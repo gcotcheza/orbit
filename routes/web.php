@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Auth\CurrentUserController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\RouteCalendarController;
+use App\Http\Controllers\RouteController;
+use App\Http\Controllers\WatchlistController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -11,8 +14,8 @@ use Illuminate\Support\Facades\Route;
 | Web routes
 |--------------------------------------------------------------------------
 |
-| Five routes. Four of them are the entire authentication surface and the fifth
-| is the single-page app.
+| Four routes are the entire authentication surface, three more are the read
+| API the screens are built on, and the last one is the single-page app.
 |
 | WHAT IS DELIBERATELY ABSENT: registration, password reset, email
 | verification, account management. docs/PLAN.md locks Orbit to a single user,
@@ -76,6 +79,51 @@ Route::middleware('auth')->group(function (): void {
  * bootstrap/app.php.
  */
 Route::middleware('auth:sanctum')->get('/api/me', CurrentUserController::class)->name('me');
+
+/*
+|--------------------------------------------------------------------------
+| The read API
+|--------------------------------------------------------------------------
+|
+| Three endpoints, and between them they are the entire data supply for the
+| globe home, the route detail, the price calendar and the watchlist screens.
+| Their exact shapes are docs/API.md — that file is the contract those screens
+| are built against, and it is written before they are.
+|
+| IN routes/web.php AND NOT routes/api.php, which this app does not have. The
+| reasoning is the same as for /api/me above: the `web` group boots the session
+| unconditionally, while Sanctum's `api` group decides whether to by sniffing
+| Origin/Referer — a heuristic that on a single-origin SPA can only ever turn a
+| signed-in user into a 401. The `/api/` PREFIX is what matters and is kept: it
+| is what bootstrap/app.php renders exceptions as JSON under, and what the SPA
+| catch-all at the bottom of this file refuses to swallow.
+|
+| ALL THREE ARE READS. Nothing here writes; the watchlist toggle, the add-route
+| form and the settings screen get their own endpoints in PR9, with the CSRF
+| protection that the `web` group already applies to them.
+|
+*/
+Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
+    Route::get('/watchlist', WatchlistController::class)->name('watchlist');
+
+    /*
+     * `AMS-LIS`, and the pattern says so.
+     *
+     * Without the constraint every misspelling reaches the controller and
+     * comes back as a 404 from a database round trip — and, more to the point,
+     * `/api/routes/../../something` would be a routing question rather than a
+     * pattern violation. Two three-letter groups is exactly what a route code
+     * is (App\Models\Route::codeFor), so anything else is not a miss, it is a
+     * malformed request.
+     */
+    Route::get('/routes/{code}', [RouteController::class, 'show'])
+        ->where('code', '[A-Z]{3}-[A-Z]{3}')
+        ->name('routes.show');
+
+    Route::get('/routes/{code}/calendar', RouteCalendarController::class)
+        ->where('code', '[A-Z]{3}-[A-Z]{3}')
+        ->name('routes.calendar');
+});
 
 /*
  * The SPA shell. Every path that is not one of the above is answered with the

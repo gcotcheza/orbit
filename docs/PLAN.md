@@ -11,6 +11,7 @@
 - **Rules vs watchlist:** separate concepts. Rules ("sunny weekend under €80") alert and list their current matches; one tap promotes a match to the watchlist. No auto-add.
 - **Day-1 honesty:** while a route has <14 days of our own history, charts show a "tracking N days" note. Deal scores work from day 1 via the stats provider.
 - **UI:** `design/README.md` is authoritative — tokens, choreography, all six screens (globe home, route detail, calendar, create rule, watchlist, settings). Globe stays mounted via KeepAlive across tab switches.
+- **API:** `docs/API.md` is the contract between the back end and the screens — exact response shapes with an example each. It is written before the screens are, and a screen that needs a field it does not list needs the file changed first.
 
 ## PR roadmap
 
