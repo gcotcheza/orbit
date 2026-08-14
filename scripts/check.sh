@@ -4,12 +4,13 @@
 # =============================================================================
 #   scripts/check.sh
 #
-# Four checks, in this order, stopping at the first failure:
+# Five checks, in this order, stopping at the first failure:
 #
 #   1. pint --test      code style (report only; `pint` alone rewrites)
 #   2. phpstan          static analysis at level 8, no baseline
 #   3. eslint           the browser half, which no PHP test can see
-#   4. artisan test     the suite
+#   4. vitest           the browser half's own unit tests (PR6 onwards)
+#   5. artisan test     the suite
 #
 # ORDER IS DELIBERATE: cheapest and most mechanical first. A style failure that
 # takes four seconds to find should not be discovered after a ninety-second
@@ -52,6 +53,15 @@ step 'ESLint (front end)'
 # running, because it is a task and not a service.
 docker compose --profile build run --rm --entrypoint sh assets -c \
     '[ -d node_modules ] || npm ci --no-audit --fund=false; npm run lint'
+
+step 'Vitest (front-end unit tests)'
+# The globe's flight arithmetic and the tour's timetable (resources/js/lib/),
+# which are pure functions precisely so that they can be checked here rather
+# than by watching a planet spin and deciding it looked about right.
+#
+# No `npm ci` guard: the ESLint step above has just made sure node_modules
+# exists, and it runs in the same image.
+docker compose --profile build run --rm --entrypoint sh assets -c 'npm run test:js'
 
 step 'PHPUnit'
 docker compose exec -T app php artisan test
