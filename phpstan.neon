@@ -60,6 +60,13 @@ parameters:
     parallel:
         maximumNumberOfProcesses: 1
 
+    # STUBS: corrections to third-party PHPDoc, which is the mechanism PHPStan
+    # itself points at for this. Each file says what it is fixing and why —
+    # these are not silencers, they are types the vendor got wrong and that this
+    # codebase would otherwise have to work around at every call site.
+    stubFiles:
+        - phpstan/stubs/Seeder.stub
+
     # Larastan reads the model's $casts, $fillable and the migrations to know
     # what `$fare->observed_at` is. Left on (the default): Orbit's models lean on
     # decimal casts for money and immutable_datetime for observation times, which

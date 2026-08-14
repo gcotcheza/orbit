@@ -1,25 +1,31 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
-class DatabaseSeeder extends Seeder
+/**
+ * There is one thing to seed, and it is the account.
+ *
+ * No demo fares, no fictional routes. Orbit's whole job is to say whether a
+ * price is unusually low, and that judgement is made against price history it
+ * has accrued — inventing any of it would put fiction into a deal score and
+ * into the alert that follows from one. When there are no provider keys yet
+ * the FAKE PROVIDERS (docs/PLAN.md, PR5) serve realistic data through the same
+ * port the real ones do, which is a swappable adapter rather than rows in the
+ * database pretending to be observations.
+ *
+ * This runs on every deploy, so everything it calls has to be idempotent.
+ */
+final class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        $this->call(SingleUserSeeder::class);
     }
 }

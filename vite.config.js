@@ -1,21 +1,57 @@
+// =============================================================================
+// Orbit — asset build
+// =============================================================================
+//   docker compose --profile build run --rm assets     # npm ci && npm run build
+//
+// Two entry points and no more: one stylesheet holding the design tokens, one
+// script that mounts the SPA. Everything else the app draws is a Vue SFC pulled
+// in by that script, so Vite's graph is the app's own import graph.
+//
+// THE BUILD RUNS IN A CONTAINER, never on the host — see the `assets` service
+// in docker-compose.yml. It writes `public/build/` through the bind mount as
+// uid 115, which is the same uid php-fpm and the nginx sidecar read it as.
+// =============================================================================
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
-import { bunny } from 'laravel-vite-plugin/fonts';
-import tailwindcss from '@tailwindcss/vite';
+import vue from '@vitejs/plugin-vue';
 
 export default defineConfig({
     plugins: [
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.js'],
             refresh: true,
-            fonts: [
-                bunny('Instrument Sans', {
-                    weights: [400, 500, 600],
-                }),
-            ],
         }),
-        tailwindcss(),
+        vue({
+            template: {
+                transformAssetUrls: {
+                    // Vue's compiler rewrites `src=""` on a handful of tags into
+                    // an import, so the bundler fingerprints the file. Both flags
+                    // stop it doing that to a ROOT-RELATIVE path: anything under
+                    // `public/` is served by nginx as it stands and has no build
+                    // entry to resolve to, and the rewrite would turn a working
+                    // URL into a build-time "failed to resolve import".
+                    base: null,
+                    includeAbsolute: false,
+                },
+            },
+        }),
     ],
+    resolve: {
+        alias: {
+            // The ESM bundler build, named explicitly rather than left to the
+            // package's `exports` map, so every import of `vue` — ours, pinia's,
+            // vue-router's — resolves to ONE copy. Two copies of Vue in a bundle
+            // is the classic "injection not found" fault, and it stays invisible
+            // until a store is read from a component the other copy created.
+            //
+            // This is the with-compiler build (~14 KB more than
+            // `vue.runtime.esm-bundler.js`) and matches ghie-writes. Every screen
+            // here is an SFC compiled at build time, so nothing NEEDS it today —
+            // it is the one that keeps a runtime `template:` string working.
+            vue: 'vue/dist/vue.esm-bundler.js',
+            '@': '/resources/js',
+        },
+    },
     server: {
         watch: {
             ignored: ['**/storage/framework/views/**'],

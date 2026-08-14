@@ -1,0 +1,37 @@
+/* ==========================================================================
+   Orbit — typefaces
+   ==========================================================================
+   Space Grotesk for anything that is a heading, a route code or a NUMBER; its
+   figures are tabular and even-width, which is what stops a price column from
+   shimmering as fares update. Hanken Grotesk for body copy.
+
+   SELF-HOSTED, AND THAT IS NOT A PREFERENCE. deploy/nginx/flights-ghiecode.conf
+   sends `default-src 'self'` — a <link> to fonts.googleapis.com is blocked, and
+   the app would silently fall back to a system sans on a phone. @fontsource
+   ships the same files npm-side; Vite fingerprints them into public/build/ and
+   nginx serves them immutable for a year.
+
+   ONLY THE SUBSETS AND WEIGHTS THIS APP USES. Both families also publish
+   Cyrillic and Vietnamese cuts, which unicode-range would keep a browser from
+   ever downloading — but Vite still emits every file the CSS references, and a
+   build folder full of fonts nobody can trigger is a deploy nobody can reason
+   about. latin covers Western Europe; latin-ext is what makes Gdańsk, Košice
+   and Timișoara render in the right typeface instead of in a fallback.
+
+   Weights: Space Grotesk 600/700 (globe caption / everything else),
+   Hanken Grotesk 400-700 (body through status pills). See design/README.md.
+   ========================================================================== */
+
+@import '@fontsource/space-grotesk/latin-600.css';
+@import '@fontsource/space-grotesk/latin-ext-600.css';
+@import '@fontsource/space-grotesk/latin-700.css';
+@import '@fontsource/space-grotesk/latin-ext-700.css';
+
+@import '@fontsource/hanken-grotesk/latin-400.css';
+@import '@fontsource/hanken-grotesk/latin-ext-400.css';
+@import '@fontsource/hanken-grotesk/latin-500.css';
+@import '@fontsource/hanken-grotesk/latin-ext-500.css';
+@import '@fontsource/hanken-grotesk/latin-600.css';
+@import '@fontsource/hanken-grotesk/latin-ext-600.css';
+@import '@fontsource/hanken-grotesk/latin-700.css';
+@import '@fontsource/hanken-grotesk/latin-ext-700.css';

@@ -91,6 +91,36 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustHosts(at: [
             '^flights\.ghiecode\.io$',
         ], subdomains: false);
+
+        /*
+         * SANCTUM IN COOKIE/SESSION MODE — no tokens, nothing in localStorage.
+         *
+         * The SPA and the API are the same origin (flights.ghiecode.io), so the
+         * browser's own httpOnly, SameSite=Lax, Secure session cookie is the
+         * credential. A bearer token would have to be stored somewhere
+         * JavaScript can read, which is the one place a credential should never
+         * be — and would buy nothing, because there is no third-party client.
+         *
+         * This line prepends EnsureFrontendRequestsAreStateful to the `api`
+         * middleware group, which is what makes a first-party request to an
+         * `api` route carry the session and be CSRF-checked instead of being
+         * treated as an anonymous token call.
+         *
+         * WHY THE JSON THE SPA ACTUALLY CALLS IS NOT IN THAT GROUP. `/api/me`
+         * is declared in routes/web.php and runs in the `web` group, where the
+         * session is UNCONDITIONAL. EnsureFrontendRequestsAreStateful decides
+         * whether to boot a session by matching the request's Origin/Referer
+         * against config('sanctum.stateful') — a heuristic that is correct in a
+         * browser and silently false for anything that does not send those
+         * headers. On a single-origin app that heuristic can only ever turn a
+         * signed-in user into a 401; being in the `web` group removes the
+         * question. See routes/web.php.
+         *
+         * It is set anyway, because an `api` route file is the obvious place
+         * for the next person to add an endpoint, and Sanctum's default for one
+         * is token-only.
+         */
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         /*

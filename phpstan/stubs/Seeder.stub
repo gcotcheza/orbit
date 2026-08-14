@@ -1,0 +1,23 @@
+<?php
+
+namespace Illuminate\Database;
+
+/**
+ * The framework documents `$command` as a non-nullable Command. It is not.
+ *
+ * A seeder only has one when it was reached through `db:seed`; run any other
+ * way — from a test, from another seeder that was constructed directly, from
+ * tinker — and the property is simply never set. The framework's own
+ * Seeder::call() proves the point: it reaches for `$this->command` behind an
+ * `isset()` before touching it.
+ *
+ * Without this stub, PHPStan reads every `$this->command?->info(...)` in
+ * database/seeders as a redundant nullsafe call, and "fixing" that by dropping
+ * the `?` produces a fatal error the first time a seeder writes a line while
+ * running outside the console.
+ */
+abstract class Seeder
+{
+    /** @var \Illuminate\Console\Command|null */
+    protected $command;
+}
