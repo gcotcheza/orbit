@@ -1,0 +1,162 @@
+/* ==========================================================================
+   Orbit — design tokens
+   ==========================================================================
+   The palette is design/README.md's, transcribed from the prototype's own
+   `voltage` palette (design/Flight Deal Tracker - Globe.dc.html, `palettes`).
+   The handoff's prose lists the headline colours; the prototype additionally
+   carries the tone BACKGROUNDS and INKS every pill, callout and chart tint is
+   built from, so the values below come from the code rather than from the
+   summary of it.
+
+   NOTHING IN THIS APP MAY HARD-CODE A COLOUR. A hex in a component is a value
+   that exists in exactly one theme, and this app ships two — the light theme is
+   not an accessibility afterthought here, it is a screen in the handoff
+   (07-home-globe-light.png). Every component reads var(--…).
+
+   DARK IS THE DEFAULT and lives on :root; light is opt-in via [data-theme].
+   Deliberately NOT `prefers-color-scheme`: the theme is a setting the user
+   chooses in the app and Orbit remembers (localStorage `orbit-theme`, see
+   resources/js/stores/theme.js), not a reading of the OS. Honouring both would
+   mean two sources of truth for one attribute and a toggle that mysteriously
+   loses to the system at midnight.
+   ========================================================================== */
+
+:root {
+    /* --- Surfaces ------------------------------------------------------- */
+    --bg: #0a0f1e;
+    --panel: #111829;
+    --card: #161f33;
+    --card2: #1f2940;
+    --chip: #141d30;
+    --line: #28324a;
+    /* A second, quieter divider: hairlines INSIDE a card, where --line would
+       out-contrast the content it separates. */
+    --line2: #161e2f;
+    --track: #26314a;
+
+    /* --- Text ----------------------------------------------------------- */
+    --ink: #eef2fc;
+    --ink2: #bac6df;
+    --muted: #7e8aa6;
+
+    /* --- Tones ----------------------------------------------------------
+       Each is a triple: the SOLID (dots, strokes, gauge rings, sparklines), the
+       BG (pill and callout fills) and the INK (text on that fill). Reaching for
+       the solid as a text colour on a tinted background is the one way to get
+       this palette wrong. */
+    --good: #3fdcbb;
+    --good-bg: rgba(63, 220, 187, 0.15);
+    --good-ink: #6ff0d4;
+    --info: #3cc0f2;
+    --info-bg: rgba(0, 165, 224, 0.18);
+    --info-ink: #7fd5f8;
+    --warn: #fb7185;
+    --warn-bg: rgba(251, 113, 133, 0.16);
+    --warn-ink: #ff9fac;
+    /* Same colour as --warn in both themes, and named separately on purpose:
+       the deal-score gauge steps good / info / warn / bad, and the day the two
+       diverge should be a change to this file and to nothing else. */
+    --bad: #fb7185;
+    /* The fourth tone: "normal", i.e. no verdict. */
+    --neu-bg: rgba(255, 255, 255, 0.05);
+    --neu-ink: #919db9;
+
+    /* --- Accent --------------------------------------------------------- */
+    --accent: #5e84ff;
+    --accent-ink: #9fb6ff;
+    /* The glow under the tab bar's centre button and the active route chip. It
+       is the accent at low alpha and does NOT change between themes in the
+       prototype. */
+    --accent-glow: rgba(94, 132, 255, 0.36);
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.38), 0 14px 34px rgba(0, 0, 0, 0.45);
+
+    /* The app background: two radial washes over the flat --bg. Defined per
+       theme rather than once with var()s, because the light theme uses
+       different stops AND a vertical lift the dark one has no use for. */
+    --bg-grad:
+        radial-gradient(125% 58% at 50% -14%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 58%),
+        radial-gradient(90% 55% at 108% 112%, color-mix(in srgb, var(--info) 14%, transparent), transparent 60%),
+        var(--bg);
+
+    /* --- Globe ----------------------------------------------------------
+       Theme-independent except the atmosphere: the Earth texture is the same
+       photograph in both themes, so an arc that re-tinted itself would stop
+       matching it. PR6 reads these. */
+    --globe-arc-from: #ffd166;
+    --globe-arc-to: #3cc0f2;
+    --globe-origin: #3fdcbb;
+    --globe-destination: #ffd166;
+    --globe-plane: #f2f7ff;
+    --globe-atmosphere: #6f96ff;
+
+    /* --- Type -----------------------------------------------------------
+       The seven steps in design/README.md, no more. A size that is not on this
+       list is a decision somebody should have to make deliberately. */
+    --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+    --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+
+    --text-xs: 10.5px;
+    --text-sm: 11px;
+    --text-md: 12px;
+    --text-lg: 13.5px;
+    --text-xl: 15px;
+    --text-2xl: 23px;
+    --text-3xl: 27px;
+
+    /* --- Geometry ------------------------------------------------------- */
+    --radius-card: 22px;
+    --radius-chip: 13px;
+    --radius-cell: 9px;
+    --radius-pill: 20px;
+    --radius-screen: 38px;
+
+    --gutter: 18px;
+    --tab-bar-height: 78px;
+    /* The app is a phone app. On anything wider it is a phone-shaped column in
+       the middle of the window rather than a stretched one — every layout in
+       design/README.md assumes a ~352 px content area. */
+    --app-width: 430px;
+}
+
+[data-theme='light'] {
+    --bg: #edeefb;
+    --panel: #f6f6fd;
+    --card: #ffffff;
+    --card2: #e9eafb;
+    --chip: #ecedf9;
+    --line: #e0e0f4;
+    --line2: #eeeef9;
+    --track: #e4e4f4;
+
+    --ink: #0d0630;
+    --ink2: #473d72;
+    --muted: #8079a6;
+
+    --good: #0fae93;
+    --good-bg: #d6f6ef;
+    --good-ink: #097a66;
+    --info: #00a5e0;
+    --info-bg: #d4f0fb;
+    --info-ink: #0a78ab;
+    --warn: #e71d36;
+    --warn-bg: #fcdfe2;
+    --warn-ink: #b01122;
+    --bad: #e71d36;
+    --neu-bg: #e9e9f6;
+    --neu-ink: #615b85;
+
+    --accent: #3454d1;
+    --accent-ink: #2440a8;
+
+    --shadow: 0 1px 2px rgba(40, 30, 20, 0.05), 0 10px 28px rgba(40, 30, 20, 0.08);
+
+    /* Softer washes than the dark theme's, plus a white-to-bg lift down the
+       first 60% — without it the light background reads as flat grey. */
+    --bg-grad:
+        radial-gradient(120% 70% at 50% -16%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 62%),
+        radial-gradient(95% 60% at 104% 108%, color-mix(in srgb, var(--info) 11%, transparent), transparent 60%),
+        linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, #ffffff) 0%, var(--bg) 60%);
+
+    --globe-atmosphere: #7fb2ff;
+}

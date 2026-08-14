@@ -1,9 +1,182 @@
-@import 'tailwindcss';
+/* ==========================================================================
+   Orbit — global stylesheet
+   ==========================================================================
+   Order matters: fonts and tokens first, because everything below reads them.
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
+   WHAT BELONGS HERE: the reset, the document, the shell that every screen sits
+   inside, and the two animations design/README.md uses on more than one screen.
+   WHAT DOES NOT: anything that styles a screen. Those live in the component's
+   own <style scoped> block, which is the reason a Vue SFC has one — a global
+   `.card` that three screens quietly disagree about is how a design system
+   becomes a suggestion.
 
-@theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+   NO CSS FRAMEWORK. Tailwind came with the Laravel skeleton and was removed in
+   this PR: design/README.md is a fully specified token system down to 10.5 px
+   type and 22 px radii, and a utility layer over it would mean every value
+   existing twice — once as a token and once as an arbitrary-value class — with
+   nothing to keep the two honest.
+   ========================================================================== */
+
+@import './fonts.css';
+@import './tokens.css';
+
+/* --- Reset --------------------------------------------------------------
+   Deliberately small. The only things worth resetting are the ones that would
+   otherwise be fought in every component. */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body,
+h1,
+h2,
+h3,
+p,
+figure,
+blockquote,
+dl,
+dd {
+    margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+    color: inherit;
+}
+
+button {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+img,
+svg {
+    display: block;
+    max-width: 100%;
+}
+
+/* --- Document ----------------------------------------------------------- */
+
+html {
+    /* The tokens are absolute px because the design is, so the root size is
+       only here to stop a browser default from moving rem-based UA styles. */
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    min-height: 100dvh;
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: var(--text-lg);
+    line-height: 1.45;
+    color: var(--ink);
+
+    /* The wash covers the VIEWPORT, not the 430 px column: on a laptop the
+       phone-shaped app sits in the middle of the gradient rather than carrying
+       a stripe of it. */
+    background: var(--bg-grad) fixed;
+
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Numbers are a first-class citizen in this app — prices, deal scores, day
+   cells. Tabular figures stop a column from shimmering when a fare updates. */
+.tabular {
+    font-variant-numeric: tabular-nums;
+}
+
+/* --- The shell ----------------------------------------------------------
+   Mobile-first: on a phone this is simply the viewport. The max-width only
+   engages on a screen wider than a phone, where the app becomes a centred
+   column rather than a stretched one. */
+
+#app {
+    min-height: 100dvh;
+}
+
+.app-shell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    max-width: var(--app-width);
+    margin-inline: auto;
+}
+
+.app-shell__main {
+    flex: 1;
+    /* The status-bar-ish top gutter of every screen in the handoff, plus the
+       notch on a phone running this from the home screen. */
+    padding-top: env(safe-area-inset-top);
+}
+
+/* Only when a tab bar is actually drawn — see App.vue. The bar is fixed, so
+   without this the last card of every screen sits underneath it. */
+.app-shell--tabs .app-shell__main {
+    padding-bottom: calc(var(--tab-bar-height) + env(safe-area-inset-bottom) + 18px);
+}
+
+/* --- Focus --------------------------------------------------------------
+   :focus-visible only, so a tapped button on a phone does not keep a ring
+   afterwards while a keyboard-tabbed one still gets a loud one. */
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* --- Motion -------------------------------------------------------------
+   The two animations design/README.md reuses across screens. Everything more
+   specific — the sheet slide-up, the globe's camera — belongs to its screen. */
+
+@keyframes orbit-rise {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes orbit-pulse {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.45;
+        transform: scale(0.82);
+    }
+}
+
+.rise-in {
+    animation: orbit-rise 0.5s ease both;
+}
+
+/* Somebody who has asked their phone to stop moving things has asked this app
+   too. The globe's auto-tour honours this in PR6 by holding still rather than
+   by animating faster. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
