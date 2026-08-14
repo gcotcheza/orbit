@@ -11,7 +11,7 @@ use Laravel\Horizon\HorizonApplicationServiceProvider;
 /**
  * Horizon, and specifically who is allowed to look at it.
  *
- * This app has no user accounts yet — PR3 brings auth — so the stock gate
+ * This app has no user accounts yet — PR4 brings auth — so the stock gate
  * (`in_array($user->email, [...])`) would evaluate against a null user and, in
  * a single-user app with no login, would be the only thing between the public
  * internet and a dashboard that lists every queued job, retries them, and

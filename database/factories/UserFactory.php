@@ -20,7 +20,13 @@ class UserFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * @return array<string, mixed>
+     * The key type is Larastan's `model-property`, not a plain string: the
+     * parent declares it that way, so the stock `array<string, mixed>` is a
+     * WIDENED return type and PHPStan says so. The narrow one is also what
+     * makes a typo in an attribute name here a static-analysis error rather
+     * than a factory that silently seeds nothing.
+     *
+     * @return array<model-property<User>, mixed>
      */
     public function definition(): array
     {

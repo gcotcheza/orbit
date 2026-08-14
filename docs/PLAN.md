@@ -13,18 +13,22 @@
 - **UI:** `design/README.md` is authoritative — tokens, choreography, all six screens (globe home, route detail, calendar, create rule, watchlist, settings). Globe stays mounted via KeepAlive across tab switches.
 
 ## PR roadmap
+
+**From PR3 onwards, `scripts/check.sh` must pass before a PR is merged.** It runs Pint, PHPStan (level 8, no baseline), ESLint and PHPUnit inside the containers, in that order, and stops at the first failure. A finding is fixed or ignored with a reason next to it — this project has no baseline for new debt to hide in.
+
 1. Skeleton + plan + design bundle
 2. Hardened Docker stack (port 127.0.0.1:3085)
-3. SPA shell + theme tokens + single-user auth
-4. Domain core + migrations + fake providers + pollers
-5. Globe home screen
-6. Route detail screen
-7. Price calendar screen
-8. Watchlist + settings screens
-9. NL rules engine (Claude parser + fallback) + create-rule screen
-10. Alert evaluation + notifications + digest
-11. PWA (manifest/SW/offline, build retention)
-12. Deploy runbook + go-live at flights.ghiecode.io
+3. Quality gates (Pint, Larastan, ESLint, unit tests) — `scripts/check.sh` must pass for every PR from here on
+4. SPA shell + theme tokens + single-user auth
+5. Domain core + migrations + fake providers + pollers
+6. Globe home screen
+7. Route detail screen
+8. Price calendar screen
+9. Watchlist + settings screens
+10. NL rules engine (Claude parser + fallback) + create-rule screen
+11. Alert evaluation + notifications + digest
+12. PWA (manifest/SW/offline, build retention)
+13. Deploy runbook + go-live at flights.ghiecode.io
 
 ## Pending owner actions
 - Sign up: Travelpayouts (affiliate) + Amadeus Self-Service; add keys to `.env`.
