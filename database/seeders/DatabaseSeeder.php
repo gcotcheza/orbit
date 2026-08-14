@@ -8,15 +8,19 @@ use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 /**
- * There is one thing to seed, and it is the account.
+ * Everything a fresh box needs to be Orbit: the account, the places, the
+ * routes, and — only while a fake provider is serving fares — their prices.
  *
- * No demo fares, no fictional routes. Orbit's whole job is to say whether a
- * price is unusually low, and that judgement is made against price history it
- * has accrued — inventing any of it would put fiction into a deal score and
- * into the alert that follows from one. When there are no provider keys yet
- * the FAKE PROVIDERS (docs/PLAN.md, PR5) serve realistic data through the same
- * port the real ones do, which is a swappable adapter rather than rows in the
- * database pretending to be observations.
+ * STILL NO FICTION IN THE PRICE TABLES. The rule this file was written with
+ * has not moved: a deal score is a judgement about real money and rows that
+ * pretend to be observations would put invention into an alert. What fills
+ * `route_price_history` below is not a fixture — it is the ORDINARY POLLER,
+ * running against whichever adapter config/orbit.php selects, and
+ * FakeHistorySeeder refuses outright to run once that adapter is a real one.
+ * See that file for the distinction and why it holds.
+ *
+ * ORDER MATTERS AND IS THE ONLY REASON THESE ARE SEPARATE CALLS: the watchlist
+ * needs an account and airports, and the poller needs a watchlist.
  *
  * This runs on every deploy, so everything it calls has to be idempotent.
  */
@@ -26,6 +30,11 @@ final class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
-        $this->call(SingleUserSeeder::class);
+        $this->call([
+            SingleUserSeeder::class,
+            DestinationSeeder::class,
+            WatchlistSeeder::class,
+            FakeHistorySeeder::class,
+        ]);
     }
 }
