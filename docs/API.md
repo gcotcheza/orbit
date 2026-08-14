@@ -1,12 +1,11 @@
-# Orbit — read API
+# Orbit — API
 
-The three endpoints the screens are built from. **This file is the contract**:
-the globe home, the route detail, the price calendar and the watchlist are all
-built against these shapes, and every field below has a feature test behind it
-(`tests/Feature/WatchlistApiTest`, `RouteDetailApiTest`, `RouteCalendarApiTest`).
-
-Writes — the watchlist toggle, adding a route, the settings switches — are PR9
-and are not here yet.
+The eight endpoints the screens are built from — three reads and five writes.
+**This file is the contract**: the globe home, the route detail, the price
+calendar, the watchlist and the alerts screen are all built against these
+shapes, and every field below has a feature test behind it
+(`tests/Feature/WatchlistApiTest`, `RouteDetailApiTest`, `RouteCalendarApiTest`,
+`WatchlistWritesTest`, `SettingsApiTest`).
 
 ---
 
@@ -18,6 +17,16 @@ cookie authenticates everything afterwards. `resources/js/lib/http.js` is
 already configured for it (`withCredentials`, `withXSRFToken`) — use it and
 nothing else. A guest gets **401** with `{"message": "Unauthenticated."}`, never
 a redirect.
+
+**Writes are CSRF-protected**, because they run in the `web` middleware group
+along with everything else here (`routes/web.php` explains why this app has no
+`routes/api.php`). `http.js` sends `X-XSRF-TOKEN` on every request, so this
+costs a caller that uses it nothing — and a caller that does not gets **419**.
+
+**Validation failures are Laravel's standard 422**:
+`{"message": …, "errors": {"field": ["A sentence a person can act on."]}}`.
+The messages are written per rule and are meant to be shown as they arrive; the
+add-route form has two fields and no room for "The given data was invalid."
 
 **Envelope.** Everything is wrapped in `data`. List endpoints add `meta`; the
 calendar adds a `meta` of its own. Do not unwrap in the store and re-wrap in the
@@ -203,6 +212,164 @@ empty grid.
 standard `{"message": …, "errors": {"month": […]}}`.
 
 **404**: `{"message": "Unknown route."}`
+
+---
+
+## `POST /api/watchlist`
+
+Start watching a city pair (`design/README.md` §5, the "Add route" expander).
+
+```json
+{ "origin": "AMS", "destination": "LIS" }
+```
+
+Both are IATA codes and both are **upper-cased and trimmed before validation**,
+so `" lis "` is accepted — the form may send what was typed.
+
+**201** with the new row in exactly the shape `GET /api/watchlist` returns,
+`active: true` and at the end of the owner's order:
+
+```json
+{
+  "data": {
+    "code": "AMS-LIS",
+    "origin": { "iata": "AMS", "…": "…" },
+    "destination": { "iata": "LIS", "…": "…" },
+    "price": { "current": null, "usual": null, "pctBelow": null },
+    "score": 0,
+    "tier": "none",
+    "confident": false,
+    "verdict": { "label": "Not enough data yet", "short": "Normal", "tone": "normal" },
+    "sparkline": [],
+    "trackingDays": 0,
+    "active": true
+  }
+}
+```
+
+**`confident: false` on a brand-new route is correct, not a failure.** The
+first poll and the first statistics refresh are **queued**, not run inside the
+request — the response is written before either has started. Render the row's
+"no opinion yet" state and let the next load fill it in. A pair that Orbit
+already has a route for (watched before and dropped, or surfaced by a rule)
+comes back with its existing history immediately.
+
+**422**, one message per rule:
+
+| when | field | message |
+| --- | --- | --- |
+| not one of the three NL origins | `origin` | Orbit only tracks departures from AMS, EIN or DUS. |
+| no such airport | `origin` / `destination` | Orbit does not know that airport yet. / …an airport with that code. |
+| not three letters | either | An airport code is three letters, like LIS. |
+| both ends the same | `destination` | A route needs two different airports. |
+| already on the watchlist | `destination` | You are already watching AMS-LIS. |
+
+The origins are `config('orbit.origins')` — `AMS`, `EIN`, `DUS`, the three
+airports within a drive. Destinations are anywhere in the `airports` table.
+
+---
+
+## `PATCH /api/watchlist/{code}`
+
+The design's iOS switch (§5). Pause a route or start it again.
+
+```json
+{ "active": false }
+```
+
+**200** with the row, in the same shape as everywhere else — take what comes
+back rather than keeping the optimistic value:
+
+```json
+{ "data": { "code": "AMS-LIS", "…": "…", "active": false } }
+```
+
+`active` is **required**; an empty body is `422`, not a no-op
+(`{"errors": {"active": ["Say whether the route should be on or off."]}}`).
+
+A pause stops the polling and the alerts and keeps everything else — the row,
+its position, and every observation already gathered.
+
+**404** `{"message": "Not watching that route."}` when the code is not on
+*this* account's watchlist. `code` is constrained to `[A-Z]{3}-[A-Z]{3}` at the
+router, so `ams-lis` is a 404 too.
+
+---
+
+## `DELETE /api/watchlist/{code}`
+
+Stop watching. **204**, no body.
+
+**The route and its price history survive.** Only the watchlist row goes —
+every observation under it was a real morning's fare and adding the pair back
+next spring picks up where it left off. The route detail screen is not scoped
+to the watchlist, so `/api/routes/AMS-LIS` still answers afterwards.
+
+**404** as above.
+
+---
+
+## `GET /api/settings` · `PUT /api/settings`
+
+The alerts screen (`design/README.md` §6). Both verbs answer the same body, so
+the screen can PUT and render the response without a follow-up GET.
+
+```json
+{
+  "data": {
+    "emailAlerts": true,
+    "pushAlerts": false,
+    "weeklyDigest": true,
+    "quietHours": true,
+    "quietStart": "22:00",
+    "quietEnd": "08:00",
+    "sensitivity": 0
+  },
+  "meta": {
+    "sensitivities": [
+      { "level": 0, "name": "Relaxed",  "minimumScore": 80, "blurb": "Only the truly insane deals — score 80 and up. Rare, and worth clearing a weekend for." },
+      { "level": 1, "name": "Balanced", "minimumScore": 65, "blurb": "Anything Orbit rates a great deal — score 65 and up. A handful a month." },
+      { "level": 2, "name": "Eager",    "minimumScore": 50, "blurb": "Every fare scoring 50 or better. More to look at, and more that turns out to be ordinary." }
+    ]
+  }
+}
+```
+
+| field | notes |
+| --- | --- |
+| `emailAlerts` / `pushAlerts` | Delivery channels. Push does nothing until the PWA has a subscription (PR12); the switch is still stored. |
+| `weeklyDigest` | The Sunday 09:00 round-up. |
+| `quietHours` | Whether the window below defers delivery. |
+| `quietStart` / `quietEnd` | `HH:MM`, **wall clock in `Europe/Amsterdam`** — the one thing this app stores as local time. Kept even while `quietHours` is `false`, so switching it back on restores the window somebody chose. |
+| `sensitivity` | `0` \| `1` \| `2`. What it *means* is `meta.sensitivities`. |
+
+**`data` is exactly the writable set and `meta` is exactly the derived set.**
+A client can PUT back the `data` object it was handed, unchanged, and that is
+the intended flow. `meta.sensitivities` is built from `config/orbit.php` —
+`minimumScore` is the same tier number a route's `tier` field is computed
+against, so the level you pick and the badge you see cannot disagree. The
+`blurb` quotes it; do not re-write that sentence in the component.
+
+**The row is created on first read**, with the defaults above. There is no
+"settings not set up yet" state to handle.
+
+### `PUT` takes the whole object
+
+Every field is `required`. It is a PUT and not a PATCH on purpose: once a
+boolean is optional, "absent" and "false" are the same request, and the failure
+mode is a switch that can be turned on and never off.
+
+**200** with the same body. **422** per rule:
+
+| when | message |
+| --- | --- |
+| a switch is not a boolean | Laravel's default |
+| `quietStart` is not `HH:MM` | Quiet hours start at a time like 22:00. |
+| `quietEnd` is not `HH:MM` | Quiet hours end at a time like 08:00. |
+| `sensitivity` is not a listed level | Pick one of the three sensitivity levels. |
+
+`date_format:H:i` is the time rule, so `24:00`, `22:60`, `9:00` and `22:00:00`
+are all rejected; `00:00` and `23:59` are fine.
 
 ---
 

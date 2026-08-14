@@ -85,6 +85,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Where the owner flies from
+    |--------------------------------------------------------------------------
+    |
+    | The three airports within a sensible drive, and therefore the only
+    | origins the "add a route" form (design/README.md §5) offers and the only
+    | ones App\Http\Requests\AddWatchedRouteRequest accepts. A destination can
+    | be anywhere Orbit knows; an origin cannot, because a fare from Malaga is
+    | not a flight this person can take.
+    |
+    | THE SAME THREE ARE FLAGGED `is_origin` BY DestinationSeeder, from
+    | database/seeders/data/european_destinations.php. Two lists of one fact is
+    | a drift waiting to happen, so tests/Feature/SeedersTest asserts they
+    | agree — the seeder's list is the one that carries the coordinates, and
+    | this one is what a request is validated against without a query.
+    |
+    */
+
+    'origins' => ['AMS', 'EIN', 'DUS'],
+
+    /*
+    |--------------------------------------------------------------------------
     | The deal score
     |--------------------------------------------------------------------------
     |
@@ -123,6 +144,52 @@ return [
 
         'trend_days' => 30,
         'trend_saturation_per_day' => 0.005,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Alert sensitivity
+    |--------------------------------------------------------------------------
+    |
+    | The three positions of the segmented control on the alerts screen
+    | (design/README.md §6), stored as `user_settings.sensitivity` and read by
+    | App\Models\UserSettings::minimumScore().
+    |
+    | EACH LEVEL NAMES A TIER RATHER THAN A NUMBER. The number lives once, in
+    | `score.tiers` above, and is the same one the API publishes as a route's
+    | `tier` — so "Relaxed" and the "insane" badge on a route can never come to
+    | mean different scores. Retuning a tier retunes the sensitivity with it.
+    |
+    | `blurb` IS THE SENTENCE UNDER THE CONTROL and takes the threshold as its
+    | one %d, filled in by App\Http\Controllers\SettingsController. It is here
+    | and not in the Vue component for exactly that reason: the copy quotes a
+    | number that this file owns, and a hard-coded "80+" in a template is a
+    | sentence that goes quietly wrong the day the tier moves.
+    |
+    | INDEXED 0, 1, 2 — an ordered scale from quietest to loudest, and the keys
+    | ARE the stored values. Adding a level means adding an entry here; the
+    | request validates against these keys, so nothing else needs changing.
+    |
+    */
+
+    'alerts' => [
+        'sensitivities' => [
+            0 => [
+                'name' => 'Relaxed',
+                'tier' => 'insane',
+                'blurb' => 'Only the truly insane deals — score %d and up. Rare, and worth clearing a weekend for.',
+            ],
+            1 => [
+                'name' => 'Balanced',
+                'tier' => 'great',
+                'blurb' => 'Anything Orbit rates a great deal — score %d and up. A handful a month.',
+            ],
+            2 => [
+                'name' => 'Eager',
+                'tier' => 'good',
+                'blurb' => 'Every fare scoring %d or better. More to look at, and more that turns out to be ordinary.',
+            ],
+        ],
     ],
 
     /*

@@ -6,7 +6,9 @@ use App\Http\Controllers\Auth\CurrentUserController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\RouteCalendarController;
 use App\Http\Controllers\RouteController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\WatchlistController;
+use App\Http\Controllers\WatchlistItemController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -15,7 +17,8 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 |
 | Four routes are the entire authentication surface, three more are the read
-| API the screens are built on, and the last one is the single-page app.
+| API the screens are built on, five more are the writes those screens make,
+| and the last one is the single-page app.
 |
 | WHAT IS DELIBERATELY ABSENT: registration, password reset, email
 | verification, account management. docs/PLAN.md locks Orbit to a single user,
@@ -98,9 +101,7 @@ Route::middleware('auth:sanctum')->get('/api/me', CurrentUserController::class)-
 | is what bootstrap/app.php renders exceptions as JSON under, and what the SPA
 | catch-all at the bottom of this file refuses to swallow.
 |
-| ALL THREE ARE READS. Nothing here writes; the watchlist toggle, the add-route
-| form and the settings screen get their own endpoints in PR9, with the CSRF
-| protection that the `web` group already applies to them.
+| ALL THREE ARE READS. The writes are the group below.
 |
 */
 Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
@@ -123,6 +124,52 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
     Route::get('/routes/{code}/calendar', RouteCalendarController::class)
         ->where('code', '[A-Z]{3}-[A-Z]{3}')
         ->name('routes.calendar');
+});
+
+/*
+|--------------------------------------------------------------------------
+| The write API
+|--------------------------------------------------------------------------
+|
+| Everything the watchlist and alerts screens (design/README.md §5 and §6) can
+| change: which routes are watched, whether each one is paused, and how the
+| owner wants to be told. Their shapes are docs/API.md, same as the reads.
+|
+| IN THE `web` GROUP, WHICH IS WHY THEY ARE CSRF-PROTECTED. That is the reason
+| this app has no routes/api.php at all: Laravel's `api` group has no CSRF
+| middleware because a token-authenticated client does not need one, and these
+| endpoints are called by a browser carrying a session cookie — exactly the
+| case CSRF exists for. `resources/js/lib/http.js` sends the XSRF header on
+| every request, so the protection costs the client nothing.
+|
+| A SEPARATE GROUP FROM THE READS ABOVE, and separate controllers behind it.
+| The read is the app's launch request and is tuned as one; these are one-row
+| operations behind a tap. Neither should have to grow the other's concerns.
+|
+*/
+Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
+    Route::post('/watchlist', [WatchlistItemController::class, 'store'])->name('watchlist.store');
+
+    /*
+     * The same `[A-Z]{3}-[A-Z]{3}` constraint the reads carry, for the same
+     * reason: a code is either that shape or it is malformed, and a write is
+     * the last place to let a path segment reach a query unexamined.
+     */
+    Route::patch('/watchlist/{code}', [WatchlistItemController::class, 'update'])
+        ->where('code', '[A-Z]{3}-[A-Z]{3}')
+        ->name('watchlist.update');
+
+    Route::delete('/watchlist/{code}', [WatchlistItemController::class, 'destroy'])
+        ->where('code', '[A-Z]{3}-[A-Z]{3}')
+        ->name('watchlist.destroy');
+
+    /*
+     * PUT rather than PATCH: the alerts screen sends the whole preferences
+     * object every time. See App\Http\Requests\UpdateSettingsRequest for why
+     * an optional boolean is a switch that cannot be turned off.
+     */
+    Route::get('/settings', [SettingsController::class, 'show'])->name('settings.show');
+    Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
 });
 
 /*

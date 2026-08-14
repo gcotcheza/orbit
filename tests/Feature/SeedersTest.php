@@ -65,6 +65,27 @@ final class SeedersTest extends TestCase
         }
     }
 
+    /**
+     * `config('orbit.origins')` and the seeder's `is_origin` flag are the same
+     * three airports, said twice: the config is what a request is validated
+     * against without a query, the data file is what carries the coordinates.
+     * This is the line that stops them drifting.
+     */
+    #[Test]
+    public function the_configured_origins_are_the_airports_the_seeder_flags_as_such(): void
+    {
+        $this->seed(DestinationSeeder::class);
+
+        /** @var list<string> $configured */
+        $configured = config('orbit.origins');
+        sort($configured);
+
+        $this->assertSame(
+            Airport::query()->where('is_origin', true)->orderBy('iata')->pluck('iata')->all(),
+            $configured,
+        );
+    }
+
     #[Test]
     public function seeding_the_destinations_twice_changes_nothing(): void
     {

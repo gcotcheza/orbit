@@ -1,20 +1,32 @@
 <script setup>
 /*
- * Alerts / settings (design/README.md §6).
+ * Alerts (design/README.md §6) — how and when Orbit reaches the owner.
  *
- * The delivery toggles and the sensitivity control arrive in a later PR. TWO
- * controls are here already, and they are not placeholder decoration: they are
- * the only UI in this PR that exercises what this PR built. Without them the
- * theme store applies a theme nobody can change and the session can be started
- * but never ended, and neither of those can be checked on the actual phone.
+ * Four cards: the delivery channels, the sensitivity that decides what counts
+ * as worth telling them about, the timing, and the two controls that were
+ * already here.
  *
- * FOR WHOEVER BUILDS THIS SCREEN PROPERLY: keep both. The design puts the theme
- * switch and the account row on exactly this screen; only the surrounding
- * placeholder is meant to be deleted.
+ * THE THEME SWITCH AND SIGN-OUT ARE NOT LEFTOVERS. They landed in PR4 as the
+ * only UI exercising the theme store and the session, and the design puts both
+ * on this screen — the placeholder prose around them is what this PR deletes.
+ * They keep their own card at the bottom because they are about the app and
+ * the account; everything above is about alerts.
+ *
+ * THE SENSITIVITY BLURB COMES FROM THE SERVER. Each level's sentence quotes
+ * the deal score it fires at, that number is config/orbit.php's `score.tiers`,
+ * and it is the same number the API publishes as a route's `tier`. A "score
+ * 80+" typed into this template would be a promise that goes quietly wrong the
+ * day the tier is retuned — on the one screen whose entire job is to say what
+ * will happen.
  */
+import { computed, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
+import SegmentedControl from '@/Components/settings/SegmentedControl.vue'
+import SettingRow from '@/Components/settings/SettingRow.vue'
+import ToggleSwitch from '@/Components/settings/ToggleSwitch.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useSettingsStore } from '@/stores/settings'
 import { useThemeStore } from '@/stores/theme'
 
 const router = useRouter()
@@ -25,6 +37,47 @@ const { user } = storeToRefs(auth)
 const themeStore = useThemeStore()
 const { theme } = storeToRefs(themeStore)
 
+const settingsStore = useSettingsStore()
+const { settings, sensitivities, status, error, isReady, chosenSensitivity } = storeToRefs(settingsStore)
+
+const THEMES = [
+  { value: 'dark', label: 'Dark' },
+  { value: 'light', label: 'Light' },
+]
+
+const sensitivityOptions = computed(() =>
+  sensitivities.value.map((level) => ({ value: level.level, label: level.name })),
+)
+
+/** "No pings 22:00 – 08:00", or the honest version when they are off. */
+const quietNote = computed(() => {
+  if (settings.value === null) {
+    return ''
+  }
+
+  return settings.value.quietHours
+    ? `No pings ${settings.value.quietStart} – ${settings.value.quietEnd}`
+    : 'Orbit may ping at any hour'
+})
+
+onMounted(settingsStore.load)
+
+function save(patch) {
+  settingsStore.change(patch)
+}
+
+/*
+ * A time input can be cleared, and an empty string is not a time — the server
+ * would answer 422 and the switch would revert for a reason nobody typed.
+ * Ignoring the empty state leaves the previous value in place, which is what
+ * an emptied field means here.
+ */
+function saveTime(field, value) {
+  if (value !== '') {
+    save({ [field]: value })
+  }
+}
+
 async function signOut() {
   await auth.logout()
   await router.push({ name: 'login' })
@@ -32,24 +85,124 @@ async function signOut() {
 </script>
 
 <template>
-  <div class="screen rise-in">
+  <div class="screen">
     <header class="screen__head">
       <h1 class="screen__title">Alerts</h1>
-      <p class="screen__note">How and when we reach you. The delivery toggles and alert sensitivity arrive in a later PR.</p>
+      <p class="screen__note">How and when we reach you.</p>
     </header>
 
-    <section class="card">
-      <h2 class="card__title">Appearance</h2>
-      <div class="segmented" role="group" aria-label="Theme">
-        <button type="button" class="segmented__option" :class="{ 'segmented__option--on': theme === 'dark' }" :aria-pressed="theme === 'dark'" @click="themeStore.set('dark')">Dark</button>
-        <button type="button" class="segmented__option" :class="{ 'segmented__option--on': theme === 'light' }" :aria-pressed="theme === 'light'" @click="themeStore.set('light')">Light</button>
-      </div>
-    </section>
+    <p v-if="error" class="screen__notice" role="alert">{{ error }}</p>
 
-    <section class="card">
-      <h2 class="card__title">Account</h2>
-      <p class="card__line">{{ user?.name }}</p>
-      <p class="card__sub">{{ user?.email }}</p>
+    <p v-if="status === 'loading' && !isReady" class="screen__state">Loading your settings…</p>
+
+    <div v-else-if="status === 'failed' && !isReady" class="screen__state">
+      <p>Could not load your alert settings.</p>
+      <button type="button" class="screen__retry" @click="settingsStore.load">Try again</button>
+    </div>
+
+    <template v-else-if="isReady">
+      <h2 class="section">Channels</h2>
+      <section class="card">
+        <SettingRow title="Email" :note="user?.email ?? 'Where the deals land'" class="card__row">
+          <template #icon>
+            <span class="icon icon--info">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <rect x="2" y="4" width="14" height="10" rx="2" stroke="var(--info)" stroke-width="1.4" />
+                <path d="M3 5l6 4 6-4" stroke="var(--info)" stroke-width="1.4" />
+              </svg>
+            </span>
+          </template>
+
+          <ToggleSwitch
+            :model-value="settings.emailAlerts"
+            label="Email alerts"
+            @update:model-value="save({ emailAlerts: $event })"
+          />
+        </SettingRow>
+
+        <SettingRow title="Push" note="This device, once Orbit is installed">
+          <template #icon>
+            <span class="icon icon--warn">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <path d="M9 2a4 4 0 0 0-4 4v3.5L3.5 12h11L13 9.5V6a4 4 0 0 0-4-4Z" stroke="var(--warn)" stroke-width="1.4" stroke-linejoin="round" />
+                <path d="M7 14a2 2 0 0 0 4 0" stroke="var(--warn)" stroke-width="1.4" />
+              </svg>
+            </span>
+          </template>
+
+          <ToggleSwitch
+            :model-value="settings.pushAlerts"
+            label="Push alerts"
+            @update:model-value="save({ pushAlerts: $event })"
+          />
+        </SettingRow>
+      </section>
+
+      <h2 class="section">Sensitivity</h2>
+      <section class="card card--padded">
+        <SegmentedControl
+          :model-value="settings.sensitivity"
+          :options="sensitivityOptions"
+          label="Alert sensitivity"
+          @update:model-value="save({ sensitivity: $event })"
+        />
+        <p class="blurb">{{ chosenSensitivity?.blurb }}</p>
+      </section>
+
+      <h2 class="section">Timing</h2>
+      <section class="card">
+        <SettingRow title="Quiet hours" :note="quietNote" class="card__row">
+          <ToggleSwitch
+            :model-value="settings.quietHours"
+            label="Quiet hours"
+            @update:model-value="save({ quietHours: $event })"
+          />
+        </SettingRow>
+
+        <!-- Revealed by the switch above, per the design: the window is only
+             worth showing while it is doing something. The values are kept
+             either way, so switching quiet hours back on restores them. -->
+        <div v-if="settings.quietHours" class="window card__row">
+          <label class="window__field">
+            <span class="window__label">From</span>
+            <input
+              class="window__input tabular"
+              type="time"
+              :value="settings.quietStart"
+              @change="saveTime('quietStart', $event.target.value)"
+            >
+          </label>
+
+          <label class="window__field">
+            <span class="window__label">Until</span>
+            <input
+              class="window__input tabular"
+              type="time"
+              :value="settings.quietEnd"
+              @change="saveTime('quietEnd', $event.target.value)"
+            >
+          </label>
+        </div>
+
+        <SettingRow title="Weekly digest" note="A Sunday round-up of deals">
+          <ToggleSwitch
+            :model-value="settings.weeklyDigest"
+            label="Weekly digest"
+            @update:model-value="save({ weeklyDigest: $event })"
+          />
+        </SettingRow>
+      </section>
+    </template>
+
+    <h2 class="section">This app</h2>
+    <section class="card card--padded">
+      <SegmentedControl :model-value="theme" :options="THEMES" label="Theme" @update:model-value="themeStore.set" />
+
+      <div class="account">
+        <p class="account__name">{{ user?.name }}</p>
+        <p class="account__email">{{ user?.email }}</p>
+      </div>
+
       <button type="button" class="signout" @click="signOut">Sign out</button>
     </section>
   </div>
@@ -57,10 +210,11 @@ async function signOut() {
 
 <style scoped>
 .screen {
-  padding: 28px var(--gutter);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  padding: 4px var(--gutter) 0;
+}
+
+.screen__head {
+  margin: 8px 2px 4px;
 }
 
 .screen__title {
@@ -72,19 +226,110 @@ async function signOut() {
 }
 
 .screen__note {
-  margin-top: 4px;
+  margin-top: 2px;
   font-size: var(--text-lg);
   color: var(--muted);
 }
 
+.screen__notice {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-chip);
+
+  font-size: var(--text-lg);
+  color: var(--warn-ink);
+  background: var(--warn-bg);
+}
+
+.screen__state {
+  margin-top: 28px;
+  text-align: center;
+  font-size: var(--text-lg);
+  color: var(--muted);
+}
+
+.screen__retry {
+  margin-top: 12px;
+  padding: 9px 16px;
+  border-radius: var(--radius-chip);
+  border: 1px solid var(--line);
+
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+.section {
+  margin: 22px 4px 9px;
+
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .card {
-  padding: 16px 17px;
-  border-radius: var(--radius-card);
+  overflow: hidden;
+
+  border: 1px solid var(--line);
+  border-radius: 18px;
   background: var(--card);
   box-shadow: var(--shadow);
 }
 
-.card__title {
+.card--padded {
+  padding: 16px;
+}
+
+/* The hairline BETWEEN rows, never after the last one. */
+.card__row {
+  border-bottom: 1px solid var(--line2);
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+}
+
+.icon--info {
+  background: var(--info-bg);
+}
+
+.icon--warn {
+  background: var(--warn-bg);
+}
+
+.blurb {
+  margin-top: 12px;
+  padding: 0 2px;
+
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* --- The quiet window ---------------------------------------------------- */
+
+.window {
+  display: flex;
+  gap: 10px;
+  padding: 0 16px 15px;
+}
+
+.window__field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.window__label {
   font-size: var(--text-sm);
   font-weight: 700;
   letter-spacing: 0.13em;
@@ -92,49 +337,51 @@ async function signOut() {
   color: var(--muted);
 }
 
-.card__line {
-  margin-top: 10px;
+.window__input {
+  width: 100%;
+  padding: 9px 11px;
+
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--card2);
+  color: var(--ink);
+
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.window__input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* --- Account ------------------------------------------------------------- */
+
+.account {
+  margin-top: 16px;
+}
+
+.account__name {
   font-family: var(--font-display);
   font-size: var(--text-xl);
   font-weight: 700;
   color: var(--ink);
 }
 
-.card__sub {
+.account__email {
   font-size: var(--text-md);
   color: var(--muted);
 }
 
-.segmented {
-  display: flex;
-  gap: 6px;
-  margin-top: 12px;
-  padding: 4px;
-  border-radius: var(--radius-pill);
-  background: var(--card2);
-}
-
-.segmented__option {
-  flex: 1;
-  padding: 8px 0;
-  border-radius: var(--radius-pill);
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--ink2);
-  transition: background 0.18s ease, color 0.18s ease;
-}
-
-.segmented__option--on {
-  background: var(--accent);
-  color: #fff;
-}
-
 .signout {
-  margin-top: 14px;
   width: 100%;
+  margin-top: 14px;
   padding: 11px 0;
-  border-radius: var(--radius-chip);
+
   border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+
   font-size: var(--text-xl);
   font-weight: 600;
   color: var(--warn-ink);
