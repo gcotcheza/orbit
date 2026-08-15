@@ -11,6 +11,14 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * One row in the add-route form's destination list.
  *
+ * SHARED BY BOTH ENDPOINTS THAT FILL THAT LIST — `GET /api/destinations` (the
+ * 184 curated places, sent whole) and `GET /api/airports?q=` (all 3,270,
+ * searched). They are two queries for one panel, and a suggestion that
+ * arrived from the second must be indistinguishable in shape from one that
+ * arrived from the first, or the component renders two kinds of row. Which
+ * tier a row came from is knowable — the client already holds the curated list
+ * — and is a presentation matter rather than a field.
+ *
  * DELIBERATELY NARROWER THAN AirportResource, which is the same table. That one
  * travels inside a watchlist row and carries `lat`/`lng` because the globe
  * cannot draw an arc without them; this one is a list of places to pick from,

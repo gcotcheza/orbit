@@ -15,15 +15,20 @@ use Tests\TestCase;
 /**
  * `GET /api/destinations` — what the add-route form offers.
  *
- * THE ONE RULE THIS ENDPOINT HAS is which airports are in it. The `airports`
- * table holds eighty rows and three of them are the places the owner leaves
- * FROM; a list that included those would put "Amsterdam" in a dropdown whose
- * every entry becomes the far end of a route from Amsterdam. The
- * `destinations` table is what tells the two apart — see the note in
+ * THE ONE RULE THIS ENDPOINT HAS is which airports are in it, and world
+ * flights made that rule matter far more than it did. The `airports` table
+ * holds 3,270 rows: 184 are the curated destinations this endpoint exists to
+ * offer, three are the places the owner leaves FROM, and the other 3,083 came
+ * from an OurAirports snapshot nobody has an opinion about. A list that
+ * included the origins would put "Amsterdam" in a dropdown whose every entry
+ * becomes the far end of a route from Amsterdam; a list that included the
+ * snapshot would be a 200 KB payload of places the rule engine can never
+ * match.
+ *
+ * The `destinations` table is what tells all three apart — see the note in
  * database/migrations/..._create_airports_table.php — and this asserts the
- * endpoint keys off it rather than off `is_origin`, which is the same answer
- * today and the one that stops being true the day a fourth origin is added
- * that people also fly to.
+ * endpoint keys off it rather than off `is_origin`, which was the same answer
+ * when this file was written and has not been since.
  */
 final class DestinationsApiTest extends TestCase
 {
@@ -65,8 +70,8 @@ final class DestinationsApiTest extends TestCase
 
     /**
      * Coordinates travel with a WATCHLIST row, because the globe needs them.
-     * They have no reader here and eighty airports' worth of them is payload
-     * the form would download and drop.
+     * They have no reader here, and 184 airports' worth of them is payload the
+     * form would download and drop.
      */
     #[Test]
     public function it_does_not_carry_the_globe_coordinates(): void
@@ -115,8 +120,27 @@ final class DestinationsApiTest extends TestCase
     }
 
     /**
-     * The list the form actually gets in production, against the file it comes
-     * from: seventy-seven destinations and not the eighty airports beside them.
+     * The list the form actually gets in production, against the files it comes
+     * from: a hundred and eighty-four destinations and not the hundred and
+     * eighty-seven airports beside them.
+     *
+     * THE NUMBERS MOVED WITH WORLD FLIGHTS, and both halves of the change are
+     * deliberate rather than a bump to make a red test green:
+     *
+     *   77 -> 184 destinations   the European file's 77, plus the 107 long-haul
+     *                            places world_destinations.php adds. Every one
+     *                            of them carries vibes and twelve warmth
+     *                            ratings, because this is the tier the rule
+     *                            engine matches against.
+     *   80 -> 187 airports       the same 107, plus the three origins. This
+     *                            seeder still writes ONLY curated rows — the
+     *                            3,083 from the OurAirports snapshot are
+     *                            WorldAirportSeeder's, are not seeded here, and
+     *                            must never appear in this endpoint's answer.
+     *
+     * That last line is the drift this test now guards: `whereHas('destination')`
+     * is what keeps 3,086 airports with no opinion attached out of a dropdown
+     * that used to be the whole table minus three.
      */
     #[Test]
     public function it_offers_every_seeded_destination_and_only_those(): void
@@ -127,8 +151,8 @@ final class DestinationsApiTest extends TestCase
 
         $expected = Destination::query()->count();
 
-        $this->assertSame(80, Airport::query()->count());
-        $this->assertSame(77, $expected);
+        $this->assertSame(187, Airport::query()->count());
+        $this->assertSame(184, $expected);
         $this->assertCount($expected, $response->json('data'));
         $this->assertSame($expected, $response->json('meta.count'));
 

@@ -11,14 +11,21 @@ use Illuminate\Http\JsonResponse;
 /**
  * Everywhere Orbit knows how to fly to — the add-route form's typeahead.
  *
- * WHY THE WHOLE LIST IN ONE REQUEST AND NOT A `?q=` SEARCH. There are
- * seventy-seven of them and the number is a checked-in file
- * (database/seeders/data/european_destinations.php), not a growing table. The
- * entire payload is a few kilobytes, so the form fetches it once when it opens
- * and filters in the browser — which means a suggestion appears on the
- * keystroke rather than after a round trip, and typing "bilb" costs four
- * requests fewer than a search endpoint would. A `?q=` endpoint over eighty
- * rows is a network hop bought with somebody's latency and nothing else.
+ * WHY THE WHOLE LIST IN ONE REQUEST AND NOT A `?q=` SEARCH. There are a
+ * hundred and eighty-four of them and the number is two checked-in files
+ * (database/seeders/data/european_destinations.php and world_destinations.php),
+ * not a growing table. The entire payload is a few kilobytes, so the form
+ * fetches it once when it opens and filters in the browser — which means a
+ * suggestion appears on the keystroke rather than after a round trip, and
+ * typing "bilb" costs four requests fewer than a search endpoint would. A `?q=`
+ * endpoint over 184 rows is a network hop bought with somebody's latency and
+ * nothing else.
+ *
+ * THE OTHER 3,086 AIRPORTS ARE NOT IN HERE, and that is the whole shape of
+ * world flights: they have no `destinations` row, no vibes and no warmth, and
+ * they are searched one query at a time through
+ * App\Http\Controllers\AirportController. Sending them all would be 200 KB
+ * before anybody typed anything, for rows the rule engine can never match.
  *
  * WHAT COUNTS AS A DESTINATION IS THE `destinations` TABLE, not `airports`.
  * The three origins (AMS, EIN, DUS) are airports with no destinations row —

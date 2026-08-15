@@ -48,9 +48,29 @@
  * form displays verbatim — so the failure is visible rather than silent.
  *
  * THE DESTINATIONS ARE NOT WRITTEN OUT HERE, and the difference is the point:
- * there are seventy-seven of them, they carry a city and a country each, and
- * they come from a seeder that is edited. That IS worth an endpoint — one, on
- * the first open, cached for the page. See stores/destinations.js.
+ * there are a hundred and eighty-four of them, they carry a city and a country
+ * each, and they come from a seeder that is edited. That IS worth an endpoint —
+ * one, on the first open, cached for the page. See stores/destinations.js.
+ *
+ * =============================================================================
+ * TWO LISTS IN ONE PANEL — world flights
+ * =============================================================================
+ * The box now finds any of the 3,270 airports Orbit can price, and it does it
+ * without giving up the thing that made the typeahead worth having: a
+ * suggestion on the keystroke rather than after a round trip.
+ *
+ *   - THE CURATED LIST IS STILL LOADED ONCE AND SEARCHED IN MEMORY. It answers
+ *     first, instantly, and it goes at the top — those are the places with
+ *     vibes and honest month-by-month warmth, and they are the only ones a rule
+ *     can ever match (docs/BUSINESS-LOGIC.md §1).
+ *   - EVERYWHERE ELSE ARRIVES 250 ms LATER from `GET /api/airports?q=`, under
+ *     a quiet divider, deduped against the rows above it. See
+ *     stores/airports.js for the debounce, the abort and the sequence guard.
+ *
+ * WHAT THE PANEL MUST NEVER DO IS FLICKER BETWEEN THE TWO. "No matching
+ * destination." while a request for the answer is in flight is a lie the box
+ * tells for a quarter of a second, and the did-you-mean guess underneath it is
+ * a worse one — so both wait for the search to land.
  *
  * THE CLIENT-SIDE CHECK IS A COURTESY, NOT A GUARD. It catches "LIS " and
  * "lisbon" without a round trip; everything that matters — does the airport
@@ -67,6 +87,7 @@
 import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { MAX_SUGGESTIONS, nearestDestination, searchDestinations, useDestinationsStore } from '@/stores/destinations'
+import { mergeSuggestions, useAirportsStore } from '@/stores/airports'
 
 const props = defineProps({
   /** The server's 422 message for the last attempt, if there was one. */
@@ -95,13 +116,24 @@ const localError = ref('')
 const store = useDestinationsStore()
 const { destinations, status: listStatus } = storeToRefs(store)
 
+const world = useAirportsStore()
+const { results: worldAirports, status: worldStatus } = storeToRefs(world)
+
 /** Whether the suggestions are showing, and which of them is highlighted. */
 const open = ref(false)
 const active = ref(-1)
 
 const listbox = useTemplateRef('listbox')
 
-const suggestions = computed(() => searchDestinations(destinations.value, destination.value, MAX_SUGGESTIONS))
+/** The 184, ranked and highlighted in the browser. Instant. */
+const curated = computed(() => searchDestinations(destinations.value, destination.value, MAX_SUGGESTIONS))
+
+const suggestions = computed(() =>
+  mergeSuggestions(curated.value, worldAirports.value, destination.value, MAX_SUGGESTIONS),
+)
+
+/** Where the divider goes, or -1 when the panel is one list. */
+const worldStartsAt = computed(() => suggestions.value.findIndex((suggestion) => suggestion.world))
 
 /*
  * WHAT WAS PROBABLY MEANT, when nothing was found.
@@ -111,9 +143,20 @@ const suggestions = computed(() => searchDestinations(destinations.value, destin
  * mistake anybody makes on a phone keyboard. Guarded by `suggestions.length`
  * so it can never appear beside real results: it is what the panel says
  * INSTEAD of admitting defeat, not a ninth suggestion.
+ *
+ * AND NOT WHILE THE WORLD SEARCH IS STILL OUT. A guess offered in the quarter
+ * second before the answer arrives is a guess about a question that is about to
+ * be answered properly — and it would appear and vanish under the thumb.
+ *
+ * IT SEARCHES THE CURATED LIST ONLY, which is a deliberate floor rather than a
+ * gap. Edit distance over 184 city names on a keystroke is free and happens
+ * in memory; over 3,270 it is a query nobody has written, and "did you mean"
+ * as a round trip is a suggestion that arrives after the correction.
  */
 const didYouMean = computed(() =>
-  suggestions.value.length === 0 ? nearestDestination(destinations.value, destination.value) : null,
+  suggestions.value.length === 0 && worldStatus.value !== 'searching'
+    ? nearestDestination(destinations.value, destination.value)
+    : null,
 )
 
 /*
@@ -122,6 +165,25 @@ const didYouMean = computed(() =>
  * before anybody had asked it anything.
  */
 const showing = computed(() => open.value && destination.value.trim() !== '')
+
+/**
+ * What the panel says when it has nothing to offer, in the order the three
+ * cases actually happen: still looking, cannot look, found nothing.
+ *
+ * The curated list failing is worth its own sentence because it is the one
+ * that changes what the box can do — no suggestions at all, code only. A world
+ * search that fails is not: the curated list is still there, still instant,
+ * and "no matching destination" is what the person sees either way.
+ */
+const emptyText = computed(() => {
+  if (worldStatus.value === 'searching') {
+    return 'Searching…'
+  }
+
+  return listStatus.value === 'failed'
+    ? 'Suggestions are unavailable — a three-letter code still works.'
+    : 'No matching destination.'
+})
 
 const canSubmit = computed(() => CODE.test(destination.value) && !props.busy)
 
@@ -133,12 +195,17 @@ const canSubmit = computed(() => CODE.test(destination.value) && !props.busy)
  * Enter sent it and the server answered "Orbit does not know an airport with
  * that code" about a place three feet down the suggestion list.
  *
- * A code that is not on this list — one of the origins, or an airport with no
- * `destinations` row — is not "known" here and does not need to be: it falls
- * through to the empty-suggestions branch, which submits.
+ * IT COUNTS THE WORLD SUGGESTIONS TOO, since world flights. "JFK" is a code
+ * Orbit will happily price and is not in the curated list, so without this the
+ * panel would offer JFK, Enter would "take" the suggestion the box already
+ * held, and the form would need a second Enter to send it — the exact
+ * double-press this computed exists to prevent, reintroduced for every airport
+ * outside Europe.
  */
 const isKnownCode = computed(() =>
-  CODE.test(destination.value) && destinations.value.some((place) => place.iata === destination.value),
+  CODE.test(destination.value)
+  && (destinations.value.some((place) => place.iata === destination.value)
+    || suggestions.value.some((suggestion) => suggestion.iata === destination.value)),
 )
 
 /*
@@ -201,6 +268,31 @@ watch(destination, () => {
 })
 
 /*
+ * ASK THE WORLD, on the NORMALISED value.
+ *
+ * This watcher runs after the one above it, so what reaches the store is what
+ * the box will actually show — "MÁLAGA" rather than the "málaga1" that was
+ * typed. The store debounces, so a watcher that fires per keystroke is one
+ * request per word; it also cancels, so the answer to a query somebody has
+ * typed past never reaches the panel. See stores/airports.js.
+ *
+ * IT WATCHES THE VALUE AND NOT THE TYPING, and that distinction cost a browser
+ * test to learn. The obvious guard here is `if (open)` — "only search while
+ * somebody is looking at the list" — and it is wrong, because it depends on
+ * two DOM listeners for the SAME `input` event running in a particular order:
+ * `@input="onType"` opens the panel, `v-model` writes the model, and a pre-flush
+ * watcher runs after both. Type character by character and it works; put a
+ * value in with ONE event — a paste, an autofill, Playwright's `fill()` — and
+ * the watcher can run against an `open` that is still false, so the box holds
+ * "NEW YORK" and never asks anybody about it. The suppression it was for lives
+ * in `choose()` and `reset()` instead, where it is an explicit cancellation of
+ * something this component itself started.
+ */
+watch(destination, (typed) => {
+  world.search(typed)
+})
+
+/*
  * A NEW QUERY UN-HIGHLIGHTS EVERYTHING. Keeping index 2 highlighted while the
  * list underneath it changes is how somebody presses Enter and gets a city
  * they never saw.
@@ -223,6 +315,19 @@ function choose(suggestion) {
   destination.value = suggestion.iata
   open.value = false
   active.value = -1
+
+  /*
+   * AND STOP THE SEARCH THIS FUNCTION JUST STARTED, on the next tick.
+   *
+   * Writing to the box triggers the watcher above exactly as typing does — it
+   * cannot tell the difference and should not have to — so `choose()` queues a
+   * search for the three-letter code it has just put in a panel it has just
+   * closed. `nextTick` is what makes cancelling it reliable: the watcher is
+   * pre-flush and has only STARTED a 250 ms debounce by then, so this lands
+   * before any request is made. Calling `clear()` synchronously here would run
+   * BEFORE the watcher and cancel nothing.
+   */
+  nextTick(() => world.clear())
 }
 
 /*
@@ -322,9 +427,20 @@ function move(step) {
  */
 function scrollActiveIntoView() {
   nextTick(() => {
-    // The optional CALL is for jsdom, which has no layout and therefore no
-    // scrollIntoView — this is a nicety of a real viewport, not behaviour.
-    listbox.value?.children[active.value]?.scrollIntoView?.({ block: 'nearest' })
+    /*
+     * BY ID, NOT BY CHILD INDEX. The panel is no longer a list of nothing but
+     * options — the divider between the curated rows and the world ones is a
+     * child too — so `children[active]` scrolls to the row above the
+     * highlighted one from the divider onwards. The id is the same thing
+     * `aria-activedescendant` names, which makes this the same lookup the
+     * browser is doing.
+     *
+     * The optional CALL is for jsdom, which has no layout and therefore no
+     * scrollIntoView — this is a nicety of a real viewport, not behaviour.
+     */
+    listbox.value
+      ?.querySelector(`#add-destination-option-${active.value}`)
+      ?.scrollIntoView?.({ block: 'nearest' })
   })
 }
 
@@ -368,6 +484,9 @@ function reset() {
   localError.value = ''
   open.value = false
   active.value = -1
+
+  /* Same tick order as `choose()`, same reason. */
+  nextTick(() => world.clear())
 }
 
 defineExpose({ reset })
@@ -440,28 +559,43 @@ defineExpose({ reset })
           default on mousedown stops the browser moving focus at all, so the
           box keeps the caret and the click arrives where it was aimed.
         -->
-        <li
-          v-for="(suggestion, index) in suggestions"
-          :id="`add-destination-option-${index}`"
-          :key="suggestion.iata"
-          class="option"
-          :class="{ 'option--active': index === active }"
-          role="option"
-          :aria-selected="index === active"
-          @mousedown.prevent
-          @click="choose(suggestion)"
-          @mousemove="active = index"
-        >
-          <span class="option__city">
-            {{ suggestion.marks.city.before }}<b>{{ suggestion.marks.city.match }}</b>{{ suggestion.marks.city.after }}
-          </span>
-          <span class="option__code">
-            {{ suggestion.marks.iata.before }}<b>{{ suggestion.marks.iata.match }}</b>{{ suggestion.marks.iata.after }}
-          </span>
-          <span class="option__country">
-            {{ suggestion.marks.country.before }}<b>{{ suggestion.marks.country.match }}</b>{{ suggestion.marks.country.after }}
-          </span>
-        </li>
+        <template v-for="(suggestion, index) in suggestions" :key="suggestion.iata">
+          <!--
+            THE JOIN BETWEEN THE TWO TIERS, drawn once and only when both are
+            on screen. A badge on every world row would be four badges saying
+            the same thing; a header with nothing above it would be a label on
+            a list with nothing to contrast against, which is why this is
+            `worldStartsAt > 0` rather than `>= 0`.
+
+            `role="presentation"` because it is not a choice — the listbox's
+            options are the rows, and a separator that announced itself as one
+            would be a suggestion a screen reader can land on and not take.
+          -->
+          <li v-if="index === worldStartsAt && worldStartsAt > 0" class="options__split" role="presentation">
+            Everywhere else Orbit can price
+          </li>
+
+          <li
+            :id="`add-destination-option-${index}`"
+            class="option"
+            :class="{ 'option--active': index === active }"
+            role="option"
+            :aria-selected="index === active"
+            @mousedown.prevent
+            @click="choose(suggestion)"
+            @mousemove="active = index"
+          >
+            <span class="option__city">
+              {{ suggestion.marks.city.before }}<b>{{ suggestion.marks.city.match }}</b>{{ suggestion.marks.city.after }}
+            </span>
+            <span class="option__code">
+              {{ suggestion.marks.iata.before }}<b>{{ suggestion.marks.iata.match }}</b>{{ suggestion.marks.iata.after }}
+            </span>
+            <span class="option__country">
+              {{ suggestion.marks.country.before }}<b>{{ suggestion.marks.country.match }}</b>{{ suggestion.marks.country.after }}
+            </span>
+          </li>
+        </template>
 
         <!--
           THE TYPO'S WAY OUT, and it is a real `option` because it really is
@@ -483,13 +617,18 @@ defineExpose({ reset })
           <span class="option__code">{{ didYouMean.iata }}</span>
         </li>
 
-        <!-- Not a `role="option"`: there is nothing here to choose. -->
+        <!--
+          Not a `role="option"`: there is nothing here to choose.
+
+          "SEARCHING…" IS NOT A SPINNER, it is the absence of a wrong answer.
+          The curated list has already been searched and found nothing; the
+          other 3,086 airports are being asked about right now, and the panel
+          saying "No matching destination." in the meantime would be a verdict
+          delivered before the evidence. It only ever shows for the length of
+          one debounce plus one request.
+        -->
         <li v-if="suggestions.length === 0 && !didYouMean" class="option option--empty">
-          {{
-            listStatus === 'failed'
-              ? 'Suggestions are unavailable — a three-letter code still works.'
-              : 'No matching destination.'
-          }}
+          {{ emptyText }}
         </li>
       </ul>
     </div>
@@ -684,6 +823,22 @@ defineExpose({ reset })
 .option--empty {
   color: var(--muted);
   cursor: default;
+}
+
+/* The line between the places Orbit has an opinion about and the places it can
+   merely price. It is a caption rather than a row: smaller, quieter, uppercase
+   like the form's own field labels, with the hairline doing the separating so
+   the text does not have to shout to be a boundary. */
+.options__split {
+  margin: 6px 0 2px;
+  padding: 9px 10px 3px;
+  border-top: 1px solid var(--line);
+
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 /* A question rather than a result: quieter than a suggestion, and the city

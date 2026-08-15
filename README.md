@@ -45,8 +45,9 @@ every run). The handful of committed reference images live in `e2e/baselines/`.
   actions: open the route, or book *that day*.
 - **Watchlist.** Boarding-pass rows with a sparkline, a status pill and a
   pause toggle; the top half of a row opens the route. Adding one is an origin
-  button plus a destination typeahead over the seventy-seven places Orbit knows
-  how to fly to. Dropping a route keeps its price history.
+  button plus a destination typeahead over every scheduled airport on Earth —
+  the 184 curated places first, everywhere else underneath. Dropping a route
+  keeps its price history.
 - **Rules in English.** "cheap weekend somewhere sunny in spring, leaving Friday
   from any NL airport, under €80" is parsed into removable chips — From, Max
   price, Trip length, Depart, Date window, Vibe — and stored as what the chips
@@ -122,7 +123,8 @@ The rules behind all of that, with their numbers and their config keys, are
 | `resources/js/` | the Vue SPA — `Views/`, `Components/`, `stores/`, `lib/` |
 | `resources/css/tokens.css` | the design tokens both themes are built from |
 | `database/migrations/`, `database/seeders/` | schema, and the checked-in destination data |
-| `database/seeders/data/european_destinations.php` | 77 destinations with vibes and month-by-month warmth |
+| `database/seeders/data/european_destinations.php`, `world_destinations.php` | 184 curated destinations with vibes and month-by-month warmth |
+| `database/seeders/data/world_airports.csv` | 3,270 airports from OurAirports — everywhere a route may be looked up |
 | `tests/` | PHPUnit — `Unit/Domain` is where the rules are pinned |
 | `e2e/` | Playwright specs, baselines, config |
 | `scripts/` | `check.sh` (the merge gate) and `e2e.sh` (the browser gate) |

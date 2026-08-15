@@ -666,3 +666,96 @@ test('confirming a removal stays on the list', async ({ page }) => {
     await expect(page.locator('.pass')).toHaveCount(6)
     await expect(page.locator('.screen__title')).toHaveText('Watch list')
 })
+
+/*
+ * ============================================================================
+ * THE WORLD, IN THE SAME BOX — world flights
+ * ============================================================================
+ * The typeahead offered 77 European cities and the box refused everything else,
+ * which made the app's one write a write about Europe. It now offers every
+ * scheduled airport on Earth, from two places at once, and the join between
+ * them is the thing worth putting a browser in front of:
+ *
+ *   - the CURATED matches are in memory and paint on the keystroke;
+ *   - the WORLD matches arrive from `GET /api/airports?q=` a quarter of a
+ *     second later, under a divider, deduped against the rows above them.
+ *
+ * WHY jsdom IS NOT ENOUGH HERE. AddRouteForm.test.js already asserts the merge,
+ * the divider and the dedupe against a mocked endpoint. What it cannot see is
+ * the panel growing a second time after the request lands — the same reflow
+ * that made the Add button unpressable when this form first grew a typeahead —
+ * or whether the real endpoint, the real ranking and the real 3,270-row table
+ * answer with what the component expects. The seeded stack has all three.
+ *
+ * AND IT ENDS IN A PRICE. A suggestion nobody can act on is a nicer dead end,
+ * not a feature: the test takes a world-only airport all the way to a priced
+ * route-detail screen, which is the journey the feature exists for.
+ */
+test('the box finds an airport on the other side of the world, and prices it', async ({ page, browserConsole }) => {
+    /* The detail screen's first read is a 404 by design — see the lookup test above. */
+    browserConsole.allow(/Failed to load resource.*404/)
+
+    await page.goto('/watch')
+    await page.getByRole('button', { name: 'Add a route' }).click()
+
+    const form = page.locator('form.add')
+    const field = form.locator('#add-destination')
+    const listbox = form.getByRole('listbox', { name: 'Destination suggestions' })
+    const divider = form.locator('.options__split')
+
+    // --- Both tiers, in one panel --------------------------------------------
+    await field.fill('new york')
+
+    /*
+     * JFK IS CURATED and comes first: it is one of the 184 places with vibes
+     * and month-by-month warmth attached, which is what the rule engine
+     * matches against (docs/BUSINESS-LOGIC.md §1).
+     */
+    const first = listbox.getByRole('option').first()
+    await expect(first).toContainText('New York')
+    await expect(first).toContainText('JFK')
+
+    /*
+     * LGA IS NOT. It is in the OurAirports snapshot, Orbit will price it, and
+     * no rule will ever suggest it — so it sits under the divider that says so.
+     * This assertion is also the one that proves the request really happened:
+     * nothing in the browser knows LaGuardia exists until it answers.
+     */
+    await expect(divider).toHaveText('Everywhere else Orbit can price')
+    await expect(listbox.getByRole('option').filter({ hasText: 'LGA' })).toHaveCount(1)
+
+    await shot(page, 'watchlist-typeahead-world')
+
+    // --- A match that only the world half has --------------------------------
+    await field.fill('newark')
+
+    // Nothing curated matched, so there is nothing for a divider to divide.
+    await expect(divider).toHaveCount(0)
+
+    const newark = listbox.getByRole('option').first()
+    await expect(newark).toContainText('Newark')
+    await expect(newark).toContainText('EWR')
+    await expect(newark).toContainText('United States')
+    // What was typed, bolded inside what the SERVER sent, in its own spelling.
+    await expect(newark.locator('b').first()).toHaveText('Newark')
+
+    await shot(page, 'watchlist-typeahead-world-only')
+
+    await newark.click()
+    await expect(field).toHaveValue('EWR')
+    await expect(listbox).toBeHidden()
+
+    // --- And it is a real route, priced on the spot --------------------------
+    await form.getByRole('radio', { name: 'AMS' }).click()
+    await form.getByRole('button', { name: 'Look up' }).click()
+
+    await expect(page).toHaveURL(/\/route\/AMS-EWR$/)
+    await expect(page.locator('.detail__code')).toHaveText('AMS → EWR')
+    await expect(page.locator('.price__value')).toHaveText(/^€\d+$/)
+
+    await shot(page, 'route-lookup-world')
+
+    // Nothing was watched to get here, and the seeded six are untouched.
+    await page.goto('/watch')
+    await expect(page.locator('.pass')).toHaveCount(6)
+})
