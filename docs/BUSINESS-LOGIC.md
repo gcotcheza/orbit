@@ -142,8 +142,8 @@ a price per departure date; it validated the token, it does not fill a
 calendar.
 
 **Patchy coverage is normal, not a fault.** Travelpayouts serves a cache of
-fares other people's searches already found: 41–87% of the 90-day window across
-the six seeded routes when this was measured. A date with no fare is **absent**,
+fares other people's searches already found: 41–87% of the window across the six
+seeded routes when this was measured, and thinner the further out it looks. A date with no fare is **absent**,
 never zero-priced, and every screen has always handled a gap.
 
 **The currency is checked, not assumed.** The response envelope's `currency`
@@ -152,10 +152,11 @@ the API answering in roubles, its documented default — is silent, and "€92"
 that is really ₽92 is a fare Orbit would shout about. `value` is whole units, so
 cents are a multiplication.
 
-**One month may fail and the poll still counts.** The 90-day window is four
-month-matrix calls; the adapter tolerates one failing, because three months of
-calendar is worth more than none. That tolerance is exactly why stale cells are
-pruned by age rather than by absence from a response — see §4.
+**One month may fail and the poll still counts.** The near window is seven
+month-matrix calls and the weekly far run is twelve; the adapter tolerates one
+failing, because six months of calendar is worth more than none. That tolerance
+is exactly why stale cells are pruned by age rather than by absence from a
+response — see §4.
 
 ### A fare has an age, and the app says what it is
 
@@ -217,48 +218,102 @@ through `now()`.
 
 | what | value | config key | code |
 | --- | --- | --- | --- |
-| window | 90 days ahead (≈91 dates, today inclusive) | `orbit.poll.window_days` | `App\Jobs\PollRoutePrices` |
+| near window | 181 days ahead (≈182 dates, today inclusive) | `orbit.poll.window_days` | `App\Jobs\PollRoutePrices` |
+| maintained horizon | 334 days ahead (≈335 dates) | `orbit.poll.horizon_days` | ditto |
+| far refresh | weekly, Saturday 04:10 | `orbit.poll.far_refresh_weekday` | `routes/console.php` |
 | stagger | 3 minutes between per-route jobs | `orbit.poll.stagger_minutes` | `App\Console\Commands\PollFares` |
-| stale-cell prune | 3 days without a refetch | `orbit.poll.stale_after_days` | `PollRoutePrices` |
+| stale-cell prune | 3 days without a refetch (near), 17 (far) | `orbit.poll.stale_after_days`, `…far_stale_after_days` | `PollRoutePrices` |
 | scope | routes with an **active** watchlist row | — | `Route::onWatchlist()` |
 
-`orbit:poll-fares` is a fan-out: it queues one `PollRoutePrices` per actively
-watched route, delayed by `index × stagger`, so six routes trickle over fifteen
-minutes rather than arriving as a burst against a per-minute rate limit. Nothing
-that talks to a rate-limited third party runs inside the scheduler process.
+**Two horizons, two speeds, and the distinction is load-bearing.** The *near
+window* is what a poll fetches every morning and **the definition of "the
+current price"** — the cheapest fare in the next six months, which is what the
+observation, the sparkline, every deal score and every alert threshold are built
+on. The *maintained horizon* is how far the calendar screen can page: eleven
+months, the airline booking edge, refreshed by one extra run a week. Widening
+the near window makes every route look cheaper; widening the horizon moves no
+number in the app at all. That is why they are two keys.
 
-**One provider call, two writes.** Each job upserts the whole window into
+**Why those exact numbers.** Travelpayouts bills one request per calendar
+*month* a window touches, so cost steps up at a month boundary rather than at a
+day. Brute-forced over every start date in a four-year span: 181 days never
+touches more than 7 months (183 reaches an 8th) and 334 never more than 12 (335
+reaches a 13th). Each is the widest window that never pays for a month it does
+not need.
+
+**The request budget**, which is what put the far run in its own clock hour —
+Travelpayouts allows ~200 requests an hour per IP, nine routes are watched:
+
+| when | what | requests |
+| --- | --- | --- |
+| 06:10 daily | poll, 9 × ≤7 months | 63 |
+| 06:40 daily | rule sweep, 30 × ≤4 months | 120 |
+| | **the ordinary morning's clock hour** | **183** |
+| 04:10 Saturday | far poll, 9 × ≤12 months | 108, alone in that hour |
+
+So the eleven months cost **nothing in the worst hour**. What breaches first is
+the ordinary morning, at **twelve watched routes** (7 × 12 + 120 = 204); the far
+run has room to sixteen. `tests/Unit/Infrastructure/TravelpayoutsPriceProviderTest`
+asserts both halves.
+
+`orbit:poll-fares` is a fan-out: it queues one `PollRoutePrices` per actively
+watched route, delayed by `index × stagger`, so nine routes trickle over
+twenty-four minutes rather than arriving as a burst against a per-minute rate
+limit. Nothing that talks to a rate-limited third party runs inside the scheduler
+process. `orbit:poll-fares --far` is the same fan-out asking for the whole
+horizon; the depth is always in the job's payload and never decided from the day
+of the week inside the job, so a retry fetches what it was queued for and a
+synchronous lookup can never be surprised by twelve provider calls.
+
+**One provider call, two writes.** Each job upserts everything it asked for into
 `calendar_fares` *and* one row into `route_price_history` — that morning's
-cheapest fare anywhere in the window. Splitting them would double the provider
-calls for the same data.
+cheapest fare anywhere in the **near** window, whatever depth the run went to.
+Splitting them would double the provider calls for the same data.
+
+**The observation is always a near-window minimum**, and that bound is what
+keeps the weekly far run out of the history. Taken over whatever a run fetched,
+Saturday's row would be the cheapest fare in the next *eleven* months — lower on
+most routes for no reason but the depth of the fetch — and the series would saw
+up and down every week, with the trend component of the score reading it as a
+fall and a recovery.
 
 **Idempotent per day.** Both writes are upserts keyed on a date, so a retry, a
 manual run or a re-seeded deploy overwrites the day's figures instead of adding
 a second point and bending the trend.
 
-**Three deletions, and they are not the same deletion:**
+**Four deletions, and they are not the same deletion:**
 
 1. **Departures that have gone by** are removed on every successful poll —
    otherwise the table grows a permanent tail of flights nobody can take, and
    the "cheapest this month" banner would happily point at one.
-2. **Future dates that have stopped being quoted** are removed once they are
-   `stale_after_days` old. An upsert only ever writes the dates the provider
-   named this morning, so a date that had a fare last week and none now would
-   keep that fare forever, with nothing in the API marking it. It would colour a
-   heatmap cell, be eligible as the "cheapest departure" a booking link points
-   at, and be matched against by a deal rule — which is this app mailing
-   somebody about a flight that cannot be booked, the one thing it must never
-   do.
-3. **Nothing at all** when the provider answers with an empty list. The job
-   returns before both deletions, so a provider that is down erases nothing.
+2. **Departures past the maintained horizon** are removed on every successful
+   poll too — bounded by `poll.horizon_days`, **never** by the near window.
+   Rows can only get out there by the horizon shrinking, and this clause is
+   also the one the eleven-month calendar turns on: bounded by the near window
+   instead, every far cell would be deleted by the next ordinary morning, six
+   days out of seven.
+3. **Future dates that have stopped being quoted** are removed once they are
+   `stale_after_days` old — in **two passes**, because the two tranches are
+   polled at two speeds. Three days is "two missed mornings plus a day"; a far
+   cell is seven days old before anything asks about it again, so months 7–11
+   get `far_stale_after_days` (17 = two missed weekly refreshes plus the same
+   cushion). An upsert only ever writes the dates the provider named this
+   morning, so a date that had a fare last week and none now would keep that
+   fare forever, with nothing in the API marking it. It would colour a heatmap
+   cell, be eligible as the "cheapest departure" a booking link points at, and
+   be matched against by a deal rule — which is this app mailing somebody about
+   a flight that cannot be booked, the one thing it must never do.
+4. **Nothing at all** when the provider answers with an empty list. The job
+   returns before every deletion, so a provider that is down erases nothing.
 
 **Three days, and by staleness rather than by absence.** The poll is daily and
 the deletion is one-way, so two consecutive failed mornings — or a date simply
 missing from the cache for a day — must not cost the calendar a cell it would
-have got back. And because the adapter deliberately tolerates one of its four
-monthly calls failing, the job cannot tell "that month is empty today" from
-"that month's request 500'd"; deleting every unnamed date would blank a quarter
-of the calendar every time Travelpayouts hiccuped.
+have got back. And because the adapter deliberately tolerates one of its seven
+(or twelve) monthly calls failing, the job cannot tell "that month is empty
+today" from "that month's request 500'd"; deleting every unnamed date would blank
+a seventh of the calendar every time Travelpayouts hiccuped — and, on the far
+tranche under the daily rule, a whole month every Saturday.
 
 **Deleted, not filtered.** Four places read this table and each would otherwise
 have to remember the same clause forever.
@@ -307,7 +362,7 @@ Two horizons, both of them real fares this app fetched:
 
 | horizon | source | available | its median means |
 | --- | --- | --- | --- |
-| **cross-sectional** | the ~91 `calendar_fares` of the current window | from the **first** poll | what a typical departure date on this route costs right now |
+| **cross-sectional** | the ~182 `calendar_fares` of the **near** window | from the **first** poll | what a typical departure date on this route costs right now |
 | **longitudinal** | `route_price_history`, one row per morning | takes weeks | what this route's cheapest fare has actually been, morning after morning |
 
 The longitudinal view is the better comparison once it exists, because the fare
@@ -329,7 +384,22 @@ for each of `min`, `p25`, `median`, `p75`, `max`.
 | what | value | config key |
 | --- | --- | --- |
 | maturity | 30 observations | `orbit.selfstats.maturity_observations` |
-| longitudinal reach | 365 days | `orbit.selfstats.history_days` |
+| longitudinal reach | 365 days back | `orbit.selfstats.history_days` |
+| cross-sectional reach | 181 days forward | `orbit.selfstats.cross_section_days` |
+
+**The cross-section stops at the near window, not at the calendar's edge.**
+`calendar_fares` runs eleven months deep (§4) and "usual" must not, for two
+reasons that are one reason. What survives out at nine and ten months is not a
+random sample: the provider's cache thins with distance, so what is left is
+disproportionately Christmas, Easter and the school holidays — pooled in, those
+peaks lift the upper knots and every route quietly scores as a better deal than
+it is, against the input the score weights at 60%. And the fare *being* scored is
+the minimum of the **near** window, so the distribution it is compared against
+has to be drawn from the same days: like against like, which is the argument the
+longitudinal half rests on too. The near window's 181 is written out a second
+time under `selfstats` rather than referenced, because the two are different
+decisions — a budget for what to fetch daily, and a claim about which departures
+are comparable — and `tests/Feature/SelfStatsProviderTest` asserts they agree.
 
 A convex combination of two non-decreasing five-number summaries is
 non-decreasing, and `round()` is monotone — so the result can never violate
@@ -344,7 +414,7 @@ threshold would move a route's usual price — and every score hanging off it �
 whatever the two views happened to disagree by that morning.
 
 **What "usual" honestly means, by phase.** Days 1–29 it is *the going rate
-across the next three months*; from day 30 it is *what the cheapest fare on this
+across the next six months*; from day 30 it is *what the cheapest fare on this
 route has actually been, morning after morning*. At day 15 it is honestly half
 of each.
 
@@ -1079,7 +1149,8 @@ looked at their phone. Every entry is `withoutOverlapping()`.
 
 | when | command | why that time |
 | --- | --- | --- |
-| **06:10 daily** | `orbit:poll-fares` | before the owner is awake, after the airlines' overnight fare loads have settled. Fans out per-route jobs at a 3-minute stagger |
+| **06:10 daily** | `orbit:poll-fares` | before the owner is awake, after the airlines' overnight fare loads have settled. Fans out per-route jobs at a 3-minute stagger, each asking for the **near** window |
+| **Sat 04:10** | `orbit:poll-fares --far` | the same fan-out asking for the whole **eleven-month** horizon — twelve provider calls a route where the daily poll costs seven. In its own clock hour because 9 × 12 beside the sweep's 120 would be 228 against a ~200/hour limit; Saturday because eleven months out is holiday planning. It does **not** replace that day's 06:10 poll, and cannot: both write the same near-window observation, idempotently |
 | **06:40 daily** | `orbit:sweep-rules` | **after** the poll, so the sweep's capped budget is not spent re-fetching routes the watchlist just priced. Half an hour is comfortable room for six staggered polls |
 | **06:55 daily** | `orbit:alerts` | **last**. It talks to no provider — every fare it reads was written by the two runs above. Running it first would not fail; it would mail this morning's verdict on yesterday's prices, every day, invisibly |
 | **Mon 05:40** | `orbit:refresh-stats` | ahead of that morning's poll, so the week's scores are read against the week's statistics. Weekly because the answer is monthly: a route's usual price is built from months of fares, and the score is deliberately most sensitive to it — an argument for it being stable, not fresh |
@@ -1096,6 +1167,7 @@ runnable by hand:
 
 ```bash
 docker compose exec app php artisan orbit:poll-fares --now
+docker compose exec app php artisan orbit:poll-fares --far --now   # months 7-11
 docker compose exec app php artisan orbit:sweep-rules --now
 docker compose exec app php artisan orbit:alerts --now
 docker compose exec app php artisan orbit:refresh-stats --now

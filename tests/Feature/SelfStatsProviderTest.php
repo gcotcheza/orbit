@@ -85,6 +85,87 @@ final class SelfStatsProviderTest extends TestCase
         $this->assertNotNull($this->provider()->statsFor('ams', 'lis'));
     }
 
+    /**
+     * THE CROSS-SECTION IS THE NEAR WINDOW, NOT THE WHOLE CALENDAR, which is
+     * what `orbit.selfstats.cross_section_days` buys.
+     *
+     * `calendar_fares` runs eleven months deep now (`orbit.poll.horizon_days`),
+     * and the far end of it is sparse in a way that is not random: the
+     * provider's cache thins with distance, so what survives out there is
+     * disproportionately Christmas, Easter and the school holidays. Pooled in,
+     * those peak fares lift the upper knots — the €300 below moves the median,
+     * the p75 and the max — and every route on the watchlist quietly scores as a
+     * better deal than it is, against the 60%-weighted input of the score.
+     *
+     * The eight near fares are the fixture every other test in this file uses,
+     * so the expected numbers are the same ones: the far fare has to change
+     * nothing at all.
+     */
+    #[Test]
+    public function fares_beyond_the_near_window_are_not_part_of_what_a_route_usually_costs(): void
+    {
+        $route = $this->route();
+        $this->calendar($route, self::WINDOW);
+
+        /* A peak-season fare nine months out — real, fetched, and not "usual". */
+        CalendarFare::query()->create([
+            'route_id' => $route->id,
+            'departure_date' => Date::now()->startOfDay()->addDays(270)->toDateString(),
+            'price_cents' => 30000,
+            'fetched_at' => Date::now(),
+        ]);
+
+        $stats = $this->provider()->statsFor('AMS', 'LIS');
+
+        $this->assertNotNull($stats);
+        $this->assertSame([1000, 2000, 4000, 6000, 8000], $this->knots($stats));
+        $this->assertSame(4000, $stats->usualCents(), 'A far peak fare moved the usual price.');
+    }
+
+    /**
+     * THE EDGE ITSELF, one day either side of it, because "181 days" is only a
+     * fact if the boundary is inclusive the way the poll writes it.
+     */
+    #[Test]
+    public function the_pool_reaches_exactly_as_far_as_the_configured_window(): void
+    {
+        $route = $this->route();
+        $days = (int) config('orbit.selfstats.cross_section_days');
+
+        foreach ([$days => 2000, $days + 1 => 8000] as $ahead => $cents) {
+            CalendarFare::query()->create([
+                'route_id' => $route->id,
+                'departure_date' => Date::now()->startOfDay()->addDays($ahead)->toDateString(),
+                'price_cents' => $cents,
+                'fetched_at' => Date::now(),
+            ]);
+        }
+
+        $stats = $this->provider()->statsFor('AMS', 'LIS');
+
+        $this->assertNotNull($stats);
+        $this->assertSame([2000, 2000, 2000, 2000, 2000], $this->knots($stats), 'The last day of the window is in, the first day past it is out.');
+    }
+
+    /**
+     * THE DRIFT GUARD, and the reason config/orbit.php writes 181 out twice.
+     *
+     * The two keys are different decisions — one is a budget for what to fetch
+     * daily, the other a claim about which departures are comparable — but the
+     * fare being scored IS the minimum of the near window (App\Jobs\
+     * PollRoutePrices), so scoring it against a pool drawn from any other span
+     * compares a best against a typical over a different set of days. If a box
+     * narrows one of these, this failure is where it finds out about the other.
+     */
+    #[Test]
+    public function the_statistical_pool_and_the_near_poll_window_are_the_same_span(): void
+    {
+        $this->assertSame(
+            (int) config('orbit.poll.window_days'),
+            (int) config('orbit.selfstats.cross_section_days'),
+        );
+    }
+
     // ------------------------------------------------------------- the blend
 
     #[Test]
@@ -322,7 +403,11 @@ final class SelfStatsProviderTest extends TestCase
 
     private function provider(int $maturityObservations = 30, int $historyDays = 365): SelfStatsProvider
     {
-        return new SelfStatsProvider($maturityObservations, $historyDays);
+        return new SelfStatsProvider(
+            $maturityObservations,
+            $historyDays,
+            (int) config('orbit.selfstats.cross_section_days'),
+        );
     }
 
     private function route(): Route

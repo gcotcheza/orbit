@@ -185,23 +185,28 @@ test('the month grid is a heat map, not a table of identical squares', async ({ 
 })
 
 /**
- * THE EDGE OF THE POLL WINDOW, walked in a real browser.
+ * THE EDGE OF THE MAINTAINED HORIZON, walked in a real browser.
  *
- * `orbit.poll.window_days` is six months, so the arrows offer this month and
- * six more and then stop. The failure this catches is the pair of numbers
- * drifting apart — a config widened without the screen following it hides half
- * a year of fares behind a disabled arrow, and a screen that walks further than
- * the poller reaches promises months that can never have anything in them.
+ * `orbit.poll.horizon_days` is 334 days — eleven months, the airline booking
+ * edge — and 334 can never touch more than twelve calendar months, so the arrows
+ * offer this month and eleven more and then stop. The failure this catches is
+ * the pair of numbers drifting apart: a horizon widened without the screen
+ * following it hides months of real fares behind a disabled arrow, and a screen
+ * that walks further than the poller reaches promises months that can never have
+ * anything in them.
  *
- * WHAT THE LAST MONTH CONTAINS IS NOT ASSERTED HERE, deliberately. A window
- * that opens on the 1st of a short month closes inside the sixth one, so on a
- * few mornings a year the last grid is legitimately empty — and a suite that
- * only passes on the other 95% of days is worse than no suite. That the empty
- * state renders is pinned deterministically in resources/js/Views/
- * Calendar.test.js, against a stubbed endpoint. What matters HERE is that the
- * screen is showing a calendar rather than an error at the far end.
+ * WHAT THE MONTHS CONTAIN IS NOT ASSERTED HERE, deliberately, and that matters
+ * more now than it did at six months. The sandbox seeds fares by polling with
+ * the NEAR window, so months 7 to 11 are legitimately empty here — as they are
+ * in production for a route added since the last weekly far run, and as the far
+ * end is whenever a horizon opens early in a month. A suite that only passed
+ * with a full grid at the far end would be asserting the seed rather than the
+ * app. That the empty state renders is pinned deterministically in
+ * resources/js/Views/Calendar.test.js, against a stubbed endpoint. What matters
+ * HERE is that the screen is showing a calendar rather than an error at the far
+ * end.
  */
-test('the month arrows walk six months forward and stop', async ({ page }) => {
+test('the month arrows walk eleven months forward and stop', async ({ page }) => {
     await page.goto('/calendar')
 
     const subtitle = page.locator('.calendar__subtitle')
@@ -232,7 +237,7 @@ test('the month arrows walk six months forward and stop', async ({ page }) => {
      * BACK TO THE NEAR EDGE BEFORE COUNTING FORWARD, and that is the one thing
      * this test had to learn from the landing change. The screen no longer
      * opens on the current month — it opens on the month the selected route's
-     * CHEAPEST departure is in — so "walk six and stop" has to start from the
+     * CHEAPEST departure is in — so "walk eleven and stop" has to start from the
      * edge rather than from wherever the fares put it.
      *
      * Which is also the clamp, asserted: the landing month is inside
@@ -247,7 +252,7 @@ test('the month arrows walk six months forward and stop', async ({ page }) => {
     await expect(prev).toBeDisabled()
     await expect(subtitle).toHaveText(`Cheapest fare per day · ${label(0)}`)
 
-    for (let ahead = 1; ahead <= 6; ahead += 1) {
+    for (let ahead = 1; ahead <= 11; ahead += 1) {
         await expect(next, `the arrow was already dead at +${ahead - 1}`).toBeEnabled()
         await next.click()
         await expect(subtitle).toHaveText(`Cheapest fare per day · ${label(ahead)}`)

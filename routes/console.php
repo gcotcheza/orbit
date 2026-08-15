@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Schedule;
 |--------------------------------------------------------------------------
 |
 | Run by the `scheduler` container (`php artisan schedule:work`, see
-| docker-compose.yml). Both entries are FAN-OUT COMMANDS that queue one job per
-| route onto redis, where Horizon picks them up — the scheduler's job is to
+| docker-compose.yml). The fare entries are FAN-OUT COMMANDS that queue one job
+| per route onto redis, where Horizon picks them up — the scheduler's job is to
 | decide WHEN, and nothing that talks to a rate-limited third party should be
 | running inside the process that keeps the clock.
 |
@@ -41,6 +41,43 @@ $timezone = (string) config('orbit.timezone');
  */
 Schedule::command('orbit:poll-fares')
     ->dailyAt('06:10')
+    ->timezone($timezone)
+    ->withoutOverlapping();
+
+/*
+ * THE FAR MONTHS, ONCE A WEEK — Orbit maintains eleven months of calendar
+ * (`orbit.poll.horizon_days`) and the entry above fetches the near six of them
+ * every morning. This is the run that fills in months 7 to 11.
+ *
+ * WEEKLY BECAUSE A FARE ELEVEN MONTHS OUT MOVES ON AN AIRLINE'S TIMETABLE, not
+ * on this morning's cache churn — and because nothing but the calendar screen
+ * reads those cells. No deal score, no alert threshold and no statistic is
+ * computed from them (config/orbit.php: `poll.window_days` and
+ * `selfstats.cross_section_days` are both the near window), so a far month that
+ * is six days old costs a person nothing but a price that has moved a little.
+ *
+ * 04:10 AND NOT 06:10, WHICH IS ENTIRELY ABOUT THE REQUEST BUDGET. This run
+ * costs twelve provider calls per watched route where the daily poll costs
+ * seven, and Travelpayouts allows ~200 an hour per IP. In the 06:00 hour, next
+ * to the rule sweep's 120, it would be 9 × 12 + 120 = 228 and over the limit; in
+ * an otherwise empty 04:00 hour it is 108, and the ordinary morning below is
+ * left exactly as it was. The whole table is in config/orbit.php's `poll`
+ * section, including the watchlist size at which the ORDINARY morning breaches.
+ *
+ * WHICH DAY IS CONFIGURED, not fixed: `orbit.poll.far_refresh_weekday`, 0 for
+ * Sunday through 6 for Saturday, exactly as weeklyOn() reads it. Saturday,
+ * because eleven months out is holiday planning and holiday planning happens at
+ * a weekend.
+ *
+ * IT DOES NOT REPLACE THAT MORNING'S POLL and must not be made to: the daily
+ * entry still runs on the far day, four hours later, and both write the same
+ * day's observation from the same near window (App\Jobs\PollRoutePrices bounds
+ * it deliberately). Two idempotent upserts, in a fixed order, for 63 requests a
+ * week — which is the price of never having a Saturday whose history row means
+ * something different from every other day's.
+ */
+Schedule::command('orbit:poll-fares --far')
+    ->weeklyOn((int) config('orbit.poll.far_refresh_weekday'), '04:10')
     ->timezone($timezone)
     ->withoutOverlapping();
 

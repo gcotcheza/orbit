@@ -7,16 +7,18 @@
 // can actually be read back. This is about the two things the six-month window
 // changed and neither of those can see:
 //
-//   1. HOW FAR THE ARROWS GO. `orbit.poll.window_days` is six months, so the
-//      screen offers this month and six more. One arrow too few hides a month
-//      of real fares; one too many is a promise of data that cannot exist.
+//   1. HOW FAR THE ARROWS GO. `orbit.poll.horizon_days` is 334 days, which can
+//      never touch more than twelve calendar months, so the screen offers this
+//      month and eleven more. One arrow too few hides a month of real fares;
+//      one too many is a promise of data that cannot exist.
 //
-//   2. WHAT THE FAR END LOOKS LIKE WHEN IT IS EMPTY. A window that opens on the
-//      1st of a short month closes INSIDE the sixth one, so on a few mornings a
-//      year the last reachable month holds nothing — and the same is true of
-//      every month of a route added this morning. The e2e suite cannot produce
-//      that case: its fake provider prices every day of the window, always.
-//      Here the endpoint is a stub and an empty month is one line of fixture.
+//   2. WHAT THE FAR END LOOKS LIKE WHEN IT IS EMPTY, which is now the ORDINARY
+//      case rather than a few mornings a year: months 7 to 11 are refreshed
+//      once a week, the provider's cache thins with distance, and a horizon
+//      that opens early in a month closes inside the twelfth one. The e2e suite
+//      cannot produce an empty month at all — its fake provider prices every
+//      day of whatever window it is handed. Here the endpoint is a stub and an
+//      empty month is one line of fixture.
 //
 // EVERY EXPECTED MONTH IS DERIVED, never written out. The screen's first month
 // is `currentMonthKey()` read at import time, so a test that named "February
@@ -128,10 +130,10 @@ describe('how far the arrows go', () => {
         expect(next(wrapper).attributes('disabled')).toBeUndefined()
     })
 
-    it('walks forward six months and stops', async () => {
+    it('walks forward eleven months and stops', async () => {
         const wrapper = await mountCalendar()
 
-        for (let month = 1; month <= 6; month += 1) {
+        for (let month = 1; month <= 11; month += 1) {
             expect(next(wrapper).attributes('disabled'), `the arrow died at +${month}`).toBeUndefined()
 
             await step(wrapper, next(wrapper))
@@ -141,9 +143,9 @@ describe('how far the arrows go', () => {
             )
         }
 
-        // Six months out is the edge of the poll window: there is nothing
-        // beyond it to ask for, and the arrow says so rather than fetching an
-        // empty grid.
+        // Eleven months out is the edge of the maintained horizon — the airline
+        // booking edge — so there is nothing beyond it to ask for, and the arrow
+        // says so rather than fetching a grid that can only be empty.
         expect(next(wrapper).attributes('disabled')).toBeDefined()
         expect(prev(wrapper).attributes('disabled')).toBeUndefined()
     })
@@ -171,12 +173,12 @@ describe('how far the arrows go', () => {
 
 describe('a month at the far end with no fares in it', () => {
     it('says so rather than drawing a legend across nothing', async () => {
-        const far = addMonths(currentMonthKey(), 6)
+        const far = addMonths(currentMonthKey(), 11)
         answering({ emptyMonths: [far] })
 
         const wrapper = await mountCalendar()
 
-        for (let month = 1; month <= 6; month += 1) {
+        for (let month = 1; month <= 11; month += 1) {
             await step(wrapper, next(wrapper))
         }
 
@@ -192,11 +194,11 @@ describe('a month at the far end with no fares in it', () => {
     })
 
     it('is a 200 and not an error — the "could not load" copy stays away', async () => {
-        answering({ emptyMonths: [addMonths(currentMonthKey(), 6)] })
+        answering({ emptyMonths: [addMonths(currentMonthKey(), 11)] })
 
         const wrapper = await mountCalendar()
 
-        for (let month = 1; month <= 6; month += 1) {
+        for (let month = 1; month <= 11; month += 1) {
             await step(wrapper, next(wrapper))
         }
 
@@ -258,12 +260,12 @@ describe('which month it opens on', () => {
     })
 
     it('clamps a date past the end of the window back to the last month', async () => {
-        const far = addMonths(currentMonthKey(), 11)
+        const far = addMonths(currentMonthKey(), 14)
         watching(`${far}-04`)
 
         const wrapper = await mountCalendar()
 
-        expect(subtitle(wrapper)).toBe(`Cheapest fare per day · ${monthLabel(addMonths(currentMonthKey(), 6))}`)
+        expect(subtitle(wrapper)).toBe(`Cheapest fare per day · ${monthLabel(addMonths(currentMonthKey(), 11))}`)
         // The far edge, so forward is dead and back is not: the screen landed
         // INSIDE the window rather than past the end of it.
         expect(next(wrapper).attributes('disabled')).toBeDefined()

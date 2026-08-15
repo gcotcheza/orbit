@@ -45,7 +45,7 @@ use Illuminate\Support\Facades\Date;
  *
  * SYNCHRONOUS, AND THAT IS THE POINT. The two jobs below are the same ones
  * `POST /api/watchlist` queues; run inline they cost the request one provider
- * round trip per calendar month of the poll window (six or seven), which is the
+ * round trip per calendar month of the NEAR window (six or seven), which is the
  * one to three seconds the lookup screen shows "Checking current fares…" for.
  * Queueing them instead would answer with an empty route and no way for the
  * person looking at it to know when to look again — which is exactly the state
@@ -119,17 +119,34 @@ final readonly class FareFreshness
         }
 
         /*
-         * THE FULL POLL WINDOW, not a cheaper slice of it. `price.current` is
-         * defined as the cheapest fare in the next six months (docs/API.md) and
-         * the calendar screen pages across all of it — a route fetched three
-         * months deep would look cheaper or dearer than a watched one for no
-         * reason a reader could see, and its calendar would end in the middle.
+         * THE WHOLE NEAR WINDOW, not a cheaper slice of it. `price.current` is
+         * defined as the cheapest fare in the next six months (docs/API.md) — a
+         * route fetched three months deep would look cheaper or dearer than a
+         * watched one for no reason a reader could see, and every number on the
+         * screen next to it is computed from those same 181 days.
+         *
+         * AND NOT THE ELEVEN-MONTH HORIZON EITHER, which is the newer half of
+         * the decision. A watched route's calendar runs to
+         * `orbit.poll.horizon_days` because one scheduled run a week can afford
+         * twelve provider calls per route; a lookup cannot, because the calls
+         * are SEQUENTIAL and SOMEBODY IS WAITING — twelve round trips at up to
+         * 15 s a read is not a screen anybody sits through — and because the
+         * endpoint's throttle is derived from what one miss costs
+         * (config/orbit.php, `lookup`): twelve calls a miss would spend the
+         * hourly allowance on twenty lookups.
+         *
+         * WHAT A LOOKED-UP ROUTE THEREFORE LACKS is months 7 to 11. Nothing
+         * shows them — the calendar screen only draws routes on the watchlist —
+         * and the first weekly far run after it is watched fills them in.
+         *
+         * PASSED EXPLICITLY rather than left to the job's default, so this
+         * choice is visible at the call site that pays for it.
          *
          * `dispatchSync` runs the job's handle() through the container here and
          * now. It is not a queued dispatch that happens to be fast: nothing is
          * serialised, nothing retries, and an exception is this request's.
          */
-        PollRoutePrices::dispatchSync($route->id);
+        PollRoutePrices::dispatchSync($route->id, (int) config('orbit.poll.window_days'));
 
         /*
          * AND WHAT IT USUALLY COSTS, in the same breath. `self` statistics are

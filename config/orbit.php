@@ -107,11 +107,12 @@ return [
     | token.
     |
     | THE ENDPOINT IS `/v2/prices/month-matrix`, one call per calendar month the
-    | poll window touches — seven for the standard 181 days, and six on the few
-    | mornings a window that starts on the 1st closes inside the sixth month.
-    | That per-MONTH billing is why `poll.window_days` and
-    | `rules.sweep_horizon_days` are the odd numbers they are. It is the only
-    | one of the three candidates that answers the port's actual question.
+    | poll window touches — seven for the standard 181 days, six on the few
+    | mornings a window that starts on the 1st closes inside the sixth month, and
+    | twelve for the weekly 334-day run. That per-MONTH billing is why
+    | `poll.window_days`, `poll.horizon_days` and `rules.sweep_horizon_days` are
+    | the odd numbers they are. It is the only one of the three candidates that
+    | answers the port's actual question.
     | Measured against the live API on 2026-08-15:
     |
     |   - `/v2/prices/month-matrix` — ONE-WAY (every one of 433 recorded entries
@@ -137,9 +138,10 @@ return [
     |
     | TIMEOUTS ARE SHORT AND THE RETRY IS SINGLE. Nobody is waiting on this — it
     | is a queued job at 06:10 — but the poll is seven calls per watched route
-    | in a stagger (fifty-odd of them across the current watchlist) and a
-    | provider that has stopped answering should fail the morning rather than
-    | occupy a worker until Horizon's timeout kills it mid-upsert.
+    | in a stagger (sixty-odd of them across the current watchlist, and a hundred
+    | on the far morning) and a provider that has stopped answering should fail
+    | the morning rather than occupy a worker until Horizon's timeout kills it
+    | mid-upsert.
     |
     | NO CURRENCY KEY. Every price in this app is euro cents, from the migration
     | to the alert mail, so the request asks for EUR in the adapter and REFUSES a
@@ -213,13 +215,13 @@ return [
     |
     | THE TWO HORIZONS IT SUMMARISES, both of them real fares this app fetched:
     |
-    |   CROSS-SECTIONAL — every cell of `calendar_fares`, i.e. the fares for the
-    |   ~182 departure dates in the current poll window. Available from the FIRST
-    |   poll, which is what makes a deal score possible on the day a route is
-    |   added. Its median answers "what does a typical departure date on this
-    |   route cost right now" — over SIX months of departures since
-    |   `poll.window_days` widened, which is a broader question than the three
-    |   months it used to summarise and a slightly different median.
+    |   CROSS-SECTIONAL — the fares for the ~182 departure dates in the NEAR
+    |   window (`cross_section_days` below). Available from the FIRST poll, which
+    |   is what makes a deal score possible on the day a route is added. Its
+    |   median answers "what does a typical departure date on this route cost
+    |   right now" — over SIX months of departures since `poll.window_days`
+    |   widened, which is a broader question than the three months it used to
+    |   summarise and a slightly different median.
     |
     |   LONGITUDINAL — `route_price_history`, one row per morning, each the
     |   cheapest fare anywhere in that morning's window. It takes weeks to mean
@@ -250,6 +252,33 @@ return [
     | about a market that has moved on — and it also keeps the pool bounded at
     | 365 rows per route rather than growing for the life of the app.
     |
+    | CROSS_SECTION_DAYS CAPS HOW FAR FORWARD THE OTHER POOL REACHES, and it
+    | exists because `calendar_fares` now runs ELEVEN months deep
+    | (`poll.horizon_days`) while "usual" must not.
+    |
+    |   WHAT THE FAR MONTHS WOULD DO TO IT. Months 7 to 11 out are sparse — the
+    |   provider's cache thins with distance, so what survives out there is
+    |   disproportionately the dates people actually search: Christmas, Easter,
+    |   the school holidays. Pooling them with the near six months does not
+    |   widen the distribution evenly, it drags the upper knots up with a
+    |   handful of peak-season fares, and every route quietly becomes a better
+    |   deal than it is. The 60%-weighted percentile of the deal score is the
+    |   one input in this app that must not move for a reason nobody asked for.
+    |
+    |   IT IS ALSO THE HONEST COMPARISON. The fare being scored is the cheapest
+    |   in the NEAR window (App\Jobs\PollRoutePrices writes exactly one
+    |   observation a morning and takes it from those 181 days), so the
+    |   distribution it is scored against has to be drawn from the same 181 days
+    |   — like against like, which is the argument the longitudinal half is
+    |   built on too.
+    |
+    |   181, WRITTEN OUT RATHER THAN REFERENCED. It is the near window's number
+    |   and it must track it — tests/Feature/SelfStatsProviderTest asserts the
+    |   two agree, which is the drift guard — but they are different decisions:
+    |   `poll.window_days` is a budget for what to fetch daily, and this is a
+    |   statistical claim about which departures are comparable. A box that
+    |   narrows one has to think about the other.
+    |
     | NEITHER HORIZON IS EVER INVENTED. A route with no calendar fares and no
     | history gets NULL, the port's real answer, and App\Domain\Pricing\
     | DealScorer renormalises its weights over what is left.
@@ -259,6 +288,7 @@ return [
     'selfstats' => [
         'maturity_observations' => 30,
         'history_days' => 365,
+        'cross_section_days' => 181,
     ],
 
     /*
@@ -500,36 +530,105 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Polling
+    | Polling — eleven months, at two speeds
     |--------------------------------------------------------------------------
     |
-    | WINDOW_DAYS is how far ahead a poll looks, and it is the definition of
-    | "the current price": the cheapest fare in the next six months. Widening it
-    | makes every route look cheaper, so it is one number in one place rather
-    | than a literal in the job and a different literal in the calendar.
+    | THERE ARE TWO HORIZONS HERE AND THEY ANSWER TWO DIFFERENT QUESTIONS. Every
+    | number below hangs off which of the two it belongs to, so read this first:
     |
-    | SIX MONTHS RATHER THAN THREE because the owner asked to see past the edge
-    | of the old window ("can we see beyond that?"), and a summer holiday is
-    | booked in February. Everything downstream follows this number on its own:
-    | the calendar's arrows stop where it stops, and `selfstats`' cross-sectional
-    | median is now the going rate across six months of departures rather than
-    | three — a wider, flatter pool that reads a little differently on day one.
-    | The blend, the score and the thresholds are untouched.
+    |   WINDOW_DAYS (181, ~6 months) is THE NEAR WINDOW: what a poll fetches on
+    |   an ordinary morning, and the definition of "the current price" — the
+    |   cheapest fare in the next six months. It is the pool the daily
+    |   observation is taken from (App\Jobs\PollRoutePrices), the pool
+    |   `selfstats` summarises, and therefore the number every deal score, alert
+    |   threshold and sparkline point in this app is built on.
     |
-    | 181 AND NOT 183, WHICH IS THE ONE NUMBER HERE WORTH THE ARITHMETIC.
-    | Travelpayouts answers a CALENDAR MONTH at a time (see the `travelpayouts`
-    | section), so a window costs one request per month it touches and the cost
-    | steps up at a month boundary rather than at a day. 181 days can never
-    | touch more than seven months — checked against every start date in a
-    | four-year span — while 183 reaches an eighth on 34 mornings a year, from
-    | the 30th of a long month. That eighth request buys two days of departures
-    | at the far end nobody is looking at, and it lands on exactly the mornings
-    | the sweep below is also at its most expensive. Six months of fares is what
-    | this is for; 181 is the widest window that never pays for a month it does
-    | not need.
+    |   HORIZON_DAYS (334, ~11 months) is HOW FAR THE APP MAINTAINS A CALENDAR:
+    |   the far edge of the heat map, the month the arrows stop at, and the line
+    |   past which PollRoutePrices deletes cells as unmaintained. It is refreshed
+    |   WEEKLY rather than daily — see `far_refresh_weekday` below.
     |
-    | STAGGER_MINUTES spaces the per-route jobs so six providers calls do not
-    | arrive as a burst — the real APIs are rate-limited per minute.
+    | Widening the near window makes every route look cheaper; widening the
+    | horizon does not move a single score. That is the whole reason they are two
+    | keys rather than one, and it is why the far months could be added at all.
+    |
+    | ELEVEN MONTHS BECAUSE THAT IS THE BOOKING EDGE. Airlines load schedules
+    | roughly eleven months out, so a twelfth month is a request that reliably
+    | answers with nothing. The owner asked to see past the six ("extend it"):
+    | a summer holiday is booked in February and a Christmas flight in January,
+    | and neither was reachable from a six-month calendar.
+    |
+    | 334 AND NOT 335, WHICH IS THE SAME ARITHMETIC 181 IS. Travelpayouts
+    | answers a CALENDAR MONTH at a time (see the `travelpayouts` section), so a
+    | window costs one request per month it touches and the cost steps up at a
+    | month boundary rather than at a day. Brute-forced over every start date in
+    | a four-year span:
+    |
+    |     181 days  →  never more than  7 months   (183 reaches an 8th)
+    |     334 days  →  never more than 12 months   (335 reaches a 13th, on the
+    |                                               31st of a long month, ~5
+    |                                               mornings a year)
+    |
+    | A thirteenth request would buy one day of departures at an edge airlines
+    | have not loaded yet, on exactly the mornings everything else is at its most
+    | expensive. 334 is the widest horizon that never pays for a month it does
+    | not need — the same sentence 181 has always carried.
+    |
+    | FAR_REFRESH_WEEKDAY IS THE SECOND SPEED, and it is a day of the week rather
+    | than a period: 0 is Sunday, 6 is Saturday, as `Schedule::weeklyOn()` reads
+    | it. routes/console.php runs `orbit:poll-fares --far` on that morning, which
+    | polls the whole 334 days for every watched route; the daily 06:10 poll goes
+    | on fetching the near window on all seven mornings including that one.
+    |
+    |   WEEKLY IS WHAT THE FAR MONTHS ARE WORTH. A fare eleven months out moves
+    |   on the timescale an airline reprices a fare bucket, not on this
+    |   morning's cache churn, and nothing downstream reads those cells except a
+    |   person paging the calendar. Daily would be 45 more requests every day of
+    |   the year for a number that is the same number.
+    |
+    |   SATURDAY because the far months are what somebody browses at a weekend —
+    |   the eleven-month calendar is holiday planning, not a commute — so it is
+    |   refreshed going INTO the weekend rather than in the middle of the week.
+    |
+    |   AND IT IS AN EXTRA FETCH, NOT A DEEPER ONE. The far run re-fetches the
+    |   seven near months it shares with the daily poll (63 of its 108 requests,
+    |   below), which is deliberate: the alternative is a job that fetches a
+    |   SLICE of the calendar, and then a morning's observation would mean "the
+    |   cheapest fare in the next six months" or "in months 7 to 11" depending on
+    |   which run happened to write it. One job, one shape, always idempotent.
+    |
+    | THE BUDGET, WHICH IS THE REAL CONSTRAINT — Travelpayouts allows ~200
+    | requests an hour per IP, and this is the whole table (nine watched routes,
+    | which is the watchlist today):
+    |
+    |   AN ORDINARY MORNING, all of it inside the 06:00 clock hour:
+    |
+    |     06:10  the poll     9 watched × ≤7 months   =  63
+    |     06:40  the sweep   30 capped  × ≤4 months   = 120   (`rules` below)
+    |                                                   ---
+    |                                                   183   of ~200
+    |
+    |   THE FAR MORNING, once a week, in the 04:00 hour with nothing else in it:
+    |
+    |     04:10  the far poll 9 watched × ≤12 months  = 108
+    |
+    |   That day's 06:00 hour is the same 183 as every other day. THE ELEVEN
+    |   MONTHS COST NOTHING IN THE WORST HOUR, which is the reason the far run
+    |   is a separate schedule entry at a separate time rather than a deeper
+    |   Wednesday poll — 9 × 12 + 120 = 228 would have been over the limit.
+    |
+    |   WHERE IT BREAKS, so nobody has to rediscover it: at W watched routes the
+    |   06:00 hour costs 7W + 120 and the far hour costs 12W. The ORDINARY
+    |   morning is the binding constraint and breaches ~200 at W = 12 (204),
+    |   while the far run has room to W = 16 (192). The twelfth watched route is
+    |   what needs a plan — a wider stagger spilling the poll into the 07:00
+    |   hour, or moving the sweep — and the far horizon is not what puts it
+    |   there.
+    |
+    | STAGGER_MINUTES spaces the per-route jobs so nine routes' worth of provider
+    | calls do not arrive as a burst — the real APIs are rate-limited per minute
+    | as well as per hour. Nine routes at three minutes is a 24-minute fan-out,
+    | which is what keeps each of the two mornings above inside one clock hour.
     |
     | STALE_AFTER_DAYS is how long a calendar cell may go without being repriced
     | before a successful poll of that route deletes it. A future departure date
@@ -552,12 +651,25 @@ return [
     | ASKED for, now that a rule sweep asks for a shorter one than the daily
     | poll does (`rules.sweep_horizon_days`).
     |
+    | FAR_STALE_AFTER_DAYS IS THE SAME RULE ON THE FAR TRANCHE'S OWN CLOCK. The
+    | three days above are "two missed mornings plus a day", and applying them to
+    | cells that are only ever refreshed on Saturdays would mean ONE failed month
+    | request costing a month of the far calendar every single time: those cells
+    | are seven days old by the time anything looks at them again, which is
+    | already stale by the daily rule. SEVENTEEN DAYS is the identical sentence
+    | at the weekly period — two missed far refreshes (7 + 7) plus the same
+    | three-day cushion — and it is why PollRoutePrices runs the staleness delete
+    | as two passes rather than one.
+    |
     */
 
     'poll' => [
         'window_days' => 181,
+        'horizon_days' => 334,
+        'far_refresh_weekday' => 6,
         'stagger_minutes' => 3,
         'stale_after_days' => 3,
+        'far_stale_after_days' => 17,
     ],
 
     /*
@@ -597,6 +709,25 @@ return [
     | bills one request per calendar month that window touches — so SIX OR SEVEN
     | provider calls, out of the ~200 an hour the token allows. The limiter's
     | hourly ceiling is set from that multiplication.
+    |
+    | THE NEAR WINDOW, AND DELIBERATELY NOT THE ELEVEN-MONTH HORIZON. A watched
+    | route's calendar runs to `poll.horizon_days` now; a looked-up one stops at
+    | six months, for two reasons that both point the same way:
+    |
+    |   1. SOMEBODY IS WAITING. The fetch is synchronous (App\Application\Routes\
+    |      FareFreshness) and the calls are sequential, so twelve months is
+    |      twelve round trips in one request instead of seven — and the timeout
+    |      budget behind it (15 s a read, one retry) is what the screen has to
+    |      sit through when the provider is slow.
+    |   2. THE ARITHMETIC ABOVE WOULD HALVE. Twelve calls a miss is 240 in the
+    |      hourly ceiling rather than 140, which is the whole allowance — so the
+    |      limiter would have to drop to ten an hour, and a long evening of
+    |      browsing would start being refused.
+    |
+    | WHAT THAT COSTS, stated: a route that is looked up and not watched has no
+    | fares in months 7 to 11. The lookup screens do not draw a calendar, so
+    | nothing shows the gap — and the first `--far` run after it is watched fills
+    | it in. See App\Application\Routes\FareFreshness.
     |
     */
 
@@ -836,10 +967,14 @@ return [
     | is DELIBERATELY SHORTER THAN `poll.window_days`. The asymmetry is the
     | budget, and the budget is Travelpayouts' ~200 requests an hour per IP:
     |
-    |   the daily poll  8 watched routes × ≤7 months  =  ≤56 requests
+    |   the daily poll  9 watched routes × ≤7 months  =  ≤63 requests
     |   one rule sweep  30 capped routes × ≤4 months  =  ≤120 requests
     |                                                    ------------
-    |   06:10 and 06:40 land in the same clock hour       ≤176
+    |   06:10 and 06:40 land in the same clock hour       ≤183
+    |
+    | THE WEEKLY FAR RUN IS NOT IN THAT SUM, on purpose: it is scheduled into the
+    | 04:00 hour precisely so that it never shares a clock hour with the sweep.
+    | The whole table, including where it breaks, is in the `poll` section above.
     |
     | The watchlist is what somebody asked to be told about and gets the wide
     | window; a rule's candidate routes are a guess at what they might like and
@@ -858,10 +993,15 @@ return [
     | names a month beyond it — "somewhere sunny in February", written in
     | August — still MATCHES on any route Orbit already holds fares for, because
     | App\Application\Rules\RuleMatches reads the calendar rather than the
-    | provider, and a WATCHED route's calendar now runs six months deep. What
+    | provider, and a WATCHED route's calendar now runs ELEVEN months deep. What
     | the rule does not get is speculative fares for that month on routes nobody
     | watches: they are fetched three months out, and the far month fills in as
     | the calendar rolls toward it. See App\Jobs\SweepRuleFares.
+    |
+    | THE SWEEP DID NOT MOVE WHEN THE HORIZON DID, and that is the same decision
+    | as before rather than an oversight: 30 × 12 = 360 requests for one rule is
+    | not close to affordable, and a rule is still a guess at what somebody might
+    | like where the watchlist is what they asked to be told about.
     |
     */
 

@@ -599,35 +599,33 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     // ------------------------------------------------------------- the budget
 
     /**
-     * WHAT THE TWO CONFIGURED WINDOWS COST, COUNTED BY THE THING THAT SPENDS
+     * WHAT THE THREE CONFIGURED WINDOWS COST, COUNTED BY THE THING THAT SPENDS
      * IT. This endpoint bills per calendar MONTH, so a window's price steps up
      * at a month boundary and not at a day — which is why
-     * `orbit.poll.window_days` is 181 and `orbit.rules.sweep_horizon_days` is
-     * 89 rather than the round numbers either side of them. 183 days reaches an
-     * eighth month, and 90 a fifth, on the mornings a window opens late in a
-     * long month.
+     * `orbit.poll.window_days` is 181, `orbit.poll.horizon_days` is 334 and
+     * `orbit.rules.sweep_horizon_days` is 89 rather than the round numbers
+     * either side of them. 183 days reaches an eighth month, 335 a thirteenth,
+     * and 90 a fifth, on the mornings a window opens late in a long month.
      *
      * THE DATES ARE THE EXTREMES, not a sample: a window that opens on the 30th
      * or 31st of a 31-day month runs through the shortest possible run of
      * following months, which is where the extra request appears. February is
      * in the list for the leap year on the other side of it.
-     *
-     * The arithmetic those ceilings feed (all of it inside Travelpayouts' ~200
-     * requests an hour, in the 06:00 clock hour the poll and the sweep share):
-     *
-     *     poll   8 watched routes × 7  =  56
-     *     sweep  30 capped routes × 4  = 120
-     *                                    ---
-     *                                    176
      */
     #[Test]
-    public function neither_configured_window_costs_more_requests_than_the_budget_allows(): void
+    public function no_configured_window_costs_more_requests_than_the_budget_allows(): void
     {
         Http::fake([self::ENDPOINT => Http::response($this->fixture('month-matrix-empty'))]);
 
-        $starts = ['2026-01-30', '2026-01-31', '2026-03-01', '2026-07-31', '2026-08-15', '2026-12-31', '2028-02-29'];
+        $starts = ['2026-01-01', '2026-01-30', '2026-01-31', '2026-03-01', '2026-07-31', '2026-08-15', '2026-12-31', '2028-02-29'];
 
-        foreach ([['orbit.poll.window_days', 7], ['orbit.rules.sweep_horizon_days', 4]] as [$key, $ceiling]) {
+        $windows = [
+            ['orbit.poll.window_days', 7],
+            ['orbit.poll.horizon_days', 12],
+            ['orbit.rules.sweep_horizon_days', 4],
+        ];
+
+        foreach ($windows as [$key, $ceiling]) {
             $days = (int) config($key);
             $requests = [];
 
@@ -651,6 +649,55 @@ final class TravelpayoutsPriceProviderTest extends TestCase
                 "{$key} = {$days} costs more provider requests than the budget in config/orbit.php allows.",
             );
         }
+    }
+
+    /**
+     * AND THE ARITHMETIC THOSE CEILINGS FEED, which is the number that actually
+     * has to hold: Travelpayouts allows ~200 requests an hour per IP, and two
+     * scheduled runs share the 06:00 clock hour.
+     *
+     *     an ordinary morning   poll      9 watched × ≤7   =  63
+     *                           sweep    30 capped  × ≤4   = 120
+     *                                                        ---
+     *                                                        183
+     *
+     *     the far morning       far poll  9 watched × ≤12  = 108, alone in the
+     *                                                        04:00 hour
+     *
+     * THE FAR RUN IS THE CHEAP ONE, in the only sense that matters: it costs
+     * more requests and shares its hour with nothing, so the ELEVEN MONTHS ADD
+     * NOTHING TO THE WORST HOUR. What breaches first is the ordinary morning, at
+     * twelve watched routes — 7 × 12 + 120 = 204 — where the far run has room to
+     * sixteen. This test is where that stops being a comment: it fails if a
+     * window widens, if the sweep's cap moves, or if the watchlist this app is
+     * budgeted for grows past what the schedule can pay for.
+     */
+    #[Test]
+    public function the_two_mornings_both_fit_inside_the_providers_hourly_limit(): void
+    {
+        /* Travelpayouts' documented per-IP allowance, and the whole budget. */
+        $perHour = 200;
+
+        /* The watchlist config/orbit.php's table is written for. */
+        $watched = 9;
+
+        $near = 7;
+        $far = 12;
+        $sweep = (int) config('orbit.rules.sweep_cap') * 4;
+
+        $this->assertSame(183, $watched * $near + $sweep);
+        $this->assertLessThan($perHour, $watched * $near + $sweep, 'The ordinary morning is over the hourly limit.');
+        $this->assertLessThan($perHour, $watched * $far, 'The weekly far run is over the hourly limit.');
+
+        /*
+         * THE SCALING LIMIT, ASSERTED RATHER THAN REMEMBERED. The ordinary
+         * morning is the binding constraint and the far run is not; both halves
+         * are pinned so that a future change that inverts them is a failure here
+         * rather than a rate-limit error at 06:40 one Tuesday.
+         */
+        $this->assertLessThan($perHour, 11 * $near + $sweep, 'Eleven watched routes must still fit.');
+        $this->assertGreaterThan($perHour, 12 * $near + $sweep, 'The documented breach is at twelve, not later.');
+        $this->assertLessThan($perHour, 16 * $far, 'The far run must have more headroom than the morning.');
     }
 
     // ------------------------------------------------------------- configuration

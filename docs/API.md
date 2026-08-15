@@ -96,7 +96,7 @@ one with more fields on it. Identical either way, so a component can take either
 | --- | --- |
 | `code` | `AMS-OPO`. The URL key, and the only id the client needs. |
 | `origin` / `destination` | `lat`/`lng` are the AIRPORT's, for the globe's great-circle arc. `countryCode` is what the design's flag swatches key off. |
-| `price.current` | The cheapest fare in the next ~6 months (`orbit.poll.window_days`, 181 days), as of the last poll. Same number as the last point of `sparkline`. **`null`** before the first poll. |
+| `price.current` | The cheapest fare in the next ~6 months (`orbit.poll.window_days`, 181 days), as of the last poll. **Six and not eleven, deliberately**: the calendar runs to `orbit.poll.horizon_days` but the observation this comes from is always taken over the near window, so the number means the same thing on the one morning a week the poller fetches further. Same number as the last point of `sparkline`. **`null`** before the first poll. |
 | `price.usual` | The route's median price from the statistics provider. **`null`** when it has none. |
 | `price.pctBelow` | Whole percent under `usual`; **negative when above it** ("14% above usual" is `-14`). `null` when either half is missing. |
 | `score` | 0–100. See "How the score works" below. |
@@ -107,7 +107,7 @@ one with more fields on it. Identical either way, so a component can take either
 | `verdict.tone` | `good` \| `info` \| `normal` \| `warn`. **The only thing to switch colours on** — maps onto the token pairs in `resources/css/tokens.css`. Do not derive a colour from `label`. |
 | `sparkline` | Up to 14 daily prices, **oldest first**, one per day we polled. Often fewer, and `[]` for a new route. Draw whatever arrives. |
 | `trackingDays` | Calendar days since the first observation we actually hold, inclusive. `0` when there are none. This is the number for the "tracking N days" note (`< 14` is the design's threshold). |
-| `cheapest` | **The day `price.current` is for**: the cheapest **departure date** still on offer, ties broken to the earliest. `null` before the first poll — and null is not today, so a screen with no date prints no date. This is a *departure* date, the other axis; never render it as an observation date. It was on the detail alone until the UX pass, which is why three screens were printing a fare nobody could act on. On the **summary** it is `{date, price}`; the route detail adds `foundAt` to it. |
+| `cheapest` | **The day `price.current` is for**: the cheapest **departure date** still on offer *inside the near window* (`orbit.poll.window_days`), ties broken to the earliest. The bound is what keeps it the same number as `price.current` now that the calendar runs eleven months deep — a cheaper fare out in month nine belongs to the calendar screen, not to a summary the deal score was computed from. `null` before the first poll — and null is not today, so a screen with no date prints no date. This is a *departure* date, the other axis; never render it as an observation date. It was on the detail alone until the UX pass, which is why three screens were printing a fare nobody could act on. On the **summary** it is `{date, price}`; the route detail adds `foundAt` to it. |
 
 ### The score's gauge colour
 
@@ -277,9 +277,13 @@ and stay ignorant of who is on the other end. Do not build either URL
 client-side — the hosts, the path shapes, the casing and the marker are
 `config/orbit.php` and `App\Application\Routes\BookingLink`'s.
 
-**Empty months are a 200, not a 404.** The poll window is about six months, so
-paging past it is normal: `days: []`, `min`/`max`/`cheapest` all `null`. Draw an
-empty grid.
+**Empty months are a 200, not a 404.** Orbit maintains about eleven months of
+calendar (`orbit.poll.horizon_days`, 334 days), so paging past it is normal:
+`days: []`, `min`/`max`/`cheapest` all `null`. Draw an empty grid. **An empty
+month inside the horizon is normal too** — months 7 to 11 are refreshed once a
+week (`orbit.poll.far_refresh_weekday`), the provider's cache thins with
+distance, and a route looked up but not watched is only ever priced six months
+out. The calendar screen offers this month and eleven more.
 
 **422** when `month` is not `YYYY-MM` with a month of 01–12, with Laravel's
 standard `{"message": …, "errors": {"month": […]}}`.
@@ -743,7 +747,8 @@ They are blended linearly by how much history there is —
 `w = min(1, observations / 30)`, then `round((1-w)·cross + w·long)` on each of
 the five numbers — so a route is scored cross-sectionally on day 1, half and
 half around day 15, and purely against its own past mornings from day 30.
-`usual` therefore means *the going rate across the next six months* on a new
+`usual` therefore means *the going rate across the next six months* (never the
+eleven the calendar holds — `orbit.selfstats.cross_section_days`) on a new
 route and *what this route's cheapest fare has actually been* on a mature one.
 
 **A route with no fares and no history has no statistics at all.** The provider
@@ -1025,13 +1030,15 @@ Rules are swept by `orbit:sweep-rules` at 06:40 Europe/Amsterdam, after the
 works in that order.
 
 **A sweep is shallower than a poll.** The watchlist is priced six months ahead
-(`orbit.poll.window_days`); a rule's speculative routes are priced three
+every morning and eleven once a week (`orbit.poll.window_days`,
+`orbit.poll.horizon_days`); a rule's speculative routes are priced three
 (`orbit.rules.sweep_horizon_days`), because the provider bills per calendar
 month and thirty routes × six months is more requests than it allows in an
-hour. A rule whose date window names a month beyond that still matches on any
-route Orbit already holds fares for — matching reads `calendar_fares`, and a
-watched route's calendar runs the full six months — but city pairs nobody
-watches are not priced that far out until the calendar rolls toward the month.
+hour — thirty × eleven is not close. A rule whose date window names a month
+beyond that still matches on any route Orbit already holds fares for — matching
+reads `calendar_fares`, and a watched route's calendar now runs eleven months —
+but city pairs nobody watches are not priced that far out until the calendar
+rolls toward the month.
 This affects `matches.count`, never the shape of a response.
 
 It can be run by hand:
