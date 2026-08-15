@@ -4,6 +4,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Session\Middleware\AuthenticateSession;
 use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -176,6 +177,41 @@ return Application::configure(basePath: dirname(__DIR__))
          * is token-only.
          */
         $middleware->statefulApi();
+
+        /*
+         * AuthenticateSession — THE MIDDLEWARE THAT MAKES A PASSWORD CHANGE
+         * MEAN SOMETHING ON A DEVICE THIS ONE CANNOT REACH.
+         *
+         * It keeps a copy of the user's password hash in each session and
+         * compares it against the real one on every request; a session whose
+         * copy has gone stale is logged out. That is the ONLY code in the
+         * framework that reads that copy, and Orbit registered it in no group,
+         * under no alias and on no route — so `Auth::logoutOtherDevices()` was
+         * a call that returned successfully and evicted nobody. This is the
+         * silent no-op health-tracker shipped for months and its security audit
+         * found; Orbit starts on the other side of it.
+         *
+         * APPENDED TO `web` AND TO NOTHING ELSE. That group is where the
+         * session is, and it is where the SPA's own JSON endpoints live too —
+         * routes/web.php declares `/api/me` and the rest inside it deliberately
+         * (see the Sanctum note above), so an evicted session gets a 401 on its
+         * next read and resources/js/lib/http.js sends that browser to the login
+         * screen. The `api` route file has no session and must stay that way.
+         *
+         * SAFE ON THE WHOLE GROUP rather than only the authenticated half: its
+         * first line returns early when the request has no user, so /login and
+         * the guest boot probe pay a null check and nothing else.
+         *
+         * WHAT IT COSTS: one comparison per request, and one genuine behaviour
+         * change — a browser holding a remember-me cookie minted before a
+         * password change is signed out rather than let back in, because the
+         * recaller carries the old hash in its third segment. That is the point
+         * of the exercise. App\Http\Controllers\Auth\PasswordController re-issues
+         * the changing device's own cookie so that it is the one that survives.
+         */
+        $middleware->web(append: [
+            AuthenticateSession::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         /*

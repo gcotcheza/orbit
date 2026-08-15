@@ -245,10 +245,12 @@ onActivated(() => {
 }
 
 .home__spotlight {
-  /* The overlap that ties the card to the globe (design/README.md §1). */
+  /* The overlap that ties the card to the globe (design/README.md §1). From
+     the token because GlobeStage.vue's caption has to clear exactly this much
+     — see the comment on .stage__caption for the defect that taught us. */
   position: relative;
   z-index: 4;
-  margin: -30px var(--gutter) 0;
+  margin: calc(-1 * var(--spotlight-overlap)) var(--gutter) 0;
 }
 
 .home__flat {
@@ -276,7 +278,8 @@ onActivated(() => {
 
 .home__skeleton-card {
   height: 108px;
-  margin-top: -30px;
+  /* The same overlap, so the screen does not shift when the real card lands. */
+  margin-top: calc(-1 * var(--spotlight-overlap));
   border-radius: var(--radius-card);
   background: var(--card);
   box-shadow: var(--shadow);

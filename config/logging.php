@@ -81,6 +81,42 @@ return [
             'replace_placeholders' => true,
         ],
 
+        /*
+        |----------------------------------------------------------------------
+        | mail — where the log mailer's messages go
+        |----------------------------------------------------------------------
+        |
+        | THE ONE CHANNEL ORBIT ADDED, and it exists because the staged rollout
+        | was invisible. Until ghiecode.io is verified as a sending domain,
+        | MAIL_MAILER=log: every alert this app exists to send is written to a
+        | log rather than delivered, deliberately, so that the firing rules can
+        | be read against real fares before anybody's phone lights up. But
+        | Symfony's log transport writes at DEBUG and production's `single`
+        | channel has a floor of LOG_LEVEL=info — so each mail was rendered,
+        | handed to Monolog and dropped. The stage was a stage with nothing on
+        | it, and nothing said so.
+        |
+        | ITS LEVEL IS A LITERAL AND NOT env('LOG_LEVEL'). That is the entire
+        | fix: a channel whose only records are DEBUG must not take its floor
+        | from a variable set for the application log — reading it is the bug,
+        | one file further along.
+        |
+        | ITS OWN FILE because a mail is not an event: one send is a full MIME
+        | message, tens of lines long, and interleaving those with the app's
+        | errors makes both harder to read. `storage/logs/mail.log` is the path
+        | the deploy runbook says to tail.
+        |
+        | Reached through MAIL_LOG_CHANNEL — config/mail.php's `log` mailer.
+        |
+        */
+
+        'mail' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/mail.log'),
+            'level' => 'debug',
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

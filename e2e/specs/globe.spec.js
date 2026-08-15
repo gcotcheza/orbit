@@ -59,46 +59,55 @@ test('the caption and the spotlight card name the route the camera is on', async
 
 /*
  * ============================================================================
- * A DEFECT NO NON-BROWSER TEST COULD SEE
+ * THE DEFECT THIS HARNESS FOUND ON ITS FIRST RUN, KEPT AS A REGRESSION TEST
  * ============================================================================
- * `test.fail()` inverts the result: this passes while the bug is there and goes
- * red the day it is fixed, which is the reminder to delete it.
- *
- * WHAT IS WRONG. design/README.md §1 asks for TWO things that turn out to be
+ * WHAT WAS WRONG. design/README.md §1 asks for TWO things that turn out to be
  * incompatible as written: a caption pinned to the bottom of the globe stage
  * ("AMS → LIS · Lisbon"), and a spotlight card that overlaps the stage by
- * −30px. GlobeStage.vue puts the caption at `bottom: 6px` of a 360px stage;
- * Home.vue gives `.home__spotlight` `margin-top: -30px`, an opaque `--card`
- * background and `z-index: 4`. Measured in the browser at a 390px viewport:
+ * −30px. GlobeStage.vue put the caption at `bottom: 6px` of a 360px stage;
+ * Home.vue gives `.home__spotlight` that negative margin, an opaque `--card`
+ * background and `z-index: 4`. Measured in the browser at a 390px viewport,
+ * before the fix:
  *
  *   .stage           y 62.3 … 422.3
  *   .stage__caption  y 398.9 … 416.3
  *   .home__spotlight y 392.3 … 538.6   ← starts 6.6px ABOVE the caption
  *   elementFromPoint(caption centre) → "spotlight rise-in"
  *
- * So the caption is rendered, is in the accessibility tree, has the right text,
- * and is never seen by anybody. Every assertion above about it passes.
+ * So the caption was rendered, was in the accessibility tree, had the right
+ * text, and was never seen by anybody — every assertion above about it passed.
  *
  * WHY NOTHING ELSE WOULD CATCH IT. jsdom has no layout engine: every box is
  * zero and `elementFromPoint` is meaningless, so a component test can only ever
- * ask whether the text is in the DOM — which it is. This needs a renderer.
+ * ask whether the text is in the DOM — which it was. This needs a renderer.
  *
- * NOT FIXED HERE: GlobeStage.vue and Home.vue belong to other work. The fix is
- * a decision about the design rather than a one-liner — lift the caption above
- * the overlap, or drop it now the spotlight card says the same thing.
+ * THE FIX: `--spotlight-overlap` in tokens.css. The card's climb is one number
+ * that both components read, and the caption clears it — which is where
+ * design/screenshots/01 draws it, below the globe and above the card.
+ *
+ * WHY THE HIT TEST ASKS FOR "SOMETHING IN THE STAGE" rather than for the
+ * caption itself: `.stage__caption` is `pointer-events: none`, so that a drag
+ * across it still rotates the globe, and `elementFromPoint` answers with what
+ * is hittable — the globe underneath it. What must never come back is the card.
  */
-test.fail('KNOWN BUG: the globe caption is hidden under the spotlight card', async ({ page }) => {
+test('the globe caption is drawn where it can be read, not under the card', async ({ page }) => {
     await page.goto('/')
     await waitForGlobe(page)
 
-    const covering = await page.evaluate(() => {
-        const box = document.querySelector('.stage__caption').getBoundingClientRect()
-        const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+    const layout = await page.evaluate(() => {
+        const caption = document.querySelector('.stage__caption').getBoundingClientRect()
+        const card = document.querySelector('.home__spotlight').getBoundingClientRect()
+        const top = document.elementFromPoint(caption.x + caption.width / 2, caption.y + caption.height / 2)
 
-        return top === null ? null : top.className.toString()
+        return {
+            covering: top === null ? null : top.className.toString(),
+            inStage: Boolean(top?.closest('.stage')),
+            clearance: Math.round((card.top - caption.bottom) * 10) / 10,
+        }
     })
 
-    expect(covering, 'something opaque is drawn over the globe caption').toContain('stage__caption')
+    expect(layout.inStage, `something outside the globe covers the caption: "${layout.covering}"`).toBe(true)
+    expect(layout.clearance, 'the caption is not clear of the spotlight card').toBeGreaterThan(0)
 })
 
 test('tapping a rail chip flies to that route', async ({ page }) => {

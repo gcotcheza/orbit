@@ -124,6 +124,14 @@
 
     --gutter: 18px;
     --tab-bar-height: 78px;
+    /* HOW FAR THE SPOTLIGHT CARD CLIMBS OVER THE GLOBE (design/README.md §1's
+       "overlaps globe by −30px"), and a token rather than two hard-coded
+       numbers because TWO components have to agree about it: Home.vue pulls the
+       card up by exactly this, and GlobeStage.vue has to keep its caption above
+       the line the card's opaque top edge draws. They did not agree, and the
+       browser gate caught it — the caption was rendered, was in the
+       accessibility tree, and was drawn entirely underneath the card. */
+    --spotlight-overlap: 30px;
     /* The app is a phone app. On anything wider it is a phone-shaped column in
        the middle of the window rather than a stretched one — every layout in
        design/README.md assumes a ~352 px content area. */

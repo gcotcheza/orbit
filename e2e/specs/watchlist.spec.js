@@ -64,18 +64,15 @@ test('pausing a route dims the row and survives a reload', async ({ page }) => {
 
 /*
  * ============================================================================
- * A DEFECT, WRITTEN DOWN AS A FAILING TEST RATHER THAN AS A COMMENT
+ * A DEFECT, WRITTEN DOWN AS A TEST RATHER THAN AS A COMMENT
  * ============================================================================
- * `test.fail()` inverts the result: this passes while the bug is there and
- * turns RED the day somebody fixes it, which is the reminder to delete it.
- *
- * WHAT IS WRONG. Watchlist.vue dims a paused route with
+ * WHAT WAS WRONG. Watchlist.vue dims a paused route with
  * `.is-paused { opacity: 0.58 }`, and every row also carries `.rise-in`, which
- * is `animation: orbit-rise 0.5s ease both` (resources/css/app.css). The
- * keyframes end at `opacity: 1` and `animation-fill-mode: both` makes that
+ * was `animation: orbit-rise 0.5s ease both` (resources/css/app.css). The
+ * keyframes end at `opacity: 1` and `animation-fill-mode: both` made that
  * final frame persist — and an animated value beats a normal declaration in
  * the cascade no matter how specific the declaration is. So the computed
- * opacity of a paused row is 1, forever, and the row is not dimmed at all.
+ * opacity of a paused row was 1, forever, and the row was not dimmed at all.
  * Measured in the browser: `class="pass rise-in is-paused"`, `opacity: "1"`,
  * `animation-name: "orbit-rise"`, `animation-fill-mode: "both"`.
  *
@@ -84,12 +81,16 @@ test('pausing a route dims the row and survives a reload', async ({ page }) => {
  * present is green and correct; only a real renderer computes the value the
  * animation left behind. This is the first thing the browser gate found.
  *
- * NOT FIXED HERE. resources/js/Views/Watchlist.vue and resources/css/app.css
- * belong to other work; the harness's job is to report, not to patch the app
- * it is measuring. The fix is one of: put the dimming on an inner element,
- * drop `both` for `forwards`-less filling, or animate `opacity` from the class.
+ * THE FIX is `both` → `backwards` on `.rise-in`: an entrance stops owning the
+ * properties it animated once it is over. It is one line and it covers all
+ * nine users of that class, each of which was one state class away from the
+ * same silent override.
+ *
+ * THE ASSERTION IS THE COMPUTED VALUE, not the class. The class was never in
+ * doubt — the test above already asserts it — and asserting it here again is
+ * exactly the test that was green throughout the defect.
  */
-test.fail('KNOWN BUG: a paused row is not actually dimmed — .rise-in wins', async ({ page }) => {
+test('a paused row is actually dimmed, and not just given a class', async ({ page }) => {
     await page.goto('/watch')
 
     const row = page.locator('.pass').first()
@@ -99,14 +100,28 @@ test.fail('KNOWN BUG: a paused row is not actually dimmed — .rise-in wins', as
     await toggle.click()
     await expect(row).toHaveClass(/is-paused/)
 
-    const opacity = Number(await row.evaluate((element) => getComputedStyle(element).opacity))
+    /*
+     * WAIT FOR THE ENTRANCE TO BE OVER before reading the value. While it runs
+     * the animation owns `opacity` legitimately, and a measurement taken during
+     * it would be testing how fast this box is. `getAnimations()` returns an
+     * empty list once a non-filling animation has finished — which is itself
+     * the fix, so this resolves immediately on a fixed build and waits half a
+     * second on a broken one rather than reporting a false pass.
+     */
+    await row.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)))
 
-    // Restore before the assertion, so this test leaves the list the way it
-    // found it whichever way the assertion goes.
+    const paused = await row.evaluate((element) => ({
+        opacity: Number(getComputedStyle(element).opacity),
+        fill: getComputedStyle(element).animationFillMode,
+    }))
+
+    // Restore before the assertions, so this test leaves the list the way it
+    // found it whichever way they go.
     await toggle.click()
     await expect(toggle).toHaveAttribute('aria-checked', 'true')
 
-    expect(opacity, 'a paused row should be visibly dimmed').toBeLessThan(1)
+    expect(paused.opacity, 'a paused row should be visibly dimmed').toBeLessThan(1)
+    expect(paused.fill, 'an entrance animation is filling forwards again — it will win the cascade').not.toBe('both')
 })
 
 test('a paused route drops out of the globe tour', async ({ page }) => {
@@ -176,35 +191,42 @@ test('a destination Orbit does not know is refused, in the form', async ({ page,
 
 /*
  * ============================================================================
- * A SECOND DEFECT, same treatment: passes while it is broken, red when fixed
+ * A SECOND DEFECT, same treatment
  * ============================================================================
- * WHAT IS WRONG. AddRouteForm.vue binds `:value="destination"` and normalises
+ * WHAT WAS WRONG. AddRouteForm.vue bound `:value="destination"` and normalised
  * in `@input`: `event.target.value.toUpperCase().replace(/[^A-Z]/g, '')`. Type
- * "1L" and `destination` goes from "" to "L", Vue re-renders, and the box shows
- * "L" — the stated behaviour, "stripped to letters AS IT IS TYPED". Type "12"
- * and the strip produces "", which is what `destination` ALREADY IS: no
- * reactive change, no re-render, and the DOM keeps the two digits the user
- * typed. The box now disagrees with the model it is supposed to be showing.
+ * "1L" and `destination` went from "" to "L", Vue re-rendered, and the box
+ * showed "L" — the stated behaviour, "stripped to letters AS IT IS TYPED".
+ * Type "12" and the strip produces "", which is what `destination` ALREADY IS:
+ * no reactive change, no re-render, and the DOM kept the two digits the user
+ * typed. The box disagreed with the model it is supposed to be showing.
  *
- * The consequence is small and confusing rather than dangerous: the field
- * displays "12", the Add button is disabled, and nothing on screen says why.
- * `v-model` would not have this problem — it force-writes the element's value
- * on update for exactly this case — which is what makes a hand-rolled
- * `:value` + `@input` pair worth flagging.
+ * The consequence was small and confusing rather than dangerous: the field
+ * displayed "12", the Add button was disabled, and nothing on screen said why.
  *
- * NOT FIXED HERE: AddRouteForm.vue is not this branch's file.
+ * THE FIX is `v-model`, which does not have this problem — it assigns the raw
+ * value (always a change, so always a re-render) and force-writes the
+ * element's value from the model on update, for exactly this case. The
+ * normalisation moved to a pre-flush watcher. See the component.
+ *
+ * WHY THIS IS A BROWSER TEST. The model was correct throughout: the fault was
+ * in an element that jsdom will happily report as holding whatever the last
+ * render put there.
  */
-test.fail('KNOWN BUG: rejected characters stay in the destination box', async ({ page }) => {
+test('a rejected character does not stay in the destination box', async ({ page }) => {
     await page.goto('/watch')
     await page.getByRole('button', { name: 'Add a route' }).click()
 
     const field = page.locator('form.add #add-destination')
-    await field.fill('12')
 
-    // A short timeout on purpose: this assertion is EXPECTED to fail, and the
-    // suite should not spend the default fifteen seconds proving a bug it
-    // already knows about. Two seconds is far longer than a Vue re-render.
-    await expect(field).toHaveValue('', { timeout: 2000 })
+    // Digits: normalise to "", which is what the model already held — the exact
+    // case the old hand-rolled binding could not repaint.
+    await field.fill('12')
+    await expect(field).toHaveValue('')
+
+    // And the ordinary path still works: letters are kept, upper-cased, as typed.
+    await field.fill('l1s')
+    await expect(field).toHaveValue('LS')
 })
 
 test('a real route can be added and removed again', async ({ page }) => {
