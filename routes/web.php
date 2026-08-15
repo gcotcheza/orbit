@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\Auth\CurrentUserController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\RouteCalendarController;
 use App\Http\Controllers\RouteController;
 use App\Http\Controllers\RuleController;
@@ -19,11 +20,11 @@ use Illuminate\Support\Facades\Route;
 | Web routes
 |--------------------------------------------------------------------------
 |
-| Four routes are the entire authentication surface, five more are the read
+| Five routes are the entire authentication surface, five more are the read
 | API the screens are built on, nine more are the writes those screens make,
 | and the last one is the single-page app.
 |
-| WHAT IS DELIBERATELY ABSENT: registration, password reset, email
+| WHAT IS DELIBERATELY ABSENT: registration, password RESET, email
 | verification, account management. docs/PLAN.md locks Orbit to a single user,
 | created by `db:seed` (see Database\Seeders\SingleUserSeeder), and a route
 | that does not exist cannot be misconfigured, rate-limit-bypassed or left
@@ -32,6 +33,13 @@ use Illuminate\Support\Facades\Route;
 | /confirm-password, and that a POST to any of them is refused — asserted
 | against the route table rather than against a 404, because the catch-all at
 | the bottom of this file answers every unclaimed GET with the shell.
+|
+| THE FIFTH AUTH ROUTE DOES NOT SOFTEN ANY OF THAT. `PUT /api/profile/password`
+| is an authenticated CHANGE — behind `auth`, and behind the current password
+| (App\Http\Requests\UpdatePasswordRequest) — so it is a rotation the owner
+| performs from the settings screen, not a recovery anybody can trigger. The
+| distinction that matters is who can reach it: a reset flow answers to a guest
+| who claims to be the owner, and nothing here does.
 |
 */
 
@@ -67,6 +75,39 @@ Route::middleware('guest')->group(function (): void {
 
 Route::middleware('auth')->group(function (): void {
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
+
+    /*
+     * Changing the password, from the alerts screen's Account card.
+     *
+     * UNDER `/api/` LIKE EVERY OTHER JSON ENDPOINT, and for the same reason
+     * they are: bootstrap/app.php renders exceptions as JSON on that prefix
+     * alone, so a guest here gets a 401 with a body rather than a redirect
+     * fetch() would follow and hand back as the shell's HTML with a 200. The
+     * SPA catch-all at the bottom of this file refuses that prefix too.
+     *
+     * IN THE `auth` GROUP AND NOT THE `auth:sanctum` ONE below, beside
+     * /logout, because this is a SESSION action rather than a data write: the
+     * credential is the cookie, the current password is checked against the
+     * session guard's user, and the response rotates the session. One guard
+     * end to end is what makes that legible. (Sanctum's token path is closed
+     * at the guard anyway — see AppServiceProvider.)
+     *
+     * `profile/` RATHER THAN BARE `password/`, and not only for shape:
+     * AuthenticationTest asserts that no route uri STARTS WITH `password`,
+     * which is what keeps Laravel's own /password reset scaffolding from ever
+     * appearing here. A nested path says "an account setting" instead of
+     * claiming the prefix that test defends.
+     *
+     * THROTTLED, unlike the writes below. The others need one because they
+     * cost money or are reachable by a guest; this one is neither — it is the
+     * only authenticated route in the app that CHECKS A SECRET, and a limiter
+     * is what stops a session that is open on an unattended phone from being
+     * used to guess the current password offline-fast. Five a minute is the
+     * same number the login route allows, because it is the same guess.
+     */
+    Route::put('/api/profile/password', [PasswordController::class, 'update'])
+        ->middleware('throttle:password-change')
+        ->name('password.update');
 });
 
 /*

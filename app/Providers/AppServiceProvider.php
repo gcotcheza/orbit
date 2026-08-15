@@ -234,6 +234,27 @@ final class AppServiceProvider extends ServiceProvider
             ->by(mb_strtolower((string) $request->input('email')).'|'.$request->ip()));
 
         /*
+         * The password-change throttle (`PUT /api/profile/password`).
+         *
+         * FIVE A MINUTE, THE SAME NUMBER THE LOGIN ROUTE ALLOWS, because it is
+         * the same guess: `current_password` is the gate on that endpoint, so a
+         * session left open on an unattended phone is otherwise a place to try
+         * the current password as fast as the box will hash — with none of the
+         * noise of a login form and none of the login limiter, which keys on an
+         * email this request does not send. Five is far more than a person
+         * mistypes a password they are about to retype twice more.
+         *
+         * KEYED ON THE ACCOUNT AND NOT THE IP, like the parser below and unlike
+         * login above: the caller here is always authenticated, so there is a
+         * better key than the address of a phone whose ip changes mid-sentence.
+         * The ip fallback cannot be reached through the route — it is behind
+         * `auth` — and is there so the limiter is total rather than relying on
+         * that staying true.
+         */
+        RateLimiter::for('password-change', fn (Request $request): Limit => Limit::perMinute(5)
+            ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
+
+        /*
          * The rule parser's throttle (design/README.md §4).
          *
          * TWENTY A MINUTE, KEYED ON THE ACCOUNT. The create screen re-parses

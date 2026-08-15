@@ -9,8 +9,16 @@
  * THE THEME SWITCH AND SIGN-OUT ARE NOT LEFTOVERS. They landed in PR4 as the
  * only UI exercising the theme store and the session, and the design puts both
  * on this screen — the placeholder prose around them is what this PR deletes.
- * They keep their own card at the bottom because they are about the app and
- * the account; everything above is about alerts.
+ * They keep their own card at the bottom because they are about the app;
+ * everything above is about alerts.
+ *
+ * THE ACCOUNT CARD IS THE EXCEPTION TO "everything here is about alerts", and
+ * it is here because there is nowhere else: this screen is the only settings
+ * surface the tab bar reaches, and a password that can only be changed by
+ * running the seeder again on a box is one the owner will never change. It sits
+ * BELOW the alert settings and ABOVE the app card, which is the order of how
+ * often each is touched. Who you are moved into it from the app card in the
+ * same PR, so the card says what account the password belongs to.
  *
  * THE SENSITIVITY BLURB COMES FROM THE SERVER. Each level's sentence quotes
  * the deal score it fires at, that number is config/orbit.php's `score.tiers`,
@@ -22,6 +30,7 @@
 import { computed, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
+import ChangePassword from '@/Components/settings/ChangePassword.vue'
 import SegmentedControl from '@/Components/settings/SegmentedControl.vue'
 import SettingRow from '@/Components/settings/SettingRow.vue'
 import ToggleSwitch from '@/Components/ToggleSwitch.vue'
@@ -194,14 +203,22 @@ async function signOut() {
       </section>
     </template>
 
-    <h2 class="section">This app</h2>
-    <section class="card card--padded">
-      <SegmentedControl :model-value="theme" :options="THEMES" label="Theme" @update:model-value="themeStore.set" />
-
-      <div class="account">
+    <h2 class="section">Account</h2>
+    <section class="card">
+      <!-- Who this is, above the one thing that can be changed about it. The
+           name and address are not editable and are not meant to be: they are
+           the seeder's, and the API has no endpoint for either. -->
+      <div class="account card__row">
         <p class="account__name">{{ user?.name }}</p>
         <p class="account__email">{{ user?.email }}</p>
       </div>
+
+      <ChangePassword />
+    </section>
+
+    <h2 class="section">This app</h2>
+    <section class="card card--padded">
+      <SegmentedControl :model-value="theme" :options="THEMES" label="Theme" @update:model-value="themeStore.set" />
 
       <button type="button" class="signout" @click="signOut">Sign out</button>
     </section>
@@ -359,7 +376,7 @@ async function signOut() {
 /* --- Account ------------------------------------------------------------- */
 
 .account {
-  margin-top: 16px;
+  padding: 14px 16px;
 }
 
 .account__name {
