@@ -134,6 +134,38 @@ final class PollersTest extends TestCase
         );
     }
 
+    /**
+     * A POLL THAT WAS ALREADY ON THE QUEUE WHEN THE WINDOW ARGUMENT SHIPPED.
+     *
+     * Redis holds `serialize($job)`, and a payload written by the one-argument
+     * version carries no `windowDays` at all — which leaves the promoted
+     * property UNINITIALISED rather than null, because a constructor default is
+     * a parameter default and not a property one. Reading it directly would
+     * throw "must not be accessed before initialization" in a worker, on the
+     * deploy, for every poll queued in the seconds before it.
+     *
+     * `?? config(...)` is what makes that safe: `isset()` on an uninitialised
+     * typed property is false rather than an error. The literal payload below
+     * is what the old class actually serialised to.
+     */
+    #[Test]
+    public function a_poll_queued_before_the_window_argument_existed_still_gets_the_full_window(): void
+    {
+        $route = $this->route();
+
+        $job = unserialize('O:24:"App\Jobs\PollRoutePrices":1:{s:7:"routeId";i:'.$route->id.';}');
+
+        $this->assertInstanceOf(PollRoutePrices::class, $job);
+        $this->assertFalse(isset($job->windowDays), 'The old payload cannot have carried it.');
+
+        $this->app->call([$job, 'handle']);
+
+        $this->assertSame(
+            (int) config('orbit.poll.window_days') + 1,
+            CalendarFare::query()->where('route_id', $route->id)->count(),
+        );
+    }
+
     #[Test]
     public function polling_twice_in_a_day_overwrites_rather_than_appends(): void
     {
