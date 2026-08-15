@@ -20,7 +20,7 @@
  * banner saying so — see the store. A revert nobody can see is how an app
  * quietly stops meaning what it shows.
  */
-import { computed, onMounted, ref, useTemplateRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import AddRouteForm from '@/Components/watch/AddRouteForm.vue'
 import RuleRow from '@/Components/rules/RuleRow.vue'
@@ -51,6 +51,36 @@ const addOpen = ref(false)
 const addError = ref('')
 const adding = ref(false)
 
+/*
+ * ===========================================================================
+ * UNDO, BECAUSE REMOVE WAS SILENT AND FINAL
+ * ===========================================================================
+ * The row simply vanished. Nothing said it had gone, nothing named what had
+ * gone, and the only way back was to remember the pair and type it in again —
+ * on the screen where a mis-tap on a 26 px bin is the likeliest mistake there
+ * is. The confirmation catches the mis-tap; it does nothing for the person who
+ * meant to remove AMS-FAO and removed AMS-AGP.
+ *
+ * IT IS A REAL UNDO AND NOT A HELD REQUEST. The delete goes immediately —
+ * deferring it would mean a list that disagrees with the server for six
+ * seconds — and undo is the ordinary add write, which works because REMOVING A
+ * ROUTE DOES NOT DELETE ITS HISTORY: the route, its observations and its fares
+ * are Orbit's, and only the watchlist ROW is the owner's (docs/API.md). So a
+ * route that comes back comes back with its sixty days of prices, its score
+ * and its verdict, exactly as it left. That is a property of the schema rather
+ * than of this button, and it is why an undo can be honest here.
+ *
+ * SIX SECONDS, then the offer goes quietly. A notice that stays forever
+ * becomes furniture, and this one sits above the list it is about.
+ */
+const UNDO_MS = 6000
+
+/** The route just removed: `{ label, origin, destination }`, or null. */
+const undo = ref(null)
+const undoError = ref('')
+
+let undoTimer = null
+
 /** Route codes with a write in flight, so their switch can go inert. */
 const busyCodes = ref(new Set())
 
@@ -75,6 +105,59 @@ onMounted(() => {
   watchlist.refresh()
   rules.load()
 })
+
+onBeforeUnmount(() => clearTimeout(undoTimer))
+
+/**
+ * Stop watching a route, and offer the way back.
+ *
+ * The store is optimistic and answers for the write itself: a delete that
+ * failed puts the row back where it was and leaves a sentence in `notice`.
+ * There is nothing to undo in that case — the route never left — so the offer
+ * is only made when the list really did change.
+ */
+async function remove(route) {
+  const label = `${route.origin.iata}→${route.destination.iata}`
+
+  undo.value = null
+  undoError.value = ''
+
+  await watchlist.remove(route)
+
+  if (notice.value) {
+    return
+  }
+
+  undo.value = { label, origin: route.origin.iata, destination: route.destination.iata }
+
+  clearTimeout(undoTimer)
+  undoTimer = setTimeout(() => {
+    undo.value = null
+  }, UNDO_MS)
+}
+
+/**
+ * Put it back. The same write the add form makes — see the note on UNDO_MS for
+ * why that is enough to restore the route rather than merely re-create it.
+ */
+async function undoRemove() {
+  const removed = undo.value
+
+  if (removed === null) {
+    return
+  }
+
+  clearTimeout(undoTimer)
+  undo.value = null
+
+  try {
+    await watchlist.add(removed.origin, removed.destination)
+  } catch (failure) {
+    undoError.value = `Could not put ${removed.label} back. Add it again from the + above.`
+
+    console.error('Could not undo a removal.', failure)
+  }
+}
 
 /** Pause or resume. The store moves the switch and answers for the write. */
 async function toggle(route, active) {
@@ -230,6 +313,15 @@ function messageFor(failure) {
     <AddRouteForm v-if="addOpen" ref="addForm" :error="addError" :busy="adding" @submit="add" />
 
     <p v-if="notice" class="screen__notice" role="alert">{{ notice }}</p>
+    <p v-if="undoError" class="screen__notice" role="alert">{{ undoError }}</p>
+
+    <!-- `role="status"` and not `alert`: nothing went wrong, and an assertive
+         announcement over a deliberate action is the screen reader shouting
+         about a thing the user just did. -->
+    <p v-if="undo" class="screen__notice screen__notice--undo" role="status">
+      Stopped watching {{ undo.label }}
+      <button type="button" class="screen__undo" @click="undoRemove">Undo</button>
+    </p>
 
     <p v-if="status === 'loading'" class="screen__state">Loading your routes…</p>
 
@@ -238,8 +330,13 @@ function messageFor(failure) {
       <button type="button" class="screen__retry" @click="watchlist.refresh()">Try again</button>
     </div>
 
+    <!-- "AT THE TOP RIGHT", because there are two blue + buttons on this
+         screen and they do different things: the one in this header adds a
+         ROUTE, the one in the tab bar at the bottom writes a RULE. An empty
+         screen saying "tap +" was pointing at both. -->
     <p v-else-if="routes.length === 0" class="screen__state">
-      No routes yet. Tap <span class="screen__plus">+</span> to watch one — Orbit starts pricing it in the morning.
+      No routes yet. Tap <span class="screen__plus">+</span> at the top right to watch one — Orbit starts pricing it in
+      the morning.
     </p>
 
     <div v-else class="screen__list">
@@ -251,7 +348,7 @@ function messageFor(failure) {
         :route="route"
         :busy="busyCodes.has(route.code)"
         @toggle="toggle(route, $event)"
-        @remove="watchlist.remove(route)"
+        @remove="remove(route)"
       />
     </div>
 
@@ -345,6 +442,30 @@ function messageFor(failure) {
   font-size: var(--text-lg);
   color: var(--warn-ink);
   background: var(--warn-bg);
+}
+
+/* The same box as the failure notice above it, in the app's own quiet colours:
+   a route that was removed on purpose is not a warning, and the warn tint is
+   how this screen says something went wrong. */
+.screen__notice--undo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  color: var(--ink2);
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+
+.screen__undo {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  margin: -4px -6px;
+
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--accent-ink);
 }
 
 .screen__state {

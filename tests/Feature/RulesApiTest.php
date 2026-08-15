@@ -111,6 +111,72 @@ final class RulesApiTest extends TestCase
         $response->assertJsonPath('data.matches.sample.1.code', 'EIN-LIS');
     }
 
+    /**
+     * ============================================================================
+     * THE COUNT IS A FLOOR UNTIL EVERY CANDIDATE HAS A PRICE
+     * ============================================================================
+     * Measured on the running app: the create screen said "2 trips match this
+     * right now" and the rule it saved reported 32 a minute later. Neither
+     * number was wrong — the second one is what App\Jobs\SweepRuleFares found —
+     * but the first was stated as a total, so the app read as having been
+     * mistaken about the thing it exists to answer, at the exact moment
+     * somebody was deciding whether to save the rule.
+     *
+     * `partial` is that gap, published. This fixture is exactly the shape that
+     * produces it: "somewhere sunny" ranks FAO and LIS, which is six candidate
+     * routes across the three origins, and only two of them have ever been
+     * priced.
+     */
+    #[Test]
+    public function the_count_is_flagged_as_a_floor_while_candidates_are_unpriced(): void
+    {
+        $this->actingAs($this->owner)
+            ->postJson('/api/rules/parse', ['text' => 'somewhere sunny under €80 leaving Friday'])
+            ->assertOk()
+            ->assertJsonPath('data.matches.count', 2)
+            ->assertJsonPath('data.matches.partial', true);
+    }
+
+    /**
+     * And it stops being a floor the moment there is nothing left to price.
+     *
+     * The four routes added here are deliberately given a fare OVER the
+     * ceiling: they are answered, and the answer is no. A candidate that has
+     * been priced and does not match is not pending — pending is about missing
+     * information, not about missing matches — so the count is unchanged and
+     * only the flag moves.
+     */
+    #[Test]
+    public function the_count_is_final_once_every_candidate_has_a_price(): void
+    {
+        foreach ([['EIN', 'FAO'], ['DUS', 'FAO'], ['AMS', 'LIS'], ['DUS', 'LIS']] as [$origin, $destination]) {
+            $this->makeRouteWithFares($origin, $destination, ['2026-09-04' => 9900]);
+        }
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/rules/parse', ['text' => 'somewhere sunny under €80 leaving Friday'])
+            ->assertOk()
+            ->assertJsonPath('data.matches.count', 2)
+            ->assertJsonPath('data.matches.cheapest', 34)
+            ->assertJsonPath('data.matches.partial', false);
+    }
+
+    /**
+     * A sentence that asks for nothing is not a sentence that is still being
+     * answered: there is no candidate set, so there is nothing pending and the
+     * screen's "name a price, a season…" prompt is the right thing to show
+     * rather than "still pricing".
+     */
+    #[Test]
+    public function an_empty_sentence_is_not_reported_as_a_floor(): void
+    {
+        $this->actingAs($this->owner)
+            ->postJson('/api/rules/parse', ['text' => ''])
+            ->assertOk()
+            ->assertJsonPath('data.matches.count', 0)
+            ->assertJsonPath('data.matches.partial', false);
+    }
+
     #[Test]
     public function a_match_carries_both_ends_the_way_every_other_screen_gets_them(): void
     {

@@ -43,6 +43,53 @@ function yymmdd(shown) {
     return `${year.slice(2)}${String(MONTHS.indexOf(month) + 1).padStart(2, '0')}${day.padStart(2, '0')}`
 }
 
+/**
+ * The route code out of a chip — `['AMS→LIS', 'AMS', 'LIS']`.
+ *
+ * READ WITH A REGEX RATHER THAN BY SPLITTING THE CHIP'S TEXT, because a chip is
+ * no longer only a code: it carries the destination CITY under it, which is the
+ * whole point of that change — six chips reading AMS→OPO, AMS→FAO, EIN→LIS are
+ * six anagrams to anybody who does not already know them. `textContent` returns
+ * the code and the city run together, so the code is matched out of it.
+ */
+async function chipCode(page, selector = '.chip--active') {
+    return (await page.locator(selector).first().textContent()).match(/([A-Z]{3})→([A-Z]{3})/)
+}
+
+/**
+ * The "★ Cheapest this month" figure, or null for a month holding no fares.
+ *
+ * A month that is still loading renders neither — the grid, the legend and the
+ * banner are all inside the same `v-else-if="payload"` — so there is no stale
+ * value to read here, only no value.
+ */
+async function cheapestOnScreen(page) {
+    const banner = page.locator('.banner')
+
+    if ((await banner.count()) === 0) {
+        return null
+    }
+
+    return Number((await banner.textContent()).match(/€(\d+)/)[1])
+}
+
+/**
+ * One month across, and WAIT FOR THE GRID RATHER THAN FOR THE HEADING.
+ *
+ * The subtitle changes the instant the arrow is tapped; the fares arrive a
+ * request later. Reading the banner in between would be reading a month that
+ * is not on screen yet — so this waits for the response and then for the
+ * skeleton the screen shows while it is in flight to be gone, which is the
+ * moment the new payload has actually rendered.
+ */
+async function step(page, arrow) {
+    const landed = page.waitForResponse((response) => response.url().includes('/calendar?'))
+
+    await arrow.click()
+    await landed
+    await expect(page.locator('.skeleton')).toHaveCount(0)
+}
+
 test('the month grid is a heat map, not a table of identical squares', async ({ page }) => {
     await page.goto('/calendar')
 
@@ -58,11 +105,31 @@ test('the month grid is a heat map, not a table of identical squares', async ({ 
      * entirely inside the window whatever day the suite runs on, which is what
      * makes "more than twenty coloured cells" a statement about the heat map
      * rather than about the calendar date.
+     *
+     * IT WALKS BACK TO THE FIRST MONTH FIRST, and that is new. The screen no
+     * longer opens on the current month: it opens on the month the selected
+     * route's CHEAPEST departure is in (see the landing test below), which is
+     * data-dependent and can be the last month of the window — where "next" is
+     * a disabled arrow and this test would have been asserting against a grid
+     * that never moved. Walking to the near edge and forward one lands on the
+     * same month this test always meant, whatever the fares say.
      */
     const month = page.locator('.calendar__subtitle')
-    const thisMonth = await month.textContent()
-    await page.getByRole('button', { name: /^Go to / }).last().click()
-    await expect(month).not.toHaveText(thisMonth)
+    const prev = page.getByRole('button', { name: /^Go to / }).first()
+    const next = page.getByRole('button', { name: /^Go to / }).last()
+
+    // The landing month has to have ARRIVED before the arrows mean anything:
+    // the screen starts on the current month and moves to the route's cheapest
+    // one when the watchlist lands. See the bounds test below.
+    await expect(page.locator('.cell--fare').first()).toBeVisible()
+
+    while (await prev.isEnabled()) {
+        await step(page, prev)
+    }
+
+    const firstMonth = await month.textContent()
+    await step(page, next)
+    await expect(month).not.toHaveText(firstMonth)
 
     const fares = page.locator('.cell--fare')
     await expect(fares.first()).toBeVisible()
@@ -123,13 +190,20 @@ test('the month arrows walk six months forward and stop', async ({ page }) => {
     await page.goto('/calendar')
 
     const subtitle = page.locator('.calendar__subtitle')
-    await expect(subtitle).toHaveText(/Cheapest fare per day · /)
+
+    /*
+     * WAIT FOR THE FIRST GRID, not merely for the heading, and this is the one
+     * line the landing change cost this test. The subtitle reads "Cheapest fare
+     * per day · August 2026" from the first frame — `month` starts at the
+     * current month and is MOVED to the route's cheapest month once the
+     * watchlist lands. Walking the arrows before that arrives means walking
+     * from a month the screen is about to leave, and every assertion after it
+     * is off by however far the landing jumped.
+     */
+    await expect(page.locator('.cell--fare').first()).toBeVisible()
 
     const prev = page.locator('.month-nav__button').first()
     const next = page.locator('.month-nav__button').last()
-
-    // The past is not offered at all: a fare you can no longer buy is not a deal.
-    await expect(prev).toBeDisabled()
 
     /* The label the screen should be showing `ahead` months from now. */
     const label = (ahead) => {
@@ -138,6 +212,25 @@ test('the month arrows walk six months forward and stop', async ({ page }) => {
 
         return `${MONTHS[month.getUTCMonth()]} ${month.getUTCFullYear()}`
     }
+
+    /*
+     * BACK TO THE NEAR EDGE BEFORE COUNTING FORWARD, and that is the one thing
+     * this test had to learn from the landing change. The screen no longer
+     * opens on the current month — it opens on the month the selected route's
+     * CHEAPEST departure is in — so "walk six and stop" has to start from the
+     * edge rather than from wherever the fares put it.
+     *
+     * Which is also the clamp, asserted: the landing month is inside
+     * FIRST_MONTH..LAST_MONTH, so walking back from it always ARRIVES at this
+     * month rather than at some month behind it.
+     */
+    while (await prev.isEnabled()) {
+        await step(page, prev)
+    }
+
+    // The past is not offered at all: a fare you can no longer buy is not a deal.
+    await expect(prev).toBeDisabled()
+    await expect(subtitle).toHaveText(`Cheapest fare per day · ${label(0)}`)
 
     for (let ahead = 1; ahead <= 6; ahead += 1) {
         await expect(next, `the arrow was already dead at +${ahead - 1}`).toBeEnabled()
@@ -156,6 +249,73 @@ test('the month arrows walk six months forward and stop', async ({ page }) => {
     if ((await page.locator('.cell--fare').count()) === 0) {
         await expect(page.locator('.calendar__note--centred')).toHaveText('No fares seen for this month yet.')
     }
+})
+
+/*
+ * ============================================================================
+ * IT OPENS ON THE MONTH WORTH LOOKING AT
+ * ============================================================================
+ * The screen always opened on the CURRENT month, which is the one month the
+ * poll window only half covers — everything before today is gone. "When is it
+ * cheap?" was therefore answered with a half-grey grid while the route's
+ * actual cheapest day sat two taps away in another month, unmentioned, under a
+ * banner that says "cheapest THIS month" and never said which month to be in.
+ *
+ * THE ASSERTION IS MADE FROM THE SCREEN ALONE. Every month in the window is
+ * walked and its banner read, and the landing month has to be one of the ones
+ * holding the cheapest fare of the lot. Nothing here re-derives the answer the
+ * way the app does — it reads the prices a person can see and checks the app
+ * landed on the best of them.
+ */
+test('the calendar opens on the month the route is cheapest in', async ({ page }) => {
+    await page.goto('/calendar')
+    await expect(page.locator('.cell--fare').first()).toBeVisible()
+
+    const subtitle = page.locator('.calendar__subtitle')
+    const landingMonth = await subtitle.textContent()
+    const landingPrice = await cheapestOnScreen(page)
+
+    expect(landingPrice, 'the calendar opened on a month with no fares in it at all').not.toBeNull()
+
+    // The city under the codes — this screen's chips are a filter somebody
+    // picks a PLACE with, and they used to be three-letter codes alone.
+    await expect(page.locator('.chip--active .chip__city')).not.toBeEmpty()
+
+    await shot(page, 'calendar-landing')
+
+    const prev = page.getByRole('button', { name: /^Go to / }).first()
+    const next = page.getByRole('button', { name: /^Go to / }).last()
+
+    // To the near edge of the window, then all the way across it.
+    while (await prev.isEnabled()) {
+        await step(page, prev)
+    }
+
+    const months = []
+
+    for (;;) {
+        months.push({ month: await subtitle.textContent(), price: await cheapestOnScreen(page) })
+
+        if (!(await next.isEnabled())) {
+            break
+        }
+
+        await step(page, next)
+    }
+
+    const priced = months.filter((month) => month.price !== null)
+    expect(priced.length, 'no month in the window had a fare in it').toBeGreaterThan(1)
+
+    const best = Math.min(...priced.map((month) => month.price))
+
+    expect(landingPrice, 'a cheaper month than the landing one is in the window').toBe(best)
+    // Named rather than deduced, so a tie between two months is a pass rather
+    // than a coin toss this test calls a failure.
+    expect(priced.filter((month) => month.price === best).map((month) => month.month)).toContain(landingMonth)
+
+    // AND THE WHOLE WINDOW IS REACHABLE FROM WHERE IT LANDED: the landing month
+    // is inside the bounds the arrows enforce, not past them.
+    expect(months.map((month) => month.month)).toContain(landingMonth)
 })
 
 test('tapping a day opens the sheet for that day', async ({ page }) => {
@@ -193,8 +353,7 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
      * wrong date — the route's cheapest day, or the first of the month — which
      * is what "the sheet has a Book button" alone would pass on.
      */
-    const chip = await page.locator('.chip--active').textContent()
-    const [origin, destination] = chip.trim().split('→')
+    const [, origin, destination] = await chipCode(page)
     const shownDate = await sheet.locator('.sheet__date').textContent()
 
     const book = sheet.getByRole('link', { name: 'Book this day' })
@@ -227,8 +386,8 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
 test('the day sheet leads to the route it is about', async ({ page }) => {
     await page.goto('/calendar')
 
-    const chip = await page.locator('.chip--active').textContent()
-    const code = chip.trim().replace('→', '-')
+    const [, origin, destination] = await chipCode(page)
+    const code = `${origin}-${destination}`
 
     const cell = page.locator('.cell--fare').first()
     await expect(cell).toBeVisible()
@@ -258,18 +417,21 @@ test('switching route redraws the month', async ({ page }) => {
     const before = await page.locator('.cell--fare .cell__price').allTextContents()
 
     /*
-     * THE CHIP IS RE-FOUND BY ITS TEXT AFTER THE TAP, not held as a locator.
+     * THE CHIP IS RE-FOUND BY ITS CODE AFTER THE TAP, not held as a locator.
      * `.chip:not(.chip--active)` is a live query: the moment the tap lands the
      * chip stops matching it and the OLD active one starts, so re-asserting on
      * the same locator reads the wrong element and reports aria-pressed=false.
+     *
+     * By its CODE and not by its whole text, because the chip now has a city
+     * on a second line — `textContent` runs the two together and would match
+     * neither the rendered text nor the accessible name.
      */
-    const wanted = await page.locator('.chip:not(.chip--active)').first().textContent()
-    await page.locator('.chip', { hasText: wanted }).click()
+    const [wanted] = await chipCode(page, '.chip:not(.chip--active)')
+    const chip = page.locator('.chip', { hasText: wanted })
 
-    await expect(page.getByRole('button', { name: wanted, exact: true })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-    )
+    await chip.click()
+
+    await expect(chip).toHaveAttribute('aria-pressed', 'true')
 
     // The fake provider is deterministic PER ROUTE, so two routes cannot
     // produce the same column of prices — if they do, the chip changed the

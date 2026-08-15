@@ -37,7 +37,7 @@
  */
 import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { MAX_SUGGESTIONS, searchDestinations, useDestinationsStore } from '@/stores/destinations'
+import { MAX_SUGGESTIONS, nearestDestination, searchDestinations, useDestinationsStore } from '@/stores/destinations'
 
 const props = defineProps({
   /** The server's 422 message for the last attempt, if there was one. */
@@ -67,6 +67,19 @@ const active = ref(-1)
 const listbox = useTemplateRef('listbox')
 
 const suggestions = computed(() => searchDestinations(destinations.value, destination.value, MAX_SUGGESTIONS))
+
+/*
+ * WHAT WAS PROBABLY MEANT, when nothing was found.
+ *
+ * "barcelna" is one letter away from a place this app knows and produced a
+ * flat "No matching destination." — a dead end reached by the most ordinary
+ * mistake anybody makes on a phone keyboard. Guarded by `suggestions.length`
+ * so it can never appear beside real results: it is what the panel says
+ * INSTEAD of admitting defeat, not a ninth suggestion.
+ */
+const didYouMean = computed(() =>
+  suggestions.value.length === 0 ? nearestDestination(destinations.value, destination.value) : null,
+)
 
 /*
  * The dropdown is not merely `open`: an empty box has nothing to suggest, and
@@ -214,8 +227,25 @@ function onFocusOut(event) {
  * @param {KeyboardEvent} event
  */
 function onEnter(event) {
-  if (!showing.value || suggestions.value.length === 0 || isKnownCode.value) {
+  if (!showing.value || isKnownCode.value) {
     // Left alone, so the browser submits the form as it always did.
+    return
+  }
+
+  /*
+   * NOTHING WAS FOUND, BUT SOMETHING WAS GUESSED. The panel is showing "Did
+   * you mean Barcelona?" and Enter is what somebody answers a question with —
+   * and it is the only way to reach that row from the keyboard, since the
+   * arrows walk `suggestions` and this is not one of them.
+   */
+  if (suggestions.value.length === 0) {
+    if (didYouMean.value === null) {
+      return
+    }
+
+    event.preventDefault()
+    choose(didYouMean.value)
+
     return
   }
 
@@ -385,8 +415,28 @@ defineExpose({ reset })
           </span>
         </li>
 
+        <!--
+          THE TYPO'S WAY OUT, and it is a real `option` because it really is
+          one: tapping it fills the box exactly as any other suggestion does.
+          It is not reachable with the arrow keys — `move()` walks
+          `suggestions`, which this deliberately is not — so Enter takes it
+          instead (see `onEnter`), which is the one keystroke somebody who has
+          just been told they mistyped is going to press.
+        -->
+        <li
+          v-if="didYouMean"
+          class="option option--guess"
+          role="option"
+          :aria-selected="false"
+          @mousedown.prevent
+          @click="choose(didYouMean)"
+        >
+          Did you mean <b>{{ didYouMean.city }}</b>?
+          <span class="option__code">{{ didYouMean.iata }}</span>
+        </li>
+
         <!-- Not a `role="option"`: there is nothing here to choose. -->
-        <li v-if="suggestions.length === 0" class="option option--empty">
+        <li v-if="suggestions.length === 0 && !didYouMean" class="option option--empty">
           {{
             listStatus === 'failed'
               ? 'Suggestions are unavailable — a three-letter code still works.'
@@ -578,6 +628,19 @@ defineExpose({ reset })
 .option--empty {
   color: var(--muted);
   cursor: default;
+}
+
+/* A question rather than a result: quieter than a suggestion, and the city
+   inside it is bold for the same reason the matched run is — the word that
+   answers the question is the word to read. The code sits at the end, so the
+   row lines up with the suggestions it stands in for. */
+.option--guess {
+  justify-content: space-between;
+  color: var(--muted);
+}
+
+.option--guess b {
+  color: var(--ink);
 }
 
 .add__error {

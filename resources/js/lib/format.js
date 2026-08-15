@@ -1,5 +1,5 @@
 // =============================================================================
-// Printing the API's numbers
+// Printing the API's numbers, and the one date that travels with them
 // =============================================================================
 // ONE MODULE, AND IT USED TO BE THREE. `Components/route/format.js`,
 // `Components/calendar/format.js` and `Components/globe/format.js` each carried
@@ -55,6 +55,43 @@ export function euro(amount) {
  * @param {number|null|undefined} pctBelow
  * @returns {string|null}
  */
+/**
+ * A DEPARTURE date, as the price screens print it: `2026-09-09` → `Wed, Sep 9`.
+ *
+ * WHY THIS IS NOT `Components/calendar/month.js`'s `dayLabel`, which formats the
+ * same kind of string. That one writes "September 9" for a grid the reader is
+ * already looking at a month of — the month is on the screen above it and the
+ * weekday is the column the cell is in. This one is read out of any context at
+ * all, under a fare, so it carries the two facts that context was supplying:
+ * WHICH MONTH, and WHICH DAY OF THE WEEK. "€75 · Wed, Sep 9" and "€75 · Sat,
+ * Sep 12" are different offers to a person with a job, and the calendar's
+ * phrasing cannot say so.
+ *
+ * PARSED BY PARTS AND FORMATTED IN UTC, for the reason month.js gives at
+ * length: `new Date('2026-09-09')` is UTC midnight, and asking it for a weekday
+ * through a viewer's own timezone answers Tuesday for anyone west of London.
+ * The locale is pinned for the reason the design pins it — one user, one
+ * language, and a device set to de-DE must not render a screen nobody signed
+ * off.
+ *
+ * @param {string|null|undefined} iso `YYYY-MM-DD`
+ * @returns {string|null}
+ */
+export function departureLabel(iso) {
+    if (iso === null || iso === undefined) {
+        return null
+    }
+
+    const [year, month, day] = iso.split('-').map(Number)
+
+    return new Intl.DateTimeFormat('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC',
+    }).format(new Date(Date.UTC(year, month - 1, day)))
+}
+
 export function usualPriceLabel(pctBelow) {
     if (pctBelow === null || pctBelow === undefined) {
         return null

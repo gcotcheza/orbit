@@ -203,3 +203,110 @@ describe('a month at the far end with no fares in it', () => {
         expect(wrapper.text()).not.toContain('Could not load this month')
     })
 })
+
+/*
+ * ============================================================================
+ * WHICH MONTH IT OPENS ON
+ * ============================================================================
+ * It opened on the current month, always — the one month the poll window only
+ * half covers, because everything before today is gone. So "when is it cheap?"
+ * was answered with a half-grey grid while the route's actual cheapest day sat
+ * several taps away in another month, unmentioned: the banner at the foot of
+ * the grid says "cheapest THIS month" and nothing ever said which month to be
+ * in.
+ *
+ * `cheapest.date` is on the watchlist row now (docs/API.md), so the landing
+ * month is a lookup rather than a request — and it is CLAMPED into the window
+ * the arrows enforce, which is the half of this that cannot be tested against a
+ * live sandbox: a route whose cheapest departure is a year out is exactly what
+ * a wider poll window, or a stale row, produces, and landing there would be a
+ * grid the navigation cannot get back from.
+ */
+describe('which month it opens on', () => {
+    /** One watched route whose cheapest departure is on `date`. */
+    function watching(date) {
+        get.mockImplementation((url, config) => {
+            if (url === '/api/watchlist') {
+                const route = { ...ROUTE, cheapest: date === null ? null : { date, price: 74 } }
+
+                return Promise.resolve({ data: { data: [route], meta: { count: 1, active: 1 } } })
+            }
+
+            return Promise.resolve({ data: priced(config?.params?.month) })
+        })
+    }
+
+    it('opens on the month the cheapest departure is in', async () => {
+        const third = addMonths(currentMonthKey(), 3)
+        watching(`${third}-09`)
+
+        const wrapper = await mountCalendar()
+
+        expect(subtitle(wrapper)).toBe(`Cheapest fare per day · ${monthLabel(third)}`)
+        // And it asked the endpoint for that month rather than for this one.
+        expect(get).toHaveBeenLastCalledWith('/api/routes/AMS-LIS/calendar', { params: { month: third } })
+    })
+
+    it('opens on this month when the route has no fare yet', async () => {
+        // docs/API.md: `cheapest` is null before the first poll. Null is not a
+        // date, and the month we are in is the honest place to start.
+        watching(null)
+
+        const wrapper = await mountCalendar()
+
+        expect(subtitle(wrapper)).toBe(`Cheapest fare per day · ${monthLabel(currentMonthKey())}`)
+    })
+
+    it('clamps a date past the end of the window back to the last month', async () => {
+        const far = addMonths(currentMonthKey(), 11)
+        watching(`${far}-04`)
+
+        const wrapper = await mountCalendar()
+
+        expect(subtitle(wrapper)).toBe(`Cheapest fare per day · ${monthLabel(addMonths(currentMonthKey(), 6))}`)
+        // The far edge, so forward is dead and back is not: the screen landed
+        // INSIDE the window rather than past the end of it.
+        expect(next(wrapper).attributes('disabled')).toBeDefined()
+        expect(prev(wrapper).attributes('disabled')).toBeUndefined()
+    })
+
+    it('clamps a date behind today up to this month', async () => {
+        // A row read from a cache, or a fare that expired between the poll and
+        // the page load. The past is not offered at all.
+        watching(`${addMonths(currentMonthKey(), -2)}-14`)
+
+        const wrapper = await mountCalendar()
+
+        expect(subtitle(wrapper)).toBe(`Cheapest fare per day · ${monthLabel(currentMonthKey())}`)
+        expect(prev(wrapper).attributes('disabled')).toBeDefined()
+    })
+
+    it('follows the chip to the month that route is cheapest in', async () => {
+        const second = addMonths(currentMonthKey(), 2)
+
+        get.mockImplementation((url, config) => {
+            if (url === '/api/watchlist') {
+                return Promise.resolve({
+                    data: {
+                        data: [
+                            { ...ROUTE, cheapest: null },
+                            { ...ROUTE, code: 'AMS-OPO', cheapest: { date: `${second}-19`, price: 44 } },
+                        ],
+                        meta: { count: 2, active: 2 },
+                    },
+                })
+            }
+
+            return Promise.resolve({ data: priced(config?.params?.month) })
+        })
+
+        const wrapper = await mountCalendar()
+
+        expect(subtitle(wrapper)).toBe(`Cheapest fare per day · ${monthLabel(currentMonthKey())}`)
+
+        await step(wrapper, wrapper.findAll('.chip')[1])
+
+        expect(subtitle(wrapper)).toBe(`Cheapest fare per day · ${monthLabel(second)}`)
+        expect(get).toHaveBeenLastCalledWith('/api/routes/AMS-OPO/calendar', { params: { month: second } })
+    })
+})

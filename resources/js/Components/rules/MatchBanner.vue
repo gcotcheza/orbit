@@ -16,9 +16,20 @@
  * ZERO IS A SENTENCE, NOT A NUMBER. "0 trips match" reads as a broken feature;
  * a rule with no matches yet is usually a rule whose routes Orbit has not
  * priced (App\Jobs\SweepRuleFares), so it says so.
+ *
+ * AND NEITHER IS A COUNT THAT IS STILL GROWING. `matches.partial` means some of
+ * the routes this rule is about have no fare yet (docs/API.md), so `count` is a
+ * floor and not a total — the sentence measured on the real app was "2 trips
+ * match this right now" before saving and "32 already match" a minute after,
+ * which reads as the app having been wrong rather than as it having been busy.
+ * The number is the same number; what changes is that it is now phrased as the
+ * floor it always was. The CHEAPEST is dropped from that phrasing on purpose:
+ * "cheapest €34" is a superlative over a set that is still being assembled, and
+ * a fare that turns out not to be the cheapest is a worse thing to have said
+ * than nothing.
  */
 defineProps({
-  /** A parse's `matches`: { count, cheapest, sample }. */
+  /** A parse's `matches`: { count, partial, cheapest, sample }. */
   matches: { type: Object, required: true },
 
   /** True while a newer parse is in flight. */
@@ -33,7 +44,12 @@ defineProps({
       <path d="M8.5 5v4M8.5 11.5v.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
     </svg>
 
-    <p v-if="matches.count > 0" class="banner__text">
+    <p v-if="matches.count > 0 && matches.partial" class="banner__text">
+      <b>At least {{ matches.count }}</b>
+      match so far — Orbit is still pricing the rest
+    </p>
+
+    <p v-else-if="matches.count > 0" class="banner__text">
       <b>{{ matches.count }} {{ matches.count === 1 ? 'trip' : 'trips' }}</b>
       match this right now — cheapest €{{ matches.cheapest }}
     </p>

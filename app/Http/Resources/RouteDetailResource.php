@@ -59,16 +59,14 @@ final class RouteDetailResource extends RouteSummaryResource
             ],
 
             /*
-             * The cheapest DEPARTURE still on offer in the poll window, which
-             * is also what the booking link is aimed at. Null before the first
-             * poll; the link then points at the route's whole month, which is
-             * still a useful place to land.
+             * `cheapest` — the cheapest DEPARTURE still on offer in the poll
+             * window — is INHERITED from the summary now, because the screens
+             * that read the summary needed it too (see the note there). It is
+             * still read here, for the one thing only this resource sends:
+             * the link is aimed at that date. Null before the first poll; the
+             * link then points at the route without one, which is still a
+             * useful place to land.
              */
-            'cheapest' => $cheapest === null ? null : [
-                'date' => $cheapest->departureDate->format('Y-m-d'),
-                'price' => Euros::from($cheapest->cents),
-            ],
-
             'bookingUrl' => BookingLink::for($snapshot->route, $cheapest?->departureDate),
         ];
     }

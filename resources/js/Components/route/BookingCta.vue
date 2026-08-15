@@ -15,15 +15,33 @@
  * The disclaimer is part of the component rather than of the screen: the line
  * exists because the button looks like a checkout, and the two should never be
  * able to drift apart.
+ *
+ * TWO VARIANTS, BECAUSE THE SCREEN ABOVE IT DOES NOT ALWAYS AGREE WITH IT. The
+ * accent fill is the loudest element on the route detail, and it was drawn at
+ * full volume under a callout reading "Above usual — wait": the page said hold
+ * off and then put a glowing Book button under it, which is the app arguing
+ * with itself in front of somebody about to spend money. `secondary` is the
+ * same link, the same size and the same tap target, drawn as an outline — the
+ * hand-off is still there for somebody who has decided anyway, it is simply no
+ * longer the conclusion. WHICH one is the caller's call: this component is not
+ * told the advice, only how loudly to say its own line, because a button that
+ * read the verdict itself would be a second opinion about it.
  */
 defineProps({
   url: { type: String, required: true },
+
+  /** 'primary' by default; 'secondary' when the advice is a warning. */
+  variant: {
+    type: String,
+    default: 'primary',
+    validator: (value) => ['primary', 'secondary'].includes(value),
+  },
 })
 </script>
 
 <template>
   <div class="booking">
-    <a class="booking__cta" :href="url" target="_blank" rel="noopener">
+    <a class="booking__cta" :class="`booking__cta--${variant}`" :href="url" target="_blank" rel="noopener">
       Book on Skyscanner
       <!-- Stroked from the style block, on the accent fill — see the note in
            AdviceCallout.vue. -->
@@ -52,14 +70,30 @@ defineProps({
   font-size: 16px;
   font-weight: 700;
   text-decoration: none;
+}
 
+.booking__cta--primary {
   background: var(--accent);
   color: var(--on-solid);
   box-shadow: 0 8px 20px var(--accent-glow);
 }
 
-.booking__cta path {
+.booking__cta--primary path {
   stroke: var(--on-solid);
+}
+
+/* The outline variant. Same box, same 54 px target, no fill and no glow — the
+   card surface with a hairline, which is the quietest thing this palette can
+   draw that is still unmistakably a control. The accent survives as the TEXT
+   colour so it still reads as the one link on the screen that leaves it. */
+.booking__cta--secondary {
+  background: var(--card);
+  color: var(--accent-ink);
+  border: 1px solid var(--line);
+}
+
+.booking__cta--secondary path {
+  stroke: var(--accent-ink);
 }
 
 .booking__disclaimer {

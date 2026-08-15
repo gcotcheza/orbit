@@ -53,12 +53,20 @@ test('the design sentence is read back as its eight chips', async ({ page }) => 
 
     expect(read).toEqual(EXPECTED_CHIPS)
 
-    // The banner underneath says what the rule matches right now. Either
-    // wording is correct — a rule can legitimately match nothing until the
-    // sweep has priced the routes it named (docs/API.md) — so this asserts it
-    // says one of them rather than inventing a number.
+    /*
+     * The banner underneath says what the rule matches right now, and there are
+     * THREE correct wordings of that (docs/API.md):
+     *
+     *   - nothing yet, because the sweep has not priced the routes it named;
+     *   - "at least N so far", because it has priced SOME of them — `partial`;
+     *   - a final count with a cheapest fare, once every candidate is priced.
+     *
+     * The middle one is the honest phrasing this app was missing: the number
+     * used to be stated as a total and then grew from 2 to 32 a minute later,
+     * which reads as the app having been wrong when it was only busy.
+     */
     await expect(page.locator('.banner')).toHaveText(
-        /(\d+ trips? match this right now — cheapest €\d+|Nothing matches yet)/,
+        /(At least \d+ match so far — Orbit is still pricing the rest|\d+ trips? match this right now — cheapest €\d+|Nothing matches yet)/,
     )
 
     await shot(page, 'create-rule')
@@ -106,8 +114,12 @@ test('removing a chip re-reads the rule and updates the match banner', async ({ 
         .not.toBe(before)
 
     // And it re-read to a REAL answer rather than to a different flavour of
-    // nothing: a count, and a cheapest fare to go with it.
-    await expect(banner).toHaveText(/\d+ trips? match this right now — cheapest €\d+/)
+    // nothing: a count that is not zero. Which of the two counted wordings it
+    // gets depends on how much of the candidate set the sandbox has priced —
+    // both carry the number, and neither is "nothing matches yet".
+    await expect(banner).toHaveText(
+        /(At least \d+ match so far|\d+ trips? match this right now — cheapest €\d+)/,
+    )
 
     // Reset puts the removed chip back.
     await page.getByRole('button', { name: 'Reset' }).click()

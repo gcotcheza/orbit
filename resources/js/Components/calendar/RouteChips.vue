@@ -25,11 +25,16 @@ defineEmits(['pick'])
       v-for="route in routes"
       :key="route.code"
       class="chip"
-      :class="{ 'chip--active': route.code === active }"
+      :class="{ 'chip--active': route.code === active, 'chip--paused': !route.active }"
       :aria-pressed="route.code === active"
       @click="$emit('pick', route.code)"
     >
-      {{ route.origin.iata }}→{{ route.destination.iata }}
+      <span>{{ route.origin.iata }}→{{ route.destination.iata }}</span>
+      <!-- The city, under the codes. Six chips reading AMS→OPO, AMS→FAO,
+           EIN→LIS are six anagrams unless you already know them, and this
+           screen's question — "when is it cheap?" — is asked about a PLACE.
+           Same addition, same reasoning, as the globe's route rail. -->
+      <span class="chip__city">{{ route.destination.city }}</span>
     </button>
   </div>
 </template>
@@ -65,9 +70,37 @@ defineEmits(['pick'])
   border: 1px solid var(--line);
 }
 
+.chip__city {
+  display: block;
+  margin-top: 1px;
+
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  /* Stepped back rather than set to --muted: the active chip is INK on BG, and
+     a fixed grey on it would be a colour nobody picked. Opacity inherits
+     whichever ink the chip is currently wearing. */
+  opacity: 0.68;
+}
+
 .chip--active {
   background: var(--ink);
   color: var(--bg);
   border-color: var(--ink);
+}
+
+/*
+ * A PAUSED ROUTE IS DIMMED HERE TOO, at the same 0.58 the watch screen's rows
+ * use. It stays in the list and stays selectable — its calendar is still worth
+ * reading, and docs/API.md is explicit that paused routes are not filtered out
+ * — but a screen that draws a paused route identically to a live one is a
+ * screen quietly disagreeing with the switch the owner just moved.
+ *
+ * IT COMPOSES WITH `.chip--active` rather than competing with it — one sets a
+ * fill, the other an opacity — so the selected chip of a paused route is both
+ * inverted and dimmed. Both statements are true at once.
+ */
+.chip--paused {
+  opacity: 0.58;
 }
 </style>
