@@ -85,6 +85,44 @@ final class RouteCalendarApiTest extends TestCase
         $response->assertJsonPath('meta.month', '2026-09');
     }
 
+    /**
+     * The day sheet books the day that was TAPPED, and only the client knows
+     * which day that is — so the link goes out as a template with a hole in it
+     * rather than as 31 URLs or as nothing.
+     *
+     * The prefix is BookingLink's own undated form (docs/API.md), which is what
+     * keeps the Skyscanner host and the lower-casing out of the browser.
+     */
+    #[Test]
+    public function the_meta_carries_a_booking_url_template_for_the_tapped_day(): void
+    {
+        $this->seedMonth();
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-FAO/calendar?month=2026-09')
+            ->assertJsonPath(
+                'meta.bookingUrlTemplate',
+                'https://www.skyscanner.nl/transport/flights/ams/fao/{date}/',
+            );
+    }
+
+    /**
+     * It is a fact about the ROUTE, not about the fares: the sheet cannot open
+     * on an empty month, but a client that reads the template once per response
+     * must not have to branch on whether this one had any days in it.
+     */
+    #[Test]
+    public function the_booking_url_template_survives_an_empty_month(): void
+    {
+        $this->seedMonth();
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-FAO/calendar?month=2029-01')
+            ->assertJsonPath('data.days', [])
+            ->assertJsonPath(
+                'meta.bookingUrlTemplate',
+                'https://www.skyscanner.nl/transport/flights/ams/fao/{date}/',
+            );
+    }
+
     #[Test]
     public function the_verdicts_follow_the_designs_thresholds(): void
     {

@@ -200,7 +200,11 @@ defaults to the current one.
     "max": 88,
     "cheapest": { "date": "2026-09-15", "price": 44 }
   },
-  "meta": { "code": "AMS-OPO", "month": "2026-09" }
+  "meta": {
+    "code": "AMS-OPO",
+    "month": "2026-09",
+    "bookingUrlTemplate": "https://www.skyscanner.nl/transport/flights/ams/opo/{date}/"
+  }
 }
 ```
 
@@ -210,6 +214,7 @@ defaults to the current one.
 | `days[].verdict` | `cheap` \| `mid` \| `pricey`, already computed against this month's own range using the design's thresholds (cheap ≤ low + 28% of the range, pricey ≥ 66%). Use it for the bottom sheet's pill; do not recompute. |
 | `min` / `max` | This month's bounds — the legend gradient's two labels, and the range to interpolate the five-stop heat scale across. `null` for an empty month. |
 | `cheapest` | The "★ Cheapest this month" banner. `null` for an empty month. |
+| `meta.bookingUrlTemplate` | The day sheet's "Book this day" link, for **whichever** day was tapped. Substitute `{date}` with that departure date as **`yymmdd`** (`2026-09-15` → `260915`) and open the result. **Always present**, including for an empty month — it is a fact about the route, not about the fares. It is the same Skyscanner deep link `bookingUrl` on the route detail is, with the date left as a hole; the host and the path shape stay on the server (`config/orbit.php`, `App\Application\Routes\BookingLink`) so a move to another affiliate is one change. Do not build this URL client-side. |
 
 **Empty months are a 200, not a 404.** The poll window is about three months, so
 paging past it is normal: `days: []`, `min`/`max`/`cheapest` all `null`. Draw an
