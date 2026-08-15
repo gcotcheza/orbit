@@ -8,22 +8,23 @@
  * FLY (docs/API.md). Nothing on this screen is derived from an observation
  * date, which is why the calendar endpoint is the only one it reads.
  *
- * WHY THE WATCHLIST IS FETCHED HERE RATHER THAN READ FROM A STORE. There is no
- * watchlist store yet — the globe home that will introduce one is being built
- * in a parallel worktree, and inventing a second one here would be the thing
- * that has to be un-merged. `Components/calendar/` is this branch's; a store is
- * not. Swapping this call for `useWatchlistStore()` afterwards is a two-line
- * change, and is flagged in the PR for the integration pass.
+ * THE ROUTE CHIPS READ THE SHARED LIST. This screen fetched `/api/watchlist`
+ * for itself while the store that now holds it was being written in a parallel
+ * worktree; the swap was flagged for the DRY pass and is this file's part of
+ * it. The chips are the only thing here that wants the watchlist — every fare
+ * on the screen comes from the calendar endpoint below.
  */
 import { computed, onMounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { http } from '@/lib/http'
 import DaySheet from '@/Components/calendar/DaySheet.vue'
 import HeatLegend from '@/Components/calendar/HeatLegend.vue'
 import MonthGrid from '@/Components/calendar/MonthGrid.vue'
 import MonthNav from '@/Components/calendar/MonthNav.vue'
 import RouteChips from '@/Components/calendar/RouteChips.vue'
-import { euro } from '@/Components/calendar/format'
+import { euro } from '@/lib/format'
 import { addMonths, currentMonthKey, dayLabel, monthLabel } from '@/Components/calendar/month'
+import { useWatchlistStore } from '@/stores/watchlist'
 
 /*
  * How far the arrows go. The poller holds about three months of departures
@@ -34,15 +35,26 @@ import { addMonths, currentMonthKey, dayLabel, monthLabel } from '@/Components/c
 const FIRST_MONTH = currentMonthKey()
 const LAST_MONTH = addMonths(FIRST_MONTH, 3)
 
-const routes = ref([])
+const watchlist = useWatchlistStore()
+const { routes, status: routesStatus } = storeToRefs(watchlist)
+
 const code = ref(null)
 const month = ref(FIRST_MONTH)
 
 const payload = ref(null)
 const loading = ref(true)
-const failed = ref(false)
-const booted = ref(false)
+const monthFailed = ref(false)
 const selected = ref(null)
+
+/** The watchlist has answered, one way or the other, and the screen can speak. */
+const booted = computed(() => routesStatus.value !== 'loading')
+
+/*
+ * One "could not load" for the two requests this screen makes. They fail the
+ * same way and the message covers both — and a screen that could not get the
+ * watchlist has no route to ask the calendar endpoint about anyway.
+ */
+const failed = computed(() => monthFailed.value || routesStatus.value === 'failed')
 
 const canPrev = computed(() => month.value > FIRST_MONTH)
 const canNext = computed(() => month.value < LAST_MONTH)
@@ -62,21 +74,16 @@ const hasFares = computed(() => payload.value?.min != null && payload.value?.max
 let request = 0
 
 async function loadRoutes() {
-  try {
-    const { data } = await http.get('/api/watchlist')
-    routes.value = data.data
-    code.value = routes.value[0]?.code ?? null
-  } catch (error) {
-    console.error('Could not load the watchlist.', error)
-    failed.value = true
-  } finally {
-    booted.value = true
+  await watchlist.refresh()
 
-    // Nothing to ask the calendar endpoint about, so the load that would have
-    // cleared this flag is never made.
-    if (code.value === null) {
-      loading.value = false
-    }
+  // The first chip, which the watcher below turns into the first month.
+  code.value = routes.value[0]?.code ?? null
+
+  // Nothing to ask the calendar endpoint about — either the list is empty or
+  // it could not be fetched — so the load that would have cleared this flag is
+  // never made.
+  if (code.value === null) {
+    loading.value = false
   }
 }
 
@@ -88,7 +95,7 @@ async function loadMonth() {
   const mine = (request += 1)
 
   loading.value = true
-  failed.value = false
+  monthFailed.value = false
   // The sheet belongs to the month that is on its way out.
   selected.value = null
 
@@ -108,7 +115,7 @@ async function loadMonth() {
     }
 
     console.error('Could not load the calendar.', error)
-    failed.value = true
+    monthFailed.value = true
     payload.value = null
   } finally {
     if (mine === request) {

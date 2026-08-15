@@ -40,7 +40,9 @@
     <RouterLink class="tab tab--create" :to="{ name: 'create' }" aria-label="Create an alert rule">
       <span class="tab__button">
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-          <path d="M11 5v12M5 11h12" stroke="#fff" stroke-width="2.2" stroke-linecap="round" />
+          <!-- Stroked from the style block: --on-solid on the accent fill,
+               and a var() in a presentation attribute is not portable. -->
+          <path d="M11 5v12M5 11h12" stroke-width="2.2" stroke-linecap="round" />
         </svg>
       </span>
     </RouterLink>
@@ -130,5 +132,9 @@
 
   background: var(--accent);
   box-shadow: 0 6px 16px var(--accent-glow);
+}
+
+.tab__button path {
+  stroke: var(--on-solid);
 }
 </style>

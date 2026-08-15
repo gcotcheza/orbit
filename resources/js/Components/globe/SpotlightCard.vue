@@ -20,7 +20,7 @@
 import { computed } from 'vue'
 import PriceSparkline from '@/Components/PriceSparkline.vue'
 import VerdictPill from '@/Components/VerdictPill.vue'
-import { euros, usualPriceLabel } from './format'
+import { euro, usualPriceLabel } from '@/lib/format'
 
 const props = defineProps({
   /** One `GET /api/watchlist` row. */
@@ -30,7 +30,7 @@ const props = defineProps({
 /** docs/API.md: under a fortnight of our own observations is worth saying. */
 const TRACKING_NOTE_DAYS = 14
 
-const price = computed(() => euros(props.route.price.current))
+const price = computed(() => euro(props.route.price.current))
 
 const comparison = computed(() => usualPriceLabel(props.route.price.pctBelow))
 
