@@ -6,6 +6,7 @@ use App\Http\Controllers\AlertController;
 use App\Http\Controllers\Auth\CurrentUserController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\DestinationController;
 use App\Http\Controllers\RouteCalendarController;
 use App\Http\Controllers\RouteController;
 use App\Http\Controllers\RuleController;
@@ -20,7 +21,7 @@ use Illuminate\Support\Facades\Route;
 | Web routes
 |--------------------------------------------------------------------------
 |
-| Five routes are the entire authentication surface, five more are the read
+| Five routes are the entire authentication surface, six more are the read
 | API the screens are built on, nine more are the writes those screens make,
 | and the last one is the single-page app.
 |
@@ -132,10 +133,10 @@ Route::middleware('auth:sanctum')->get('/api/me', CurrentUserController::class)-
 | The read API
 |--------------------------------------------------------------------------
 |
-| Five endpoints, and between them they are the entire data supply for the
-| globe home, the route detail, the price calendar, the watchlist and the
-| rules the watch screen lists — plus the alert ledger, which no screen reads
-| yet and which docs/API.md publishes anyway.
+| Six endpoints, and between them they are the entire data supply for the
+| globe home, the route detail, the price calendar, the watchlist, the rules
+| the watch screen lists and the places its add form offers — plus the alert
+| ledger, which no screen reads yet and which docs/API.md publishes anyway.
 | Their exact shapes are docs/API.md — that file is the contract those screens
 | are built against, and it is written before they are.
 |
@@ -147,7 +148,7 @@ Route::middleware('auth:sanctum')->get('/api/me', CurrentUserController::class)-
 | is what bootstrap/app.php renders exceptions as JSON under, and what the SPA
 | catch-all at the bottom of this file refuses to swallow.
 |
-| ALL FIVE ARE READS. The writes are the group below.
+| ALL SIX ARE READS. The writes are the group below.
 |
 */
 Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
@@ -179,6 +180,18 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
      * that is wrong from the next poll onwards.
      */
     Route::get('/rules', [RuleController::class, 'index'])->name('rules.index');
+
+    /*
+     * Everywhere Orbit knows how to fly to, for the add-route form's typeahead
+     * (design/README.md §5's destination box, which the owner cannot use
+     * without knowing IATA codes off by heart).
+     *
+     * THE WHOLE LIST, AND NO `?q=`. Seventy-seven rows from a checked-in file
+     * — the client fetches it once and filters as somebody types. See
+     * App\Http\Controllers\DestinationController for why that is the cheaper
+     * of the two designs rather than the lazier one.
+     */
+    Route::get('/destinations', DestinationController::class)->name('destinations');
 
     /*
      * What Orbit has actually sent, newest first — the alert ledger.
