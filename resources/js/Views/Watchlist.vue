@@ -22,11 +22,14 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useRouter } from 'vue-router'
 import AddRouteForm from '@/Components/watch/AddRouteForm.vue'
 import RuleRow from '@/Components/rules/RuleRow.vue'
 import WatchRow from '@/Components/watch/WatchRow.vue'
 import { useRulesStore } from '@/stores/rules'
 import { useWatchlistStore } from '@/stores/watchlist'
+
+const router = useRouter()
 
 const watchlist = useWatchlistStore()
 const { routes, status, error: notice } = storeToRefs(watchlist)
@@ -197,6 +200,24 @@ async function add({ origin, destination }) {
   }
 }
 
+/**
+ * Look a route up without watching it — the form's primary action.
+ *
+ * A NAVIGATION AND NOTHING ELSE, and the route may well not exist yet. The
+ * detail screen prices it on arrival when Orbit has nothing recent for the pair
+ * (`POST /api/routes/lookup`, docs/API.md), which is the same thing it has to
+ * do for a bookmark or a shared link — so this screen does not need to know
+ * whether the code it is sending is one Orbit has ever heard of, and does not
+ * pretend to.
+ *
+ * The code is assembled here rather than asked for, because `ORIGIN-DEST` is
+ * what a route code IS (App\Models\Route::codeFor) and the form has both halves
+ * in hand.
+ */
+function lookUp({ origin, destination }) {
+  router.push({ name: 'route-detail', params: { id: `${origin}-${destination}` } })
+}
+
 function toggleAddForm() {
   addOpen.value = !addOpen.value
   addError.value = ''
@@ -310,7 +331,7 @@ function messageFor(failure) {
       </button>
     </header>
 
-    <AddRouteForm v-if="addOpen" ref="addForm" :error="addError" :busy="adding" @submit="add" />
+    <AddRouteForm v-if="addOpen" ref="addForm" :error="addError" :busy="adding" @lookup="lookUp" @watch="add" />
 
     <p v-if="notice" class="screen__notice" role="alert">{{ notice }}</p>
     <p v-if="undoError" class="screen__notice" role="alert">{{ undoError }}</p>
@@ -334,9 +355,12 @@ function messageFor(failure) {
          screen and they do different things: the one in this header adds a
          ROUTE, the one in the tab bar at the bottom writes a RULE. An empty
          screen saying "tap +" was pointing at both. -->
+    <!-- "LOOK ONE UP" RATHER THAN "WATCH ONE", because that is what the form's
+         first button now does: a price without a commitment, and the watching
+         is one tap further on if it turns out to be worth it. -->
     <p v-else-if="routes.length === 0" class="screen__state">
-      No routes yet. Tap <span class="screen__plus">+</span> at the top right to watch one — Orbit starts pricing it in
-      the morning.
+      No routes yet. Tap <span class="screen__plus">+</span> at the top right to look one up — you can start watching it
+      from there, and Orbit prices it every morning after that.
     </p>
 
     <div v-else class="screen__list">

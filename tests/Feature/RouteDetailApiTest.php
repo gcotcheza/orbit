@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\CalendarFare;
 use App\Models\Route;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -216,5 +217,82 @@ final class RouteDetailApiTest extends TestCase
         $this->seedRoute();
 
         $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')->assertOk();
+    }
+
+    /*
+     * -------------------------------------------------------------------------
+     * `meta` — the two facts about the ASKING rather than about the route
+     * -------------------------------------------------------------------------
+     * Both arrived with "look before you watch". `watched` is what draws the
+     * "Add to watchlist" button, and its absence is what keeps a watched
+     * route's detail screen exactly the screen it always was; `fares.fresh` is
+     * what lets that screen decide to ask for a price rather than draw a stale
+     * one and say nothing. Neither belongs in `data`, which is the shared route
+     * summary four screens read whole.
+     */
+
+    #[Test]
+    public function it_says_whether_this_account_watches_the_route(): void
+    {
+        $route = $this->seedRoute();
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('meta.watched', false);
+
+        $this->watch($this->owner, $route);
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('meta.watched', true);
+    }
+
+    /**
+     * A watchlist row belongs to an account, not to the route — so somebody
+     * else's row must not make this one say "watched".
+     */
+    #[Test]
+    public function another_accounts_watchlist_row_is_not_this_ones(): void
+    {
+        $route = $this->seedRoute();
+
+        $this->watch(User::factory()->create(), $route);
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('meta.watched', false);
+    }
+
+    #[Test]
+    public function it_says_how_old_the_fares_are(): void
+    {
+        $this->seedRoute();
+
+        // seedRoute() offers fares as of now, and now is 09:00 UTC — which is
+        // 11:00 where the owner lives, because this is the one timestamp in the
+        // API and it is sent in their timezone.
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('meta.fares.fetchedAt', '2026-08-14T11:00:00+02:00')
+            ->assertJsonPath('meta.fares.fresh', true);
+    }
+
+    #[Test]
+    public function fares_older_than_the_freshness_window_are_not_fresh(): void
+    {
+        $this->seedRoute();
+
+        CalendarFare::query()->update([
+            'fetched_at' => Date::now()->subHours((int) config('orbit.lookup.fresh_for_hours') + 1),
+        ]);
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('meta.fares.fresh', false);
+    }
+
+    #[Test]
+    public function a_route_nobody_has_priced_says_so_rather_than_guessing(): void
+    {
+        $this->makeRoute('AMS', 'OPO');
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('meta.fares.fetchedAt', null)
+            ->assertJsonPath('meta.fares.fresh', false);
     }
 }

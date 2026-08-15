@@ -1,15 +1,15 @@
 # Orbit — API
 
-The sixteen endpoints the screens are built from — six reads, nine writes and
+The seventeen endpoints the screens are built from — six reads, ten writes and
 one account action.
 **This file is the contract**: the globe home, the route detail, the price
 calendar, the watchlist, the alerts screen and the rule creator are all built
 against these shapes, and every field below has a feature test behind it
 (`tests/Feature/WatchlistApiTest`, `RouteDetailApiTest`, `RouteCalendarApiTest`,
-`WatchlistWritesTest`, `SettingsApiTest`, `RulesApiTest`, `AlertsApiTest`,
-`DestinationsApiTest`, `PasswordChangeTest`).
+`WatchlistWritesTest`, `RouteLookupTest`, `SettingsApiTest`, `RulesApiTest`,
+`AlertsApiTest`, `DestinationsApiTest`, `PasswordChangeTest`).
 
-One of the sixteen has no screen yet: `GET /api/alerts` is the alert ledger,
+One of the seventeen has no screen yet: `GET /api/alerts` is the alert ledger,
 and the alerts screen stays settings-only for now.
 
 ---
@@ -175,12 +175,33 @@ The route detail screen (`design/README.md` §2). The summary above, plus:
 | `advice` | The tinted callout. `title` always equals `verdict.label` and `tone` always equals `verdict.tone` — they are generated together so the prose and the gauge cannot disagree. |
 | `bookingUrl` | Skyscanner deep link, aimed at `cheapest.date` (which is on the **summary** — every screen gets it). Falls back to the route without a date (`…/ams/opo/`) when there are no fares. Always present. |
 
+…and a `meta` of two facts about the **asking** rather than about the route:
+
+```json
+{
+  "data": { "…": "…" },
+  "meta": {
+    "watched": false,
+    "fares": { "fetchedAt": "2026-08-15T06:12:07+02:00", "fresh": true }
+  }
+}
+```
+
+| field | notes |
+| --- | --- |
+| `meta.watched` | Whether **this account** has the route on its watchlist. Draws the "Watch this route" strip on the detail screen; a route that is already watched gets no strip at all, and that screen is unchanged from what it always was. |
+| `meta.fares.fetchedAt` | When the provider was last asked about this route — the newest `calendar_fares.fetched_at`. **`null`** when Orbit has never got a fare for it. The **only timestamp in this API** (every other date is a bare `YYYY-MM-DD` because it names a day); it is ISO-8601 with the offset, in the owner's timezone. |
+| `meta.fares.fresh` | `fetchedAt` is inside `orbit.lookup.fresh_for_hours` (24). **The client's rule is "not fresh AND not watched → ask for a lookup"**: a watched route is polled every morning, so stale fares on one are a broken poll rather than provider calls to spend from somebody's phone. |
+
 `code` is constrained to `[A-Z]{3}-[A-Z]{3}` at the router: **upper case, with
 the hyphen**. `ams-lis` does not match and is a 404, not a redirect.
 
 Not scoped to the watchlist — any known route has a detail screen.
 
-**404**: `{"message": "Unknown route."}`
+**404**: `{"message": "Unknown route."}` — and since "look before you watch",
+that is a question rather than a dead end: it is what a pair Orbit has no route
+row for answers, and `POST /api/routes/lookup` below is what the screen asks
+next.
 
 ---
 
@@ -228,9 +249,82 @@ standard `{"message": …, "errors": {"month": […]}}`.
 
 ---
 
+## `POST /api/routes/lookup`
+
+**Look before you watch.** Prices a city pair the owner has not committed to —
+the watch screen's "Look up" button (`design/README.md` §5's expander, whose
+only action used to be a commitment).
+
+```json
+{ "origin": "AMS", "destination": "MAD" }
+```
+
+Same two fields as `POST /api/watchlist`, same normalisation, same five
+messages — both take their pair from `App\Http\Requests\RoutePairRequest`. The
+one rule it does **not** carry is "you are already watching AMS-LIS": looking at
+a route is not adding it.
+
+**201** when this request created the route row, **200** when the pair was
+already known (watched before and dropped, or swept up by a rule). The body is
+**exactly `GET /api/routes/{code}`'s** — `data` plus the same `meta` — so the
+detail screen adopts the answer instead of re-fetching.
+
+### What it does, in order
+
+1. **Finds or creates the route.** A route is a fact about the world; a
+   watchlist row is this account's relationship to one
+   (`docs/BUSINESS-LOGIC.md` §1). This makes the first and **never** the second
+   — `WatchlistItem` is untouched on every path, which is the whole point of the
+   endpoint.
+2. **Fetches fares, inside the request**, when `meta.fares.fresh` would
+   otherwise be false: the same `PollRoutePrices` + `RefreshRouteStats` the add
+   queues, run synchronously. That is where the one to three seconds go, and why
+   the screen says "Checking current fares…" while it waits. Queueing them
+   instead would answer with an empty route and no moment at which to look
+   again.
+3. **Answers with the route as it now stands** — including
+   `price.current: null` when the provider had nothing, which is a real answer
+   and not a failure.
+
+### What it costs, and the throttle
+
+One miss fetches the **full six-month poll window** — the same one a watched
+route gets, so a looked-up fare and a watched one are the same number about the
+same months — and Travelpayouts bills **one request per calendar month it
+touches**: **six or seven per lookup**, out of the ~200 an hour the token
+allows.
+
+| limit | provider requests |
+| --- | --- |
+| 6 a minute | ≈ 42 |
+| 20 an hour | ≈ 140 |
+
+Both apply (`route-lookup` in `App\Providers\AppServiceProvider`), keyed on the
+account. Over either: **429**, and the screen says the throttle refused it
+rather than blaming the connection.
+
+**Fresh routes cost nothing.** A route with a calendar fare fetched inside
+`orbit.lookup.fresh_for_hours` (24) is served from the database with no provider
+call at all — and having *asked* is remembered for the same window, so a pair
+Travelpayouts has no fares for (an empty answer writes no rows) is not
+re-fetched on every view.
+
+**422**: the same table as `POST /api/watchlist` below, minus the
+already-watching row. The client shows the sentence — it names which half of the
+pair is the problem, which is all the detail screen has to go on when somebody
+typed a code Orbit has never heard of.
+
+**A GET would have been wrong.** It creates a row and it can spend money, and a
+GET that does either is one a browser prefetch, a link preview or a retry will
+eventually do on somebody's behalf. That is also why it is not a `?refresh=1` on
+the read above it.
+
+---
+
 ## `POST /api/watchlist`
 
-Start watching a city pair (`design/README.md` §5, the "Add route" expander).
+Start watching a city pair (`design/README.md` §5, the "Add route" expander) —
+the second of the expander's two buttons, and the one that commits.
 
 ```json
 { "origin": "AMS", "destination": "LIS" }

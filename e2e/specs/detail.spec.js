@@ -187,18 +187,114 @@ test('Back returns to the globe', async ({ page }) => {
     await expect(page.locator('.home__greeting')).toBeVisible()
 })
 
-test('an unknown route code says so instead of throwing', async ({ page, browserConsole }) => {
-    // The 404 is the answer this test is asking for, and RouteDetail.vue is
-    // careful NOT to console.error on it — a miss is not a fault. Chromium
-    // still writes the failed request to the console, so that one line is
-    // waived and nothing else is.
+/*
+ * ============================================================================
+ * A ROUTE ORBIT HAS NEVER PRICED
+ * ============================================================================
+ * This screen can be opened for a pair with no route row at all — the watch
+ * form's "Look up" navigates straight here — so it owns the fetch, and the two
+ * or three seconds that fetch takes are a state a person actually sits in
+ * front of. What is photographed here is that state; what is asserted is that
+ * it ends.
+ *
+ * EIN-VIE is not one of the six seeded routes, so this is the real path: a 404
+ * from the read, a lookup that creates the route and prices it, and a screen
+ * that fills in.
+ */
+test('says what it is doing while it prices a route for the first time', async ({ page, browserConsole }) => {
+    // The read that says "never priced" — see the note in watchlist.spec.js.
     browserConsole.allow(/Failed to load resource.*404/)
 
-    // `[A-Z]{3}-[A-Z]{3}` is well-formed, so this reaches the controller and
-    // comes back 404 — the branch RouteDetail.vue draws `notFound` for. A
+    /*
+     * HELD OPEN ON PURPOSE. The sandbox runs the FAKE fare provider
+     * (scripts/e2e.sh), which answers instantly and in-process — so the state
+     * somebody on a metered API waits two or three seconds in would flash past
+     * in a frame and could neither be asserted nor photographed. Delaying the
+     * lookup is the only thing this route handler does; the request itself goes
+     * through untouched.
+     */
+    await page.route('**/api/routes/lookup', async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+        await route.continue()
+    })
+
+    await page.goto('/route/EIN-VIE')
+
+    // A sentence, not a skeleton: a skeleton says "this is arriving", and what
+    // is happening is a fare provider being asked about six months of
+    // departures.
+    await expect(page.locator('.checking__title')).toHaveText('Checking current fares…')
+
+    await shot(page, 'route-lookup-checking')
+
+    // And it ends, with a price on it.
+    await expect(page.locator('.detail__code')).toHaveText('EIN → VIE')
+    await expect(page.locator('.price__value')).toHaveText(/^€\d+$/)
+    await expect(page.locator('.checking')).toHaveCount(0)
+})
+
+/*
+ * THE OFFER, IN BOTH THEMES. The strip is the one new control on this screen
+ * and it is the only accent-filled button above the fold, so it is exactly the
+ * kind of element that reads perfectly in the theme it was built in and
+ * disappears into the card in the other one. Both palettes are a full token
+ * swap (theme.spec.js), and only a real renderer knows.
+ */
+test('an unwatched route offers the watch list, in dark and in light', async ({ page }) => {
+    await page.goto('/route/EIN-VIE')
+
+    const strip = page.locator('.watch')
+    await expect(strip).toContainText('Not on your watch list')
+    await expect(page.getByRole('button', { name: 'Watch this route' })).toBeVisible()
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await shot(page, 'route-detail-unwatched-dark')
+
+    // Through the control that owns the theme, rather than by setting the
+    // attribute — the point is the palette that a user's own choice produces.
+    await page.goto('/alerts')
+    await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Light' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+
+    await page.goto('/route/EIN-VIE')
+    await expect(page.getByRole('button', { name: 'Watch this route' })).toBeVisible()
+
+    await shot(page, 'route-detail-unwatched-light')
+})
+
+/*
+ * AND THE SCREEN A WATCHED ROUTE GETS IS THE SCREEN IT ALWAYS GOT. The strip is
+ * for routes nobody is tracking; on one of the six the morning poll already
+ * owns, there is nothing to decide and nothing new on the page.
+ */
+test('a route that is already watched gets no strip and no extra fetch', async ({ page }) => {
+    await page.goto('/route/AMS-LIS')
+
+    await expect(page.locator('.detail__code')).toHaveText('AMS → LIS')
+    await expect(page.locator('.watch')).toHaveCount(0)
+    await expect(page.locator('.checking')).toHaveCount(0)
+})
+
+/*
+ * A CODE THAT IS NOT A ROUTE AT ALL, which since "look before you watch" takes
+ * two requests to establish rather than one: the read says Orbit has no such
+ * route, the lookup says it cannot make one either — ZZZ is not an airport it
+ * knows and not one of the three it flies from. The screen ends up exactly
+ * where it always did, plus the server's sentence about which half is wrong.
+ */
+test('an unknown route code says so instead of throwing', async ({ page, browserConsole }) => {
+    // Both refusals are the answers this test is asking for, and RouteDetail.vue
+    // is careful NOT to console.error on either — a miss is not a fault.
+    // Chromium still writes the failed requests to the console, so those two
+    // lines are waived and nothing else is.
+    browserConsole.allow(/Failed to load resource.*(404|422)/)
+
+    // `[A-Z]{3}-[A-Z]{3}` is well-formed, so this reaches the controller. A
     // malformed code would not even be routed (routes/web.php constrains it).
     await page.goto('/route/ZZZ-YYY')
 
     await expect(page.locator('.empty__title')).toHaveText('No such route')
     await expect(page.locator('.empty__code')).toHaveText('ZZZ-YYY')
+    // Which half, in the server's own words (App\Http\Requests\RoutePairRequest).
+    await expect(page.locator('.empty__why')).toHaveText(/Orbit only tracks departures from/)
 })

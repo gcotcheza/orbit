@@ -18,11 +18,18 @@
 // docs/API.md is the fixture, as it is for Home.test.js.
 // =============================================================================
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 
 const get = vi.fn()
+const post = vi.fn()
 
-vi.mock('@/lib/http', () => ({ http: { get: (...args) => get(...args) } }))
+vi.mock('@/lib/http', () => ({
+    http: {
+        get: (...args) => get(...args),
+        post: (...args) => post(...args),
+    },
+}))
 // The screen resolves a router only for its Back button, which is not what any
 // of this is about.
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), back: vi.fn() }) }))
@@ -51,18 +58,37 @@ const DETAIL = {
     bookingUrl: 'https://www.skyscanner.nl/transport/flights/ams/lis/260909/',
 }
 
-async function detail(overrides = {}) {
-    get.mockResolvedValue({ data: { data: { ...DETAIL, ...overrides } } })
+/**
+ * The `meta` half of the answer (docs/API.md): whether this account watches the
+ * route, and how old its fares are. A route that is watched and fresh is the
+ * one this screen has always drawn, so it is the default here — the states that
+ * are new are the ones that say otherwise.
+ */
+const META = { watched: true, fares: { fetchedAt: '2026-08-14T06:12:00+02:00', fresh: true } }
 
-    const wrapper = mount(RouteDetail, { props: { id: 'AMS-LIS' } })
+async function detail(overrides = {}, meta = META) {
+    get.mockResolvedValue({ data: { data: { ...DETAIL, ...overrides }, meta } })
+
+    // The screen shares stores/watchlist.js with the watch screen and the
+    // globe, so that a route added from here is a route they both know about.
+    const wrapper = mount(RouteDetail, {
+        props: { id: 'AMS-LIS' },
+        global: { plugins: [createPinia()] },
+    })
 
     await flushPromises()
 
     return wrapper
 }
 
+/** A 404 from the read, which is what a pair Orbit has never priced answers. */
+function neverPriced() {
+    get.mockRejectedValue({ response: { status: 404 } })
+}
+
 beforeEach(() => {
     vi.clearAllMocks()
+    setActivePinia(createPinia())
 })
 
 describe('the day the price is for', () => {
@@ -135,6 +161,190 @@ describe('the caption under the price', () => {
         const wrapper = await detail({ price: { current: null, usual: null, pctBelow: null } })
 
         expect(wrapper.get('.price__caption').text()).toBe('No fare seen for this route yet.')
+    })
+})
+
+/*
+ * =============================================================================
+ * LOOK BEFORE YOU WATCH
+ * =============================================================================
+ * This screen can now be opened for a pair Orbit has no route row for at all —
+ * the watch form's "Look up" navigates straight here — so it owns the fetch and
+ * everything that can go wrong with one. What is asserted below is the part
+ * that would otherwise be invisible: WHEN it asks, when it deliberately does
+ * not, and what it says while it waits.
+ */
+
+/** Mounted by hand, so a test can hold the lookup open and look at the screen. */
+function mountDetail() {
+    return mount(RouteDetail, { props: { id: 'AMS-LIS' }, global: { plugins: [createPinia()] } })
+}
+
+const FRESH = { watched: false, fares: { fetchedAt: '2026-08-14T09:00:00+02:00', fresh: true } }
+
+describe('a route Orbit has never priced', () => {
+    it('says what it is doing, and draws the fares it gets back', async () => {
+        neverPriced()
+
+        let answer
+        post.mockReturnValue(new Promise((resolve) => { answer = resolve }))
+
+        const wrapper = mountDetail()
+        await flushPromises()
+
+        // Not the skeleton: a sentence, because a fare provider is being asked
+        // six or seven questions and that is a second or three of somebody's
+        // evening.
+        expect(wrapper.get('.checking__title').text()).toBe('Checking current fares…')
+        expect(post).toHaveBeenCalledWith(
+            '/api/routes/lookup',
+            { origin: 'AMS', destination: 'LIS' },
+            expect.objectContaining({ timeout: expect.any(Number) }),
+        )
+
+        answer({ data: { data: DETAIL, meta: FRESH } })
+        await flushPromises()
+
+        expect(wrapper.find('.checking').exists()).toBe(false)
+        expect(wrapper.get('.price__value').text()).toBe('€75')
+    })
+
+    /*
+     * A PAIR THAT IS NOT A ROUTE — an origin Orbit does not fly from, an
+     * airport it has never heard of — is refused by the lookup with a sentence
+     * naming the half that is wrong, and that sentence is worth more than the
+     * generic apology above it.
+     */
+    it('shows the server’s own reason when the pair cannot be priced', async () => {
+        neverPriced()
+        post.mockRejectedValue({
+            response: { status: 422, data: { errors: { destination: ['Orbit does not know an airport with that code.'] } } },
+        })
+
+        const wrapper = mountDetail()
+        await flushPromises()
+
+        expect(wrapper.get('.empty__title').text()).toBe('No such route')
+        expect(wrapper.get('.empty__code').text()).toBe('AMS-LIS')
+        expect(wrapper.get('.empty__why').text()).toBe('Orbit does not know an airport with that code.')
+    })
+
+    it('says so honestly when the fetch fails, rather than spinning', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        neverPriced()
+        post.mockRejectedValue({ response: { status: 500 } })
+
+        const wrapper = mountDetail()
+        await flushPromises()
+
+        expect(wrapper.find('.checking').exists()).toBe(false)
+        expect(wrapper.get('.empty__title').text()).toBe('Could not load this route')
+    })
+
+    it('names the throttle instead of blaming the connection', async () => {
+        neverPriced()
+        post.mockRejectedValue({ response: { status: 429 } })
+
+        const wrapper = mountDetail()
+        await flushPromises()
+
+        expect(wrapper.get('.empty__body').text()).toContain('Give it a minute')
+    })
+})
+
+describe('fares that have gone stale', () => {
+    const STALE = { watched: false, fares: { fetchedAt: '2026-07-02T06:12:00+02:00', fresh: false } }
+
+    it('are refreshed when nothing else is going to refresh them', async () => {
+        post.mockResolvedValue({ data: { data: { ...DETAIL, price: { current: 61, usual: 111, pctBelow: 45 } }, meta: FRESH } })
+
+        const wrapper = await detail({}, STALE)
+
+        expect(post).toHaveBeenCalledTimes(1)
+        expect(wrapper.get('.price__value').text()).toBe('€61')
+    })
+
+    /*
+     * A WATCHED ROUTE IS LEFT ALONE. It is polled every morning; stale fares on
+     * one are a poll to fix rather than provider calls to spend from somebody's
+     * phone — and the screen a watched route gets is the screen it always got.
+     */
+    it('are left alone on a route the morning poll owns', async () => {
+        const wrapper = await detail({}, { ...STALE, watched: true })
+
+        expect(post).not.toHaveBeenCalled()
+        expect(wrapper.find('.watch').exists()).toBe(false)
+    })
+
+    /*
+     * AND A REFRESH THAT FAILS DOES NOT TAKE THE PRICES WITH IT. What is on
+     * screen was real when it was fetched; replacing it with an error page
+     * would be the app punishing somebody for coming back to a route.
+     */
+    it('keep the last prices on screen when the refresh does not work', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        post.mockRejectedValue({ response: { status: 500 } })
+
+        const wrapper = await detail({}, STALE)
+
+        expect(wrapper.get('.price__value').text()).toBe('€75')
+        expect(wrapper.get('.detail__notice--quiet').text()).toContain('Could not check today’s fares')
+        // And it says WHEN these are from, because that is the whole of what is
+        // wrong with them.
+        expect(wrapper.get('.detail__notice--quiet').text()).toContain('Jul 2')
+    })
+})
+
+describe('the watchlist strip', () => {
+    it('is not on a route that is already watched', async () => {
+        const wrapper = await detail()
+
+        expect(wrapper.find('.watch__action').exists()).toBe(false)
+    })
+
+    it('offers the route, and says so once it is taken', async () => {
+        const wrapper = await detail({}, FRESH)
+
+        const button = wrapper.get('.watch__action')
+        expect(button.text()).toBe('Watch this route')
+
+        post.mockResolvedValue({ data: { data: { code: 'AMS-LIS', active: true } } })
+
+        await button.trigger('click')
+        await flushPromises()
+
+        // The same write the add form makes (docs/API.md), through the store
+        // the globe and the watch list both read.
+        expect(post).toHaveBeenCalledWith('/api/watchlist', { origin: 'AMS', destination: 'LIS' })
+        expect(wrapper.find('.watch__action').exists()).toBe(false)
+        expect(wrapper.get('.watch--on').text()).toContain('On your watch list')
+    })
+
+    it('says a failed add failed, and keeps the offer', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const wrapper = await detail({}, FRESH)
+
+        post.mockRejectedValue({ response: { status: 500 } })
+
+        await wrapper.get('.watch__action').trigger('click')
+        await flushPromises()
+
+        expect(wrapper.get('[role="alert"]').text()).toContain('Could not add this route')
+        expect(wrapper.get('.watch__action').text()).toBe('Watch this route')
+    })
+
+    /*
+     * AN ANSWER WITH NO `meta` AT ALL — an older server, a proxy that ate it —
+     * must not produce a button that offers to add a route this screen cannot
+     * tell is already there. Both things it drives fail closed.
+     */
+    it('stays away when the server did not say whether the route is watched', async () => {
+        const wrapper = await detail({}, null)
+
+        expect(wrapper.find('.watch').exists()).toBe(false)
+        expect(post).not.toHaveBeenCalled()
     })
 })
 

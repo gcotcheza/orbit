@@ -11,7 +11,6 @@ use App\Http\Requests\UpdateWatchedRouteRequest;
 use App\Http\Resources\WatchlistRouteResource;
 use App\Jobs\PollRoutePrices;
 use App\Jobs\RefreshRouteStats;
-use App\Models\Airport;
 use App\Models\Route;
 use App\Models\User;
 use App\Models\WatchlistItem;
@@ -53,8 +52,10 @@ final class WatchlistItemController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        $origin = self::airport($request->iata('origin'));
-        $destination = self::airport($request->iata('destination'));
+        // The lookup rather than the check — see App\Http\Requests\RoutePairRequest,
+        // which both this write and the route lookup take their pair from.
+        $origin = $request->airport('origin');
+        $destination = $request->airport('destination');
 
         /*
          * FIND OR CREATE. A route is a fact about the world, not a possession:
@@ -143,13 +144,6 @@ final class WatchlistItemController extends Controller
                 $route->where('code', $code);
             })
             ->first() ?? abort(404, 'Not watching that route.');
-    }
-
-    private static function airport(string $iata): Airport
-    {
-        // Validation has already established that both exist — this is the
-        // lookup, not the check.
-        return Airport::query()->where('iata', $iata)->firstOrFail();
     }
 
     private function present(Route $route, bool $active, RouteSnapshots $snapshots, int $status): JsonResponse

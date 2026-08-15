@@ -344,6 +344,51 @@ final class AppServiceProvider extends ServiceProvider
             ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
 
         /*
+         * The route lookup's throttle (`POST /api/routes/lookup`).
+         *
+         * THIS IS THE ONE ENDPOINT WHERE A TAP SPENDS THE FARE BUDGET DIRECTLY,
+         * and the two limits below are that budget divided up rather than a
+         * round number. A lookup that finds no fresh fares fetches the full
+         * `orbit.poll.window_days` window, Travelpayouts bills one request per
+         * calendar month it touches, and 181 days touches six or seven — so:
+         *
+         *     one miss                  ≈  7 provider requests
+         *     6 a minute (the burst)    ≈ 42 in that minute
+         *     20 an hour (the ceiling)  ≈ 140 in that hour
+         *
+         * against the ~200 requests an hour the token allows, of which the 06:10
+         * poll and the 06:40 rule sweep already claim ≤176 in the one clock hour
+         * they share (config/orbit.php, `rules`). A person looking routes up at
+         * 06:15 is not a case worth designing for; every other hour of the day
+         * has the whole allowance free, and 140 leaves room in it.
+         *
+         * BOTH LIMITS, NOT EITHER. The per-minute one alone would permit 360 an
+         * hour — the entire allowance, twice over, from a stuck retry loop. The
+         * hourly one alone would let all twenty land in four seconds and be
+         * refused for the rest of the hour, which is the same outage with worse
+         * manners. Six in a minute is a typo, a correction and a change of mind;
+         * twenty in an hour is a long evening of browsing.
+         *
+         * ONLY MISSES REACH THE COUNTER IN PRACTICE. The detail screen asks for
+         * a lookup when the route it is showing has no fresh fares and is not
+         * watched (docs/API.md), so viewing a route Orbit priced this morning
+         * costs nothing here — it never makes the request. A fetch that comes
+         * back empty is remembered for `orbit.lookup.fresh_for_hours` too, so a
+         * pair with no fares cannot be re-fetched view after view.
+         *
+         * BY THE ACCOUNT, like the two above: one account, several devices, and
+         * a phone on mobile data whose ip changes mid-sentence.
+         */
+        RateLimiter::for('route-lookup', static function (Request $request): array {
+            $key = (string) ($request->user()?->getAuthIdentifier() ?? $request->ip());
+
+            /** @var list<Limit> $limits */
+            $limits = [Limit::perMinute(6)->by($key), Limit::perHour(20)->by($key)];
+
+            return $limits;
+        });
+
+        /*
          * ORBIT ISSUES NO API TOKENS, so a bearer token is never a credential
          * here — see bootstrap/app.php for why Sanctum is in cookie/session
          * mode.
