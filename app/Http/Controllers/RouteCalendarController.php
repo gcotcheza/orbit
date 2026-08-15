@@ -56,40 +56,52 @@ final class RouteCalendarController extends Controller
             ->where('route_id', $route->id)
             ->whereBetween('departure_date', [$start->toDateString(), $end->toDateString()])
             ->orderBy('departure_date')
-            ->get(['departure_date', 'price_cents']);
+            ->get(['departure_date', 'price_cents', 'found_at']);
 
         $calendar = MonthCalendar::from(
             array_values($fares->map(static fn (CalendarFare $fare): DatedFare => new DatedFare(
                 $fare->departure_date->toDateTimeImmutable(),
                 $fare->price_cents,
+                /* How old each price is — the day sheet says so. Null = unknown. */
+                $fare->found_at?->toDateTimeImmutable(),
             ))->all()),
             (float) config('orbit.calendar.cheap_at'),
             (float) config('orbit.calendar.pricey_at'),
         );
 
         /*
-         * WHERE "BOOK THIS DAY" GOES, AS A TEMPLATE RATHER THAN AS 31 URLS.
+         * WHERE THE TWO HAND-OFFS GO, AS TEMPLATES RATHER THAN AS 62 URLS.
          *
-         * The day sheet books the day the user tapped, so the link is
-         * per-DATE and the client is the only party that knows which date that
-         * is. Sending one `bookingUrl` per day would repeat the same 50-byte
-         * prefix down the whole month; sending nothing would mean the client
-         * hard-coding the Skyscanner host, the path shape and the lower-casing
-         * that BookingLink and config('orbit.booking') already own — and
-         * config/orbit.php is explicit that those links may move to another
-         * affiliate, which is a change that must not have to be made twice.
+         * The day sheet books the day the user tapped, so a link is per-DATE
+         * and the client is the only party that knows which date that is.
+         * Sending one URL per day per site would repeat the same prefixes down
+         * the whole month; sending nothing would mean the client hard-coding two
+         * hosts, two path shapes, the lower-casing, the upper-casing and the
+         * affiliate marker — all of which App\Application\Routes\BookingLink and
+         * config('orbit.booking') own.
          *
-         * So the prefix comes from BookingLink (its undated form is exactly
-         * that prefix, by construction) and the client substitutes `{date}`
-         * with the six digits of the day it drew. See docs/API.md.
+         * TWO OF THEM NOW, AND THE ORDER IN THE OBJECT IS NOT THE POINT —
+         * `aviasales` is the primary because it is the search Orbit's own prices
+         * come out of, and the sheet draws it as the loud button. See
+         * BookingLink for the €29-against-€68 that made this a bug rather than a
+         * preference.
+         *
+         * THE HOLE IS NAMED AFTER ITS DATE FORMAT, `{ddmm}` and `{yymmdd}`,
+         * rather than being a bare `{date}` in both. The two sites want the
+         * parts of a date in different orders and different lengths, and a
+         * single token would leave the client guessing which URL wanted which —
+         * i.e. knowing something about Skyscanner and Aviasales specifically.
+         * Named tokens keep that knowledge here and leave the client with pure
+         * date formatting. See docs/API.md.
          */
-        $bookingUrlTemplate = BookingLink::for($route).'{date}/';
-
         return RouteCalendarResource::make($calendar)
             ->additional(['meta' => [
                 'code' => $route->code,
                 'month' => $month,
-                'bookingUrlTemplate' => $bookingUrlTemplate,
+                'booking' => [
+                    'aviasales' => BookingLink::aviasalesTemplate($route),
+                    'skyscanner' => BookingLink::skyscannerTemplate($route),
+                ],
             ]])
             ->response();
     }

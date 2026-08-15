@@ -87,40 +87,84 @@ final class RouteCalendarApiTest extends TestCase
 
     /**
      * The day sheet books the day that was TAPPED, and only the client knows
-     * which day that is — so the link goes out as a template with a hole in it
-     * rather than as 31 URLs or as nothing.
+     * which day that is — so the links go out as templates with holes in them
+     * rather than as 62 URLs or as nothing.
      *
-     * The prefix is BookingLink's own undated form (docs/API.md), which is what
-     * keeps the Skyscanner host and the lower-casing out of the browser.
+     * TWO OF THEM, AND THE HOLES ARE NAMED AFTER THEIR DATE FORMATS. The two
+     * sites want the parts of a date in different orders and lengths, so a bare
+     * `{date}` in both would force the client to know which URL belonged to
+     * which site (docs/API.md). Aviasales is the primary — it is the search
+     * Orbit's own prices come out of.
      */
     #[Test]
-    public function the_meta_carries_a_booking_url_template_for_the_tapped_day(): void
+    public function the_meta_carries_both_booking_templates_for_the_tapped_day(): void
     {
         $this->seedMonth();
 
+        config(['orbit.travelpayouts.marker' => '123456']);
+
         $this->actingAs($this->owner)->getJson('/api/routes/AMS-FAO/calendar?month=2026-09')
             ->assertJsonPath(
-                'meta.bookingUrlTemplate',
-                'https://www.skyscanner.nl/transport/flights/ams/fao/{date}/',
+                'meta.booking.aviasales',
+                'https://www.aviasales.com/search/AMS{ddmm}FAO1?marker=123456',
+            )
+            ->assertJsonPath(
+                'meta.booking.skyscanner',
+                'https://www.skyscanner.nl/transport/flights/ams/fao/{yymmdd}/',
             );
     }
 
     /**
-     * It is a fact about the ROUTE, not about the fares: the sheet cannot open
-     * on an empty month, but a client that reads the template once per response
-     * must not have to branch on whether this one had any days in it.
+     * They are facts about the ROUTE, not about the fares: the sheet cannot
+     * open on an empty month, but a client that reads the templates once per
+     * response must not have to branch on whether this one had any days in it.
      */
     #[Test]
-    public function the_booking_url_template_survives_an_empty_month(): void
+    public function the_booking_templates_survive_an_empty_month(): void
     {
         $this->seedMonth();
 
         $this->actingAs($this->owner)->getJson('/api/routes/AMS-FAO/calendar?month=2029-01')
             ->assertJsonPath('data.days', [])
             ->assertJsonPath(
-                'meta.bookingUrlTemplate',
-                'https://www.skyscanner.nl/transport/flights/ams/fao/{date}/',
+                'meta.booking.skyscanner',
+                'https://www.skyscanner.nl/transport/flights/ams/fao/{yymmdd}/',
+            )
+            ->assertJsonPath(
+                'meta.booking.aviasales',
+                'https://www.aviasales.com/search/AMS{ddmm}FAO1',
             );
+    }
+
+    /**
+     * HOW OLD EACH PRICE IS, PER DAY.
+     *
+     * The provider serves a cache of other people's searches, so one grid
+     * legitimately mixes a fare found an hour ago with one found last week —
+     * which is why this is on the day and not on the month. The day sheet
+     * prints it as "Seen 3 hours ago".
+     *
+     * AND NULL WHERE ORBIT DOES NOT KNOW, which is a row written before the
+     * column existed. It must arrive as null rather than as the fetch time: the
+     * screen draws no line at all for it, and substituting `fetched_at` would
+     * manufacture exactly the "this price is current" claim the field exists to
+     * prevent.
+     */
+    #[Test]
+    public function each_day_says_when_its_price_was_found(): void
+    {
+        $route = $this->makeRoute('AMS', 'FAO');
+
+        $this->offer($route, ['2026-09-10' => 4400], foundAt: '2026-09-08 11:30:00');
+        $this->offer($route, ['2026-09-11' => 5200]);
+
+        $response = $this->actingAs($this->owner)->getJson('/api/routes/AMS-FAO/calendar?month=2026-09');
+
+        $response->assertOk();
+
+        /* In the owner's timezone, with the offset on it — CEST in September. */
+        $response->assertJsonPath('data.days.0.foundAt', '2026-09-08T13:30:00+02:00');
+        $response->assertJsonPath('data.days.1.foundAt', null);
     }
 
     #[Test]

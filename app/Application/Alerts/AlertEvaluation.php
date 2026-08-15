@@ -139,8 +139,25 @@ final readonly class AlertEvaluation
             $route = $snapshot->route;
             $key = AlertLedger::key(AlertType::RouteDeal, $route->id, null);
 
+            /*
+             * THE FRESHNESS GUARD IS ASKED ABOUT THE FARE THE MAIL WILL POINT
+             * AT, which is the cheapest calendar fare and not the observation
+             * `$price` came from. That is the same split DealSummary::forRoute()
+             * makes and for the same reason: the headline PRICE is the number
+             * the score was computed from, while the DATE and the booking link
+             * belong to the cheapest departure. What the reader clicks is what
+             * has to be real, so that is the row whose age matters.
+             */
+            $cheapest = $snapshot->cheapest;
+
             $decision = $this->policy->decide(
-                AlertCandidate::watchedRoute($snapshot->deal->score, $price, $snapshot->trackingDays),
+                AlertCandidate::watchedRoute(
+                    $snapshot->deal->score,
+                    $price,
+                    $snapshot->trackingDays,
+                    $cheapest?->foundAt,
+                    $cheapest?->departureDate,
+                ),
                 $minimum,
                 $recent[$key] ?? null,
                 $at,
@@ -244,9 +261,23 @@ final readonly class AlertEvaluation
                  * feature on precisely the fares it exists to find. The cap is
                  * a number a person chose; no history is needed to check a fare
                  * against it.
+                 *
+                 * THE FRESHNESS GUARD IS THE EXCEPTION, AND IT IS PASSED HERE
+                 * DELIBERATELY. Everything above is about whether Orbit knows
+                 * enough to hold an OPINION, which a rule does not need. How old
+                 * the fare is, is not an opinion — it is whether the €38 this
+                 * mail is about still exists. A rule match names one departure
+                 * with a booking link under it exactly as a route deal does, and
+                 * its fares are if anything the stalest in the app, because they
+                 * come from the speculative sweep over routes nobody watches.
+                 * App\Domain\Alerts\AlertPolicy::isStale() carries the argument.
                  */
                 $decision = $this->policy->decide(
-                    AlertCandidate::ruleMatch($price),
+                    AlertCandidate::ruleMatch(
+                        $price,
+                        $match->cheapest->foundAt,
+                        $match->cheapest->departureDate,
+                    ),
                     $minimum,
                     $recent[$key] ?? null,
                     $at,

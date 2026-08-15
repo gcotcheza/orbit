@@ -7,6 +7,7 @@ namespace App\Infrastructure\Pricing;
 use App\Application\Ports\PriceProvider;
 use App\Domain\Pricing\DatedFare;
 use DateTimeImmutable;
+use DateTimeZone;
 use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Http\Client\Factory as Http;
 use InvalidArgumentException;
@@ -58,6 +59,21 @@ use Throwable;
  *    of that arithmetic is trusted, because the failure it guards against —
  *    the API answering in roubles, its documented default — is silent, and
  *    "€92" that is really ₽92 is a fare Orbit would shout about.
+ *
+ * 7. `found_at` IS THE AGE OF THE PRICE, AND IT IS NOT THE AGE OF THE REQUEST.
+ *    Point 2 says this endpoint serves a CACHE of other people's searches; this
+ *    field is the direct consequence, and it is the reason a poll that ran
+ *    twenty minutes ago can hand back a fare last seen four days ago. Orbit
+ *    displayed €36 for a date whose live cheapest was €56 — the €36 had been
+ *    real, days earlier — so the figure now travels with the date it was found
+ *    on, all the way to the screen (`DatedFare::$foundAt`).
+ *
+ *    ALL 116 ENTRIES RECORDED FROM THE LIVE API CARRY IT, as
+ *    `YYYY-MM-DDTHH:MM:SSZ` — UTC, always, in every one of them. It is
+ *    nonetheless parsed defensively and yields NULL rather than a guess when it
+ *    is absent or unreadable, because the one thing worse than not knowing how
+ *    old a price is, is saying a number that is not true. Null renders as no
+ *    line at all.
  * ---------------------------------------------------------------------------
  */
 final readonly class TravelpayoutsPriceProvider implements PriceProvider
@@ -346,7 +362,46 @@ final readonly class TravelpayoutsPriceProvider implements PriceProvider
             return null;
         }
 
-        return new DatedFare($departure, (int) round($value * 100));
+        return new DatedFare($departure, (int) round($value * 100), $this->foundAt($entry));
+    }
+
+    /**
+     * When this price was found, per the provider — or null if it will not say.
+     *
+     * ALWAYS UTC. Every one of the 116 recorded entries ends in `Z`, and the
+     * format is pinned to that rather than left to `new DateTimeImmutable($s)`:
+     * the loose parser accepts "tomorrow", "+3 days" and a bare "13:51" (which
+     * it dates to TODAY), and every one of those would come back as a confident
+     * timestamp built out of a value the API did not mean. This field's whole
+     * job is to be trustworthy, so an unrecognised shape is no answer rather
+     * than a plausible one.
+     *
+     * THE ROUND TRIP IS WHAT REJECTS `2026-02-31T00:00:00Z`, which
+     * createFromFormat would otherwise roll cheerfully into March — the same
+     * guard, for the same reason, that `fare()` puts on `depart_date`.
+     *
+     * @param  array<mixed>  $entry
+     */
+    private function foundAt(array $entry): ?DateTimeImmutable
+    {
+        /** @var mixed $value */
+        $value = $entry['found_at'] ?? null;
+
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $found = DateTimeImmutable::createFromFormat(
+            'Y-m-d\TH:i:s\Z',
+            $value,
+            new DateTimeZone('UTC'),
+        );
+
+        if ($found === false || $found->format('Y-m-d\TH:i:s\Z') !== $value) {
+            return null;
+        }
+
+        return $found;
     }
 
     /**

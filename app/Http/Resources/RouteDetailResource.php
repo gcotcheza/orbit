@@ -6,6 +6,7 @@ namespace App\Http\Resources;
 
 use App\Application\Routes\BookingLink;
 use App\Domain\Pricing\PricePoint;
+use DateTimeZone;
 use Illuminate\Http\Request;
 
 /**
@@ -31,8 +32,10 @@ final class RouteDetailResource extends RouteSummaryResource
         $stats = $snapshot->stats;
         $cheapest = $snapshot->cheapest;
 
+        $summary = parent::toArray($request);
+
         return [
-            ...parent::toArray($request),
+            ...$summary,
 
             /*
              * Oldest first, up to config('orbit.history.chart_days'). Dates are
@@ -60,14 +63,42 @@ final class RouteDetailResource extends RouteSummaryResource
 
             /*
              * `cheapest` — the cheapest DEPARTURE still on offer in the poll
-             * window — is INHERITED from the summary now, because the screens
-             * that read the summary needed it too (see the note there). It is
-             * still read here, for the one thing only this resource sends:
-             * the link is aimed at that date. Null before the first poll; the
-             * link then points at the route without one, which is still a
-             * useful place to land.
+             * window — is INHERITED from the summary, because the screens that
+             * read the summary needed it too (see the note there). THIS
+             * RESOURCE ADDS ONE FIELD TO IT rather than restating the shape:
+             * how old that price is.
+             *
+             * ONLY HERE AND NOT ON THE SUMMARY, deliberately. The three screens
+             * that read the summary — the globe's spotlight card, the watchlist
+             * rows, the chips — print a fare in a space that has room for a
+             * number and nothing else; a freshness line they cannot draw would
+             * be a field they all had to ignore. This is the screen with room
+             * to explain itself, and the one with a Book button under it.
              */
-            'bookingUrl' => BookingLink::for($snapshot->route, $cheapest?->departureDate),
+            'cheapest' => $summary['cheapest'] === null ? null : [
+                ...$summary['cheapest'],
+                'foundAt' => $cheapest?->foundAt?->setTimezone(
+                    new DateTimeZone((string) config('orbit.timezone')),
+                )->format('c'),
+            ],
+
+            /*
+             * WHERE "BOOK IT" GOES — both of them, dated to the cheapest
+             * departure. Null before the first poll, and then each link points
+             * at the route without a date, which is still a useful place to
+             * land (Aviasales' pre-filled search form, Skyscanner's whole
+             * month).
+             *
+             * `aviasales` IS THE PRIMARY and the screen draws it as such: it is
+             * the search Orbit's own fares come out of, so it is the only site
+             * that can be expected to be holding the price shown above it. See
+             * App\Application\Routes\BookingLink for the €29 that was really
+             * €68 and made that a correctness matter rather than a preference.
+             */
+            'booking' => [
+                'aviasales' => BookingLink::aviasales($snapshot->route, $cheapest?->departureDate),
+                'skyscanner' => BookingLink::skyscanner($snapshot->route, $cheapest?->departureDate),
+            ],
         ];
     }
 }

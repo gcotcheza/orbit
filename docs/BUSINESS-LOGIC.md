@@ -38,6 +38,23 @@ route-detail screen is deliberately *not* scoped to the watchlist.
 `RefreshRouteStats` and answers before either has run, so a brand-new row is
 `confident: false` with no prices — see §8.
 
+**A route can be priced without being watched, and that is the lookup path.**
+`POST /api/routes/lookup` finds-or-creates the route and, when Orbit holds no
+fares fetched inside `orbit.lookup.fresh_for_hours` (24), asks the provider
+**inside the request** — `App\Application\Routes\FareFreshness`, six or seven
+metered calls, two or three seconds while somebody waits. It is the one place in
+the app where a person's tap spends provider calls directly, which is why it is
+a POST, why it is throttled (`route-lookup`), and why the "we already asked and
+got nothing" answer is remembered in the cache for the same window: an empty
+answer writes no rows, so the calendar alone would read as stale forever and
+re-fetch on every view. **It touches no watchlist row** — a route is a fact
+about the world, a watchlist item is this account's relationship to one, so
+bringing the first into existence to look at it commits to nothing. Nothing
+lists these routes and the morning poll never visits them, which is exactly why
+the route detail refreshes a *stale and unwatched* route and never a watched
+one: a watched route with old fares is a broken poll, not a call to make from
+somebody's phone.
+
 **Origins are closed, destinations are not.** `config('orbit.origins')` is
 `['AMS', 'EIN', 'DUS']` and `AddWatchedRouteRequest` accepts nothing else as an
 origin: a fare from Málaga is not a flight this person can take. The
@@ -88,6 +105,43 @@ cents are a multiplication.
 month-matrix calls; the adapter tolerates one failing, because three months of
 calendar is worth more than none. That tolerance is exactly why stale cells are
 pruned by age rather than by absence from a response — see §4.
+
+### A fare has an age, and the app says what it is
+
+| | value | where |
+| --- | --- | --- |
+| when Orbit asked | `calendar_fares.fetched_at` | stamped by `PollRoutePrices` |
+| when the price was found | `calendar_fares.found_at`, nullable | the provider's own `found_at`, carried on `DatedFare::$foundAt` |
+| shown as | "Seen 3 hours ago" / "Seen 4 days ago" | `resources/js/lib/format.js` → `seenLabel()` |
+
+**These are two different facts and the app used to publish only the first.**
+Travelpayouts does not quote fares, it serves a cache of results other people's
+searches produced, so the morning poll can stamp `fetched_at` at 06:10 today and
+be handed a price last seen on Tuesday. Every screen read `fetched_at` and
+implied the number was live. The owner caught it twice: **€36 shown where
+Skyscanner's live cheapest was €56**, and **€29 against a real €68**. Nothing had
+miscalculated — both figures were true when they were found, days earlier — and
+nothing on the screen said so.
+
+So `found_at` now travels from the adapter to the screen, and every price says
+how old it is: the **day sheet** prints it under every fare, the **route
+detail** prints it beside the cheapest-departure line only once the fare is over
+24 hours old (under that it is the ordinary state of a route polled this
+morning, and a line nobody needs teaches people to skip it).
+
+**Null is "not known" and renders as nothing.** Rows written before the column
+existed have no find time and it is not recoverable; `fetched_at` is emphatically
+**not** a substitute, because using it would state precisely the false thing this
+column was added to stop stating. Under an hour reads as "just now" rather than a
+count of minutes — nothing here moves on that scale, and false precision is its
+own kind of lie. The fake provider stamps every fare with the current clock, so a
+sandbox exercises the visible path rather than the silent one.
+
+**Neither booking link is a promise.** Both hand-offs sit under one line —
+*"Prices come from recent searches — the booking site shows live availability"* —
+which replaced a disclaimer about Orbit not selling tickets. That answered a
+question nobody was asking; this answers the one a reader standing in front of a
+possibly-stale fare actually has. See §12.
 
 ---
 
@@ -449,19 +503,66 @@ The order is load-bearing:
 | --- | --- | --- |
 | 0 | **maturity** — a watched route needs ≥ 7 daily observations | `immature-data` |
 | 1 | **threshold** — the score reaches the account's sensitivity | `below-threshold` |
-| 2 | **cooldown** — 24h per route per kind per rule | `cooling-down` |
-| 3 | **further drop** — ≥ 5% cheaper than the last alerted price | `superseded-by-drop` |
+| 2 | **freshness** — the fare is stale *and* the flight leaves soon | `stale-fare` |
+| 3 | **cooldown** — 24h per route per kind per rule | `cooling-down` |
+| 4 | **further drop** — ≥ 5% cheaper than the last alerted price | `superseded-by-drop` |
 
 `AlertDecision` is an enum and the **case is the reason**. "Nothing was sent
 this morning" is the hardest state this app has to explain to itself — the score
-may have been a point short, the route may be too young, the same route may have
-been announced yesterday, or there may have been nothing at all — and a bare
-`false` would collapse four very different mornings into one. `fires()` is true
-for `fired` and `superseded-by-drop`.
+may have been a point short, the route may be too young, the fare may be too old
+to stand behind, the same route may have been announced yesterday, or there may
+have been nothing at all — and a bare `false` would collapse five very different
+mornings into one. `fires()` is true for `fired` and `superseded-by-drop`.
 
 Maturity is answered **before** the threshold so the reason is right: a route
 held there is a route Orbit has not learned anything about, and "below
 threshold" would read as "we looked and it was ordinary".
+
+### The freshness guard
+
+| what | value | config key |
+| --- | --- | --- |
+| fare too old at | **> 2 days** since `found_at` | `orbit.alerts.max_fare_age_days` |
+| departure counts as near at | **≤ 3 weeks** away | `orbit.alerts.near_departure_weeks` |
+| held as | `stale-fare` | `App\Domain\Alerts\AlertPolicy::isStale()` |
+
+**Both halves are required, and the `AND` is the whole rule.** Age alone is not
+a reason to stay quiet and neither is an imminent departure.
+
+| fare found | departure | decision |
+| --- | --- | --- |
+| > 2 days ago | ≤ 3 weeks away | **held** — `stale-fare` |
+| ≤ 2 days ago | ≤ 3 weeks away | fires |
+| > 2 days ago | > 3 weeks away | fires |
+| ≤ 2 days ago | > 3 weeks away | fires |
+| **`null` (unknown)** | any | **fires** — treated as fresh |
+
+*Why age.* Prices come from a cache (§2), so a fare can be days old. On a screen
+that is a stale number with a line under it saying so; in a **mail** there is no
+such line and no such choice — it is Orbit waking somebody at seven about a
+flight that is not for sale, and they find out at the payment step.
+
+*Why near-departure.* Fares close to departure move fast and mostly one way, so a
+four-day-old quote for a flight three weeks out is often gone. A fare for next
+April sits still for weeks and the same four days say nothing about it. Holding
+on age alone would silence precisely the alerts most likely to be **true**, about
+the trips somebody has the most time to act on.
+
+*Why `null` is fresh.* Null means "Orbit does not know how old this is", not
+"this is old". Reading it as stale looks cautious and fails in the direction that
+breaks the product: on the morning this shipped every row was null, so it would
+have switched the alert system off silently until the poller had rewritten the
+whole calendar. It would also turn an absence into a claim, which this app
+refuses to do everywhere else (a missing fare is absent, not €0). The exposure
+shrinks with every poll.
+
+**This gate applies to rule matches too — the §"route_deal vs rule_match"
+asymmetry stops here**, and deliberately. Everything else in that table is about
+whether Orbit knows enough to hold an *opinion*, which a rule does not need. This
+one is about whether the **fare exists**. A rule match names one departure at one
+price with a booking link under it exactly as a route deal does, and its fares
+are if anything the stalest in the app, because they come from the speculative
+sweep over routes nobody watches.
 
 ### route_deal vs rule_match — the asymmetry
 
@@ -474,6 +575,7 @@ fields are null:
 | `trackingDays` | the route's observations | `null` |
 | gated by maturity | **yes** | **no** |
 | gated by sensitivity | **yes** | **no** |
+| gated by **freshness** | **yes** | **yes** — see below |
 | grouping | one mail per route | one mail per **rule**, however many routes |
 
 **Rules stay ungated, and it matters most here.** A rule's threshold is a
@@ -831,30 +933,61 @@ it ranks — the cap limits provider calls, not matches.
 
 ## 12. Booking
 
-**Orbit does not sell flights and is not going to.** "Book this" is a Skyscanner
-deep link — no API, no key, no agreement — landing the user on the same search
-that was scored.
+**Orbit does not sell flights and is not going to.** A hand-off is a deep link
+into somebody else's search — no API, no key, no agreement. There are **two**,
+and which one is first is a correctness matter rather than a preference.
 
 | what | value | config key | code |
 | --- | --- | --- | --- |
-| base | `https://www.skyscanner.nl/transport/flights` | `orbit.booking.skyscanner_base` | `App\Application\Routes\BookingLink` |
+| **primary** | `https://www.aviasales.com` | `orbit.booking.aviasales_base` | `App\Application\Routes\BookingLink` |
+| params | `{ORIGIN}{DDMM}{DEST}{passengers}`, **upper-case IATA, day before month** | — | ditto |
+| dated form | `/search/AMS1509OPO1` | — | ditto |
+| undated form | `/?params=AMSOPO1` — the pre-filled search box | — | ditto |
+| marker | appended as `?marker=` when set | `orbit.travelpayouts.marker` | ditto |
+| **secondary** | `https://www.skyscanner.nl/transport/flights` | `orbit.booking.skyscanner_base` | ditto |
 | path | `/{origin}/{dest}/{yymmdd}/`, lower-case IATA | — | ditto |
 | undated form | `/{origin}/{dest}/` = "show me the whole month" | — | ditto |
 
-The undated form is the right fallback for a route with no fares yet. The route
-detail sends a resolved `bookingUrl` for the cheapest departure; the calendar
-sends `meta.bookingUrlTemplate` — the same link with `{date}` left as a hole —
-because the day sheet books **whichever** day was tapped and only the client
-knows which. Sending 31 URLs would repeat the same prefix down the month;
-sending none would mean the client hard-coding the host, the path shape and the
-lower-casing. The template is always present, including for an empty month: it
-is a fact about the route, not about the fares.
+**Aviasales is primary because that is where the price came from.** Fares reach
+Orbit through Travelpayouts, which is Aviasales' cache; the app quoted those
+fares and then handed the reader to Skyscanner, a different meta-search with a
+different set of agencies and no reason to be holding the same fare. It showed
+DUS→AGP at **€29** where Skyscanner's cheapest for that date was **€68**.
+Quoting one shop's price and pointing at another's till is a way to look wrong
+while being right. Skyscanner survives as a quiet "Compare on Skyscanner" text
+link, because a second opinion is worth having.
 
-**`TRAVELPAYOUTS_MARKER` is read and sent to nobody, by design.** It identifies
-whose link a *booking* came from and the data API has no use for it — today
-nothing Orbit sends anybody is monetised. It is read in exactly one place so
-that the day those links move to Aviasales, the number already lives somewhere
-obvious rather than needing a fresh hunt through a dashboard.
+**One passenger, economy, one-way.** The trailing `1` is the passenger count and
+is mandatory — the link does not work without it — and economy is the *absence*
+of a class letter. One-way matches the fare: every price in this app is one-way
+(§2), and a round-trip hand-off would open a search whose cheapest result cannot
+be the number the user just tapped. The params string is **case-sensitive** in a
+way that fails silently: `PAR1607ROc1` is Romania in business class,
+`PAR1607ROC1` is Rochester airport in economy.
+
+The undated forms are the right fallback for a route with no fares yet — for
+Aviasales that is the pre-filled search box rather than a results page, because
+there is no day to show results for. The route detail sends resolved
+`booking.aviasales` / `booking.skyscanner` for the cheapest departure; the
+calendar sends `meta.booking` with the same two links, each with a **date-shaped
+hole named after its format** (`{ddmm}`, `{yymmdd}`), because the day sheet books
+**whichever** day was tapped and only the client knows which. Named holes rather
+than one `{date}` keep the client from having to know which URL belongs to which
+site. Both are always present, including for an empty month: they are facts about
+the route, not about the fares.
+
+**`TRAVELPAYOUTS_MARKER` is finally used.** It spent its whole life read-but-unsent
+against a comment saying it was there for "the day those links move to Aviasales".
+That day arrived for a reason that had nothing to do with money — the price
+consistency above — and the attribution comes along with the fix. It is appended
+to the Aviasales hand-off and to nothing else: the data API has no use for it, so
+no request in `App\Infrastructure\Pricing` carries it, and Skyscanner has never
+been monetised. Unset is fine and is the default; what is lost is the credit, not
+the destination.
+
+**Neither link promises a seat.** Both sit under one line — *"Prices come from
+recent searches — the booking site shows live availability"* — which merged the
+old "we don't sell tickets" disclaimer rather than stacking beside it. See §2.
 
 ---
 

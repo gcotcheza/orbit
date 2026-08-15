@@ -35,10 +35,27 @@
  * so that the pair are the same kind of thing to a screen reader and to a
  * long-press, and so the route detail is a real URL here as it is everywhere
  * else in this app.
+ *
+ * =============================================================================
+ * AND THE SHEET NOW SAYS HOW OLD ITS PRICE IS
+ * =============================================================================
+ * `foundAt` is when the fare was FOUND, which is neither of this app's two
+ * usual date axes. Orbit's prices are Travelpayouts' cache of other people's
+ * searches, so the number in this sheet can be days old — the owner caught it
+ * showing €36 where the live cheapest was €56. The sheet was the worst place
+ * for that silence: it is the screen with a booking link on it, and a big
+ * confident number over a "Book this day" button is the app implying a fare is
+ * on sale right now.
+ *
+ * UNDER THE PRICE AND DELIBERATELY QUIET. It is a qualifier on the number
+ * above it, not a fact of its own — it should be read second and only by
+ * somebody who is about to act. NOTHING AT ALL when `foundAt` is null, which is
+ * what an old row or a provider that will not say produces: a made-up "Seen just
+ * now" would be worse than the silence this replaced.
  */
 import { computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import { euro } from '@/lib/format'
+import { euro, seenLabel, withDateTokens } from '@/lib/format'
 import { heatColour } from './heat'
 import { dayLabel } from './month'
 
@@ -49,18 +66,19 @@ const props = defineProps({
   // The route the month belongs to, for the detail link.
   code: { type: String, required: true },
   /*
-   * The Skyscanner deep link with a `{date}` hole in it, straight from the
-   * calendar endpoint's `meta` (docs/API.md). The host, the path shape and the
-   * lower-cased codes are the SERVER's — App\Application\Routes\BookingLink and
-   * config('orbit.booking') own them, and config/orbit.php says out loud that
-   * they may one day point at a different affiliate. Filling a hole is the only
-   * part of that this component is allowed to know.
+   * The two hand-off templates, each with a named date hole in it, straight
+   * from the calendar endpoint's `meta` (docs/API.md): `{ aviasales, skyscanner
+   * }`. The hosts, the path shapes, the casing and the affiliate marker are all
+   * the SERVER's — App\Application\Routes\BookingLink and config('orbit.booking')
+   * own them. Filling a hole is the only part of that this component knows, and
+   * the hole is named after its DATE FORMAT rather than after a site, so even
+   * that much is arithmetic rather than knowledge about Aviasales.
    *
    * Null-tolerant rather than required: a response from an older build has no
-   * template, and the honest answer to that is a sheet with one action on it
+   * templates, and the honest answer to that is a sheet with one action on it
    * rather than no sheet at all.
    */
-  bookingUrlTemplate: { type: String, default: null },
+  booking: { type: Object, default: null },
 })
 
 const emit = defineEmits(['close'])
@@ -75,17 +93,25 @@ const verdict = computed(() => VERDICTS[props.fare.verdict] ?? VERDICTS.mid)
 const swatch = computed(() => heatColour(props.fare.price, props.min, props.max))
 
 /*
- * `2026-09-15` → `260915`, which is the only thing the template leaves to the
- * client. STRING SURGERY AND NOT A `Date`, for the reason month.js opens with:
- * the API's dates are calendar days with no time and no zone, and routing one
- * through `new Date(...).toLocaleDateString()` re-reads it in the viewer's own
- * timezone — which books the 14th for anybody west of London.
+ * The day that was TAPPED, spliced into each template — the only thing the
+ * server leaves to the client. `withDateTokens` is string surgery and not a
+ * `Date`, for the reason month.js opens with: the API's dates are calendar days
+ * with no time and no zone, and routing one through `new Date(...)` re-reads it
+ * in the viewer's own timezone, which books the 14th for anybody west of
+ * London.
  */
-const bookingUrl = computed(() =>
-  props.bookingUrlTemplate === null
-    ? null
-    : props.bookingUrlTemplate.replace('{date}', props.fare.date.slice(2).replaceAll('-', '')),
-)
+const aviasalesUrl = computed(() => withDateTokens(props.booking?.aviasales, props.fare.date))
+const skyscannerUrl = computed(() => withDateTokens(props.booking?.skyscanner, props.fare.date))
+
+/**
+ * "Seen 3 hours ago" — how old THIS day's price is.
+ *
+ * Per-DAY and not per-month, because that is how the cache behind it works: one
+ * grid can mix a fare found an hour ago with one found last Thursday, and the
+ * only number that matters is the one belonging to the day in front of the
+ * reader. Null when the API sent none, and then no line is drawn at all.
+ */
+const seen = computed(() => seenLabel(props.fare.foundAt))
 
 // Escape closes it, the same as tapping the backdrop. A sheet that can only be
 // dismissed by pointing at it is a sheet a keyboard cannot get out of.
@@ -109,6 +135,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
       <div>
         <p class="sheet__date">{{ dayLabel(fare.date, { withYear: true }) }}</p>
         <p class="sheet__price tabular">{{ euro(fare.price) }}</p>
+        <!-- Absent, not empty, when Orbit does not know how old the price is —
+             a fabricated age is worse than no line. -->
+        <p v-if="seen" class="sheet__seen">Seen {{ seen }}</p>
       </div>
 
       <div class="sheet__swatch" :style="{ background: swatch }" aria-hidden="true"></div>
@@ -124,8 +153,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         Route details
       </RouterLink>
 
-      <a v-if="bookingUrl" class="action action--solid" :href="bookingUrl" target="_blank" rel="noopener">
-        Book this day
+      <!-- AVIASALES, BECAUSE THAT IS WHERE THIS PRICE CAME FROM. Orbit's fares
+           are Travelpayouts' — Aviasales' — cache, and this sheet used to send
+           people to Skyscanner, which had never seen many of them (€29 here
+           against €68 there). "See this fare" rather than "Book this day"
+           because neither site is promising a seat and this one is showing a
+           price that may be days old. -->
+      <a v-if="aviasalesUrl" class="action action--solid" :href="aviasalesUrl" target="_blank" rel="noopener">
+        See this fare
         <!-- Stroked from the style block, on the accent fill — the same arrow
              BookingCta uses, for the same reason. -->
         <svg width="15" height="15" viewBox="0 0 17 17" fill="none" aria-hidden="true">
@@ -134,14 +169,28 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
       </a>
     </div>
 
+    <!-- The second opinion, at the weight of a text link: a third equal action
+         in the row above would be a choice the reader has no basis for making. -->
+    <a
+      v-if="skyscannerUrl"
+      class="compare"
+      :href="skyscannerUrl"
+      target="_blank"
+      rel="noopener"
+    >
+      Compare on Skyscanner
+    </a>
+
     <!-- Word for word BookingCta's, and duplicated rather than shared on
-         purpose: that component is a full-width 54px checkout button and this
-         is half of a compact pair, so what they have in common is the SENTENCE
-         and not the layout. The line exists because the button looks like a
-         checkout, and the two places we say it must not be able to disagree —
-         if this copy changes, change it there too. -->
-    <p v-if="bookingUrl" class="disclaimer">
-      We don't sell tickets — we hand you off to the airline or an OTA.
+         purpose: that component is a full-width 54px button and this is half of
+         a compact pair, so what they have in common is the SENTENCE and not the
+         layout. It says where the number came from and who has the real one,
+         which is what somebody about to leave the app for a cached fare needs —
+         and it MERGED the old "we don't sell tickets" line rather than being
+         added under it, because two greyed sentences read as small print and
+         small print is not read. If this copy changes, change it there too. -->
+    <p v-if="aviasalesUrl" class="disclaimer">
+      Prices come from recent searches — the booking site shows live availability.
     </p>
   </div>
 </template>
@@ -204,6 +253,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   font-weight: 700;
   line-height: 1.1;
   color: var(--ink);
+}
+
+/* A qualifier on the price above it, drawn to be read second: the muted ink and
+   the small size are the same pair the disclaimer uses, because they are the
+   same kind of statement — true, necessary, and not the thing on the screen. */
+.sheet__seen {
+  margin-top: 4px;
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
 .sheet__swatch {
@@ -290,6 +348,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 .action--solid path {
   stroke: var(--on-solid);
+}
+
+/* Between the two loud actions and the fine print, which is where it belongs:
+   an option somebody may take, not the conclusion and not a footnote. */
+.compare {
+  display: block;
+  margin-top: 12px;
+  text-align: center;
+
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--accent-ink);
+  text-decoration: none;
 }
 
 .disclaimer {

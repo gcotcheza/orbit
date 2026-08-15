@@ -42,6 +42,26 @@ enum AlertDecision: string
     /** The score is under the sensitivity this account chose. */
     case BelowThreshold = 'below-threshold';
 
+    /**
+     * The fare behind this alert was found too long ago to be worth waking
+     * somebody up about a flight that leaves soon —
+     * config('orbit.alerts.max_fare_age_days') and `near_departure_weeks`.
+     *
+     * NOT "THE PRICE WENT UP", WHICH ORBIT HAS NO WAY OF KNOWING. This is the
+     * app declining to make a claim rather than the app knowing the claim is
+     * false: the fare may well still be there. What it cannot do is say so on
+     * the strength of a number somebody else's search turned up four days ago
+     * for a flight three weeks out.
+     *
+     * DISTINCT FROM `cooling-down`, WHICH IS ABOUT US, and from
+     * `below-threshold`, which is about the fare being ordinary. This one is
+     * about the EVIDENCE, and it is the only held reason that would still hold
+     * if the deal were the best in the app's history — which is exactly the case
+     * where the difference matters, because that is the alert somebody acts on
+     * within a minute of reading it.
+     */
+    case StaleFare = 'stale-fare';
+
     /** Announced within the cooldown, and not enough cheaper to say again. */
     case CoolingDown = 'cooling-down';
 

@@ -181,6 +181,130 @@ final class TravelpayoutsPollTest extends TestCase
         $this->assertSame(8000, $observation->price_cents);
     }
 
+    /**
+     * THE WHOLE WAY THROUGH, FOR THE ONE FIELD THIS ALL EXISTS FOR.
+     *
+     * The unit test proves the adapter reads `found_at` out of a response. This
+     * proves it survives the port, the job and the upsert and lands in a column
+     * — which is three places it could quietly be dropped, and the failure would
+     * be a screen that simply never says how old anything is.
+     *
+     * AND THAT IT IS NOT `fetched_at`, which is the actual bug. Both timestamps
+     * are on the same row and only one of them is about the price. The poll runs
+     * at 06:10 on the 15th; the recorded fares were found on the 14th and the
+     * 15th, by other people's searches, before Orbit asked. If those two columns
+     * ever come to hold the same value, the app is back to implying every price
+     * is live.
+     */
+    #[Test]
+    public function the_calendar_records_when_each_price_was_found_and_not_only_when_it_was_fetched(): void
+    {
+        $this->useTravelpayouts();
+        $this->fakeRecordedMonths();
+
+        $route = Route::factory()->between('AMS', 'LIS')->create();
+
+        PollRoutePrices::dispatchSync($route->id);
+
+        $fares = CalendarFare::query()->where('route_id', $route->id)->get();
+
+        /* Every recorded entry carries one, so every row must have one. */
+        $this->assertSame(0, $fares->whereNull('found_at')->count(), 'a polled fare has no find time');
+
+        /*
+         * THE FIXTURE'S OWN VALUE, looked up rather than restated: the 16th of
+         * August's fare in the recording was found at a particular moment and
+         * that moment must be what is in the column.
+         */
+        $found = $this->recordedFindTime('month-matrix-ams-lis-2026-08', '2026-08-16');
+
+        $row = $fares->first(
+            static fn (CalendarFare $fare): bool => $fare->departure_date->toDateString() === '2026-08-16',
+        );
+
+        $this->assertNotNull($row);
+        $this->assertSame($found, $row->found_at?->utc()->format('Y-m-d\TH:i:s\Z'));
+
+        /*
+         * AND THE TWO COLUMNS DISAGREE, which is the entire point. `fetched_at`
+         * is this poll, 06:10 on the 15th; the finds are older than that.
+         */
+        $this->assertSame('2026-08-15 06:10:00', $row->fetched_at->utc()->format('Y-m-d H:i:s'));
+        /* Non-null by the assertion above, which is what narrowed it. */
+        $this->assertTrue(
+            $row->found_at->lessThan($row->fetched_at),
+            'found_at and fetched_at are the same moment — the cache\'s age has been lost',
+        );
+    }
+
+    /**
+     * A RE-POLL MOVES IT, INCLUDING BACKWARDS.
+     *
+     * `found_at` is in the upsert's update list, so a date whose price is
+     * re-quoted with an OLDER find time gets the older one. That direction is
+     * the one worth pinning: the provider's cache is not monotonic, and a column
+     * that could only ever move forward would freeze the first age a row was
+     * given and quietly become a lie in the reassuring direction.
+     */
+    #[Test]
+    public function a_later_poll_rewrites_the_find_time_even_when_it_is_older(): void
+    {
+        $this->useTravelpayouts();
+
+        /*
+         * A WINDOW NARROW ENOUGH TO BE ONE REQUEST, so the two polls below are
+         * request one and request two of a sequence rather than fourteen. The
+         * production window is six months and touches seven calendar months;
+         * nothing about THIS test is the window's business.
+         */
+        Date::setTestNow('2026-09-01 06:10:00');
+        config(['orbit.poll.window_days' => 20]);
+
+        $route = Route::factory()->between('AMS', 'LIS')->create();
+
+        $answer = static fn (string $foundAt): array => [
+            'currency' => 'eur',
+            'data' => [[
+                'actual' => true,
+                'depart_date' => '2026-09-04',
+                'origin' => 'AMS',
+                'destination' => 'LIS',
+                'return_date' => '',
+                'value' => 88,
+                'found_at' => $foundAt,
+            ]],
+        ];
+
+        /*
+         * ONE SEQUENCE RATHER THAN TWO `Http::fake()` CALLS. A second `fake()`
+         * for a URL that already has a stub does not replace it — the first
+         * registered matcher keeps winning — so the "next morning" response
+         * would silently be the previous one and this test would pass against a
+         * `found_at` that never moved.
+         */
+        Http::fake([self::ENDPOINT => Http::sequence()
+            ->push($answer('2026-08-14T13:51:45Z'))
+            ->push($answer('2026-08-09T02:00:00Z')),
+        ]);
+
+        PollRoutePrices::dispatchSync($route->id);
+
+        $this->assertSame(
+            '2026-08-14T13:51:45Z',
+            CalendarFare::query()->firstOrFail()->found_at?->utc()->format('Y-m-d\TH:i:s\Z'),
+        );
+
+        /* The next morning, and the cache has handed back an OLDER find. */
+        Date::setTestNow('2026-09-02 06:10:00');
+        PollRoutePrices::dispatchSync($route->id);
+
+        $row = CalendarFare::query()->firstOrFail();
+
+        $this->assertSame('2026-08-09T02:00:00Z', $row->found_at?->utc()->format('Y-m-d\TH:i:s\Z'));
+        /* …and the row was updated rather than duplicated. */
+        $this->assertSame(1, CalendarFare::query()->count());
+    }
+
     #[Test]
     public function no_departure_outside_the_window_reaches_the_calendar(): void
     {
@@ -258,6 +382,30 @@ final class TravelpayoutsPollTest extends TestCase
             ->push($this->fixture('month-matrix-ams-lis-2026-10'))
             ->push($this->fixture('month-matrix-ams-lis-2026-11')),
         ]);
+    }
+
+    /**
+     * The `found_at` a recording actually holds for one departure date — read
+     * out of the fixture rather than restated, so the assertion is about the
+     * value surviving the trip rather than about a string typed twice.
+     */
+    private function recordedFindTime(string $fixture, string $departDate): string
+    {
+        /** @var list<array<string, mixed>> $data */
+        $data = $this->fixture($fixture)['data'];
+
+        foreach ($data as $entry) {
+            if (($entry['depart_date'] ?? null) === $departDate) {
+                $this->assertIsString($entry['found_at'] ?? null);
+
+                /** @var string $foundAt */
+                $foundAt = $entry['found_at'];
+
+                return $foundAt;
+            }
+        }
+
+        $this->fail("No entry for {$departDate} in {$fixture}.");
     }
 
     /**

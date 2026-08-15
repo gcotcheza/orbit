@@ -70,7 +70,7 @@ final class RouteDetailApiTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonStructure(['data' => [
-            'code', 'score', 'tier', 'confident', 'trackingDays', 'sparkline', 'bookingUrl',
+            'code', 'score', 'tier', 'confident', 'trackingDays', 'sparkline',
             'origin' => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
             'destination' => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
             'price' => ['current', 'usual', 'pctBelow'],
@@ -78,7 +78,9 @@ final class RouteDetailApiTest extends TestCase
             'history' => [['date', 'price']],
             'stats' => ['min', 'p25', 'median', 'p75', 'max'],
             'advice' => ['title', 'body', 'tone'],
-            'cheapest' => ['date', 'price'],
+            /* `foundAt` is the detail's addition to the shared summary shape. */
+            'cheapest' => ['date', 'price', 'foundAt'],
+            'booking' => ['aviasales', 'skyscanner'],
         ]]);
 
         // The detail must agree with the list it was opened from.
@@ -165,23 +167,70 @@ final class RouteDetailApiTest extends TestCase
             ->assertJsonPath('data.cheapest.price', 50);
     }
 
+    /**
+     * BOTH LINKS ARE AIMED AT THE SAME DEPARTURE, and they encode the date
+     * differently — `0309` is 3 September day-first for Aviasales, `260903` is
+     * year-first for Skyscanner. A link that opens perfectly and searches the
+     * wrong day is the failure this catches.
+     */
     #[Test]
-    public function the_booking_link_points_at_that_departure(): void
+    public function both_booking_links_point_at_that_departure(): void
     {
         $this->seedRoute();
 
+        config(['orbit.travelpayouts.marker' => '123456']);
+
         $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
-            ->assertJsonPath('data.bookingUrl', 'https://www.skyscanner.nl/transport/flights/ams/opo/260903/');
+            ->assertJsonPath('data.booking.aviasales', 'https://www.aviasales.com/search/AMS0309OPO1?marker=123456')
+            ->assertJsonPath('data.booking.skyscanner', 'https://www.skyscanner.nl/transport/flights/ams/opo/260903/');
     }
 
+    /**
+     * A route with no fares has no day to show results for, so the primary link
+     * lands on Aviasales' PRE-FILLED SEARCH FORM rather than on an empty results
+     * page — the reader gets the box with the route already in it.
+     */
     #[Test]
-    public function a_route_with_no_fares_still_gets_a_usable_link(): void
+    public function a_route_with_no_fares_still_gets_usable_links(): void
     {
         $this->makeRoute('AMS', 'OPO');
 
         $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
             ->assertJsonPath('data.cheapest', null)
-            ->assertJsonPath('data.bookingUrl', 'https://www.skyscanner.nl/transport/flights/ams/opo/');
+            ->assertJsonPath('data.booking.aviasales', 'https://www.aviasales.com/?params=AMSOPO1')
+            ->assertJsonPath('data.booking.skyscanner', 'https://www.skyscanner.nl/transport/flights/ams/opo/');
+    }
+
+    /**
+     * HOW OLD THE HEADLINE FARE IS — the detail's one addition to the shared
+     * `cheapest` shape, and the reason it is not on the summary: the three
+     * screens that read the summary print a fare in a space with room for a
+     * number and nothing else.
+     *
+     * NULL WHEN ORBIT DOES NOT KNOW, which the screen renders as no line rather
+     * than as a reassurance.
+     */
+    #[Test]
+    public function the_cheapest_fare_says_when_it_was_found(): void
+    {
+        $route = $this->makeRoute('AMS', 'OPO');
+        $this->trackedSince($route, 9000);
+        $this->offer($route, ['2026-09-03' => 5000], foundAt: '2026-08-30 09:15:00');
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('data.cheapest.foundAt', '2026-08-30T11:15:00+02:00');
+    }
+
+    #[Test]
+    public function a_fare_of_unknown_age_says_nothing_rather_than_borrowing_the_fetch_time(): void
+    {
+        $route = $this->makeRoute('AMS', 'OPO');
+        $this->trackedSince($route, 9000);
+        $this->offer($route, ['2026-09-03' => 5000]);
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('data.cheapest.price', 50)
+            ->assertJsonPath('data.cheapest.foundAt', null);
     }
 
     #[Test]

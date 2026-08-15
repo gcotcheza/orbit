@@ -527,7 +527,14 @@ final class AlertPipelineTest extends TestCase
         $body = (string) $mail[0]->getHtmlBody();
         $this->assertStringContainsString('AMS→OPO', $body);
         $this->assertStringContainsString('53% below', $body);
-        $this->assertStringContainsString('skyscanner', $body);
+        /*
+         * AVIASALES, WHICH IS WHERE THE PRICE IN THIS MAIL CAME FROM. A mail is
+         * the one place a reader cannot see two links and pick, so it carries
+         * the primary hand-off alone — the search Orbit's fares come out of
+         * rather than a different meta-search that may never have had the fare.
+         * See App\Application\Routes\BookingLink.
+         */
+        $this->assertStringContainsString('aviasales', $body);
     }
 
     // -- Rules ---------------------------------------------------------------

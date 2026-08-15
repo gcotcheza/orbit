@@ -125,6 +125,9 @@ final class AppServiceProvider extends ServiceProvider
             cooldownHours: (int) config('orbit.alerts.cooldown_hours'),
             furtherDropPercent: (int) config('orbit.alerts.further_drop_percent'),
             minTrackingDays: (int) config('orbit.alerts.min_tracking_days'),
+            /* The freshness guard's two halves — see config/orbit.php. */
+            maxFareAgeDays: (int) config('orbit.alerts.max_fare_age_days'),
+            nearDepartureWeeks: (int) config('orbit.alerts.near_departure_weeks'),
         ));
 
         /*

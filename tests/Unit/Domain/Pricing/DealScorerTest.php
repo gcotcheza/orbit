@@ -245,7 +245,15 @@ final class DealScorerTest extends TestCase
 
         $this->assertNotSame('Good price — book', $deal->verdict->label);
         $this->assertSame('Not enough data yet', $deal->verdict->label);
-        $this->assertStringContainsString('only just started watching', $deal->advice->body);
+        /*
+         * "PRICING" AND NOT "WATCHING". The sentence is shown on the detail
+         * screen of routes nobody watches — `POST /api/routes/lookup` opens it
+         * on pairs the poller will never visit again — so "started watching"
+         * was a promise the app does not keep, on the very screen offering a
+         * "Watch this route" button. Flagged in PR #29.
+         */
+        $this->assertStringContainsString('only just started pricing', $deal->advice->body);
+        $this->assertStringNotContainsString('watching', $deal->advice->body);
     }
 
     /**

@@ -91,7 +91,7 @@ final class RuleMatches
             ->whereIn('route_id', $routes->pluck('id')->all())
             ->where('departure_date', '>=', $today->toDateString())
             ->orderBy('departure_date')
-            ->get(['route_id', 'departure_date', 'price_cents'])
+            ->get(['route_id', 'departure_date', 'price_cents', 'found_at'])
             ->groupBy('route_id');
 
         $watched = $this->watchedRouteIds($user);
@@ -103,6 +103,15 @@ final class RuleMatches
                 static fn (CalendarFare $fare): DatedFare => new DatedFare(
                     $fare->departure_date->toDateTimeImmutable(),
                     $fare->price_cents,
+                    /*
+                     * CARRIED SO THE ALERT PIPELINE CAN REFUSE A STALE ONE.
+                     * A rule match names a specific departure and puts a
+                     * booking link under it, so its fare's age matters exactly
+                     * as much as a watched route's — more, if anything, because
+                     * these come from the speculative sweep over routes nobody
+                     * watches. App\Domain\Alerts\AlertPolicy::isStale().
+                     */
+                    $fare->found_at?->toDateTimeImmutable(),
                 ),
                 ($fares->get($route->id) ?? collect())->all(),
             );

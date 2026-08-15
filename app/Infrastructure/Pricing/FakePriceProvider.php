@@ -50,7 +50,26 @@ final readonly class FakePriceProvider implements PriceProvider
         $fares = [];
 
         for ($day = $from->setTime(0, 0); $day <= $to; $day = $day->modify('+1 day')) {
-            $fares[] = new DatedFare($day, $this->model->priceCents($routeCode, $day, $observedAt));
+            /*
+             * FOUND NOW, BECAUSE THIS ONE REALLY DID JUST INVENT THEM.
+             *
+             * `foundAt` is how old a price is (App\Domain\Pricing\DatedFare),
+             * and the honest answer for a simulated fare is "this instant" — it
+             * has no cache behind it and no other search found it first. That is
+             * a claim the real adapter is usually NOT entitled to make, which is
+             * the whole reason the field exists.
+             *
+             * IT IS NOT LEFT NULL, EVEN THOUGH NULL WOULD BE LESS CODE. Null
+             * means "we do not know how old this is" and renders as no line at
+             * all, so a sandbox, the e2e run and every screenshot taken against
+             * the fake would silently exercise the one path where the freshness
+             * feature is invisible. Stamping the clock keeps the fake a
+             * plausible provider rather than a hole in the coverage — and it
+             * moves with `Date::setTestNow()` exactly as `$observedAt` does,
+             * which is what keeps FakeHistorySeeder's replayed mornings
+             * internally consistent.
+             */
+            $fares[] = new DatedFare($day, $this->model->priceCents($routeCode, $day, $observedAt), $observedAt);
         }
 
         return $fares;

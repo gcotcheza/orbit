@@ -101,17 +101,38 @@ final class PollRoutePrices implements ShouldQueue
 
         $now = Date::now();
 
+        /*
+         * `fetched_at` IS THIS MOMENT AND `found_at` IS THE PROVIDER'S, and the
+         * two are written side by side here precisely because they are so easy
+         * to mistake for one another. This job asking at 06:10 says nothing
+         * about how old the answer is: Travelpayouts serves a cache of other
+         * people's searches, so `$now` is when we asked and `$fare->foundAt` is
+         * when the price was actually seen — days earlier, often.
+         *
+         * NULL IS WRITTEN AS NULL. A provider that does not report a find time
+         * (and every row written before this column existed) leaves it empty
+         * rather than inheriting `$now`, which would be this job asserting the
+         * one thing it cannot know. Downstream renders null as no line at all.
+         */
         CalendarFare::query()->upsert(
             array_map(fn (DatedFare $fare): array => [
                 'route_id' => $route->id,
                 'departure_date' => $fare->departureDate->format('Y-m-d'),
                 'price_cents' => $fare->cents,
                 'fetched_at' => $now,
+                'found_at' => $fare->foundAt,
                 'created_at' => $now,
                 'updated_at' => $now,
             ], $fares),
             ['route_id', 'departure_date'],
-            ['price_cents', 'fetched_at', 'updated_at'],
+            /*
+             * `found_at` IS IN THE UPDATE LIST, and it has to be: a date whose
+             * price is re-quoted with an older find time — which happens, the
+             * cache is not monotonic — must be able to get OLDER as well as
+             * newer. Leaving it out would freeze the first age a row ever had
+             * and slowly turn the column into a lie in the reassuring direction.
+             */
+            ['price_cents', 'fetched_at', 'found_at', 'updated_at'],
         );
 
         /*

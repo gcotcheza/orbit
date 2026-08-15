@@ -62,12 +62,23 @@ final readonly class DealScorer
      * code path.
      *
      * THE SENTENCE FITS BOTH CALLERS, and that is not a coincidence: "Orbit has
-     * only just started watching this route" is the honest reading of a route
+     * only just started pricing this route" is the honest reading of a route
      * with no prices AND of one with three days of them. The UI needs no new
      * state for the second case, which is the whole reason the maturity gate is
      * expressed as this value rather than as a flag beside a live score — see
      * resources/js/Components/globe/SpotlightCard.vue, which prints
      * `verdict.label` without asking whether we meant it.
+     *
+     * "PRICING" AND NOT "WATCHING", WHICH IS A ONE-WORD FIX FOR A SENTENCE THAT
+     * BECAME FALSE. It was written when the only way to reach a route was to put
+     * it on the watchlist, so "started watching" described every route that
+     * could reach this line. `POST /api/routes/lookup` broke that: the route
+     * detail now opens on pairs nobody watches and nobody is going to, and
+     * telling somebody Orbit has "started watching" a route it will never poll
+     * again is a promise the app does not keep — on the very screen that offers
+     * a "Watch this route" button, which then reads as already pressed.
+     * "Pricing" is true of both: it is what Orbit did, and it says nothing about
+     * whether it will do it again tomorrow. Flagged in PR #29.
      */
     public function noOpinion(): DealScore
     {
@@ -93,7 +104,7 @@ final readonly class DealScorer
             verdict: $verdict,
             advice: new Advice(
                 $verdict->label,
-                'Orbit has only just started watching this route. A few more days of prices and this becomes a real verdict.',
+                'Orbit has only just started pricing this route. A few more days of prices and this becomes a real verdict.',
                 $verdict->tone,
             ),
             confident: false,
