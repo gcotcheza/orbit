@@ -251,30 +251,45 @@ Everything below is `.env` in `/var/www/orbit`. **There is no `config:cache` ste
 anywhere in this project**, so `.env` is read at container boot — after editing
 it, `docker compose restart app horizon scheduler` and nothing more.
 
-### Fare providers — Travelpayouts + Amadeus
+### Fare providers — one key, and no key at all
 
 ```dotenv
 TRAVELPAYOUTS_TOKEN=…          # daily calendar-shaped fares per route
-AMADEUS_CLIENT_ID=…            # route price *statistics* — what a route usually costs
-AMADEUS_CLIENT_SECRET=…
 ```
 
-Adding the keys **changes nothing on its own.** The adapter is chosen by name,
+**That is the only fare key there is.** The route price *statistics* — what a
+route usually costs, which the deal score is mostly a percentile against — were
+going to be Amadeus'. **Their Self-Service API was decommissioned on 2026-07-17**
+(registrations closed, the remaining offering is enterprise), and nothing else
+sells the distribution of a route's fares rather than the fares themselves. Orbit
+computes its own instead, from the calendar window and the daily history it
+already collects: `App\Infrastructure\Pricing\SelfStatsProvider`, no key, no
+network. There is nothing left to sign up for here.
+
+Adding the token **changes nothing on its own.** Each adapter is chosen by name,
 and the names are still `fake`:
 
 ```dotenv
 ORBIT_PRICE_PROVIDER=fake      # → travelpayouts
-ORBIT_STATS_PROVIDER=fake      # → amadeus
+ORBIT_STATS_PROVIDER=fake      # → self
 ```
 
 Both lines have to move, and an unknown name **throws at resolution rather than
 falling back** — deliberately, because a box quietly serving invented prices would
 send real alerts about fares that do not exist.
 
-> ⚠ **The real adapters are not written yet.** See (g). The ports exist
-> (`app/Application/Ports/PriceProvider.php`, `PriceStatsProvider.php`) and the
-> fakes implement them, but flipping these two values today resolves to classes
-> that do not exist. Keys first, adapters second, *then* these lines.
+> ⚠ **Move them together, and reset the history in the same breath.** `self`
+> summarises whatever fares are in the database, so `ORBIT_STATS_PROVIDER=self`
+> against a table the fake provider filled is a real statistic about a
+> simulation. The order is: both lines, then
+> `php artisan orbit:reset-history --confirm`, then the restart, then
+> `php artisan orbit:refresh-stats --now`.
+>
+> ⚠ **The statistics are thin before they are deep, and the app says so.** For
+> the first month `self` answers from the current 90-day window — "the going rate
+> across the next three months" — and blends toward the accruing daily history as
+> that matures (30 observations). `docs/PLAN.md`'s score section and `docs/API.md`
+> both spell the phases out.
 
 ### Anthropic — the rule parser
 
@@ -359,10 +374,13 @@ after, written down so none of it becomes a surprise.
 
 **Real work still to build**
 
-- [ ] **The real provider adapters.** The ports are defined and the fakes
-      implement them; `TravelpayoutsPriceProvider` and `AmadeusPriceStatsProvider`
-      do not exist yet. This is the single biggest remaining piece, and until it
-      lands every fare on every screen is simulated. See (f).
+- [x] **The real provider adapters.** Both are written:
+      `TravelpayoutsPriceProvider` (#20) for the fares and `SelfStatsProvider`
+      (#22) for the statistics — the latter because Amadeus' Self-Service API was
+      decommissioned before a key was ever bought, so that half is computed from
+      Orbit's own data rather than purchased. What remains is a `.env` decision
+      rather than code: until `ORBIT_PRICE_PROVIDER`/`ORBIT_STATS_PROVIDER` move,
+      every fare on every screen is still simulated. See (f).
 - [ ] **The web-push adapter.** The `DealNotifier` port and its email
       implementation arrive with the alerts PR (nothing named `DealNotifier`
       exists on `main` as this is written). Push is the *second* implementation
