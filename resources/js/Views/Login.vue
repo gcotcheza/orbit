@@ -217,7 +217,7 @@ async function submit() {
   border-radius: var(--radius-chip);
   background: var(--accent);
   box-shadow: 0 6px 16px var(--accent-glow);
-  color: #fff;
+  color: var(--on-solid);
   font-family: var(--font-display);
   font-size: var(--text-xl);
   font-weight: 700;

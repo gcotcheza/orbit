@@ -814,7 +814,34 @@ docker compose exec app php artisan orbit:digest --now
 ```
 
 **Mail is the only channel today.** `email_alerts` gates the deal alerts and
-`weekly_digest` gates the Sunday mail (`PUT /api/settings`); `push_alerts` has
-no adapter until the PWA lands and is stored and ignored. Whether a mail leaves
-the box is `MAIL_MAILER` — `log` until `ghiecode.io` is verified as a sending
-domain in Resend.
+`weekly_digest` gates the Sunday mail (`PUT /api/settings`); `push_alerts` is
+stored and ignored — the PWA shell has landed, but nothing subscribes a device
+to web push yet, and the port is shaped so that adapter is an addition rather
+than a change. Whether a mail leaves the box is `MAIL_MAILER` — `log` until
+`ghiecode.io` is verified as a sending domain in Resend.
+
+---
+
+## The PWA routes
+
+Three more paths exist on this origin, and they are the only ones here that are
+**public and session-less** — no cookie, no CSRF, no user. They are registered
+outside both middleware groups from `bootstrap/app.php`; `routes/pwa.php`
+explains why, and `tests/Feature/PwaShellTest` holds them to it.
+
+They are not part of the screens' contract and nothing in `resources/js` calls
+them except the one-line registration in `resources/js/lib/pwa.js`. They are
+listed for the same reason `/up` would be: they are server-owned paths, and the
+SPA catch-all must never answer them.
+
+| Route | Answers | Cache-Control |
+| --- | --- | --- |
+| `GET /manifest.webmanifest` | `application/manifest+json` — name, colours, the five icons. Values come from `config('orbit.pwa.*')`, which is also where the shell's `theme-color` meta is read from. | `public, max-age=3600` |
+| `GET /sw.js` | `application/javascript` — `resources/js/service-worker.js` with the build's version and precache list substituted in from the Vite manifest (`App\Services\Pwa\BuildAssets`). Carries an ETag, so the browser's per-navigation update check is a 304, and `Service-Worker-Allowed: /`. | `no-cache, must-revalidate` |
+| `GET /offline` | `text/html` — the static page the worker shows when a navigation cannot reach the network. No bundle, no fonts, no script. | `public, max-age=86400` |
+
+**The worker never caches `/api/*`.** Every endpoint above it in this file
+returns a fare, and a cached fare is a wrong number that looks like a right one.
+It caches content-hashed `/build/` output, the earth textures under `/globe/`
+and the icons — things whose URL is either their version or effectively
+permanent — and nothing else.

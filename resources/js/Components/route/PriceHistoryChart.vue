@@ -17,7 +17,7 @@
  * without a reference rather than with one at zero.
  */
 import { computed, useId } from 'vue'
-import { euro } from './format'
+import { euro } from '@/lib/format'
 
 const props = defineProps({
   history: { type: Array, default: () => [] },

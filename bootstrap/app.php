@@ -4,12 +4,67 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+
+        /*
+         * The PWA shell — the manifest, the service worker and the offline
+         * page — registered with NO middleware group.
+         *
+         * `Route::group([], ...)` is the whole point: none of the three reads a
+         * session, a CSRF token or a user, and a browser revalidates /sw.js on
+         * EVERY navigation. Inside the `web` group each of those checks would
+         * write a `sessions` row for a visitor who is not one and answer with a
+         * Set-Cookie, which also stops Cloudflare holding the response. The
+         * full reasoning is in routes/pwa.php.
+         *
+         * -------------------------------------------------------------------
+         * WHY THE SPA ROUTE IS DEMOTED TO A FALLBACK ON THE LINE ABOVE
+         *
+         * `then:` runs AFTER routes/web.php has been loaded (see
+         * ApplicationBuilder::buildRoutingCallback), and the router answers
+         * with the first route that matches in registration order. The last
+         * thing web.php registers is the SPA catch-all — `/{any?}` with a
+         * negative lookahead that excludes `api`, `up` and `horizon` — so
+         * without this line /manifest.webmanifest, /sw.js and /offline would
+         * every one of them be answered with the app's HTML shell, at 200. The
+         * failure is silent in the worst way: `navigator.serviceWorker
+         * .register()` rejects with a MIME-type error nobody sees, and the OS
+         * reads a page of HTML where it expected a manifest and installs a
+         * bookmark.
+         *
+         * Laravel has a first-class notion of "the route that answers when
+         * nothing else did" — a fallback — and both matchers (the collection at
+         * runtime and the compiled one behind `route:cache`) try every other
+         * route before any fallback. The SPA catch-all IS that route: it exists
+         * to hand vue-router the paths the server does not claim. Saying so
+         * here is what lets these three be claimed, and what stops the next
+         * server-owned path from having to be added to a regex in web.php.
+         *
+         * The name lookups are refreshed first because the framework does not
+         * build them until `booted`, which is after all routes are loaded —
+         * without it `getByName('spa')` is null here. The refresh is a rebuild
+         * from the collection and the framework runs it again later, so doing
+         * it early costs nothing.
+         *
+         * If this ever stops working, it stops loudly:
+         * tests/Feature/PwaShellTest asserts all three routes reach their
+         * controllers rather than the shell.
+         * -------------------------------------------------------------------
+         */
+        then: function (): void {
+            $routes = Route::getRoutes();
+
+            $routes->refreshNameLookups();
+            $routes->getByName('spa')?->fallback();
+
+            Route::group([], __DIR__.'/../routes/pwa.php');
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         /*

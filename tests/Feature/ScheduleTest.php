@@ -118,6 +118,22 @@ final class ScheduleTest extends TestCase
     }
 
     /**
+     * `vite.config.js` stops the build emptying public/build, which makes this
+     * the only thing that ever deletes an old chunk. The deploy runs it too;
+     * the schedule is what keeps a forgotten deploy step from becoming a full
+     * disk.
+     */
+    #[Test]
+    public function old_builds_are_pruned_nightly(): void
+    {
+        $event = $this->find('build:retain');
+
+        $this->assertSame('10 3 * * *', $event->expression);
+        $this->assertSame('Europe/Amsterdam', $event->timezone);
+        $this->assertTrue($event->withoutOverlapping);
+    }
+
+    /**
      * Two polls writing the same day's observation at once would race on the
      * upsert; the second one is held instead.
      */

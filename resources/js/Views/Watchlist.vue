@@ -3,13 +3,12 @@
  * The watch list (design/README.md §5): a stack of boarding passes, one per
  * route, and an expander for adding another.
  *
- * IT KEEPS ITS OWN COPY OF THE LIST rather than reading a store. There is no
- * watchlist store yet — the globe home is being built against `/api/watchlist`
- * in a parallel branch and will want one — so this screen fetches for itself
- * and the two are folded together on the DRY pass. Nothing here assumes it is
- * the only reader; every write adopts the row the server sends back, so a
- * store dropped in later inherits a screen that already trusts the response
- * over its own optimism.
+ * IT READS THE SHARED LIST. This screen kept its own copy while the globe home
+ * was being built against `/api/watchlist` in a parallel branch; both now read
+ * stores/watchlist.js, which is where the optimistic writes live too. Nothing
+ * here ever assumed it was the only reader — every write adopts the row the
+ * server sends back — so the store inherited a screen that already trusted the
+ * response over its own optimism.
  *
  * PAUSED ROUTES ARE IN THE LIST, dimmed, with the switch off. docs/API.md is
  * explicit that they arrive with `active: false` and must not be filtered out
@@ -18,28 +17,26 @@
  *
  * OPTIMISM AND ITS PRICE. The toggle and the remove both apply immediately and
  * both put the row back exactly where it was if the request fails, with a
- * banner saying so. A revert nobody can see is how an app quietly stops
- * meaning what it shows.
+ * banner saying so — see the store. A revert nobody can see is how an app
+ * quietly stops meaning what it shows.
  */
 import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import AddRouteForm from '@/Components/watch/AddRouteForm.vue'
 import RuleRow from '@/Components/rules/RuleRow.vue'
 import WatchRow from '@/Components/watch/WatchRow.vue'
-import { http } from '@/lib/http'
 import { useRulesStore } from '@/stores/rules'
+import { useWatchlistStore } from '@/stores/watchlist'
 
-const routes = ref([])
+const watchlist = useWatchlistStore()
+const { routes, status, error: notice } = storeToRefs(watchlist)
 
 /*
  * THE RULES SECTION (design/README.md §4's rules, listed on §5's screen).
  *
- * It reads a STORE while the routes above it are fetched by hand, and the
- * mismatch is deliberate rather than sloppy: the create screen and this one
- * are two views of the same list — a rule written on that tab has to appear on
- * this one — while the watchlist is only ever drawn here and by the globe.
- * When the parallel branches are folded together the routes get a store too
- * and this file loses its own `routes` ref.
+ * A second store, because rules and routes are separate concepts (docs/PLAN.md)
+ * that happen to share this screen: the create tab and this one are two views
+ * of the rules list, and a rule written there has to appear here.
  */
 const rules = useRulesStore()
 const { rules: dealRules, status: rulesStatus, error: rulesError } = storeToRefs(rules)
@@ -50,10 +47,6 @@ const busyRules = ref(new Set())
 /** The code of the match currently being promoted to the watchlist. */
 const watchingCode = ref('')
 
-/** loading | ready | failed */
-const status = ref('loading')
-
-const notice = ref('')
 const addOpen = ref(false)
 const addError = ref('')
 const adding = ref(false)
@@ -79,81 +72,36 @@ const countLine = computed(() => {
 })
 
 onMounted(() => {
-  load()
+  watchlist.refresh()
   rules.load()
 })
 
-async function load() {
-  status.value = 'loading'
-  notice.value = ''
-
-  try {
-    const { data } = await http.get('/api/watchlist')
-    routes.value = data.data
-    status.value = 'ready'
-  } catch (failure) {
-    status.value = 'failed'
-    console.error('Could not load the watchlist.', failure)
-  }
-}
-
-/**
- * Pause or resume. The switch moves now; the server's answer replaces the row
- * when it arrives, and puts the old value back if it never does.
- */
+/** Pause or resume. The store moves the switch and answers for the write. */
 async function toggle(route, active) {
-  const previous = route.active
-
-  route.active = active
-  notice.value = ''
   markBusy(route.code, true)
 
   try {
-    const { data } = await http.patch(`/api/watchlist/${route.code}`, { active })
-    Object.assign(route, data.data)
-  } catch (failure) {
-    route.active = previous
-    notice.value = `Could not ${active ? 'resume' : 'pause'} ${route.code}. Nothing changed.`
-    console.error('Could not toggle a watched route.', failure)
+    await watchlist.toggle(route, active)
   } finally {
     markBusy(route.code, false)
   }
 }
 
 /**
- * Stop watching. The row leaves the list immediately and comes back into the
- * same position if the request fails — order is the owner's, and a route that
- * reappeared at the bottom would be a second thing to explain.
- */
-async function remove(route) {
-  const index = routes.value.indexOf(route)
-
-  routes.value.splice(index, 1)
-  notice.value = ''
-
-  try {
-    await http.delete(`/api/watchlist/${route.code}`)
-  } catch (failure) {
-    routes.value.splice(index, 0, route)
-    notice.value = `Could not remove ${route.code}. It is still on the list.`
-    console.error('Could not remove a watched route.', failure)
-  }
-}
-
-/**
- * Add a route. A brand-new one arrives with no prices at all — that is the
- * correct state and WatchRow draws it, rather than the screen waiting for a
- * poll that happens on the queue.
+ * Add a route.
+ *
+ * THE MESSAGE IS THIS SCREEN'S, not the store's: a refused add is answered
+ * inside the form, beside the field that was refused, rather than in the banner
+ * at the top — which is why the store's `add` throws instead of writing a
+ * sentence of its own.
  */
 async function add({ origin, destination }) {
   adding.value = true
   addError.value = ''
-  notice.value = ''
 
   try {
-    const { data } = await http.post('/api/watchlist', { origin, destination })
+    await watchlist.add(origin, destination)
 
-    routes.value.push(data.data)
     // Cleared before the expander closes, so the field is empty when it is
     // opened again rather than still holding the code that just worked.
     addForm.value?.reset()
@@ -217,7 +165,7 @@ async function watchMatch(match) {
     const added = await rules.watch(match)
 
     if (added) {
-      routes.value.push(added)
+      watchlist.adopt(added)
     }
   } finally {
     watchingCode.value = ''
@@ -271,8 +219,10 @@ function messageFor(failure) {
         :aria-label="addOpen ? 'Close the add-route form' : 'Add a route'"
         @click="toggleAddForm"
       >
+        <!-- Stroked from the style block: --on-solid on the accent fill, and a
+             var() in a presentation attribute is not portable. -->
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="M10 4v12M4 10h12" stroke="#fff" stroke-width="2" stroke-linecap="round" />
+          <path d="M10 4v12M4 10h12" stroke-width="2" stroke-linecap="round" />
         </svg>
       </button>
     </header>
@@ -285,7 +235,7 @@ function messageFor(failure) {
 
     <div v-else-if="status === 'failed'" class="screen__state">
       <p>Could not load your watch list.</p>
-      <button type="button" class="screen__retry" @click="load">Try again</button>
+      <button type="button" class="screen__retry" @click="watchlist.refresh()">Try again</button>
     </div>
 
     <p v-else-if="routes.length === 0" class="screen__state">
@@ -301,7 +251,7 @@ function messageFor(failure) {
         :route="route"
         :busy="busyCodes.has(route.code)"
         @toggle="toggle(route, $event)"
-        @remove="remove(route)"
+        @remove="watchlist.remove(route)"
       />
     </div>
 
@@ -381,6 +331,10 @@ function messageFor(failure) {
   border-radius: var(--radius-chip);
   background: var(--accent);
   box-shadow: 0 6px 16px var(--accent-glow);
+}
+
+.screen__add path {
+  stroke: var(--on-solid);
 }
 
 .screen__notice {

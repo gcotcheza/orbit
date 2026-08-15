@@ -14,6 +14,12 @@
  *
  * Used by the globe home's spotlight card (design/README.md §1) and, with
  * `verdict.short`, by the watchlist rows (§5).
+ *
+ * TWO SIZES, NOT TWO COMPONENTS. The watchlist's pill is the smaller of the
+ * design's two — it shares a line with the flight number rather than standing
+ * under a price — and it was a scoped copy of this file until the DRY pass,
+ * because the two screens were written in parallel branches. The difference is
+ * three CSS declarations, so it is a prop.
  */
 defineProps({
   label: { type: String, required: true },
@@ -26,11 +32,17 @@ defineProps({
     // is worth a console warning in development.
     validator: (value) => ['good', 'info', 'normal', 'warn'].includes(value),
   },
+  /** 'md' on the spotlight card, 'sm' on a watchlist row. */
+  size: {
+    type: String,
+    default: 'md',
+    validator: (value) => ['sm', 'md'].includes(value),
+  },
 })
 </script>
 
 <template>
-  <span class="pill" :data-tone="tone">
+  <span class="pill" :data-tone="tone" :data-size="size">
     <span class="pill__dot"></span>
     {{ label }}
   </span>
@@ -40,16 +52,29 @@ defineProps({
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
 
-  padding: 5px 11px;
   border-radius: var(--radius-pill);
+  font-weight: 600;
+}
+
+/* The spotlight card, where the pill carries the whole verdict sentence. */
+.pill[data-size='md'] {
+  gap: 7px;
+  padding: 5px 11px;
 
   font-size: var(--text-md);
-  font-weight: 600;
   /* Long verdicts ("Cheap & still falling") sit beside a sparkline in a 352 px
      card. Wrapping is better than pushing the chart off the edge. */
   text-wrap: balance;
+}
+
+/* A watchlist row, where the pill shares the boarding pass's eyebrow with the
+   flight number and carries `verdict.short` — one word, so nothing to balance. */
+.pill[data-size='sm'] {
+  gap: 6px;
+  padding: 4px 10px;
+
+  font-size: var(--text-sm);
 }
 
 .pill__dot {

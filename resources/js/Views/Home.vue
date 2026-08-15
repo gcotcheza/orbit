@@ -16,29 +16,33 @@
  * the rail in a single payload (docs/API.md), so the tour never waits on the
  * network between routes.
  *
- * WHY THE FETCH IS HERE AND NOT IN A STORE. Nothing else on this screen needs
- * the list, and a store would be a second place for it to be stale. The
- * watchlist screen (PR9) fetches the same endpoint for a different purpose —
- * with the toggles it writes back — and if the two ever need to agree, THAT is
- * the moment a store earns its keep.
+ * THE LIST IS THE SHARED ONE. This screen fetched the endpoint for itself until
+ * the DRY pass, on the grounds that nothing else here needed it; the watch
+ * screen writes to the same list, so a route paused there used to stay in this
+ * screen's tour until the next reload. That is the moment stores/watchlist.js
+ * earned its keep, and this file is now one of its three readers.
  *
  * THE TOUR IS KEYED BY ROUTE CODE, not by index: a reload that returns the
  * routes in a new order (the owner reordered them on another device) leaves the
  * camera where it was rather than cutting to whatever is now third.
  */
 import { computed, onActivated, onMounted, ref } from 'vue'
-import { http } from '@/lib/http'
+import { storeToRefs } from 'pinia'
 import { nextIndex } from '@/lib/tour'
 import GlobeStage from '@/Components/globe/GlobeStage.vue'
 import RouteRail from '@/Components/globe/RouteRail.vue'
 import SpotlightCard from '@/Components/globe/SpotlightCard.vue'
 import { hasWebgl } from '@/Components/globe/globeScene'
+import { useWatchlistStore } from '@/stores/watchlist'
 
 defineOptions({ name: 'Home' })
 
-const routes = ref([])
-const loading = ref(true)
-const failed = ref(false)
+const watchlist = useWatchlistStore()
+const { routes, status } = storeToRefs(watchlist)
+
+const loading = computed(() => status.value === 'loading')
+const failed = computed(() => status.value === 'failed')
+
 const activeCode = ref(null)
 
 /*
@@ -80,24 +84,16 @@ function currentGreeting() {
 // where the heading goes.
 const greeting = ref(currentGreeting())
 
+/*
+ * The store says what went wrong and to whom (a 401 is handled in lib/http.js,
+ * which sends the whole app to the login screen). What is left for this screen
+ * is where the camera starts — and, when the list could not be reached, saying
+ * so quietly with a way to try again rather than showing an empty planet.
+ */
 async function load() {
-  loading.value = true
-  failed.value = false
+  await watchlist.refresh()
 
-  try {
-    const { data } = await http.get('/api/watchlist')
-
-    routes.value = data.data
-    activeCode.value = activeRoutes.value[0]?.code ?? null
-  } catch (error) {
-    // A 401 is not this screen's problem — lib/http.js sends the whole app to
-    // the login screen. Anything else is: the globe has nothing to fly, and
-    // saying so quietly with a way to try again beats an empty planet.
-    console.error('The watchlist could not be loaded.', error)
-    failed.value = true
-  } finally {
-    loading.value = false
-  }
+  activeCode.value = activeRoutes.value[0]?.code ?? null
 }
 
 /** The tour has finished dwelling on a route: move to the next one. */

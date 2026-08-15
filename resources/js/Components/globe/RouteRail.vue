@@ -13,7 +13,7 @@
  * buttons. The globe and the card are the panel; they are not marked up as one,
  * because `aria-controls` pointing at a decorative canvas would be a lie.
  */
-import { euros } from './format'
+import { euro } from '@/lib/format'
 
 defineProps({
   routes: { type: Array, required: true },
@@ -43,7 +43,7 @@ defineEmits(['select'])
       >
         <span class="rail__dot" :data-tone="route.verdict.tone"></span>
         <span>{{ route.origin.iata }}→{{ route.destination.iata }}</span>
-        <span class="rail__price tabular">{{ euros(route.price.current) ?? '—' }}</span>
+        <span class="rail__price tabular">{{ euro(route.price.current) ?? '—' }}</span>
       </button>
     </div>
   </section>
@@ -112,9 +112,9 @@ defineEmits(['select'])
   border-color: var(--accent);
   background: var(--accent);
   /* White on the accent in BOTH themes — the accent is a saturated blue either
-     way, and --ink would be near-black on it in the light theme. The same
-     literal, for the same reason, as the tab bar's centre button. */
-  color: #fff;
+     way, and --ink would be near-black on it in the light theme. That is what
+     --on-solid is, and the tab bar's centre button reads the same token. */
+  color: var(--on-solid);
   box-shadow: 0 6px 16px var(--accent-glow);
 }
 
@@ -146,6 +146,6 @@ defineEmits(['select'])
    said by the card above, and a coloured dot on the accent fill reads as a
    status light rather than as a bullet. */
 .rail__chip--active .rail__dot {
-  background: #fff;
+  background: var(--on-solid);
 }
 </style>

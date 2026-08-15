@@ -13,7 +13,7 @@
  * still put it in the accessibility tree as one.
  */
 import { computed } from 'vue'
-import { euro } from './format'
+import { euro } from '@/lib/format'
 import { HEAT_INK, heatColour } from './heat'
 import { WEEKDAYS, buildMonthGrid, dayLabel } from './month'
 

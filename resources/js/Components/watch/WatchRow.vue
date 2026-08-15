@@ -13,13 +13,15 @@
  * first morning of every route's life. Prices fall back to an em dash and the
  * stub says how long we have been watching instead of pretending to a fare.
  *
- * THE STATUS PILL IS INLINE AND SHOULD NOT STAY THAT WAY. `VerdictPill.vue`
- * is being written in a parallel branch for the globe and the detail screen;
- * this is the same pill in the same tone colours, scoped to this component to
- * avoid two branches creating one file. Fold it in on the DRY pass.
+ * THE STATUS PILL IS THE SHARED ONE, at its smaller size. It was a scoped copy
+ * of `VerdictPill.vue` while that file was being written in a parallel branch;
+ * the two were the same pill in the same tone colours, so the copy went on the
+ * DRY pass and the size difference is a prop.
  */
 import { computed, ref } from 'vue'
-import ToggleSwitch from '@/Components/settings/ToggleSwitch.vue'
+import ToggleSwitch from '@/Components/ToggleSwitch.vue'
+import VerdictPill from '@/Components/VerdictPill.vue'
+import { euro } from '@/lib/format'
 import { flagFor, flightNumberFor } from './boardingPass'
 
 const props = defineProps({
@@ -36,22 +38,6 @@ const confirming = ref(false)
 
 const flightNumber = computed(() => flightNumberFor(props.route.code))
 const flagStyle = computed(() => ({ background: flagFor(props.route.destination.countryCode) }))
-
-/*
- * The one thing to switch colour on, per docs/API.md: `verdict.tone`, never
- * the label. Each tone is a token pair in tokens.css, so this maps to CSS
- * custom properties rather than to colours.
- */
-const toneStyle = computed(() => ({
-  '--tone-bg': `var(--${props.route.verdict.tone === 'normal' ? 'neu' : props.route.verdict.tone}-bg)`,
-  '--tone-ink': `var(--${props.route.verdict.tone === 'normal' ? 'neu' : props.route.verdict.tone}-ink)`,
-  '--tone-dot': props.route.verdict.tone === 'normal' ? 'var(--muted)' : `var(--${props.route.verdict.tone})`,
-}))
-
-/** €58, or an em dash — never €0. A missing price is not a free flight. */
-function euros(amount) {
-  return amount === null || amount === undefined ? '—' : `€${Math.round(amount)}`
-}
 
 /*
  * The design's "tracking N days" note. Shown while the route has less than a
@@ -81,7 +67,7 @@ function confirmRemove() {
 </script>
 
 <template>
-  <article class="pass" :style="toneStyle">
+  <article class="pass">
     <div class="pass__top">
       <div class="pass__eyebrow">
         <svg width="15" height="15" viewBox="0 0 30 30" fill="none" aria-hidden="true">
@@ -92,9 +78,7 @@ function confirmRemove() {
         <span class="pass__flight">Flight watch · {{ flightNumber }}</span>
       </div>
 
-      <span class="pill">
-        <span class="pill__dot"></span>{{ route.verdict.short }}
-      </span>
+      <VerdictPill :label="route.verdict.short" :tone="route.verdict.tone" size="sm" />
     </div>
 
     <div class="pass__itinerary">
@@ -136,12 +120,13 @@ function confirmRemove() {
     <div v-else class="pass__stub">
       <div class="stub__figure">
         <p class="stub__label">Fare</p>
-        <p class="stub__price tabular">{{ euros(route.price.current) }}</p>
+        <!-- An em dash, never €0: a missing price is not a free flight. -->
+        <p class="stub__price tabular">{{ euro(route.price.current) ?? '—' }}</p>
       </div>
 
       <div class="stub__figure">
         <p class="stub__label">Usual</p>
-        <p class="stub__price stub__price--usual tabular">{{ euros(route.price.usual) }}</p>
+        <p class="stub__price stub__price--usual tabular">{{ euro(route.price.usual) ?? '—' }}</p>
       </div>
 
       <p v-if="showTrackingNote" class="stub__tracking">{{ trackingNote }}</p>
@@ -195,32 +180,6 @@ function confirmRemove() {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
-}
-
-/* --- The verdict pill. Colours come entirely from the --tone-* properties
-   set on the card, which come entirely from `verdict.tone`. ---------------- */
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-
-  font-size: var(--text-sm);
-  font-weight: 600;
-
-  background: var(--tone-bg);
-  color: var(--tone-ink);
-}
-
-.pill__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: var(--tone-dot);
 }
 
 /* --- Itinerary ----------------------------------------------------------- */
@@ -437,7 +396,7 @@ function confirmRemove() {
 }
 
 .confirm__button--go {
-  color: #fff;
+  color: var(--on-solid);
   background: var(--warn);
 }
 </style>

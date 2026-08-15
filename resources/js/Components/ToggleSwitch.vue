@@ -8,11 +8,10 @@
  * ends look symmetrical, and they stop being symmetrical the moment somebody
  * rounds the track to 48.
  *
- * WHERE IT LIVES IS TEMPORARY. `Components/settings/` is this PR's own
- * directory and the watchlist imports across into it, which reads oddly; it
- * belongs one level up next to the other shared controls. That move is for the
- * DRY pass once the parallel branches are merged — doing it here would mean
- * three PRs creating files in the same folder at the same time.
+ * IT LIVES IN `Components/` RATHER THAN IN A SCREEN'S FOLDER because three
+ * unrelated screens draw it — alerts, the watchlist's boarding passes and the
+ * deal rules. It was written under `Components/settings/` while those screens
+ * were being built in parallel branches, and moved up here on the DRY pass.
  *
  * A <button role="switch">, NOT a checkbox. It carries no label of its own —
  * the row beside it is the label — so it takes an explicit `label` for
@@ -80,8 +79,8 @@ const emit = defineEmits(['update:modelValue'])
 
   /* The knob is white in BOTH themes — it is a physical object on a coloured
      track, not a piece of the palette, and a knob that turned dark in the dark
-     theme would read as the switch being off. */
-  background: #fff;
+     theme would read as the switch being off. That is what --on-solid is. */
+  background: var(--on-solid);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 
   transition: transform 0.2s ease;

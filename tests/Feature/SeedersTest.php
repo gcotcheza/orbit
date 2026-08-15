@@ -224,7 +224,9 @@ final class SeedersTest extends TestCase
     #[Test]
     public function the_fake_history_seeder_backfills_and_then_leaves_it_alone(): void
     {
-        Date::setTestNow('2026-08-14 06:10:00');
+        $frozen = '2026-08-14 06:10:00';
+
+        Date::setTestNow($frozen);
 
         User::factory()->create(['email' => config('orbit.seed.email')]);
         $this->seed(DestinationSeeder::class);
@@ -240,7 +242,19 @@ final class SeedersTest extends TestCase
         $this->assertSame(6, RouteStats::query()->count());
 
         // The clock is handed back, or everything after this writes last month.
-        $this->assertSame('2026-08-14', Date::now()->toDateString());
+        //
+        // ASSERTED AGAINST THE FROZEN VALUE, NOT A LITERAL DATE, which is what
+        // this line was reaching for: a hard-coded '2026-08-14' is a test that
+        // passes on the day it is written. Reading it from the variable above
+        // cannot rot at midnight.
+        //
+        // AND IT IS "RESTORED", NOT "CLEARED". FakeHistorySeeder's `finally`
+        // deliberately puts back whatever it found rather than unfreezing —
+        // its docblock explains at length why handing a test its own clock back
+        // is the honest behaviour — so `hasTestNow()` is still true here. What
+        // is worth asserting is that the seeder did not leave one of its
+        // backfill dates in place.
+        $this->assertSame($frozen, Date::now()->toDateTimeString());
 
         // Second run: today is re-polled, the backfill is not repeated.
         $this->seed(FakeHistorySeeder::class);

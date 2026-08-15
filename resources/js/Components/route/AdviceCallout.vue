@@ -17,13 +17,13 @@ defineProps({
 <template>
   <div class="callout" :class="`callout--${tone}`">
     <div class="callout__icon">
-      <!-- #fff, not a token: the square is filled with a saturated tone in
-           both themes, so its glyph is white in both. TabBar.vue's + button
-           writes the same literal for the same reason. A `--on-solid` token
-           would be the tidy answer and belongs to tokens.css, which this
-           branch does not own. -->
+      <!-- The tick's colour is set in the style block below, not as a `stroke`
+           attribute here: the square is filled with a saturated tone in both
+           themes, so the glyph is --on-solid in both, and a presentation
+           attribute carrying a var() is honoured by some browsers and dropped
+           as invalid by others. -->
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-        <path d="M4 9.5l3 3 7-8" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M4 9.5l3 3 7-8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
     </div>
 
@@ -78,6 +78,10 @@ defineProps({
   height: 34px;
   border-radius: 10px;
   background: var(--tone);
+}
+
+.callout__icon path {
+  stroke: var(--on-solid);
 }
 
 .callout__title {

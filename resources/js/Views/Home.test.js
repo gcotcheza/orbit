@@ -15,8 +15,14 @@
 //
 // The globe itself is stubbed. It has its own tests, it needs a GPU, and this
 // file is about the screen's decisions rather than its scenery.
+//
+// A PINIA PER MOUNT. The watchlist is a store since the DRY pass, and a store
+// is shared state — one instance across the file would carry the routes of the
+// previous test into the next one, which is exactly the kind of leakage the
+// empty-list and failure cases would stop catching.
 // =============================================================================
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPinia } from 'pinia'
 import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
 
 const get = vi.fn()
@@ -80,7 +86,7 @@ async function mountHome(data = [LIS, OPO]) {
     get.mockResolvedValue(watchlist(data))
 
     const wrapper = mount(Home, {
-        global: { stubs: { RouterLink: RouterLinkStub, GlobeStage: GlobeStageStub } },
+        global: { plugins: [createPinia()], stubs: { RouterLink: RouterLinkStub, GlobeStage: GlobeStageStub } },
     })
 
     await flushPromises()
@@ -100,7 +106,7 @@ describe('loading', () => {
         get.mockReturnValue(new Promise(() => {}))
 
         const wrapper = mount(Home, {
-            global: { stubs: { RouterLink: RouterLinkStub, GlobeStage: GlobeStageStub } },
+            global: { plugins: [createPinia()], stubs: { RouterLink: RouterLinkStub, GlobeStage: GlobeStageStub } },
         })
 
         expect(wrapper.find('.home__skeleton').exists()).toBe(true)
@@ -199,7 +205,7 @@ describe('nothing to show', () => {
         get.mockRejectedValueOnce(new Error('offline'))
 
         const wrapper = mount(Home, {
-            global: { stubs: { RouterLink: RouterLinkStub, GlobeStage: GlobeStageStub } },
+            global: { plugins: [createPinia()], stubs: { RouterLink: RouterLinkStub, GlobeStage: GlobeStageStub } },
         })
         await flushPromises()
 
