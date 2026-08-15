@@ -168,7 +168,13 @@ final class SeedersTest extends TestCase
         $this->assertSame(6, RouteStats::query()->count());
 
         // The clock is handed back, or everything after this writes last month.
-        $this->assertSame('2026-08-14', Date::now()->toDateString());
+        //
+        // ASSERTED AS "NOT FROZEN" RATHER THAN AS A DATE. FakeHistorySeeder's
+        // `finally` clears the test clock outright (it does not restore what
+        // was there before), so after seeding Date::now() is the real now — and
+        // a literal date here is a test that passes on the day it is written
+        // and fails at the next midnight. It did: this line read '2026-08-14'.
+        $this->assertFalse(Date::hasTestNow());
 
         // Second run: today is re-polled, the backfill is not repeated.
         $this->seed(FakeHistorySeeder::class);
