@@ -16,6 +16,35 @@ import laravel from 'laravel-vite-plugin';
 import vue from '@vitejs/plugin-vue';
 
 export default defineConfig({
+    build: {
+        /*
+         * DO NOT let the build empty public/build.
+         *
+         * Vite's default is to wipe the output directory, which means every
+         * deploy DELETES the previous build's chunks. Orbit is a client-
+         * rendered SPA behind a service worker, so that is not a stale-asset
+         * problem, it is a dead-page problem:
+         *
+         *   A PAGE LEFT OPEN ACROSS A DEPLOY. Its entry chunk is already
+         *   running and looks fine, right up to the first lazy import — and
+         *   every screen is one, including the 1.9 MB globe. The chunk 404s,
+         *   the dynamic import rejects, and the tab bar stops working with
+         *   nothing in any server log to say so.
+         *
+         *   A DOCUMENT SERVED FROM ANY CACHE. Stale HTML naming a deleted entry
+         *   chunk is a script tag pointing at a 404, which for this app is a
+         *   completely blank screen behind a 200.
+         *
+         * Keeping the old files costs a few hundred kilobytes per build and
+         * makes a briefly-stale reference resolve instead of dying. The
+         * directory is not allowed to grow without limit: `php artisan
+         * build:retain` keeps the newest three builds from a ledger it writes
+         * and deletes the rest. It runs in the deploy, straight after this, and
+         * again on the daily schedule (routes/console.php) so that a forgotten
+         * deploy step is a day of extra chunks rather than a full disk.
+         */
+        emptyOutDir: false,
+    },
     plugins: [
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.js'],

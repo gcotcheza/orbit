@@ -33,8 +33,15 @@
 
     {{-- The dark theme's --bg. Rewritten by the theme store when the user
          switches, so the browser chrome follows the app rather than lagging a
-         theme behind. --}}
-    <meta name="theme-color" content="#0a0f1e">
+         theme behind.
+
+         FROM CONFIG, not a literal, because the manifest declares the same
+         colour (App\Http\Controllers\Pwa\ManifestController) and the two are
+         read at different moments by different parts of the OS — the meta tag
+         paints the status bar, the manifest paints the splash. One of them
+         drifting is a one-shade seam nobody can see in review and everybody
+         sees on the phone. --}}
+    <meta name="theme-color" content="{{ config('orbit.pwa.theme_color') }}">
 
     {{-- Tells the UA which form controls and scrollbars to draw, and which
          background to paint before any of our CSS has arrived. Dark first,
@@ -44,6 +51,20 @@
     <meta name="robots" content="noindex, nofollow">
 
     <title>Orbit</title>
+
+    {{-- THE PWA SHELL. All three of these paths are served by PHP rather than
+         from public/ — see routes/pwa.php for why they carry no session.
+
+         The manifest is what turns "Add to Home Screen" into an app with a name
+         and an icon instead of a bookmark. `apple-touch-icon` is what iOS
+         actually reads (it ignores the manifest's `icons` when this is
+         present), at the 180px it asks for; iOS applies its own squircle mask,
+         so the file is drawn full-bleed. The SVG is for everything else, and is
+         also this app's favicon — one drawing, five files, all rasterised from
+         public/icon.svg. --}}
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>

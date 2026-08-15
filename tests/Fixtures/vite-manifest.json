@@ -1,0 +1,69 @@
+{
+    "_rolldown-runtime-hePW80VL.js": {
+        "file": "assets/rolldown-runtime-hePW80VL.js"
+    },
+    "_vue.esm-bundler-sbGJpPMH.js": {
+        "file": "assets/vue.esm-bundler-sbGJpPMH.js",
+        "imports": [
+            "_rolldown-runtime-hePW80VL.js"
+        ]
+    },
+    "node_modules/@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff2": {
+        "file": "assets/space-grotesk-latin-700-normal-RjhwGPKo.woff2",
+        "src": "node_modules/@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff2"
+    },
+    "node_modules/@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff": {
+        "file": "assets/space-grotesk-latin-700-normal-CwsQ-cCU.woff",
+        "src": "node_modules/@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff"
+    },
+    "node_modules/globe.gl/dist/globe.gl.mjs": {
+        "file": "assets/globe.gl-XnNELMe5.js",
+        "name": "globe.gl",
+        "imports": [
+            "_rolldown-runtime-hePW80VL.js"
+        ]
+    },
+    "resources/css/app.css": {
+        "file": "assets/app-Bgy56Azy.css",
+        "src": "resources/css/app.css",
+        "isEntry": true,
+        "assets": [
+            "assets/space-grotesk-latin-700-normal-RjhwGPKo.woff2",
+            "assets/space-grotesk-latin-700-normal-CwsQ-cCU.woff"
+        ]
+    },
+    "resources/js/Views/Home.vue": {
+        "file": "assets/Home-b7yxOmrZ.js",
+        "src": "resources/js/Views/Home.vue",
+        "imports": [
+            "_vue.esm-bundler-sbGJpPMH.js",
+            "resources/js/app.js"
+        ],
+        "dynamicImports": [
+            "node_modules/globe.gl/dist/globe.gl.mjs"
+        ],
+        "css": [
+            "assets/Home-mU4mzQZt.css"
+        ]
+    },
+    "resources/js/app.js": {
+        "file": "assets/app-B1WR5ovF.js",
+        "src": "resources/js/app.js",
+        "isEntry": true,
+        "imports": [
+            "_rolldown-runtime-hePW80VL.js",
+            "_vue.esm-bundler-sbGJpPMH.js"
+        ],
+        "dynamicImports": [
+            "resources/js/Views/Home.vue"
+        ],
+        "css": [
+            "assets/app-CFkF99lj.css",
+            "assets/app-Bgy56Azy.css"
+        ],
+        "assets": [
+            "assets/space-grotesk-latin-700-normal-RjhwGPKo.woff2",
+            "assets/space-grotesk-latin-700-normal-CwsQ-cCU.woff"
+        ]
+    }
+}

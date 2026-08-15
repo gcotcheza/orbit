@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Orbit — the app's mark, and the master every PNG in public/icons/ is
+    rasterised from.
+
+    THREE SHAPES AND THREE COLOURS, because the place this is looked at is a
+    ~60 px square on a home screen. Anything with a gradient fights the OS's own
+    rounding, and anything with more than one idea in it goes to mud at that
+    size: a planet (accent #5e84ff), the path something takes around it (the
+    globe screen's arc gold #ffd166) and the thing taking it. The plate is the
+    app's own background #0a0f1e, so the icon and the first frame of the app are
+    the same colour.
+
+    FULL BLEED, NO ROUNDED CORNERS. iOS applies its own squircle to the
+    apple-touch icon and Android masks the `purpose: maskable` variants; drawing
+    our own radius would only show up as a dark seam inside somebody else's mask.
+    The maskable PNGs are this drawing with the glyph scaled to sit inside the
+    safe circle — see the note in App\Http\Controllers\Pwa\ManifestController for
+    why that is a second rendering rather than the same file declared twice.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Orbit">
+    <title>Orbit</title>
+
+    <rect width="512" height="512" fill="#0a0f1e"/>
+
+    <g id="glyph">
+        <ellipse cx="256" cy="256" rx="196" ry="76" transform="rotate(-25 256 256)"
+                 fill="none" stroke="#ffd166" stroke-width="22"/>
+
+        <circle cx="256" cy="256" r="108" fill="#5e84ff"/>
+
+        <!-- On the ellipse at t = -35°, with a plate-coloured stroke so it cuts
+             its own gap out of the arc instead of merging into it. -->
+        <circle cx="383" cy="149" r="24" fill="#ffd166" stroke="#0a0f1e" stroke-width="12"/>
+    </g>
+</svg>
