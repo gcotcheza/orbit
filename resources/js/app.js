@@ -19,6 +19,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
 import App from '@/App.vue'
+import { registerServiceWorker } from '@/lib/pwa'
 import { router } from '@/router'
 import { useThemeStore } from '@/stores/theme'
 
@@ -31,3 +32,7 @@ useThemeStore().load()
 app.use(router)
 
 app.mount('#app')
+
+// Last, and deliberately after mount: the PWA is an enhancement, and nothing
+// the user is looking at should wait on it. See resources/js/lib/pwa.js.
+registerServiceWorker()
