@@ -56,6 +56,36 @@ trait BuildsRouteData
         }
     }
 
+    /**
+     * Make a route OLD without making it noisy: one observation far enough back
+     * that Orbit has been watching it for longer than
+     * config('orbit.alerts.min_tracking_days'), placed where it cannot touch
+     * the score.
+     *
+     * WHY IT IS NEEDED. `trackingDays` counts from the first observation there
+     * is, and App\Domain\Pricing\DealScorer now declines to judge a route below
+     * the floor — so a fixture that writes today's price and nothing else gets
+     * "not enough data yet" back, whatever price it chose. That is the correct
+     * answer for a real route with one morning of history and a useless one for
+     * a test about the cooldown.
+     *
+     * WHY IT IS ONE ROW AND NOT A SERIES. The obvious fixture — seven flat days
+     * — hands the scorer a trend to fold in, and the moment the trend component
+     * is computable the weights renormalise over three components instead of
+     * two. Every score in these tests would move (€60 stops being a "great"
+     * deal at 65) and no reader could work out why. Placed a full
+     * config('orbit.history.chart_days') back, this row is outside the window
+     * RouteSnapshots loads, so the scorer still sees exactly one price and the
+     * arithmetic in the docblocks stays checkable on paper.
+     */
+    protected function trackedSince(Route $route, int $cents): void
+    {
+        $days = (int) config('orbit.history.chart_days');
+        $end = Date::now((string) config('orbit.timezone'))->startOfDay()->subDays($days);
+
+        $this->observe($route, [$cents], $end->toDateString());
+    }
+
     protected function summarise(Route $route, int $min, int $p25, int $median, int $p75, int $max): void
     {
         RouteStats::query()->create([

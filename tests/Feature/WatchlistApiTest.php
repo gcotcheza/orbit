@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\BuildsRouteData;
 use Tests\TestCase;
@@ -162,6 +163,67 @@ final class WatchlistApiTest extends TestCase
         $response->assertJsonPath('data.0.price.usual', null);
         $response->assertJsonPath('data.0.price.pctBelow', null);
         $response->assertJsonPath('data.0.sparkline', []);
+    }
+
+    /**
+     * The same honesty one day later, which is the case that was WRONG in
+     * production: a route with exactly one morning behind it is not a route
+     * with no opinion by accident of having no data — it has data, and the data
+     * says the current fare is the cheapest, dearest and most usual price this
+     * route has ever had. `ORBIT_STATS_PROVIDER=self` summarises the very
+     * observation the current price came from, so the API answered 100 / insane
+     * / confident / "Good price — book" for every route on the watchlist.
+     */
+    #[Test]
+    public function a_route_watched_since_this_morning_still_has_no_opinion(): void
+    {
+        $route = $this->makeRoute('AMS', 'LIS');
+        $this->watch($this->owner, $route);
+        $this->observe($route, [5000], '2026-08-14');
+        /* The degenerate day-1 summary: one price, so every knot is that price. */
+        $this->summarise($route, 5000, 5000, 5000, 5000, 5000);
+
+        $response = $this->actingAs($this->owner)->getJson('/api/watchlist');
+
+        $response->assertJsonPath('data.0.trackingDays', 1);
+        $response->assertJsonPath('data.0.score', 0);
+        $response->assertJsonPath('data.0.tier', 'none');
+        $response->assertJsonPath('data.0.confident', false);
+        $response->assertJsonPath('data.0.verdict.label', 'Not enough data yet');
+        $response->assertJsonPath('data.0.verdict.tone', 'normal');
+
+        /* The price itself is real and is still published — only the JUDGEMENT is withheld. */
+        $response->assertJsonPath('data.0.price.current', 50);
+    }
+
+    /**
+     * The floor, from both sides, through the JSON the screens actually read.
+     * Six mornings is not a week; the seventh is the morning a verdict appears.
+     */
+    #[Test]
+    #[DataProvider('maturities')]
+    public function confidence_arrives_at_the_configured_floor(int $days, bool $confident): void
+    {
+        $route = $this->makeRoute('AMS', 'LIS');
+        $this->watch($this->owner, $route);
+        $this->summarise($route, 4000, 6000, 8000, 11000, 16000);
+        $this->observe($route, array_fill(0, $days, 5000), '2026-08-14');
+
+        $this->actingAs($this->owner)->getJson('/api/watchlist')
+            ->assertJsonPath('data.0.trackingDays', $days)
+            ->assertJsonPath('data.0.confident', $confident);
+    }
+
+    /**
+     * @return array<string, array{int, bool}>
+     */
+    public static function maturities(): array
+    {
+        return [
+            'the first morning' => [1, false],
+            'one morning short of the floor' => [6, false],
+            'exactly the floor' => [7, true],
+        ];
     }
 
     #[Test]

@@ -102,6 +102,21 @@ final readonly class RouteSnapshots
             /** @var string|null $first */
             $first = $firstSeen->get($route->id);
 
+            /*
+             * BOTH ENDS PARSED IN THE OWNER'S TIMEZONE, or the difference comes
+             * back with a fraction on it: `observed_on` is a bare date, and
+             * reading it as UTC midnight against a local midnight leaves the
+             * two an offset apart. Inclusive of the first day, so a route
+             * polled once today is "tracking 1 day" rather than 0.
+             *
+             * COMPUTED BEFORE THE SCORE because the score now depends on it:
+             * App\Domain\Pricing\DealScorer declines to judge a route it has
+             * not watched for config('orbit.alerts.min_tracking_days') days.
+             */
+            $trackingDays = $first === null
+                ? 0
+                : (int) Date::parse($first, $timezone)->startOfDay()->diffInDays($today) + 1;
+
             $snapshots[$route->id] = new RouteSnapshot(
                 route: $route,
                 currentCents: $current,
@@ -109,18 +124,8 @@ final readonly class RouteSnapshots
                 history: $history,
                 deal: $current === null
                     ? $this->scorer->noOpinion()
-                    : $this->scorer->score($current, $stats, $history),
-                /*
-                 * BOTH ENDS PARSED IN THE OWNER'S TIMEZONE, or the difference
-                 * comes back with a fraction on it: `observed_on` is a bare
-                 * date, and reading it as UTC midnight against a local
-                 * midnight leaves the two an offset apart. Inclusive of the
-                 * first day, so a route polled once today is "tracking 1 day"
-                 * rather than 0.
-                 */
-                trackingDays: $first === null
-                    ? 0
-                    : (int) Date::parse($first, $timezone)->startOfDay()->diffInDays($today) + 1,
+                    : $this->scorer->score($current, $stats, $history, $trackingDays),
+                trackingDays: $trackingDays,
                 cheapest: $cheapest[$route->id] ?? null,
             );
         }

@@ -46,10 +46,12 @@ trait BuildsAlertData
     /**
      * A route this account watches, priced at `$cents` today.
      *
-     * ONE OBSERVATION AND NOT A SERIES, deliberately: two prices give the
-     * scorer a trend to fold in and the expected score stops being something a
-     * reader can work out from the knots above. The trend component has its own
-     * tests.
+     * ONE PRICE IN THE SCORING WINDOW AND NOT A SERIES, deliberately: two
+     * prices give the scorer a trend to fold in and the expected score stops
+     * being something a reader can work out from the knots above. The trend
+     * component has its own tests. The second row `priceRoute()` writes is
+     * outside that window and exists only to age the route — see
+     * Tests\Concerns\BuildsRouteData::trackedSince().
      */
     protected function watchedRoute(User $user, string $destination, int $cents, bool $active = true): Route
     {
@@ -70,11 +72,39 @@ trait BuildsAlertData
         return Route::query()->where('code', $code)->sole();
     }
 
+    /**
+     * Today's price on a route Orbit has been watching long enough to have an
+     * opinion about it.
+     *
+     * `trackedSince()` IS WHAT MAKES THE SCORE EXIST AT ALL. Below
+     * config('orbit.alerts.min_tracking_days') the scorer answers "not enough
+     * data yet" and App\Domain\Alerts\AlertPolicy answers `immature-data`, so
+     * without that line every test in this file would be testing the maturity
+     * gate instead of the thing it names. The gate has its own tests; these
+     * want a route whose only interesting property is its price.
+     */
     protected function priceRoute(Route $route, int $cents, string $departure = '2026-09-04'): void
     {
+        $this->trackedSince($route, $cents);
         $this->observe($route, [$cents], Date::now((string) config('orbit.timezone'))->toDateString());
         $this->summarise($route, ...self::USUAL);
         $this->offer($route, [$departure => $cents]);
+    }
+
+    /**
+     * The same route, priced today and watched since this morning — the state
+     * every route on the watchlist was in on the day the statistics went live.
+     */
+    protected function brandNewRoute(User $user, string $destination, int $cents): Route
+    {
+        $route = $this->makeRoute('AMS', $destination);
+
+        $this->watch($user, $route);
+        $this->observe($route, [$cents], Date::now((string) config('orbit.timezone'))->toDateString());
+        $this->summarise($route, ...self::USUAL);
+        $this->offer($route, ['2026-09-04' => $cents]);
+
+        return $route;
     }
 
     /**
@@ -122,8 +152,8 @@ trait BuildsAlertData
      * and never fires NotificationSent, which is the event
      * App\Infrastructure\Notify\MarkAlertsDelivered stamps `delivered_at` from
      * — so a test that faked it could not tell a delivered alert from an
-     * undelivered one. phpunit.xml already pins MAIL_MAILER to `array`, so this
-     * is the whole pipeline with only the socket missing.
+     * undelivered one. `.env.testing` already pins MAIL_MAILER to `array`, so
+     * this is the whole pipeline with only the socket missing.
      *
      * @return list<Email>
      */

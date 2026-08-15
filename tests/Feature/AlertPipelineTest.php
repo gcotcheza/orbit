@@ -196,6 +196,120 @@ final class AlertPipelineTest extends TestCase
         $this->assertSame(0, Alert::query()->count());
     }
 
+    // -- Routes Orbit has only just met --------------------------------------
+
+    /**
+     * THE MORNING AFTER A WATCHLIST IS FILLED IN, which is the shape of the
+     * production incident this section exists for: `ORBIT_STATS_PROVIDER=self`
+     * computes a route's usual price from the fares Orbit itself has fetched,
+     * so on day one the current fare is the route's own minimum, median and
+     * maximum and every route scores 100/insane/confident. These three would
+     * have been three "insane deal" mails about nothing, at 06:55, on the first
+     * morning the owner was paying attention.
+     *
+     * THE FIXTURE IS HARSHER THAN REALITY ON PURPOSE. `brandNewRoute()` gives
+     * each route the FULL set of statistics — so each really is scoring 94 on
+     * the numbers — and the gate still holds them. Nothing here depends on the
+     * degenerate day-1 statistics also producing a low score, because they do
+     * not: they produce the highest one there is.
+     */
+    #[Test]
+    public function a_watchlist_filled_in_this_morning_sends_nothing_at_all(): void
+    {
+        Notification::fake();
+
+        foreach (['OPO', 'LIS', 'FAO'] as $destination) {
+            $this->brandNewRoute($this->owner, $destination, self::INSANE_CENTS);
+        }
+
+        $this->evaluate();
+
+        Notification::assertNothingSent();
+
+        /*
+         * AND NO LEDGER ROW EITHER, exactly like a below-threshold or a
+         * cooling-down route. The ledger is what Orbit SAID; a row here would
+         * start a 24-hour cooldown on a route nobody was told about, so the
+         * genuine alert on the day the route matures would be suppressed.
+         */
+        $this->assertSame(0, Alert::query()->count());
+    }
+
+    /**
+     * The other side of the boundary, through the whole pipeline: a week of
+     * mornings and the same fare is news.
+     *
+     * IT SCORES 83 RATHER THAN THE FIXTURE'S 94 because seven observations give
+     * the scorer a trend to fold in — flat, so 50 out of 25 points — and the
+     * weights renormalise over three components instead of two: 0.75 × 94 +
+     * 12.5. Still insane, which is the point: the maturity gate changes WHEN
+     * Orbit is allowed to have an opinion, not what the opinion is.
+     */
+    #[Test]
+    public function seven_mornings_in_the_same_fare_is_worth_an_alert(): void
+    {
+        Notification::fake();
+
+        $route = $this->makeRoute('AMS', 'OPO');
+        $this->watch($this->owner, $route);
+        $this->observe($route, array_fill(0, 7, self::INSANE_CENTS), '2026-08-15');
+        $this->summarise($route, ...self::USUAL);
+        $this->offer($route, ['2026-09-04' => self::INSANE_CENTS]);
+
+        $this->evaluate();
+
+        Notification::assertSentTo($this->owner, RouteDealAlert::class);
+
+        $alert = Alert::query()->sole();
+        $this->assertSame($route->id, $alert->route_id);
+        $this->assertSame(83, $alert->score);
+    }
+
+    /**
+     * THE ASYMMETRY, THROUGH THE WHOLE PIPELINE. Every route this rule matches
+     * has fares and no observations at all — `trackingDays: 0`, the youngest a
+     * route can be — and the mail goes out anyway, because "under €80" is a
+     * number the owner wrote down rather than an inference from a distribution
+     * Orbit has not observed yet. Gating rules on maturity would silence the
+     * one feature whose entire purpose is finding routes nobody was watching.
+     */
+    #[Test]
+    public function a_rule_still_fires_on_routes_orbit_has_never_watched(): void
+    {
+        Notification::fake();
+
+        $this->beachRule();
+
+        $this->evaluate();
+
+        Notification::assertSentTimes(RuleMatchAlert::class, 1);
+        Notification::assertNotSentTo($this->owner, RouteDealAlert::class);
+
+        $this->assertSame(3, Alert::query()->where('type', AlertType::RuleMatch)->count());
+    }
+
+    /**
+     * BOTH HALVES OF ONE MORNING, which is the state the app is actually in
+     * tonight: a watchlist too young to score and a standing rule that is not.
+     * The run has to be silent about one and loud about the other in the same
+     * pass — a gate applied one level too high would take the rule mail with it.
+     */
+    #[Test]
+    public function a_young_watchlist_is_silent_while_its_rules_still_speak(): void
+    {
+        Notification::fake();
+
+        $this->beachRule();
+        $this->brandNewRoute($this->owner, 'OPO', self::INSANE_CENTS);
+
+        $this->evaluate();
+
+        Notification::assertSentTimes(RuleMatchAlert::class, 1);
+        Notification::assertNotSentTo($this->owner, RouteDealAlert::class);
+
+        $this->assertSame(0, Alert::query()->where('type', AlertType::RouteDeal)->count());
+    }
+
     // -- The cooldown --------------------------------------------------------
 
     #[Test]

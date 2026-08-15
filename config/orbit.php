@@ -342,6 +342,42 @@ return [
 
     'alerts' => [
         /*
+         * HOW MANY REAL DAILY OBSERVATIONS A ROUTE NEEDS before its deal score
+         * is allowed to interrupt somebody — and, for the same reason, before
+         * the score is published as anything but "no opinion yet".
+         *
+         * THIS IS THE DAY-1 HONESTY RULE WITH TEETH. `ORBIT_STATS_PROVIDER=self`
+         * computes a route's statistics from the fares Orbit itself has already
+         * fetched, so on the first morning the "usual price" IS today's price:
+         * the current fare is the minimum, the median and the maximum of a
+         * distribution one observation wide. Every component of the score then
+         * agrees that the fare is as cheap as this route has ever been, and
+         * every route on the watchlist scores 100/insane/confident at
+         * `trackingDays: 1`. That is not a sale, it is a summary of a single
+         * number — and left alone, 06:55 the next morning is eight "insane
+         * deal" mails about nothing, on the one day the owner is most likely to
+         * decide this app cries wolf.
+         *
+         * SEVEN DAYS is a week of mornings: enough for a spread to exist and
+         * for the trend component to have a direction, and short enough that a
+         * route added on a Monday can still be alerted about before the next
+         * one. It is not a claim that seven observations make a good estimate
+         * — `selfstats.maturity_observations` above is where THAT claim lives,
+         * and it blends the cross-sectional calendar in until 30 mornings have
+         * accumulated. This number is the smaller, harder question: below it,
+         * Orbit says nothing rather than something it cannot support.
+         *
+         * READ BY TWO PURE VALUES, both through App\Providers\AppServiceProvider:
+         * App\Domain\Alerts\AlertPolicy, which answers `immature-data` instead
+         * of firing, and App\Domain\Pricing\ScoringPolicy, which is what makes
+         * `confident: false` mean what docs/API.md says it means. One number,
+         * because a screen that showed "Good price — book" for a route the
+         * alert engine considered too young to mention would be two different
+         * opinions about the same morning.
+         */
+        'min_tracking_days' => 7,
+
+        /*
          * HOW LONG ONE ROUTE STAYS QUIET after Orbit has mentioned it, per kind
          * of alert. A fare that sits at 95 for a week is one piece of news, and
          * a person mailed about it seven times stops opening the mail — at
