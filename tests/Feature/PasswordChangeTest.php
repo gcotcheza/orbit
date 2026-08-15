@@ -17,12 +17,14 @@ use Tests\TestCase;
 /**
  * `PUT /api/profile/password` — the owner rotating their own password.
  *
- * THE ENDPOINT IS TWO PROMISES AND THIS FILE HOLDS BOTH. That the old password
- * stops working and the new one starts (the point), and that the device which
- * made the change is still signed in when it lands (the thing that makes it
- * usable from a phone). A password change that logs the owner out of the screen
- * they changed it on is a bug that reads as a security feature, and it is the
- * one this suite would otherwise never notice.
+ * THE ENDPOINT IS THREE PROMISES AND THIS FILE HOLDS ALL THREE. That the old
+ * password stops working and the new one starts (the point), that the device
+ * which made the change is still signed in when it lands (the thing that makes
+ * it usable from a phone), and that every OTHER live session is over (the thing
+ * somebody is actually asking for when they rotate a password they think
+ * somebody else has). A password change that logs the owner out of the screen
+ * they changed it on is a bug that reads as a security feature; one that leaves
+ * a stranger's session open is the reverse, and reads as nothing at all.
  *
  * The guard-level facts — that the current password is required, that it is
  * checked rather than merely present — are asserted through the HTTP surface,
@@ -280,6 +282,72 @@ final class PasswordChangeTest extends TestCase
             ->getJson('/api/me')
             ->assertOk()
             ->assertJsonPath('data.email', $this->owner->email);
+    }
+
+    /**
+     * EVERY OTHER DEVICE IS SIGNED OUT, which is the promise the endpoint could
+     * not keep until Illuminate\Session\Middleware\AuthenticateSession was
+     * registered in the `web` group (bootstrap/app.php). Before that, a session
+     * open on a phone in somebody else's pocket sailed through the change: the
+     * only code that reads a session's copy of the password hash is that
+     * middleware, and it ran nowhere.
+     *
+     * THE OTHER DEVICE'S SESSION IS CAPTURED, NOT CONSTRUCTED. What is replayed
+     * below is the bag the middleware itself wrote on an ordinary authenticated
+     * request — key name, hash format and all — so this test cannot pass by
+     * agreeing with a hand-built fake of the value it is supposed to be
+     * checking. It is replayed rather than held because the test session driver
+     * is `array` (phpunit.xml), which is one in-memory bag shared by every
+     * request in a test: two genuinely separate sessions do not exist here, so
+     * the second device is a snapshot taken before the change and put back
+     * afterwards.
+     */
+    #[Test]
+    public function a_session_on_another_device_stops_working_after_the_change(): void
+    {
+        $this->actingAs($this->owner)->getJson('/api/me')->assertOk();
+
+        $otherDevice = session()->all();
+
+        $this->assertArrayHasKey(
+            'password_hash_web',
+            $otherDevice,
+            'AuthenticateSession is not in the web group — nothing is comparing session hashes, and logoutOtherDevices() is a no-op.'
+        );
+
+        $this->asANewProcessWould();
+
+        $this->change(self::body())->assertOk();
+
+        $this->asANewProcessWould();
+
+        // The other device's very next request. 401 rather than 200, and the
+        // SPA's interceptor turns that into the login screen (lib/http.js).
+        $this->withSession($otherDevice)
+            ->actingAs($this->owner)
+            ->getJson('/api/me')
+            ->assertUnauthorized();
+    }
+
+    /**
+     * Put back the three pieces of state php-fpm throws away between requests
+     * and the test client keeps: the session bag, the resolved guards, and —
+     * the one that bites — the DEFAULT GUARD NAME.
+     *
+     * `auth:sanctum` calls `Auth::shouldUse('sanctum')` the moment it
+     * authenticates somebody, and that writes into `auth.defaults.guard`, i.e.
+     * into the config repository, which this process shares across every request
+     * in the test. Left alone, the next request's `current_password` rule asks
+     * Sanctum's RequestGuard to validate a password — something it has no
+     * implementation of — and a correct password is refused. Production reads
+     * that key back off disk for every request and never sees it.
+     */
+    private function asANewProcessWould(): void
+    {
+        $this->flushSession();
+
+        Auth::forgetGuards();
+        Auth::shouldUse('web');
     }
 
     /**

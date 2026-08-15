@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\AuthenticateSession;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -176,6 +178,83 @@ return Application::configure(basePath: dirname(__DIR__))
          * is token-only.
          */
         $middleware->statefulApi();
+
+        /*
+         * AuthenticateSession — THE MIDDLEWARE THAT MAKES A PASSWORD CHANGE
+         * MEAN SOMETHING ON A DEVICE THIS ONE CANNOT REACH.
+         *
+         * It keeps a copy of the user's password hash in each session and
+         * compares it against the real one on every request; a session whose
+         * copy has gone stale is logged out. That is the ONLY code in the
+         * framework that reads that copy, and Orbit registered it in no group,
+         * under no alias and on no route — so `Auth::logoutOtherDevices()` was
+         * a call that returned successfully and evicted nobody. This is the
+         * silent no-op health-tracker shipped for months and its security audit
+         * found; Orbit starts on the other side of it.
+         *
+         * APPENDED TO `web` AND TO NOTHING ELSE. That group is where the
+         * session is, and it is where the SPA's own JSON endpoints live too —
+         * routes/web.php declares `/api/me` and the rest inside it deliberately
+         * (see the Sanctum note above), so an evicted session gets a 401 on its
+         * next read and resources/js/lib/http.js sends that browser to the login
+         * screen. The `api` route file has no session and must stay that way.
+         *
+         * SAFE ON THE WHOLE GROUP rather than only the authenticated half: its
+         * first line returns early when the request has no user, so /login and
+         * the guest boot probe pay a null check and nothing else.
+         *
+         * IT IS ORBIT'S SUBCLASS AND NOT THE FRAMEWORK'S, because this app has
+         * Sanctum and the framework's reads `auth.defaults.guard` — which
+         * `auth:sanctum` rewrites mid-request. App\Http\Middleware\
+         * AuthenticateSession pins it to the session guard at both ends; the
+         * class says what breaks otherwise, and both failures are severe.
+         *
+         * WHAT IT COSTS: one comparison per request, and one genuine behaviour
+         * change — a browser holding a remember-me cookie minted before a
+         * password change is signed out rather than let back in, because the
+         * recaller carries the old hash in its third segment. That is the point
+         * of the exercise. App\Http\Controllers\Auth\PasswordController re-issues
+         * the changing device's own cookie so that it is the one that survives.
+         */
+        $middleware->web(append: [
+            AuthenticateSession::class,
+        ]);
+
+        /*
+         * AND IT RUNS BEFORE `auth`, WHICH IT DOES NOT BY DEFAULT.
+         *
+         * The router does not run middleware in the order they are written: it
+         * sorts them through Kernel::$middlewarePriority, where
+         * `Contracts\Auth\Middleware\AuthenticatesRequests` (the `auth`
+         * middleware) sits three places ABOVE
+         * `Contracts\Session\Middleware\AuthenticatesSessions` (the class
+         * appended above). Appending to the `web` group does not change that,
+         * and `auth:sanctum` is what rewrites the default guard mid-request.
+         *
+         * WHY IT MATTERS EVEN THOUGH THE SUBCLASS ALREADY SURVIVES THAT:
+         *
+         *   - the session key is read on the way in, and the key is
+         *     `password_hash_` + whatever the default guard is at that moment.
+         *     Running before anything can call `shouldUse()` is what makes that
+         *     read `password_hash_web` on every route rather than
+         *     `password_hash_sanctum` on some of them — one key, and it is the
+         *     one App\Http\Middleware\AuthenticateSession keeps current;
+         *   - a session this middleware decides to kill should be dead before
+         *     anything downstream builds a response out of the user on it. That
+         *     is health-tracker's own rationale for the same placement.
+         *
+         * It still lands AFTER `ValidateCsrfToken`, which is not in the priority
+         * list and keeps its written position in the group — a request with no
+         * token is refused for that before this ever looks at it.
+         *
+         * The list is matched on the exact class name first and on interfaces
+         * second (Illuminate\Routing\SortedMiddleware), so naming the concrete
+         * class here wins over the contract entry further down the default list.
+         */
+        $middleware->prependToPriorityList(
+            before: AuthenticatesRequests::class,
+            prepend: AuthenticateSession::class,
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         /*

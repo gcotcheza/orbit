@@ -387,10 +387,31 @@ watch(reducedMotion, () => play({ instant: true }))
   background: var(--accent);
 }
 
+/*
+ * THE CAPTION SITS ABOVE THE SPOTLIGHT CARD, and the arithmetic is the whole
+ * fix. design/README.md §1 asks for two things that are incompatible as
+ * written: a caption pinned to the bottom of a 360px stage (`bottom: 6px` in
+ * the prototype's own markup) and a card that climbs 30px over that same
+ * bottom edge, opaque and at `z-index: 4`. Every pixel of the caption was
+ * therefore painted underneath the card — `elementFromPoint` at its centre
+ * returned `.spotlight`, and the text was in the DOM, in the accessibility
+ * tree, and visible to nobody. Only a browser could see that; jsdom has no
+ * layout engine, so every test that existed was green.
+ *
+ * The design's 6px stays as the caption's own breathing room; what is added is
+ * the card's overlap plus a gap, which puts the caption in the strip of stage
+ * the card does not reach — where design/screenshots/01 draws it, under the
+ * globe and above the card. Raising the caption's z-index instead would put
+ * this text ON the card's rounded top edge, over the route code, which is not
+ * the screen anybody drew.
+ */
 .stage__caption {
   position: absolute;
   inset-inline: 0;
-  bottom: 6px;
+  bottom: calc(6px + var(--spotlight-overlap) + 8px);
+  /* Kept, and now load-bearing for a second reason: the caption has moved onto
+     the globe's own rectangle, and a drag that starts on this text still has
+     to reach the globe's rotate controls underneath it. */
   pointer-events: none;
 
   text-align: center;
@@ -399,5 +420,13 @@ watch(reducedMotion, () => play({ instant: true }))
   font-weight: 600;
   letter-spacing: 0.12em;
   color: var(--muted);
+  /* A halo in the page colour, because this text is now over the EARTH rather
+     than over the strip of background below it, and a photographic texture is
+     not a backdrop this palette gets to choose: `--muted` reads over the
+     Atlantic and vanishes over the Sahara. Two soft shadows rather than one
+     offset — the glyphs need backing on every side, not underneath.
+     (The design's own screenshot has clear space here because its camera was
+     parked at the fitted altitude; ours is mid-flight most of the time.) */
+  text-shadow: 0 0 4px var(--bg), 0 0 9px var(--bg);
 }
 </style>

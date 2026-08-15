@@ -29,6 +29,11 @@ dimming is overridden by an animation's fill mode, an input that keeps the
 characters it claims to strip — are all invisible to every test that existed
 before it, and all three are *rendering* faults in code whose logic is correct.
 
+All three were fixed by the follow-ups PR, and each left an ordinary assertion
+behind in the spec that found it. That is the return on this harness stated as
+plainly as it can be: three defects on a screen that five other checks called
+green, in code none of them could have been written to see.
+
 The rule this implements: **an agent must be able to verify a screen in a real
 browser.** Not "assert the component mounted". Look at it.
 
@@ -281,19 +286,24 @@ into "this passed", which is the one thing a browser gate must never do.
 
 ### `test.fail()` — defects written down as tests
 
-Three tests are marked `test.fail()`. They **pass while the bug exists** and go
-red the day it is fixed, which is the reminder to delete them. Each carries the
-measurement that proves it, in a comment. They are not skips: the assertion runs
-every time.
+**Nothing in the suite is marked `test.fail()` today, and a `✘` in a run is
+therefore a failure.** The mechanism is documented here because it is how the
+next one should be handled, and because the three it carried are the reason this
+harness exists.
 
-| spec | defect |
-| --- | --- |
-| `globe.spec.js` | the globe caption is drawn entirely underneath the opaque spotlight card — `elementFromPoint` at its centre returns `.spotlight` |
-| `watchlist.spec.js` | a paused row is never dimmed: `.rise-in` is `animation: … both`, its final keyframe is `opacity: 1`, and an animated value beats `.is-paused { opacity: .58 }` in the cascade |
-| `watchlist.spec.js` | digits typed into the destination box stay visible — `:value` + `@input` normalising `"12"` to `""` is not a change to a model that is already `""`, so Vue never re-renders and the DOM keeps them |
+A `test.fail()` inverts the result: it **passes while the bug exists** and goes
+red the day it is fixed, which is the reminder to delete it. It is not a skip —
+the assertion runs every time — and it is the honest way for a harness to report
+a defect in an app it has no business patching in the same branch.
 
-None is fixed on this branch: the harness's job is to report, not to patch the
-app it is measuring.
+The three it found on its first run, all fixed in the follow-ups PR, each with
+an ordinary assertion left in its place:
+
+| spec | defect | fix |
+| --- | --- | --- |
+| `globe.spec.js` | the globe caption was drawn entirely underneath the opaque spotlight card — `elementFromPoint` at its centre returned `.spotlight` | `--spotlight-overlap` (tokens.css): one number for the card's climb, which the caption now clears |
+| `watchlist.spec.js` | a paused row was never dimmed: `.rise-in` was `animation: … both`, its final keyframe is `opacity: 1`, and an animated value beats `.is-paused { opacity: .58 }` in the cascade | `both` → `backwards`, so the entrance stops owning `opacity` when it ends |
+| `watchlist.spec.js` | digits typed into the destination box stayed visible — `:value` + `@input` normalising `"12"` to `""` is not a change to a model that is already `""`, so Vue never re-rendered and the DOM kept them | `v-model` plus a normalising watcher: the raw assignment always re-renders, and the directive force-writes the element |
 
 ---
 

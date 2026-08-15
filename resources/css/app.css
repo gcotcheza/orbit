@@ -163,8 +163,36 @@ body {
     }
 }
 
+/*
+ * `backwards`, AND NOT `both`. This is an entrance and it has to STOP OWNING
+ * the properties it animated the moment it is over.
+ *
+ * `both` = backwards + forwards, and forwards means the last keyframe
+ * (`opacity: 1`) keeps applying for as long as the element lives. An animated
+ * value beats a normal declaration in the cascade no matter how specific that
+ * declaration is, so `.pass.rise-in.is-paused { opacity: 0.58 }` computed to 1
+ * — forever. A paused route on the watch list was never dimmed at all, on a
+ * screen whose only cue that a route is off IS the dimming plus a small switch.
+ * Measured in the browser before this change: `class="pass rise-in is-paused"`,
+ * `opacity: "1"`, `animation-fill-mode: "both"`.
+ *
+ * WHY THIS ONE LINE RATHER THAN A WRAPPER OR AN `!important`. The fault is not
+ * the watch list's — it is every one of the nine elements that carries
+ * `.rise-in`, each of which is one state class away from the same silent
+ * override. `!important` would win this round and lose the next; a wrapper
+ * would fix one screen. Dropping `forwards` fixes the rule.
+ *
+ * NOTHING MOVES AS A RESULT. The final keyframe (`opacity: 1`,
+ * `transform: none`) is the element's own resting state, so there is nothing to
+ * snap back to when the fill is released. `backwards` is kept so the element
+ * still starts invisible if a delay is ever added.
+ *
+ * Regression: e2e/specs/watchlist.spec.js reads the computed opacity of a
+ * paused row out of a real browser. jsdom computes no cascade and runs no
+ * animation, so no vitest test can hold this line.
+ */
 .rise-in {
-    animation: orbit-rise 0.5s ease both;
+    animation: orbit-rise 0.5s ease backwards;
 }
 
 /* Somebody who has asked their phone to stop moving things has asked this app

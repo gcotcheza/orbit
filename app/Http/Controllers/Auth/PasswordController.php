@@ -65,14 +65,29 @@ use Illuminate\Support\Str;
  * has to run after the save, so the cookie it queues carries the token that was
  * just written.
  *
- * WHAT THIS DOES NOT DO IS EVICT OTHER SESSIONS. `Auth::logoutOtherDevices()`
- * would, but only with Illuminate\Session\Middleware\AuthenticateSession in the
- * `web` group — it is the middleware that compares each session's stored copy of
- * the password hash against the real one, and this app does not register it
- * (bootstrap/app.php). Calling it without that middleware is the silent no-op
- * health-tracker shipped for months. A live session elsewhere therefore survives
- * this change until it expires; the long-lived cookies that would have RE-created
- * one do not.
+ * ===========================================================================
+ * AND EVERY OTHER SESSION GOES
+ *
+ * `Auth::logoutOtherDevices()` re-hashes the stored password, which makes every
+ * OTHER session's copy of that hash stale; the copy is compared on their next
+ * request by Illuminate\Session\Middleware\AuthenticateSession, which answers a
+ * mismatch with a 401 and a flushed session. THAT MIDDLEWARE IS THE WHOLE
+ * MECHANISM, and until this branch Orbit registered it in no group, under no
+ * alias and on no route — so the call would have returned successfully and
+ * evicted nobody, which is the silent no-op health-tracker shipped for months.
+ * It is now appended to the `web` group; see bootstrap/app.php.
+ *
+ * IT IS CALLED WITH THE NEW PASSWORD AND AFTER THE SAVE, and neither is a
+ * matter of taste. Laravel 13's implementation asserts
+ * `Hash::check($password, $user->getAuthPassword())` before it re-hashes and
+ * throws InvalidArgumentException otherwise — so the CURRENT password, passed
+ * after the row has been written, is an exception rather than an eviction.
+ *
+ * WHY BOTH CALLS. The save alone already invalidates the other sessions, since
+ * what they hold is a copy of a hash that no longer exists. This call is what
+ * says so out loud: it re-hashes deliberately, it fires OtherDeviceLogout, and
+ * it means the eviction survives a future refactor that stops writing the
+ * password on this path.
  */
 final class PasswordController extends Controller
 {
@@ -94,6 +109,19 @@ final class PasswordController extends Controller
         $user->setRememberToken(Str::random(60));
 
         $user->save();
+
+        /*
+         * Every OTHER session, gone. See the class docblock: this re-hashes the
+         * password the row now holds, which is what every other session's stored
+         * copy is compared against, and AuthenticateSession logs them out on
+         * their next request.
+         *
+         * BEFORE the re-login on the next line, so that the recaller cookie
+         * queued there carries the FINAL hash. A cookie minted against a hash
+         * this call then replaces is a cookie that same middleware would refuse
+         * — this device would be signed out by its own password change.
+         */
+        Auth::logoutOtherDevices($password);
 
         // Re-issue THIS device's recaller against the token just written, so the
         // one device that proved it knows the password keeps the long session

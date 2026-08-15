@@ -35,21 +35,48 @@ const localError = ref('')
 
 const canSubmit = computed(() => destination.value.length === 3 && !props.busy)
 
-// A fresh attempt clears the client-side complaint; the server's own message
-// is cleared by whoever owns the request.
-watch(destination, () => {
-  localError.value = ''
-})
-
 /*
  * Upper-cased and stripped to letters AS IT IS TYPED, rather than on submit.
  * A destination box that shows `lis` and sends `LIS` is a box that disagrees
  * with the row it produces, and three letters is short enough that the
  * correction is invisible rather than jarring.
+ *
+ * =============================================================================
+ * WHY THIS IS `v-model` PLUS A WATCHER, AND NOT `:value` PLUS `@input`
+ * =============================================================================
+ * It was the hand-rolled pair, and the pair has a hole in it that only a
+ * browser can see. `@input` normalised the event's value straight into the ref:
+ * type "1L" and the ref went "" → "L", Vue re-rendered, the box showed "L" —
+ * correct. Type "12" and the strip produces "", which is what the ref ALREADY
+ * held. No change, no re-render, and the DOM kept the two digits the user
+ * typed: a field showing `12`, an Add button disabled, and nothing on screen
+ * saying why.
+ *
+ * `v-model` closes it because of the order it works in. Its own listener
+ * assigns the RAW value first ("12"), which is always a change and therefore
+ * always schedules a render; this watcher then normalises it back to "" before
+ * that render runs (watchers are pre-flush). The render finds the model
+ * unchanged from last time — but `v-model`'s directive force-writes
+ * `el.value` from the model on every update precisely for this case, and the
+ * digits disappear.
+ *
+ * jsdom cannot catch this: the model is right in every component test, and it
+ * is the ELEMENT that is wrong. e2e/specs/watchlist.spec.js types into a real
+ * box and reads it back.
  */
-function onInput(event) {
-  destination.value = event.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)
-}
+watch(destination, (typed) => {
+  const cleaned = typed.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)
+
+  if (cleaned !== typed) {
+    destination.value = cleaned
+  }
+})
+
+// A fresh attempt clears the client-side complaint; the server's own message
+// is cleared by whoever owns the request.
+watch(destination, () => {
+  localError.value = ''
+})
 
 function submit() {
   if (props.busy) {
@@ -101,8 +128,8 @@ defineExpose({ reset })
     <label class="add__label" for="add-destination">To</label>
     <input
       id="add-destination"
+      v-model="destination"
       class="add__input"
-      :value="destination"
       type="text"
       inputmode="text"
       autocapitalize="characters"

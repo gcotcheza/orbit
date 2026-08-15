@@ -34,13 +34,14 @@
   only `api|up|horizon`, so `/sw.js`, `/manifest.webmanifest` and
   `/definitely-not-a-route` all return **200 `text/html`** — the shell. A status
   code alone therefore proves nothing about those paths. **Assert
-  `Content-Type`**, which is what step 9 does.
+  `Content-Type`**, which is what post-deploy check 4 does.
 - **⚠ `SESSION_SECURE_COOKIE=true` breaks naive curl cookie replay.** Both cookies
   are `Secure`, so over the loopback's plain HTTP curl will not even **store**
   them: `-c jar` writes a file of comments and no rows. `-c`/`-b` therefore
   authenticate nothing, silently, and the 401 you get means "curl dropped the
   cookie" rather than "the app is broken". The cookies have to be lifted off
-  `Set-Cookie` and sent back as an explicit `Cookie:` header — step 9.3 does it.
+  `Set-Cookie` and sent back as an explicit `Cookie:` header — post-deploy check 3
+  does it.
 
 ## Pre-flight checks
 
@@ -56,26 +57,94 @@
    ```bash
    git -C /var/www/orbit log --oneline -3
    ```
-4. **`scripts/check.sh` must be green on the merge commit being deployed.** From
+4. **The five checks must be green on the merge commit being deployed.** From
    PR3 onwards this is the merge gate (`docs/PLAN.md`), so normally it was green
-   on the branch before merge — but a merge commit is code no run has seen. Run it
-   once here, on `main`, after step 1's pull:
+   on the branch before merge — but a merge commit is code no run has seen. Run
+   it once here, on `main`, after the pull (deploy step 1).
+
+   **⚠ `./scripts/check.sh` DOES NOT RUN ON THIS BOX AND MUST NOT BE MADE TO.**
+   Every step in it is `docker compose exec -T app …`, i.e. the *live* php-fpm
+   container, whose `vendor/` was installed `--no-dev` (deploy step 3) —
+   there is no `vendor/bin/pint`, no `vendor/bin/phpstan` and no phpunit in it.
+   The script is the *pre-merge* gate, run against a checkout that has dev
+   dependencies. Installing them here to make it work is the trap: `./` is
+   bind-mounted into `app`, `horizon` and `scheduler`, so a dev `composer
+   install` in this checkout is a dev `composer install` **in production**.
+
+   **The gate runs in a throwaway container with its own vendor tree instead.**
+   Same image, same uid, same PHP as the site — and nothing it writes is
+   visible to the running containers:
+
    ```bash
-   cd /var/www/orbit && ./scripts/check.sh
+   GATE=/var/tmp/orbit-gate
+   mkdir -p "$GATE/vendor" "$GATE/bootstrap-cache" && chown -R 115:119 "$GATE"
+
+   # 0. dev dependencies, into the overlay and nowhere near the live vendor/
+   docker compose run --rm --no-deps \
+       -v "$GATE/vendor:/var/www/html/vendor" \
+       -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
+       app composer install --no-interaction --no-progress
+
+   # 1. Pint
+   docker compose run --rm --no-deps \
+       -v "$GATE/vendor:/var/www/html/vendor" \
+       -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
+       app vendor/bin/pint --test
+
+   # 2. PHPStan
+   docker compose run --rm --no-deps \
+       -v "$GATE/vendor:/var/www/html/vendor" \
+       -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
+       app vendor/bin/phpstan analyse --no-progress --memory-limit=512M
+
+   # 3 + 4. ESLint and Vitest — unchanged, `assets` is a task and brings its own
+   #        node_modules; nothing about it is --no-dev.
+   docker compose --profile build run --rm --entrypoint sh assets -c \
+       '[ -d node_modules ] || npm ci --no-audit --fund=false; npm run lint'
+   docker compose --profile build run --rm --entrypoint sh assets -c 'npm run test:js'
+
+   # 5. PHPUnit
+   docker compose run --rm --no-deps \
+       -v "$GATE/vendor:/var/www/html/vendor" \
+       -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
+       app php artisan test
+
+   # and take the overlay away again
+   rm -rf "$GATE"
    ```
-   **Good:** five headed steps — Pint, PHPStan, ESLint, Vitest, PHPUnit — and a
-   final green `==> all checks passed`. It stops at the first failure; a failure
-   is a stop, not a note.
-   The PHP steps need the stack already up (`docker compose up -d`); the node
-   steps bring their own container.
-   - **⚠ NOT `sudo -u orbit ./scripts/check.sh`.** Every step in it shells out to
-     `docker compose`, and talking to `/var/run/docker.sock` is a **group
+
+   **Good:** Pint `PASS`, PHPStan `[OK] No errors`, ESLint silent, Vitest all
+   green, and PHPUnit ending in `OK`. A failure is a stop, not a note.
+
+   - **⚠ `bootstrap/cache` IS OVERLAID FOR A DIFFERENT AND WORSE REASON THAN
+     `vendor`.** `composer install` fires `@php artisan package:discover` on
+     every run, which writes `bootstrap/cache/packages.php` and `services.php` —
+     the list of service providers the framework loads at boot. Run with dev
+     dependencies present, that list names dev-only providers (Pail, Collision,
+     Larastan's, whatever a package adds next). Those files are in the same
+     bind-mounted checkout, so the **live, `--no-dev`** app would read them on
+     its next boot, try to load a class that is not in its vendor tree, and
+     answer **every request with a 500** — an outage caused by a gate run,
+     minutes after it reported all green. The overlay is what keeps
+     `package:discover`'s output inside the throwaway container.
+   - **⚠ `--no-deps`** so that `run` does not start or restart `postgres` and
+     `redis` behind your back. The suite needs neither: `phpunit.xml` pins
+     sqlite `:memory:` and the array cache/session drivers.
+   - `--rm` and `run` (not `exec`): this is a container that exists for one
+     command. The live `app` container is never entered and never changed.
+   - **⚠ NOT `sudo -u orbit`.** Talking to `/var/run/docker.sock` is a **group
      membership** — `orbit` is not in the `docker` group and gets
      `permission denied while trying to connect to the Docker daemon socket`
      before the first check runs. Run it as root. Nothing it does lands
      root-owned files in the checkout: the containers it drives are already
-     `user: '115:119'`, which *is* the `orbit` user (see "How this is wired"), so
-     file ownership is handled inside them rather than by the invoking shell.
+     `user: '115:119'`, which *is* the `orbit` user (see "How this is wired"),
+     so file ownership is handled inside them rather than by the invoking shell.
+     `$GATE` is chowned to the same uid for the same reason.
+   - **⚠ The PHPUnit step writes into `storage/logs/laravel.log`.** It is the
+     real checkout, bind-mounted, so a test that exercises a logging path leaves
+     `testing.INFO` / `testing.ERROR` lines in production's application log.
+     They are the gate's own noise and not incidents — the environment name in
+     front of the level is how you tell. See post-deploy check 8.
 
 5. **`scripts/e2e.sh` — the browser gate. Optional, strongly recommended.**
    ```bash
@@ -104,10 +173,17 @@
      how it is meant to be run.
    - It leaves nothing behind: `down -v` at the end, always. `--keep` if you want
      to look at the sandbox afterwards; `scripts/e2e.sh --down` then tears it down.
-   - **⚠ Three tests are `test.fail()`** — known rendering defects, written down
-     as tests that pass while the bug is there. They print with a `✘` and are
-     counted in the green total. `docs/E2E.md` lists all three. A run is good when
-     the last line is `==> browser gate passed`, not when every line has a tick.
+   - **⚠ It runs off the live checkout's `vendor/`, `node_modules/` and
+     `public/build/`** and installs each only if it is missing — so on this box
+     it uses the `--no-dev` vendor tree, which is all it needs (it drives the app
+     through a browser and runs no PHP tooling). It does **not** need the gate
+     overlay from step 4.
+   - **⚠ A run is good when every line has a tick.** It used to carry three
+     `test.fail()` markers — rendering defects written down as tests that passed
+     while the bug was there, printing a `✘` in a green run. All three are fixed
+     (the follow-ups PR), the markers are gone, and **a `✘` now means a
+     failure.** The last line is still the thing to read: `==> browser gate
+     passed`.
 
 ## Deploy steps
 
@@ -116,6 +192,20 @@ If any step fails, **stop and report** — do not continue to the next one.
 ```bash
 cd /var/www/orbit
 ```
+
+**⚠ THE ORDER IS ABOUT ONE WINDOW: PULL → MIGRATE.** The checkout is
+bind-mounted into `app`, `horizon` and `scheduler`, so `git pull` puts the new
+code on disk *in the running containers* immediately. The long-lived processes
+keep serving the old code from opcache (which is why step 8 exists) — but
+anything that boots the framework fresh in that window runs **new code against
+an unmigrated database**: every `artisan` the scheduler spawns, every Horizon
+worker that recycles after its job limit, every `php artisan` a person types.
+A missing-column exception on the fare poll is what that looks like.
+
+So the window is kept to the length of one `migrate`, and everything slow — the
+asset build especially, which is an `npm ci` and a Vite build and takes minutes
+— happens **after** the schema and the code agree. That is the only reason the
+build is not step 3 any more.
 
 1. **Pull latest code**
    ```bash
@@ -132,7 +222,36 @@ cd /var/www/orbit
    **`.git` is included on purpose**; chowning only the worktree leaves the next
    `sudo -u orbit git` call failing on "dubious ownership".
 
-3. **Build the front-end assets**
+3. **Composer dependencies — ONLY if `composer.lock` moved**
+   ```bash
+   git -C /var/www/orbit diff --name-only HEAD@{1} HEAD -- composer.lock    # empty? skip this step
+   docker compose exec -T app composer install --no-dev --optimize-autoloader --no-interaction
+   ```
+   **Good:** `Nothing to install, update or remove` (if you ran it anyway) or a
+   package list ending in `Generating optimized autoload files`.
+   `--no-dev` keeps phpunit, larastan, mockery and friends out of the production
+   classmap. It also means **`php artisan test` and `vendor/bin/pint` do not work
+   in the `app` container** — by design, and the reason pre-flight step 4 runs the
+   gate in a throwaway container with its own vendor tree.
+   - **⚠ BEFORE the migration, not after.** A migration is code too: if the
+     commit being deployed adds one that reaches for a class from a package the
+     lockfile just introduced, running it against the old vendor tree is a fatal
+     halfway through a schema change.
+
+4. **Run migrations**
+   ```bash
+   docker compose exec -T app php artisan migrate --force
+   ```
+   **Good:** either `Nothing to migrate` or a list of migrations each ending
+   `DONE`. `--force` is required: `APP_ENV=production` makes migrate refuse to
+   run interactively-unconfirmed.
+   - **⚠ THIS CLOSES THE WINDOW OPENED BY THE PULL** — see the note above the
+     steps. It is deliberately the first slow-ish thing after the code lands and
+     is deliberately ahead of the asset build: a schema that is minutes behind
+     the code on disk is minutes of a scheduler running new queries against an
+     old database.
+
+5. **Build the front-end assets**
    ```bash
    docker compose --profile build run --rm assets
    ```
@@ -141,12 +260,17 @@ cd /var/www/orbit
    `--profile build` is required — `assets` is a task and is not running, so
    `exec` cannot reach it and `run --rm` is the verb.
 
-4. **Prune old builds**
+6. **Prune old builds**
    ```bash
    docker compose exec -T app php artisan build:retain
    ```
    **Good:** a `keeping …` line naming up to three build versions, and a count of
    deleted files.
+   - **⚠ "Up to three" is literal.** Retention keeps the newest three
+     *snapshots*, and there are only as many snapshots as there have been runs:
+     the first deploy after this command exists reports one, the second two. A
+     `keeping` line naming fewer than three builds on an early deploy is the
+     command working, not a build that went missing.
    - **⚠ AFTER the asset build, never before.** It snapshots *the build that is
      currently on disk* — running it first would record the previous build and
      then prune the one you just made.
@@ -165,26 +289,6 @@ cd /var/www/orbit
    - It also runs daily at 03:10 from `routes/console.php`, so a forgotten step
      here is a day of extra chunks rather than a full disk.
 
-5. **Composer dependencies — ONLY if `composer.lock` moved**
-   ```bash
-   git -C /var/www/orbit diff --name-only HEAD@{1} HEAD -- composer.lock    # empty? skip this step
-   docker compose exec -T app composer install --no-dev --optimize-autoloader --no-interaction
-   ```
-   **Good:** `Nothing to install, update or remove` (if you ran it anyway) or a
-   package list ending in `Generating optimized autoload files`.
-   `--no-dev` keeps phpunit, larastan, mockery and friends out of the production
-   classmap. It also means **`php artisan test` and `vendor/bin/pint` stop working
-   in the `app` container** — by design; `scripts/check.sh` is run before the
-   merge, not here.
-
-6. **Run migrations**
-   ```bash
-   docker compose exec -T app php artisan migrate --force
-   ```
-   **Good:** either `Nothing to migrate` or a list of migrations each ending
-   `DONE`. `--force` is required: `APP_ENV=production` makes migrate refuse to
-   run interactively-unconfirmed.
-
 7. **Clear compiled views**
    ```bash
    docker compose exec -T app php artisan view:clear
@@ -196,15 +300,34 @@ cd /var/www/orbit
 
 8. **Restart the long-lived processes** — the step that actually ships the code
    ```bash
-   docker compose exec -T app php artisan horizon:terminate
+   docker compose exec -T horizon php artisan horizon:terminate
    docker compose restart app horizon scheduler web
    ```
-   **Good:** `horizon:terminate` prints nothing much and exits 0; `restart` prints
-   four `Restarting`/`Started` lines.
+   **Good:** `INFO  Sending TERM signal to processes.` followed by a
+   `Process: 1 … DONE` line; then `restart` prints four `Restarting`/`Started`
+   lines.
    - **`horizon:terminate` FIRST, and it is not redundant with `restart`.** It
      asks the workers to finish the job in hand and then exit, so an in-flight
      fare poll or alert send completes instead of being killed mid-transaction.
-     `restart` alone would SIGTERM them.
+     `restart` alone would SIGTERM them. `stop_grace_period: 60s` on the horizon
+     service is what gives that drain time to happen.
+   - **⚠ IN THE `horizon` CONTAINER, NOT IN `app` — and this runbook said `app`
+     for its first several deploys.** Horizon's master supervisor registers
+     itself in redis under `gethostname()`, and every container has a hostname
+     of its own. Run from `app`, the command looks for a master named after the
+     app container, finds none, and exits **0** with
+     `INFO  No processes to terminate.` — a green line, a successful step, and
+     no drain whatsoever. Measured on this box, both halves in one sitting:
+
+     | where | output |
+     | --- | --- |
+     | `exec -T app php artisan horizon:terminate` | `INFO No processes to terminate.` (rc 0) |
+     | `exec -T horizon php artisan horizon:terminate` | `INFO Sending TERM signal to processes.` `Process: 1 … DONE` |
+
+     So until this line changed, **every deploy SIGTERM'd the workers mid-job**
+     via `restart` and the graceful drain had never once been in effect. Reading
+     the output is the check: `No processes to terminate.` means you are in the
+     wrong container.
    - **`web` is in the list** because the nginx sidecar reads
      `docker/web/nginx.conf` only at start — the `/globe/` and `/build/` cache
      locations live there, and a config change is invisible until the sidecar
@@ -231,7 +354,7 @@ B='http://127.0.0.1:3085'
    curl -s -o /dev/null -w '%{http_code}\n' -H "$H" "$B/"          # expect 200
    curl -s -H "$H" "$B/" | grep -oE 'build/assets/app-[A-Za-z0-9_-]+\.js'
    ```
-   **Good:** `200`, and an `app-<hash>.js` whose hash **changed** if step 3 rebuilt
+   **Good:** `200`, and an `app-<hash>.js` whose hash **changed** if step 5 rebuilt
    anything. An unchanged hash after a front-end change means the build did not
    land.
 
@@ -319,6 +442,15 @@ B='http://127.0.0.1:3085'
         -d '{"active":false}' "$B/api/watchlist/AMS-LIS"
    ```
    **Good:** `200`. A `419` here means the token, not the app.
+
+   **⚠ AND A BARE `PUT /api/profile/password` IS 419, NOT 401.** It is the
+   obvious "is the password endpoint protected?" smoke test and it proves
+   nothing: `ValidateCsrfToken` runs **before** `auth` in the `web` group, so a
+   request with no cookies at all is refused for having no token and never
+   reaches the guard. Only the full lift above — session cookie, then
+   `X-XSRF-TOKEN` from the same session — gets far enough for a 401 to mean
+   "unauthenticated". Same trap as the `-c`/`-b` one: a refusal that is real,
+   for a reason that is not the one being tested.
    **Better still: don't.** `scripts/e2e.sh` (pre-flight step 5) drives every one
    of these writes through a real browser that handles the cookie dance itself,
    against a sandbox where a mistake costs nothing. Hand-rolled `curl` POSTs
@@ -386,9 +518,39 @@ B='http://127.0.0.1:3085'
    ```bash
    docker compose exec -T app tail -n 40 storage/logs/laravel.log
    ```
-   **Good:** no `ERROR`/`CRITICAL` newer than the restart. Until Resend is
-   configured this file is also where **every alert email** lands
-   (`MAIL_MAILER=log`), so mail lines here are expected, not a fault.
+   **Good:** no `production.ERROR` / `production.CRITICAL` newer than the
+   restart.
+   - **⚠ `testing.*` LINES ARE THE GATE'S OWN NOISE.** Pre-flight step 4 runs
+     PHPUnit against this checkout, bind-mounted, so any test that exercises a
+     logging path writes into *production's* application log with `testing` as
+     the environment. `testing.ERROR` next to a passing gate is a test asserting
+     that something fails, not an incident. The environment name in front of the
+     level is the only thing that separates them; grep for `production.` if the
+     tail is busy.
+
+9. **The alert mail nobody is receiving yet.**
+   ```bash
+   docker compose exec -T app tail -n 40 storage/logs/mail.log
+   ```
+   **Good:** either nothing (no alert fired since the last look) or whole MIME
+   messages, each headed `production.DEBUG: Symfony\Component\Mime\Email`.
+
+   Until ghiecode.io is verified as a sending domain in Resend, `MAIL_MAILER=log`
+   and **this file is where every alert this app decides to send ends up**. That
+   is the deliberate stage that lets the firing rules be judged against real
+   fares before anybody's phone lights up — and it is worth reading after a
+   deploy that touched alerting.
+   - **⚠ IT NEEDS `MAIL_LOG_CHANNEL=mail` IN `.env`,** which `.env` on this box
+     does not have until somebody adds it: the line is in `.env.example` (which
+     is in git) and `.env` (which is not). Add it **before** step 8's restart, so
+     the workers pick it up with everything else. Without it the log mailer falls
+     back to the default channel, whose floor is `LOG_LEVEL=info`, and the
+     transport writes at DEBUG — so every message is rendered and then dropped,
+     silently, which is exactly what was happening before this file mentioned
+     `mail.log` at all. `tests/Feature/MailLogChannelTest.php` holds both halves
+     of that.
+   - The file does not exist until the first mail is written to it; a `No such
+     file` from `tail` on a box that has fired no alerts is not a fault.
 
 ## Rollback
 
@@ -403,7 +565,7 @@ git -C /var/www/orbit push origin main
 chown -R orbit:orbit /var/www/orbit
 ```
 
-Then **redeploy from step 3** — the revert is only code on disk until the assets
+Then **redeploy from step 5** — the revert is only code on disk until the assets
 are rebuilt and the containers are restarted. Reverting and not restarting leaves
 the bad build serving.
 
