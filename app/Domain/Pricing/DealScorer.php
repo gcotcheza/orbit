@@ -37,19 +37,37 @@ namespace App\Domain\Pricing;
  * quietly capped. A route with nothing at all gets score 0 and
  * `confident: false`, which the UI is expected to render as "no opinion yet"
  * rather than as a bad deal.
+ *
+ * AND A ROUTE WITH TOO LITTLE OF IT ANSWERS THE SAME WAY. Below
+ * `$policy->minTrackingDays` mornings the scorer declines the question rather
+ * than renormalising it, because the failure there is not a missing component
+ * but a poisoned one: the statistics are computed from the fares Orbit itself
+ * collected (App\Infrastructure\Pricing\SelfStatsProvider), so on day one the
+ * current price IS the minimum, the median and the maximum. Every component
+ * agrees, agrees confidently, and returns 100 for a route nobody has learned
+ * anything about yet. That is the one wrong answer this class must never give,
+ * because it is the one that gets mailed.
  */
 final readonly class DealScorer
 {
     public function __construct(private ScoringPolicy $policy = new ScoringPolicy) {}
 
     /**
-     * The answer for a route we have no price for at all — one that was added
-     * an hour ago and has not been polled yet.
+     * The answer for a route Orbit cannot judge yet: one added an hour ago and
+     * not polled, and equally one polled every morning since Tuesday.
      *
      * A DISTINCT METHOD rather than `score(0, null, empty)`, because a price
      * of zero is the cheapest fare imaginable and would score 100. "We do not
      * know" and "it is free" are not the same answer and must not share a
      * code path.
+     *
+     * THE SENTENCE FITS BOTH CALLERS, and that is not a coincidence: "Orbit has
+     * only just started watching this route" is the honest reading of a route
+     * with no prices AND of one with three days of them. The UI needs no new
+     * state for the second case, which is the whole reason the maturity gate is
+     * expressed as this value rather than as a flag beside a live score — see
+     * resources/js/Components/globe/SpotlightCard.vue, which prints
+     * `verdict.label` without asking whether we meant it.
      */
     public function noOpinion(): DealScore
     {
@@ -68,8 +86,25 @@ final readonly class DealScorer
         );
     }
 
-    public function score(int $currentCents, ?PriceStats $stats, PriceHistory $history): DealScore
+    /**
+     * @param  int  $trackingDays  mornings of this route's own prices Orbit
+     *                             actually holds — App\Application\Routes\
+     *                             RouteSnapshot::$trackingDays, counted from the
+     *                             first observation and not from when the route
+     *                             was added
+     */
+    public function score(int $currentCents, ?PriceStats $stats, PriceHistory $history, int $trackingDays): DealScore
     {
+        /*
+         * ASKED FIRST, and the argument is required rather than defaulted:
+         * every caller has this number to hand, and a default would be a
+         * silent claim that whoever forgot it was looking at a mature route.
+         * That claim is exactly the bug this guard exists to prevent.
+         */
+        if ($trackingDays < $this->policy->minTrackingDays) {
+            return $this->noOpinion();
+        }
+
         $drift = $history->lastDays($this->policy->trendDays)->dailyDrift();
 
         $components = [

@@ -18,19 +18,20 @@
         </include>
     </source>
     <php>
+        <!--
+            ONE VARIABLE, AND IT IS THE ONE THAT PICKS THE FILE THE REST LIVE IN.
+            Laravel loads `.env.testing` INSTEAD OF `.env` when APP_ENV is
+            already set at boot, so this line is what makes the suite hermetic;
+            every other value it needs is in `.env.testing`, which is committed.
+
+            THIS LIST USED TO BE A DOZEN ENTRIES LONG, and that was the bug.
+            PHPUnit sets `<env>` before Dotenv runs and Dotenv is immutable, so
+            these always won — while everything NOT listed here fell through to
+            whatever `.env` sat next to the checkout. On production that is
+            `ORBIT_PRICE_PROVIDER=travelpayouts`, i.e. `php artisan test` made
+            real, metered API calls. Two places for one truth, and the one that
+            won was the shorter list. Add new values to `.env.testing`.
+        -->
         <env name="APP_ENV" value="testing"/>
-        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
-        <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="BROADCAST_CONNECTION" value="null"/>
-        <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
-        <env name="DB_URL" value=""/>
-        <env name="MAIL_MAILER" value="array"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
-        <env name="PULSE_ENABLED" value="false"/>
-        <env name="TELESCOPE_ENABLED" value="false"/>
-        <env name="NIGHTWATCH_ENABLED" value="false"/>
     </php>
 </phpunit>

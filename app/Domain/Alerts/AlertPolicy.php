@@ -18,7 +18,22 @@ use InvalidArgumentException;
  * by the clock. Everything it needs — the candidate, the account's threshold,
  * what was last said, and what time it is — arrives as an argument.
  *
- * THREE RULES, IN THIS ORDER, and the order is load-bearing:
+ * FOUR RULES, IN THIS ORDER, and the order is load-bearing:
+ *
+ *   0. THE DATA. A watched route says nothing at all until Orbit has
+ *      config('orbit.alerts.min_tracking_days') mornings of its prices. With
+ *      the self-computed statistics a route's first observation is its own
+ *      minimum, median and maximum, so a day-old route scores 100 and looks
+ *      like the deal of the year — eight of them, the first morning after a
+ *      watchlist is filled in. This rule is answered BEFORE the threshold on
+ *      purpose: a route held here is usually scoring far ABOVE the sensitivity,
+ *      and "below threshold" would be the wrong sentence in the log as well as
+ *      the wrong reason in the value.
+ *
+ *      THE ASYMMETRY LIVES IN `decide()`: rule matches are NOT gated by it. A
+ *      fare at or below the cap the owner wrote down is true on day one — it is
+ *      arithmetic against a number a person chose, not an inference from a
+ *      distribution Orbit has not observed yet.
  *
  *   1. THE THRESHOLD. A watched route fires when its deal score reaches the
  *      account's sensitivity minimum (Relaxed 80 / Balanced 65 / Eager 50 —
@@ -53,10 +68,13 @@ final readonly class AlertPolicy
      * @param  int  $furtherDropPercent  how much cheaper a fare has to be than
      *                                   the last alerted price to be worth
      *                                   saying again inside the cooldown
+     * @param  int  $minTrackingDays  daily observations a route needs before its
+     *                                score may interrupt anybody
      */
     public function __construct(
         private int $cooldownHours,
         private int $furtherDropPercent,
+        private int $minTrackingDays,
     ) {
         if ($cooldownHours < 0) {
             throw new InvalidArgumentException('The alert cooldown cannot be negative.');
@@ -64,6 +82,16 @@ final readonly class AlertPolicy
 
         if ($furtherDropPercent < 0 || $furtherDropPercent > 100) {
             throw new InvalidArgumentException('The further-drop percentage must be between 0 and 100.');
+        }
+
+        /*
+         * ZERO IS ALLOWED — "trust the score from the first morning" is a
+         * position, and it is the one this app shipped with by accident.
+         * Negative is not: it would read as a floor nothing can fall below,
+         * which is what zero already says.
+         */
+        if ($minTrackingDays < 0) {
+            throw new InvalidArgumentException('The minimum tracking window cannot be negative.');
         }
     }
 
@@ -80,6 +108,22 @@ final readonly class AlertPolicy
         ?LastAlert $last,
         DateTimeImmutable $now,
     ): AlertDecision {
+        /*
+         * THE MATURITY GATE, AND THE ASYMMETRY IT IS BUILT ON.
+         *
+         * `trackingDays` is null for a rule match and only for a rule match
+         * (App\Domain\Alerts\AlertCandidate), so this line gates scores without
+         * ever gating a rule — deliberately, and not as an accident of the
+         * null. A rule fires on the owner's own maximum price: "under €80" is
+         * a fact about a fare and a number a person typed, and it is exactly as
+         * true on the route's first morning as on its hundredth. A deal SCORE
+         * is an inference from a distribution, and on the first morning the
+         * distribution is one price wide.
+         */
+        if ($candidate->trackingDays !== null && $candidate->trackingDays < $this->minTrackingDays) {
+            return AlertDecision::ImmatureData;
+        }
+
         if ($candidate->score !== null && $candidate->score < $minimumScore) {
             return AlertDecision::BelowThreshold;
         }

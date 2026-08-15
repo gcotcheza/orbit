@@ -11,6 +11,7 @@ use App\Domain\Pricing\PriceStats;
 use App\Domain\Pricing\ScoringPolicy;
 use App\Domain\Pricing\Verdict;
 use DateTimeImmutable;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -24,6 +25,18 @@ use PHPUnit\Framework\TestCase;
  */
 final class DealScorerTest extends TestCase
 {
+    /**
+     * Mornings of history behind every score below, unless the test is about
+     * the maturity floor itself.
+     *
+     * PASSED EXPLICITLY EVERYWHERE. The scorer declines to judge a route under
+     * `ScoringPolicy::$minTrackingDays` days old, and an argument with a
+     * default would let a test quietly assert the floor's behaviour while
+     * appearing to assert the arithmetic — which is how the two got confused in
+     * production in the first place.
+     */
+    private const MATURE = 30;
+
     /** €40 / €60 / €80 / €110 / €160. */
     private function stats(): PriceStats
     {
@@ -55,7 +68,7 @@ final class DealScorerTest extends TestCase
     #[Test]
     public function the_cheapest_a_route_has_ever_been_scores_at_the_top(): void
     {
-        $deal = (new DealScorer)->score(4000, $this->stats(), $this->flat(4000));
+        $deal = (new DealScorer)->score(4000, $this->stats(), $this->flat(4000), self::MATURE);
 
         // percentile 100, absolute 100, trend 50 (flat) => 0.6*100 + 0.25*50 + 0.15*100
         $this->assertSame(88, $deal->score);
@@ -66,7 +79,7 @@ final class DealScorerTest extends TestCase
     #[Test]
     public function a_fare_at_the_usual_price_scores_around_the_middle(): void
     {
-        $deal = (new DealScorer)->score(8000, $this->stats(), $this->flat(8000));
+        $deal = (new DealScorer)->score(8000, $this->stats(), $this->flat(8000), self::MATURE);
 
         // percentile 50, absolute 0, trend 50 => 30 + 12.5 + 0
         $this->assertSame(43, $deal->score);
@@ -76,7 +89,7 @@ final class DealScorerTest extends TestCase
     #[Test]
     public function a_fare_above_the_usual_price_scores_low_and_says_wait(): void
     {
-        $deal = (new DealScorer)->score(11000, $this->stats(), $this->flat(11000));
+        $deal = (new DealScorer)->score(11000, $this->stats(), $this->flat(11000), self::MATURE);
 
         $this->assertLessThan(50, $deal->score);
         $this->assertSame(Verdict::TONE_WARN, $deal->verdict->tone);
@@ -89,9 +102,9 @@ final class DealScorerTest extends TestCase
         $scorer = new DealScorer;
         $stats = $this->stats();
 
-        $falling = $scorer->score(6000, $stats, $this->history([7000, 6800, 6600, 6400, 6200, 6000]));
-        $steady = $scorer->score(6000, $stats, $this->flat(6000, 6));
-        $rising = $scorer->score(6000, $stats, $this->history([5000, 5200, 5400, 5600, 5800, 6000]));
+        $falling = $scorer->score(6000, $stats, $this->history([7000, 6800, 6600, 6400, 6200, 6000]), self::MATURE);
+        $steady = $scorer->score(6000, $stats, $this->flat(6000, 6), self::MATURE);
+        $rising = $scorer->score(6000, $stats, $this->history([5000, 5200, 5400, 5600, 5800, 6000]), self::MATURE);
 
         $this->assertGreaterThan($steady->score, $falling->score);
         $this->assertGreaterThan($rising->score, $steady->score);
@@ -108,6 +121,7 @@ final class DealScorerTest extends TestCase
             15000,
             $this->stats(),
             $this->history([30000, 26000, 22000, 19000, 17000, 15000]),
+            self::MATURE,
         );
 
         $this->assertLessThan(50, $deal->score);
@@ -118,7 +132,7 @@ final class DealScorerTest extends TestCase
     #[Test]
     public function a_route_with_no_history_is_scored_on_what_is_left(): void
     {
-        $deal = (new DealScorer)->score(4000, $this->stats(), PriceHistory::empty());
+        $deal = (new DealScorer)->score(4000, $this->stats(), PriceHistory::empty(), self::MATURE);
 
         // Percentile and absolute only, renormalised over 75 of the weight —
         // both are 100 here, so the score is 100 and not 75.
@@ -129,7 +143,7 @@ final class DealScorerTest extends TestCase
     #[Test]
     public function a_route_with_no_statistics_is_scored_on_its_trend_alone(): void
     {
-        $deal = (new DealScorer)->score(6000, null, $this->history([9000, 8000, 7000, 6000]));
+        $deal = (new DealScorer)->score(6000, null, $this->history([9000, 8000, 7000, 6000]), self::MATURE);
 
         $this->assertTrue($deal->confident);
         $this->assertGreaterThan(50, $deal->score);
@@ -140,7 +154,7 @@ final class DealScorerTest extends TestCase
     #[Test]
     public function a_route_with_nothing_at_all_has_no_opinion(): void
     {
-        $deal = (new DealScorer)->score(6000, null, PriceHistory::empty());
+        $deal = (new DealScorer)->score(6000, null, PriceHistory::empty(), self::MATURE);
 
         $this->assertSame(0, $deal->score);
         $this->assertFalse($deal->confident);
@@ -159,7 +173,7 @@ final class DealScorerTest extends TestCase
 
         $this->assertFalse($scorer->noOpinion()->confident);
         $this->assertSame(0, $scorer->noOpinion()->score);
-        $this->assertTrue($scorer->score(0, $this->stats(), PriceHistory::empty())->confident);
+        $this->assertTrue($scorer->score(0, $this->stats(), PriceHistory::empty(), self::MATURE)->confident);
     }
 
     #[Test]
@@ -167,7 +181,7 @@ final class DealScorerTest extends TestCase
     {
         $flatStats = new PriceStats(7000, 7000, 7000, 7000, 7000);
 
-        $deal = (new DealScorer)->score(7000, $flatStats, $this->flat(7000));
+        $deal = (new DealScorer)->score(7000, $flatStats, $this->flat(7000), self::MATURE);
 
         $this->assertTrue($deal->confident);
         /*
@@ -188,9 +202,98 @@ final class DealScorerTest extends TestCase
     {
         $flatStats = new PriceStats(7000, 7000, 7000, 7000, 7000);
 
-        $deal = (new DealScorer)->score(5000, $flatStats, $this->flat(5000));
+        $deal = (new DealScorer)->score(5000, $flatStats, $this->flat(5000), self::MATURE);
 
         $this->assertGreaterThanOrEqual(80, $deal->score);
+    }
+
+    // ------------------------------------------------------- the day-1 floor
+
+    /**
+     * THE PRODUCTION BUG, AS A TEST. With `ORBIT_STATS_PROVIDER=self` the
+     * statistics ARE the observations, so on a route's first morning the
+     * current fare is its own minimum, median and maximum: every component
+     * scores it perfectly, and the app announces an insane deal about a route
+     * it knows one number about. The inputs below are exactly that shape —
+     * today's price sitting on the floor of a distribution one price wide.
+     */
+    #[Test]
+    public function a_route_watched_for_one_morning_has_no_opinion_however_well_it_scores(): void
+    {
+        $dayOne = new PriceStats(4400, 4400, 4400, 4400, 4400);
+
+        $deal = (new DealScorer)->score(4400, $dayOne, $this->history([4400]), 1);
+
+        $this->assertSame(0, $deal->score);
+        $this->assertFalse($deal->confident);
+        $this->assertSame(ScoringPolicy::TIER_NONE, $deal->tier);
+        $this->assertSame('Not enough data yet', $deal->verdict->label);
+        $this->assertSame(Verdict::TONE_NORMAL, $deal->verdict->tone);
+    }
+
+    /**
+     * The verdict has to degrade with the flag and not merely beside it:
+     * resources/js/Components/globe/SpotlightCard.vue prints `verdict.label`
+     * without asking whether Orbit meant it, so "Good price — book" next to
+     * `confident: false` would be a booking recommendation nobody could see was
+     * a guess.
+     */
+    #[Test]
+    public function the_verdict_degrades_with_the_confidence_and_not_beside_it(): void
+    {
+        $deal = (new DealScorer)->score(4000, $this->stats(), $this->flat(4000), 3);
+
+        $this->assertNotSame('Good price — book', $deal->verdict->label);
+        $this->assertSame('Not enough data yet', $deal->verdict->label);
+        $this->assertStringContainsString('only just started watching', $deal->advice->body);
+    }
+
+    /**
+     * The boundary. Six mornings is not a week and seven is — the same floor
+     * App\Domain\Alerts\AlertPolicy gates alerts on, from the same config key,
+     * so a screen cannot say "book it" about a route the alert engine considers
+     * too young to mention.
+     */
+    #[Test]
+    #[DataProvider('maturities')]
+    public function confidence_arrives_exactly_at_the_floor(int $trackingDays, bool $confident): void
+    {
+        $deal = (new DealScorer)->score(4000, $this->stats(), $this->flat(4000), $trackingDays);
+
+        $this->assertSame($confident, $deal->confident);
+
+        /*
+         * The same 88 the top-of-file case computes (percentile 100, trend 50,
+         * absolute 100), asserted here so the floor is seen to switch between
+         * "the real answer" and "no answer" rather than between two scores.
+         */
+        $this->assertSame($confident ? 88 : 0, $deal->score);
+    }
+
+    /**
+     * @return array<string, array{int, bool}>
+     */
+    public static function maturities(): array
+    {
+        return [
+            'nothing at all' => [0, false],
+            'the first morning' => [1, false],
+            'one morning short' => [6, false],
+            'exactly the floor' => [7, true],
+            'a fortnight' => [14, true],
+        ];
+    }
+
+    /**
+     * The floor is the policy's, not a literal in the scorer: a deployment that
+     * wants the old behaviour back sets it to zero rather than editing a class.
+     */
+    #[Test]
+    public function a_zero_floor_scores_the_first_morning(): void
+    {
+        $scorer = new DealScorer(new ScoringPolicy(minTrackingDays: 0));
+
+        $this->assertTrue($scorer->score(4000, $this->stats(), $this->flat(4000), 1)->confident);
     }
 
     // ---------------------------------------------------------- the verdicts
@@ -198,7 +301,7 @@ final class DealScorerTest extends TestCase
     #[Test]
     public function a_great_score_that_is_still_falling_says_so(): void
     {
-        $deal = (new DealScorer)->score(4500, $this->stats(), $this->history([7000, 6500, 6000, 5500, 5000, 4500]));
+        $deal = (new DealScorer)->score(4500, $this->stats(), $this->history([7000, 6500, 6000, 5500, 5000, 4500]), self::MATURE);
 
         $this->assertSame('Cheap & still falling', $deal->verdict->label);
         $this->assertSame('Falling', $deal->verdict->short);
@@ -208,7 +311,7 @@ final class DealScorerTest extends TestCase
     #[Test]
     public function a_great_score_that_has_settled_says_book_it(): void
     {
-        $deal = (new DealScorer)->score(4500, $this->stats(), $this->flat(4500));
+        $deal = (new DealScorer)->score(4500, $this->stats(), $this->flat(4500), self::MATURE);
 
         $this->assertSame('Good price — book', $deal->verdict->label);
         $this->assertSame('Good', $deal->verdict->short);
@@ -218,7 +321,7 @@ final class DealScorerTest extends TestCase
     #[Test]
     public function the_advice_quotes_the_same_numbers_the_score_used(): void
     {
-        $deal = (new DealScorer)->score(5000, $this->stats(), $this->flat(5000));
+        $deal = (new DealScorer)->score(5000, $this->stats(), $this->flat(5000), self::MATURE);
 
         $this->assertSame($deal->verdict->label, $deal->advice->title);
         $this->assertSame($deal->verdict->tone, $deal->advice->tone);
@@ -237,7 +340,7 @@ final class DealScorerTest extends TestCase
 
         foreach ([3000, 4500, 6000, 8000, 10000, 14000] as $price) {
             foreach ([$this->flat($price), $this->history([$price * 2, $price]), $this->history([intdiv($price, 2), $price])] as $history) {
-                $this->assertContains($scorer->score($price, $stats, $history)->verdict->tone, $tones);
+                $this->assertContains($scorer->score($price, $stats, $history, self::MATURE)->verdict->tone, $tones);
             }
         }
     }
@@ -255,7 +358,7 @@ final class DealScorerTest extends TestCase
 
         // A fare at the very bottom of its range, but perfectly flat: with the
         // price components switched off this is the trend's 50 and nothing else.
-        $this->assertSame(50, $trendOnly->score(4000, $this->stats(), $this->flat(4000))->score);
+        $this->assertSame(50, $trendOnly->score(4000, $this->stats(), $this->flat(4000), self::MATURE)->score);
     }
 
     #[Test]
@@ -278,7 +381,7 @@ final class DealScorerTest extends TestCase
 
         foreach ([0, 1000, 4000, 8000, 16000, 99000] as $price) {
             foreach ([PriceHistory::empty(), $this->flat($price ?: 1), $this->history([100000, $price ?: 1])] as $history) {
-                $score = $scorer->score($price, $stats, $history)->score;
+                $score = $scorer->score($price, $stats, $history, self::MATURE)->score;
 
                 $this->assertGreaterThanOrEqual(0, $score);
                 $this->assertLessThanOrEqual(100, $score);

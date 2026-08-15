@@ -8,6 +8,7 @@ use App\Application\Ports\DealNotifier;
 use App\Application\Routes\RouteSnapshots;
 use App\Application\Rules\RuleViews;
 use App\Domain\Alerts\AlertCandidate;
+use App\Domain\Alerts\AlertDecision;
 use App\Domain\Alerts\AlertPolicy;
 use App\Domain\Alerts\AlertType;
 use App\Domain\Alerts\LastAlert;
@@ -75,9 +76,19 @@ final readonly class AlertEvaluation
         $routes = $this->watchedRoutes($user, $minimum, $recent, $notBefore, $at);
         $rules = $this->ruleMatches($user, $minimum, $recent, $notBefore, $at);
 
+        /*
+         * THE IMMATURE COUNT IS IN THE LOG LINE and the other three held
+         * reasons are not, because this is the one that explains a MORNING
+         * rather than a route. A watchlist filled in yesterday sends nothing at
+         * all today, and "route_alerts: 0" on its own reads like a bug in the
+         * poller; "route_alerts: 0, routes_too_new: 8" reads like the app
+         * working. It stops being interesting a week after a route is added,
+         * which is exactly when it stops being logged.
+         */
         $this->logger->info('Evaluated alerts.', [
             'user' => $user->getAuthIdentifier(),
-            'route_alerts' => $routes,
+            'route_alerts' => $routes['fired'],
+            'routes_too_new' => $routes['immature'],
             'rule_alerts' => $rules,
             'minimum_score' => $minimum,
             'held_until' => $notBefore?->toIso8601String(),
@@ -86,6 +97,9 @@ final readonly class AlertEvaluation
 
     /**
      * @param  array<string, LastAlert>  $recent
+     * @return array{fired: int, immature: int} mails sent, and routes held back
+     *                                          because their score is younger
+     *                                          than the data behind it needs
      */
     private function watchedRoutes(
         User $user,
@@ -93,12 +107,12 @@ final readonly class AlertEvaluation
         array $recent,
         ?CarbonImmutable $notBefore,
         CarbonImmutable $at,
-    ): int {
+    ): array {
         /** @var list<int> $ids */
         $ids = $user->watchlistItems()->where('active', true)->pluck('route_id')->all();
 
         if ($ids === []) {
-            return 0;
+            return ['fired' => 0, 'immature' => 0];
         }
 
         $routes = Route::query()
@@ -107,6 +121,7 @@ final readonly class AlertEvaluation
             ->get();
 
         $fired = 0;
+        $immature = 0;
 
         foreach ($this->snapshots->for($routes) as $snapshot) {
             $price = $snapshot->currentCents;
@@ -125,12 +140,24 @@ final readonly class AlertEvaluation
             $key = AlertLedger::key(AlertType::RouteDeal, $route->id, null);
 
             $decision = $this->policy->decide(
-                AlertCandidate::watchedRoute($snapshot->deal->score, $price),
+                AlertCandidate::watchedRoute($snapshot->deal->score, $price, $snapshot->trackingDays),
                 $minimum,
                 $recent[$key] ?? null,
                 $at,
             );
 
+            if ($decision === AlertDecision::ImmatureData) {
+                $immature++;
+            }
+
+            /*
+             * NOTHING IS WRITTEN DOWN FOR A ROUTE THAT DID NOT FIRE, and that
+             * includes this new reason. The ledger is what Orbit SAID, which is
+             * why the cooldown can be read straight out of it; a row for a
+             * decision nobody was told about would start the cooldown on a
+             * route the owner never heard of. Same as below-threshold and
+             * cooling-down, deliberately.
+             */
             if (! $decision->fires()) {
                 continue;
             }
@@ -153,7 +180,7 @@ final readonly class AlertEvaluation
             $fired++;
         }
 
-        return $fired;
+        return ['fired' => $fired, 'immature' => $immature];
     }
 
     /**
@@ -209,6 +236,14 @@ final readonly class AlertEvaluation
                  * no score, because the rule's own maximum price is its
                  * threshold and RuleMatches applied it before this line. See
                  * App\Domain\Alerts\AlertCandidate.
+                 *
+                 * NOR DOES THE MATURITY GATE ABOVE, for the same reason and it
+                 * matters more here: a rule is how the owner asks about routes
+                 * Orbit has never watched ("somewhere sunny under €80"), so
+                 * gating it on how long we have watched them would silence the
+                 * feature on precisely the fares it exists to find. The cap is
+                 * a number a person chose; no history is needed to check a fare
+                 * against it.
                  */
                 $decision = $this->policy->decide(
                     AlertCandidate::ruleMatch($price),

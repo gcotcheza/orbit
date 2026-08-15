@@ -83,6 +83,14 @@ final class AppServiceProvider extends ServiceProvider
                 goodAt: $score['tiers']['good'],
                 trendDays: $score['trend_days'],
                 trendSaturationPerDay: (float) $score['trend_saturation_per_day'],
+                /*
+                 * FROM THE ALERTS SECTION, ON PURPOSE. It is the same number
+                 * App\Domain\Alerts\AlertPolicy is given below, because "young
+                 * enough that we will not mail about it" and "young enough that
+                 * we will not put a verdict on it" have to be one decision. See
+                 * config/orbit.php.
+                 */
+                minTrackingDays: (int) config('orbit.alerts.min_tracking_days'),
             ));
         });
 
@@ -116,6 +124,7 @@ final class AppServiceProvider extends ServiceProvider
         $this->app->singleton(AlertPolicy::class, fn (): AlertPolicy => new AlertPolicy(
             cooldownHours: (int) config('orbit.alerts.cooldown_hours'),
             furtherDropPercent: (int) config('orbit.alerts.further_drop_percent'),
+            minTrackingDays: (int) config('orbit.alerts.min_tracking_days'),
         ));
 
         /*

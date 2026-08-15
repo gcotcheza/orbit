@@ -34,9 +34,26 @@ final readonly class ScoringPolicy
         public int $goodAt = 50,
         public int $trendDays = 30,
         public float $trendSaturationPerDay = 0.005,
+        /**
+         * Daily observations a route needs before the scorer will express an
+         * opinion at all — config('orbit.alerts.min_tracking_days'), which is
+         * ALSO what App\Domain\Alerts\AlertPolicy gates on.
+         *
+         * ONE NUMBER FOR BOTH, read from the alerts section for both, because
+         * they are one decision seen from two sides: a screen saying "Good
+         * price — book" about a route the alert engine considers too young to
+         * mention would be Orbit disagreeing with itself in public. It lives
+         * under `alerts` rather than under `score` because that is where the
+         * consequence people feel is — an unwanted mail at 06:55.
+         */
+        public int $minTrackingDays = 7,
     ) {
         if ($percentileWeight < 0 || $trendWeight < 0 || $absoluteWeight < 0) {
             throw new InvalidArgumentException('Score weights cannot be negative.');
+        }
+
+        if ($minTrackingDays < 0) {
+            throw new InvalidArgumentException('The minimum tracking window cannot be negative.');
         }
 
         if ($percentileWeight + $trendWeight + $absoluteWeight <= 0) {

@@ -56,7 +56,8 @@ them is the easiest mistake to make here:
 **Null means "not known yet", never zero.** A route added this morning has
 `price.current: null`, `stats: null` and `score: 0` with `confident: false`.
 Render that as the design's "tracking N days" note, not as a €0 fare or a
-damning gauge.
+damning gauge. The same `confident: false` state holds for the route's first
+week even once prices arrive — see "The day-1 floor".
 
 ---
 
@@ -89,7 +90,7 @@ one with more fields on it. Identical either way, so a component can take either
 | `price.pctBelow` | Whole percent under `usual`; **negative when above it** ("14% above usual" is `-14`). `null` when either half is missing. |
 | `score` | 0–100. See "How the score works" below. |
 | `tier` | `insane` (≥80) / `great` (≥65) / `good` (≥50) / `none`. What the alert sensitivities in PR11 fire on. |
-| `confident` | `false` means the score is a placeholder — no prices and no statistics yet. **Branch on this**, not on `score === 0`. |
+| `confident` | `false` means **Orbit is not expressing an opinion**: `score: 0`, `tier: "none"` and the "Not enough data yet" verdict. It is false with no prices and no statistics, *and* for the first `orbit.alerts.min_tracking_days` (7) mornings of a route's life — see "The day-1 floor" below. **Branch on this**, not on `score === 0`. |
 | `verdict.label` | The sentence: spotlight card, route-detail header. |
 | `verdict.short` | The single word the watchlist pill has room for: `Good` / `Falling` / `Normal` / `Wait`. |
 | `verdict.tone` | `good` \| `info` \| `normal` \| `warn`. **The only thing to switch colours on** — maps onto the token pairs in `resources/css/tokens.css`. Do not derive a colour from `label`. |
@@ -398,6 +399,30 @@ components, each 0–100:
 is scored on the other two with the weights renormalised — not docked 25 points.
 A route with nothing at all returns `score: 0, tier: "none", confident: false`.
 
+### The day-1 floor
+
+**A route Orbit has watched for fewer than `orbit.alerts.min_tracking_days` (7)
+mornings is not scored at all.** It answers exactly like a route with no data:
+`score: 0`, `tier: "none"`, `confident: false`,
+`verdict: "Not enough data yet"` — while `price.current`, `sparkline` and
+`trackingDays` stay real, because those are observations rather than opinions.
+
+This is not caution for its own sake. `ORBIT_STATS_PROVIDER=self` computes the
+statistics from the fares Orbit has already fetched, so on a route's first
+morning the current fare **is** its minimum, its median and its maximum: the
+percentile component says 100, the absolute component says 100, and the API
+would report `score: 100, tier: "insane", confident: true, "Good price — book"`
+for every route on the watchlist, on the strength of one number each.
+
+The same floor gates alerts (`AlertPolicy` answers `immature-data` and sends
+nothing), from the same config key, so a screen can never recommend booking a
+fare the alert engine considers too young to mention. **Rule matches are not
+gated by it** — a fare at or below a maximum price the owner wrote down is true
+on day one.
+
+Clients need no new branch: this is the `confident: false` state they already
+render as the "tracking N days" note.
+
 `verdict` follows from the score and the trend:
 
 | condition | label | short | tone |
@@ -408,7 +433,7 @@ A route with nothing at all returns `score: 0, tier: "none", confident: false`.
 | score ≥ 50, steady | Around normal | Normal | `normal` |
 | score < 50, above usual | Above usual — wait | Wait | `warn` |
 | score < 50, otherwise | Around normal | Normal | `normal` |
-| no data | Not enough data yet | Normal | `normal` |
+| no data, or under the day-1 floor | Not enough data yet | Normal | `normal` |
 
 ---
 
