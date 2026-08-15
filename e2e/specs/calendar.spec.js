@@ -14,6 +14,35 @@
 // =============================================================================
 import { expect, shot, test } from '../fixtures.js'
 
+const MONTHS = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+]
+
+/**
+ * `September 15, 2026` → `260915`, the six digits a Skyscanner path carries.
+ *
+ * Read back out of the SHEET'S OWN HEADING and worked out here from scratch,
+ * which is the point: the app builds that URL by substituting into a template
+ * the server sent, and a check that re-derived it the same way would agree with
+ * a bug. This starts from the date a person can read on the screen.
+ */
+function yymmdd(shown) {
+    const [, month, day, year] = shown.match(/^(\w+) (\d+), (\d{4})$/)
+
+    return `${year.slice(2)}${String(MONTHS.indexOf(month) + 1).padStart(2, '0')}${day.padStart(2, '0')}`
+}
+
 test('the month grid is a heat map, not a table of identical squares', async ({ page }) => {
     await page.goto('/calendar')
 
@@ -97,11 +126,70 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
     // calendar and a future alert cannot disagree about what cheap means.
     await expect(sheet.locator('.pill')).not.toBeEmpty()
 
+    /*
+     * THE BOOKING LINK IS AIMED AT THE DAY THAT WAS TAPPED, and is checked by
+     * READING ITS HREF RATHER THAN BY FOLLOWING IT. Nothing in this suite may
+     * navigate to skyscanner.nl: it is a third party, it is slow, and a run
+     * would then fail whenever somebody else's site was having a bad morning.
+     * The href is the whole of what this app decided.
+     *
+     * The failure this catches is a link that opens perfectly and books the
+     * wrong date — the route's cheapest day, or the first of the month — which
+     * is what "the sheet has a Book button" alone would pass on.
+     */
+    const chip = await page.locator('.chip--active').textContent()
+    const [origin, destination] = chip.trim().split('→')
+    const shownDate = await sheet.locator('.sheet__date').textContent()
+
+    const book = sheet.getByRole('link', { name: 'Book this day' })
+    const path = `${origin.toLowerCase()}/${destination.toLowerCase()}/${yymmdd(shownDate)}/`
+
+    await expect(book).toHaveAttribute(
+        'href',
+        `https://www.skyscanner.nl/transport/flights/${path}`,
+    )
+
+    // It leaves the app, so: a new tab, no `window.opener` handle back into
+    // this one — and NO `noreferrer`, which is what the affiliate attribution
+    // rides on (Components/route/BookingCta.vue).
+    await expect(book).toHaveAttribute('target', '_blank')
+    await expect(book).toHaveAttribute('rel', 'noopener')
+
     await shot(page, 'calendar-day-sheet')
 
-    // And it closes again on the backdrop.
+    // And it closes again on the backdrop — the two actions did not turn the
+    // sheet into something that has to be dismissed some other way.
     await page.locator('.backdrop').click()
     await expect(sheet).toHaveCount(0)
+})
+
+/**
+ * The other half of the sheet: the way out of it that stays in the app. It
+ * exists because the sheet used to be a dead end — a date, a price and a
+ * verdict, and no way to act on any of them.
+ */
+test('the day sheet leads to the route it is about', async ({ page }) => {
+    await page.goto('/calendar')
+
+    const chip = await page.locator('.chip--active').textContent()
+    const code = chip.trim().replace('→', '-')
+
+    const cell = page.locator('.cell--fare').first()
+    await expect(cell).toBeVisible()
+    await cell.click()
+
+    const sheet = page.getByRole('dialog')
+    await expect(sheet).toBeVisible()
+
+    await sheet.getByRole('link', { name: 'Route details' }).click()
+
+    // The route the CHIPS were on, not some default — and the detail screen
+    // really rendered, rather than the router landing somewhere blank.
+    await expect(page).toHaveURL(new RegExp(`/route/${code}$`))
+    await expect(page.locator('.detail__code')).toHaveText(code.replace('-', ' → '))
+
+    // Navigating away took the sheet with it; nothing is left over the detail.
+    await expect(page.getByRole('dialog')).toHaveCount(0)
 })
 
 test('switching route redraws the month', async ({ page }) => {

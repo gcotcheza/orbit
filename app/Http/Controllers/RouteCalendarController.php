@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Application\Routes\BookingLink;
 use App\Application\Routes\MonthCalendar;
 use App\Domain\Pricing\DatedFare;
 use App\Http\Resources\RouteCalendarResource;
@@ -66,8 +67,30 @@ final class RouteCalendarController extends Controller
             (float) config('orbit.calendar.pricey_at'),
         );
 
+        /*
+         * WHERE "BOOK THIS DAY" GOES, AS A TEMPLATE RATHER THAN AS 31 URLS.
+         *
+         * The day sheet books the day the user tapped, so the link is
+         * per-DATE and the client is the only party that knows which date that
+         * is. Sending one `bookingUrl` per day would repeat the same 50-byte
+         * prefix down the whole month; sending nothing would mean the client
+         * hard-coding the Skyscanner host, the path shape and the lower-casing
+         * that BookingLink and config('orbit.booking') already own — and
+         * config/orbit.php is explicit that those links may move to another
+         * affiliate, which is a change that must not have to be made twice.
+         *
+         * So the prefix comes from BookingLink (its undated form is exactly
+         * that prefix, by construction) and the client substitutes `{date}`
+         * with the six digits of the day it drew. See docs/API.md.
+         */
+        $bookingUrlTemplate = BookingLink::for($route).'{date}/';
+
         return RouteCalendarResource::make($calendar)
-            ->additional(['meta' => ['code' => $route->code, 'month' => $month]])
+            ->additional(['meta' => [
+                'code' => $route->code,
+                'month' => $month,
+                'bookingUrlTemplate' => $bookingUrlTemplate,
+            ]])
             ->response();
     }
 }
