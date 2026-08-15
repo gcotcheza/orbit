@@ -57,4 +57,19 @@ export default defineConfig({
             ignored: ['**/storage/framework/views/**'],
         },
     },
+    test: {
+        // ONLY OUR OWN TESTS.
+        //
+        // Vitest's default `include` sweeps the whole project for anything
+        // matching `*.test.*`, and `vendor/` is part of the project — a PHP
+        // package that happens to ship a JavaScript library with its own test
+        // suite (anthropic-ai/sdk pulls in standard-webhooks, which does)
+        // therefore lands in `npm run test:js` and fails it on a dependency
+        // *we* do not have installed. Composer's tree is not ours to run.
+        //
+        // `node_modules` is in vitest's defaults; naming it here replaces them,
+        // so it has to be repeated.
+        include: ['resources/js/**/*.test.js'],
+        exclude: ['**/node_modules/**', 'vendor/**'],
+    },
 });

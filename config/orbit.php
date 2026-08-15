@@ -262,4 +262,167 @@ return [
         'skyscanner_base' => 'https://www.skyscanner.nl/transport/flights',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Reading a rule written in English
+    |--------------------------------------------------------------------------
+    |
+    | design/README.md §4 is a textarea, not a form: the owner types "cheap
+    | weekend somewhere sunny in spring, leaving Friday from any NL airport,
+    | under €80" and the app turns it into removable chips. Two adapters answer
+    | App\Application\Ports\RuleTextParser, chosen by name here exactly like the
+    | fare providers above.
+    |
+    | `parser` DEFAULTS TO THE ONE THAT WORKS WITHOUT A KEY. docs/PLAN.md's
+    | pending-owner-actions list still has "dedicated Anthropic API key" on it,
+    | so the regex adapter is what production runs today and is written to be
+    | good enough to ship rather than as a stub. The moment a key lands in .env
+    | the anthropic adapter takes over with no other change — and it composes
+    | the regex one as its fallback, so a refusal or a truncated answer is a
+    | slightly dumber parse rather than a 500 on the create screen.
+    |
+    | ORBIT_NLP_PARSER OVERRIDES BOTH, which is how a box with a key can still
+    | be pinned to the deterministic parser for a demo or a bisect.
+    |
+    */
+
+    'nlp' => [
+        'parser' => env('ORBIT_NLP_PARSER') ?: (env('ANTHROPIC_API_KEY') ? 'anthropic' : 'regex'),
+
+        'api_key' => env('ANTHROPIC_API_KEY'),
+
+        /*
+         * Haiku, and not by accident. The job is one short sentence in and one
+         * small JSON document out, the schema does the structural work, and
+         * the whole thing has to answer inside a 500 ms debounce while
+         * somebody is still typing. Reaching for a larger model here would buy
+         * nothing the schema does not already guarantee and would spend the
+         * latency budget the screen is built around.
+         */
+        'model' => env('ORBIT_NLP_MODEL', 'claude-haiku-4-5-20251001'),
+
+        /*
+         * The JSON this asks for is a handful of fields, so 1024 is generous.
+         * It is a ceiling and not a target: the adapter treats a max-tokens
+         * stop as a failure and falls back, because a truncated JSON document
+         * is not a small problem, it is unparseable.
+         */
+        'max_tokens' => 1024,
+
+        /*
+         * THE TIMEOUTS ARE THE PSR-18 CLIENT'S, not the SDK's. The SDK's own
+         * `timeout` option is advisory — its source never reads it — so the
+         * only thing that will actually stop a hung request is the transporter
+         * we hand it (see App\Providers\AppServiceProvider). A parse that
+         * hangs is a create screen that never says anything.
+         *
+         * One retry, from the SDK, covering 429 / 5xx / connection errors. The
+         * caller is a person typing, and a second attempt is the most a
+         * keystroke can wait for.
+         */
+        'connect_timeout' => 5,
+        'timeout' => 30,
+        'max_retries' => 1,
+
+        /*
+         * WHAT A PERSON CALLS THE THREE AIRPORTS. The codes themselves come
+         * from `origins` above and are not repeated here — these are the words
+         * somebody types instead of the code, and they are a different fact.
+         * tests/Feature/SeedersTest asserts every value is one of `origins`
+         * and that the city names agree with the seeder's, the same drift
+         * guard the origins list itself carries.
+         *
+         * `any nl airport` and friends are handled by the parser as "all of
+         * them" rather than as an alias, because they name the SET.
+         */
+        'origin_aliases' => [
+            'ams' => 'AMS',
+            'amsterdam' => 'AMS',
+            'schiphol' => 'AMS',
+            'ein' => 'EIN',
+            'eindhoven' => 'EIN',
+            'dus' => 'DUS',
+            'düsseldorf' => 'DUS',
+            'dusseldorf' => 'DUS',
+        ],
+
+        /*
+         * THE NINE-WORD VIBE VOCABULARY, and the words that mean each of them.
+         *
+         * The keys are exactly the vocabulary in
+         * database/seeders/data/european_destinations.php — that file's header
+         * explains why the set is closed, and SeedersTest asserts these keys
+         * and the seeder's agree. The values are the open half: what somebody
+         * might actually type. Adding a synonym is safe; adding a KEY is not,
+         * because no destination carries it and the rule would match nothing.
+         *
+         * Longest phrases first within a vibe, so "city break" is not eaten by
+         * "city" — App\Infrastructure\Nlp\RegexRuleTextParser relies on it.
+         */
+        'vibe_words' => [
+            'sunny' => ['sunshine', 'sunny', 'warm', 'hot', 'sun'],
+            'beach' => ['seaside', 'beaches', 'beach', 'coastal', 'coast', 'sand', 'swimming'],
+            'city' => ['city break', 'citybreak', 'city', 'urban'],
+            'culture' => ['cultural', 'culture', 'museums', 'museum', 'history', 'historic', 'art'],
+            'food' => ['gastronomy', 'restaurants', 'foodie', 'food', 'cuisine', 'wine'],
+            'islands' => ['archipelago', 'islands', 'island'],
+            'nature' => ['mountains', 'mountain', 'outdoors', 'hiking', 'hike', 'nature', 'forest', 'scenery'],
+            'party' => ['nightlife', 'clubbing', 'party', 'bars'],
+            'ski' => ['snowboard', 'skiing', 'slopes', 'piste', 'snow', 'ski'],
+        ],
+
+        /*
+         * The chip the screen draws for each vibe (design/README.md §4 shows
+         * "☀ Sunny"). HERE AND NOT IN THE VUE COMPONENT for the same reason
+         * the sensitivity blurbs are here: the label names a vocabulary this
+         * file owns, and a hard-coded "Sunny" in a template is a word that
+         * goes quietly wrong the day the vocabulary moves.
+         */
+        'vibe_labels' => [
+            'sunny' => '☀ Sunny',
+            'beach' => '🏖 Beach',
+            'city' => 'City break',
+            'culture' => 'Culture',
+            'food' => 'Food',
+            'islands' => 'Islands',
+            'nature' => 'Nature',
+            'party' => 'Nightlife',
+            'ski' => 'Snow',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Matching a rule against the world
+    |--------------------------------------------------------------------------
+    |
+    | WARM_AT is the `destinations.warmth` rating (1 "pack a coat" to 5
+    | "beach", see the seeder data file) a place has to reach before it counts
+    | as somewhere a WARM_VIBES rule would send you. It is checked against the
+    | BEST month in the rule's date window rather than every month, because a
+    | person flies on one date: "somewhere sunny in spring" is satisfied by a
+    | place that is warm by May, and demanding March be warm too would leave
+    | the Canaries and nothing else.
+    |
+    | THE GATE ONLY RUNS WHEN THE RULE ASKS FOR ONE OF WARM_VIBES AND NAMES A
+    | WINDOW. A rule that just says "somewhere sunny" is already answered by
+    | the `sunny` tag on the destination; a climate check with no window to
+    | check it in would be inventing a season the person did not ask about.
+    |
+    | SWEEP_CAP is how many origin×destination pairs one rule may put on the
+    | queue. A rule with no vibe at all is 3 origins × 77 destinations = 231
+    | provider calls, which is a rate limit spent on a sentence somebody typed
+    | and may delete a minute later. The cap keeps the best-fitting thirty and
+    | logs the rest — see App\Jobs\SweepRuleFares for what "best" means.
+    |
+    */
+
+    'rules' => [
+        'warm_at' => 4,
+        'warm_vibes' => ['sunny', 'beach'],
+        'sweep_cap' => 30,
+        /* The design's match banner shows a handful, not a list (§4). */
+        'sample' => 6,
+    ],
+
 ];

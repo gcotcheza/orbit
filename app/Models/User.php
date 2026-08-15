@@ -36,6 +36,23 @@ class User extends Authenticatable
     }
 
     /**
+     * The trips this account described in English (design/README.md §4),
+     * newest first — a rule somebody just wrote is the one they want to see.
+     *
+     * SEPARATE FROM `watchlistItems` AND NOT A KIND OF IT. docs/PLAN.md is
+     * explicit that rules and the watchlist are different concepts: a rule
+     * finds routes nobody is watching yet, and promoting one of its matches to
+     * the watchlist is a deliberate tap rather than something a rule does on
+     * the owner's behalf.
+     *
+     * @return HasMany<DealRule, $this>
+     */
+    public function dealRules(): HasMany
+    {
+        return $this->hasMany(DealRule::class)->latest('created_at')->latest('id');
+    }
+
+    /**
      * How and when this account wants to be told about a deal.
      *
      * MAY NOT EXIST YET, which is why almost nothing should use this relation

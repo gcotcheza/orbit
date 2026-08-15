@@ -57,3 +57,23 @@ Schedule::command('orbit:refresh-stats')
     ->weeklyOn(1, '05:40')
     ->timezone($timezone)
     ->withoutOverlapping();
+
+/*
+ * 06:40 — AFTER the watchlist poll above, and that ordering is the whole
+ * reason for the gap rather than a guess at how long a poll takes.
+ *
+ * A rule is about routes nobody is watching (design/README.md §4), so this is
+ * where Orbit finds out what "somewhere sunny in spring" currently costs. It
+ * runs second because App\Jobs\SweepRuleFares deliberately skips any route the
+ * morning already priced: sweeping first would spend the rule's capped budget
+ * re-fetching the watchlist, and the routes only a rule cares about would
+ * never get their turn.
+ *
+ * Half an hour is comfortable room for 06:10's staggered fan-out — six routes
+ * at config('orbit.poll.stagger_minutes') is fifteen minutes — and the skip
+ * makes an overlap merely wasteful rather than wrong.
+ */
+Schedule::command('orbit:sweep-rules')
+    ->dailyAt('06:40')
+    ->timezone($timezone)
+    ->withoutOverlapping();

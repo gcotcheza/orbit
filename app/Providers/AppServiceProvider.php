@@ -4,12 +4,19 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use Anthropic\Client as AnthropicClient;
 use App\Application\Ports\PriceProvider;
 use App\Application\Ports\PriceStatsProvider;
+use App\Application\Ports\RuleTextParser;
 use App\Domain\Pricing\DealScorer;
 use App\Domain\Pricing\ScoringPolicy;
+use App\Domain\Rules\RuleMatcher;
+use App\Domain\Rules\RuleVocabulary;
+use App\Infrastructure\Nlp\AnthropicRuleTextParser;
+use App\Infrastructure\Nlp\RegexRuleTextParser;
 use App\Infrastructure\Pricing\FakePriceProvider;
 use App\Infrastructure\Pricing\FakeStatsProvider;
+use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -66,6 +73,95 @@ final class AppServiceProvider extends ServiceProvider
                 trendSaturationPerDay: (float) $score['trend_saturation_per_day'],
             ));
         });
+
+        /*
+         * THE VOCABULARY, once. App\Domain is pure PHP and calls no config(),
+         * so the words the rule parser works from are read here and handed in
+         * — the same arrangement DealScorer and ScoringPolicy have above.
+         *
+         * A SINGLETON because it is immutable and three things want it (both
+         * parsers and App\Application\Rules\RuleViews), not as an optimisation.
+         */
+        $this->app->singleton(RuleVocabulary::class, function (): RuleVocabulary {
+            /** @var list<string> $origins */
+            $origins = config('orbit.origins');
+            /** @var array<string, string> $aliases */
+            $aliases = config('orbit.nlp.origin_aliases');
+            /** @var array<string, list<string>> $vibeWords */
+            $vibeWords = config('orbit.nlp.vibe_words');
+            /** @var array<string, string> $vibeLabels */
+            $vibeLabels = config('orbit.nlp.vibe_labels');
+
+            return new RuleVocabulary($origins, $aliases, $vibeWords, $vibeLabels);
+        });
+
+        $this->app->singleton(RuleMatcher::class, function (): RuleMatcher {
+            /** @var list<string> $warmVibes */
+            $warmVibes = config('orbit.rules.warm_vibes');
+
+            return new RuleMatcher((int) config('orbit.rules.warm_at'), $warmVibes);
+        });
+
+        /*
+         * THE RULE PARSER, chosen by name in config/orbit.php — the third port
+         * this app has and the only one whose adapters are layered rather than
+         * alternatives: the anthropic one COMPOSES the regex one and hands
+         * over on any failure, so a refusal or an outage costs a smarter
+         * reading rather than the screen.
+         *
+         * AN UNKNOWN NAME THROWS AT RESOLUTION, same as the fare providers. A
+         * box that silently fell back to regex because somebody typo'd
+         * `anthropc` would look like it was working while quietly reading
+         * sentences worse than it was paid to.
+         */
+        $this->app->bind(RuleTextParser::class, function (): RuleTextParser {
+            $regex = new RegexRuleTextParser($this->app->make(RuleVocabulary::class));
+
+            return match ($name = config('orbit.nlp.parser')) {
+                'regex' => $regex,
+                'anthropic' => $this->anthropicParser($regex),
+                default => throw new InvalidArgumentException(sprintf('Unknown rule parser [%s].', is_string($name) ? $name : gettype($name))),
+            };
+        });
+    }
+
+    /**
+     * The Claude-backed parser, with an explicit transporter.
+     *
+     * THE TRANSPORTER IS SUPPLIED RATHER THAN DISCOVERED, and that is the one
+     * thing in this method that is not boilerplate. The SDK's own `timeout`
+     * option is advisory — its source says so and never reads it — so the only
+     * thing that will actually stop a hung request is the timeout on the
+     * PSR-18 client we hand it. Left to php-http/discovery, a create screen
+     * whose parse request never returns would sit on a spinner forever.
+     *
+     * `http_errors => false` because the SDK reads the status itself and turns
+     * it into a typed exception; letting Guzzle throw first would replace the
+     * API's own error text with a stack trace.
+     */
+    private function anthropicParser(RuleTextParser $fallback): RuleTextParser
+    {
+        /** @var array<string, mixed> $nlp */
+        $nlp = config('orbit.nlp');
+
+        return new AnthropicRuleTextParser(
+            client: new AnthropicClient(
+                apiKey: (string) $nlp['api_key'],
+                requestOptions: [
+                    'transporter' => new GuzzleClient([
+                        'connect_timeout' => (float) $nlp['connect_timeout'],
+                        'timeout' => (float) $nlp['timeout'],
+                        'http_errors' => false,
+                    ]),
+                    'maxRetries' => (int) $nlp['max_retries'],
+                ],
+            ),
+            fallback: $fallback,
+            logger: $this->app->make('log'),
+            vocabulary: $this->app->make(RuleVocabulary::class),
+            model: (string) $nlp['model'],
+            maxTokens: (int) $nlp['max_tokens'],
+        );
     }
 
     public function boot(): void
@@ -86,6 +182,27 @@ final class AppServiceProvider extends ServiceProvider
          */
         RateLimiter::for('login', fn (Request $request): Limit => Limit::perMinute(5)
             ->by(mb_strtolower((string) $request->input('email')).'|'.$request->ip()));
+
+        /*
+         * The rule parser's throttle (design/README.md §4).
+         *
+         * TWENTY A MINUTE, KEYED ON THE ACCOUNT. The create screen re-parses
+         * on a 500 ms debounce, so continuous typing is roughly two calls a
+         * second of which the debounce lets through a handful — twenty is
+         * comfortably above what a person generates and comfortably below what
+         * a stuck loop would.
+         *
+         * IT EXISTS BEFORE IT IS NEEDED, on purpose. Today the endpoint runs a
+         * dozen regexes and could take any number of calls; the day an
+         * Anthropic key lands in .env the same route becomes a metered
+         * third-party request per keystroke, and nobody is going to remember
+         * to add a limiter on that day.
+         *
+         * By user id and not by ip: this app has one account, several devices,
+         * and a phone on mobile data whose ip changes mid-sentence.
+         */
+        RateLimiter::for('rules-parse', fn (Request $request): Limit => Limit::perMinute(20)
+            ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
 
         /*
          * ORBIT ISSUES NO API TOKENS, so a bearer token is never a credential

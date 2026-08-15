@@ -85,10 +85,19 @@ final class FakeHistorySeeder extends Seeder
      * goes on to write, and every `created_at` in it. A throw in the middle of
      * the loop without this leaves the application believing it is still last
      * month.
+     *
+     * IT RESTORES WHAT IT FOUND rather than clearing. A bare `setTestNow()`
+     * UNFREEZES the clock, which is the right answer in production (nothing
+     * was frozen) and the wrong one under a test that pinned the date before
+     * seeding — that caller gets the real wall clock back and every assertion
+     * about "today" afterwards silently starts depending on the day the suite
+     * is run. Handing back exactly what was there is the same thing in
+     * production and the honest thing everywhere else.
      */
     private function backfill(Route $route, int $days): void
     {
         $anchor = Date::now();
+        $restore = Date::getTestNow();
 
         try {
             // Down to 1, not 0: run() polls today straight afterwards.
@@ -98,7 +107,7 @@ final class FakeHistorySeeder extends Seeder
                 PollRoutePrices::dispatchSync($route->id);
             }
         } finally {
-            Date::setTestNow();
+            Date::setTestNow($restore);
         }
     }
 }
