@@ -20,7 +20,7 @@
   back. There is no `-u` flag anywhere in this runbook and none is wanted.
 - **⚠ The containers boot the code once.** php-fpm, Horizon and `schedule:work`
   are long-lived processes holding an opcache and a booted framework. New code on
-  disk changes nothing until they are told. This is why step 8 exists and is not
+  disk changes nothing until they are told. This is why step 9 exists and is not
   optional — a deploy that skips it looks completely successful and serves the
   old app.
 - **⚠ Root-run git re-owns files.** `git pull` as root leaves root-owned objects
@@ -146,44 +146,18 @@
      They are the gate's own noise and not incidents — the environment name in
      front of the level is how you tell. See post-deploy check 8.
 
-5. **`scripts/e2e.sh` — the browser gate. Optional, strongly recommended.**
-   ```bash
-   cd /var/www/orbit && ./scripts/e2e.sh
-   ```
-   **Good:** the `orbit-e2e` stack comes up, migrates, seeds, runs 32 browser
-   tests and tears itself down, ending in a green `==> browser gate passed`.
-   About 90 seconds after the first run.
+5. **The browser gate is NOT a pre-flight check. It is deploy step 6.**
 
-   **What it adds over step 4, and why it is worth the time.** Not one of
-   `check.sh`'s five checks has ever seen a screen — Vitest runs the front end in
-   jsdom, which has no layout engine and no rasteriser. All five are green on an
-   app whose globe renders as a black circle and whose calendar renders 31
-   identical grey squares. This drives a real Chromium (WebGL on SwiftShader)
-   through the eight journeys and fails on any uncaught exception. `docs/E2E.md`
-   is the full description.
+   `scripts/e2e.sh` used to be listed here, and being listed here is what broke
+   deploy `ab262c4`. It drives a real browser against **the checkout's own
+   `public/build/`**, which at pre-flight time is still the *previous* deploy's
+   bundle — the code has been pulled, the assets have not been rebuilt, and the
+   suite fails on a UI that does not exist yet. A red gate that says nothing
+   about the commit being deployed is worse than no gate: it is fifteen minutes
+   spent looking for a bug in the app.
 
-   **Why it is optional.** It pulls a ~2 GB Playwright image the first time it
-   runs, and this box's disk is shared with six other apps. On a box that has it
-   cached there is no reason to skip it.
-
-   - **⚠ Also root, not `sudo -u orbit`** — same docker.sock reason as step 4.
-   - **It cannot touch the live stack.** Different compose project (`orbit-e2e`),
-     different port (`127.0.0.1:3185`, never 3085), its own generated `.env.e2e`
-     and its own volumes. It is safe to run **while the site is up**, which is
-     how it is meant to be run.
-   - It leaves nothing behind: `down -v` at the end, always. `--keep` if you want
-     to look at the sandbox afterwards; `scripts/e2e.sh --down` then tears it down.
-   - **⚠ It runs off the live checkout's `vendor/`, `node_modules/` and
-     `public/build/`** and installs each only if it is missing — so on this box
-     it uses the `--no-dev` vendor tree, which is all it needs (it drives the app
-     through a browser and runs no PHP tooling). It does **not** need the gate
-     overlay from step 4.
-   - **⚠ A run is good when every line has a tick.** It used to carry three
-     `test.fail()` markers — rendering defects written down as tests that passed
-     while the bug was there, printing a `✘` in a green run. All three are fixed
-     (the follow-ups PR), the markers are gone, and **a `✘` now means a
-     failure.** The last line is still the thing to read: `==> browser gate
-     passed`.
+   It has to run **after the asset build**, so it now lives with the deploy steps
+   as step 6. Nothing else moved.
 
 ## Deploy steps
 
@@ -196,7 +170,7 @@ cd /var/www/orbit
 **⚠ THE ORDER IS ABOUT ONE WINDOW: PULL → MIGRATE.** The checkout is
 bind-mounted into `app`, `horizon` and `scheduler`, so `git pull` puts the new
 code on disk *in the running containers* immediately. The long-lived processes
-keep serving the old code from opcache (which is why step 8 exists) — but
+keep serving the old code from opcache (which is why step 9 exists) — but
 anything that boots the framework fresh in that window runs **new code against
 an unmigrated database**: every `artisan` the scheduler spawns, every Horizon
 worker that recycles after its job limit, every `php artisan` a person types.
@@ -260,7 +234,61 @@ build is not step 3 any more.
    `--profile build` is required — `assets` is a task and is not running, so
    `exec` cannot reach it and `run --rm` is the verb.
 
-6. **Prune old builds**
+6. **`scripts/e2e.sh` — the browser gate. Optional, strongly recommended.**
+   ```bash
+   cd /var/www/orbit && ./scripts/e2e.sh
+   ```
+   **Good:** the `orbit-e2e` stack comes up, migrates, seeds, runs the browser
+   suite and tears itself down, ending in a green `==> browser gate passed`.
+   About 90 seconds after the first run.
+
+   - **⚠ HERE, AND NOT IN THE PRE-FLIGHT, WHICH IS WHERE IT USED TO BE.** It
+     serves the app out of the checkout's own `public/build/`, and it only builds
+     one **if there is none** — so run before step 5 it tests the code that was
+     just pulled through the bundle that was already there. Deploy `ab262c4` is
+     that mistake: a red suite, a green app, and the difference was a stale
+     JavaScript bundle. After step 5 the directory holds the build for the commit
+     being deployed, which is the only thing worth driving a browser at.
+   - **⚠ And BEFORE step 9's restart**, which is the other half of the sandwich.
+     The whole point of a gate is that there is still something to stop.
+
+   **What it adds over pre-flight step 4, and why it is worth the time.** Not one
+   of `check.sh`'s five checks has ever seen a screen — Vitest runs the front end
+   in jsdom, which has no layout engine and no rasteriser. All five are green on
+   an app whose globe renders as a black circle and whose calendar renders 31
+   identical grey squares. This drives a real Chromium (WebGL on SwiftShader)
+   through the eight journeys and fails on any uncaught exception. `docs/E2E.md`
+   is the full description.
+
+   **Why it is optional.** It pulls a ~2 GB Playwright image the first time it
+   runs, and this box's disk is shared with six other apps. On a box that has it
+   cached there is no reason to skip it.
+
+   - **⚠ Also root, not `sudo -u orbit`** — same docker.sock reason as pre-flight
+     step 4.
+   - **It cannot touch the live stack.** Different compose project (`orbit-e2e`),
+     different port (`127.0.0.1:3185`, never 3085), its own generated `.env.e2e`
+     and its own volumes. It is safe to run **while the site is up**, which is
+     how it is meant to be run.
+   - It leaves nothing behind: `down -v` at the end, always. `--keep` if you want
+     to look at the sandbox afterwards; `scripts/e2e.sh --down` then tears it down.
+   - **⚠ It runs off the live checkout's `vendor/`, `node_modules/` and
+     `public/build/`** and installs each only if it is missing — so on this box
+     it uses the `--no-dev` vendor tree, which is all it needs (it drives the app
+     through a browser and runs no PHP tooling). It does **not** need the gate
+     overlay from pre-flight step 4.
+   - **⚠ A run is good when every line has a tick.** It used to carry three
+     `test.fail()` markers — rendering defects written down as tests that passed
+     while the bug was there, printing a `✘` in a green run. All three are fixed
+     (the follow-ups PR), the markers are gone, and **a `✘` now means a
+     failure.** The last line is still the thing to read: `==> browser gate
+     passed`.
+   - **⚠ NO COUNT IS WRITTEN DOWN HERE ON PURPOSE.** This said "runs 32 browser
+     tests" for several months during which the number was 32 exactly once. A
+     figure in a runbook that nothing checks is a figure that rots, and the only
+     honest reading of "it ran 29" is then a shrug. The last line is the check.
+
+7. **Prune old builds**
    ```bash
    docker compose exec -T app php artisan build:retain
    ```
@@ -289,7 +317,7 @@ build is not step 3 any more.
    - It also runs daily at 03:10 from `routes/console.php`, so a forgotten step
      here is a day of extra chunks rather than a full disk.
 
-7. **Clear compiled views**
+8. **Clear compiled views**
    ```bash
    docker compose exec -T app php artisan view:clear
    ```
@@ -298,7 +326,7 @@ build is not step 3 any more.
    content hash, so a changed `app.blade.php` can otherwise keep serving the old
    compiled file.
 
-8. **Restart the long-lived processes** — the step that actually ships the code
+9. **Restart the long-lived processes** — the step that actually ships the code
    ```bash
    docker compose exec -T horizon php artisan horizon:terminate
    docker compose restart app horizon scheduler web
@@ -451,7 +479,7 @@ B='http://127.0.0.1:3085'
    `X-XSRF-TOKEN` from the same session — gets far enough for a 401 to mean
    "unauthenticated". Same trap as the `-c`/`-b` one: a refusal that is real,
    for a reason that is not the one being tested.
-   **Better still: don't.** `scripts/e2e.sh` (pre-flight step 5) drives every one
+   **Better still: don't.** `scripts/e2e.sh` (deploy step 6) drives every one
    of these writes through a real browser that handles the cookie dance itself,
    against a sandbox where a mistake costs nothing. Hand-rolled `curl` POSTs
    against **production** change production's data.
@@ -510,7 +538,7 @@ B='http://127.0.0.1:3085'
    docker compose exec -T app php artisan queue:failed
    ```
    **Good:** `Horizon is running.` and `No failed jobs found.`
-   `horizon:status` is the check that step 8's `horizon:terminate` was followed by
+   `horizon:status` is the check that step 9's `horizon:terminate` was followed by
    a supervisor that actually came back — a terminate whose container did not
    restart leaves a silent queue, and nothing else in this battery would notice.
 
@@ -542,7 +570,7 @@ B='http://127.0.0.1:3085'
    deploy that touched alerting.
    - **⚠ IT NEEDS `MAIL_LOG_CHANNEL=mail` IN `.env`,** which `.env` on this box
      does not have until somebody adds it: the line is in `.env.example` (which
-     is in git) and `.env` (which is not). Add it **before** step 8's restart, so
+     is in git) and `.env` (which is not). Add it **before** step 9's restart, so
      the workers pick it up with everything else. Without it the log mailer falls
      back to the default channel, whose floor is `LOG_LEVEL=info`, and the
      transport writes at DEBUG — so every message is rendered and then dropped,

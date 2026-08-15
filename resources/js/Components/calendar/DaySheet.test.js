@@ -112,6 +112,35 @@ describe('DaySheet', () => {
     })
 
     /*
+     * AND THE QUIET ONE IS A BUTTON. It was a 12 px centred text link under the
+     * row, in the same grey as the disclaimer beneath it — the owner reported
+     * that it does not read as something you can press. Both hand-offs are now
+     * the same control in the same row, sized rather than styled apart, which is
+     * also what Components/route/BookingCta.vue draws. `action` is that control.
+     */
+    it('draws the second opinion as a button beside the first, not as small print', () => {
+        const wrapper = sheet()
+
+        expect(compare(wrapper).classes()).toContain('action')
+        // Skyscanner first, then Aviasales: the check before the act.
+        expect(wrapper.findAll('.actions .action').map((link) => link.attributes('href'))).toEqual([
+            BOOKING.skyscanner.replace('{yymmdd}', '260915'),
+            BOOKING.aviasales.replace('{ddmm}', '1509'),
+        ])
+    })
+
+    /*
+     * THE SWATCH SAYS WHAT IT IS OF. It is a 54 px square of a colour whose
+     * whole meaning is a comparison — where this day's fare sits between the
+     * cheapest and dearest day of this month, on the grid's own ramp — and
+     * without the grid in front of you that is unguessable. The UX pass read it
+     * as decoration.
+     */
+    it('labels the heat swatch', () => {
+        expect(sheet().get('.sheet__swatch-label').text()).toBe('Price vs month')
+    })
+
+    /*
      * The date is a calendar day with no zone (docs/API.md). Anything that
      * routes it through a `Date` re-reads it in the viewer's own timezone and
      * books the day before for half the planet — so the first of a month, which

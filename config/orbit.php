@@ -958,10 +958,15 @@ return [
     | check it in would be inventing a season the person did not ask about.
     |
     | SWEEP_CAP is how many origin×destination pairs one rule may put on the
-    | queue. A rule with no vibe at all is 3 origins × 77 destinations = 231
-    | polls, which is a rate limit spent on a sentence somebody typed and may
-    | delete a minute later. The cap keeps the best-fitting thirty and logs the
-    | rest — see App\Jobs\SweepRuleFares for what "best" means.
+    | queue. A rule with no vibe at all is 3 origins × every curated destination
+    | — 184 of them today, and the number only ever goes up as
+    | database/seeders/data/ is edited — which is a rate limit spent on a
+    | sentence somebody typed and may delete a minute later. (It read "3 × 77 =
+    | 231" for months after world flights more than doubled the list, which is
+    | why the arithmetic is now written as a shape with the count beside it
+    | rather than as a product nobody recomputes.) The cap keeps the
+    | best-fitting thirty and logs the rest — see App\Jobs\SweepRuleFares for
+    | what "best" means.
     |
     | SWEEP_HORIZON_DAYS is how far ahead those speculative polls look, and it
     | is DELIBERATELY SHORTER THAN `poll.window_days`. The asymmetry is the

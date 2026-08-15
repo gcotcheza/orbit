@@ -16,8 +16,9 @@ use Illuminate\Http\JsonResponse;
  *
  * WHY THIS IS A `?q=` SEARCH WHEN `GET /api/destinations` DELIBERATELY IS NOT.
  * That endpoint's note argues at length that a network hop between a letter
- * and its suggestion is latency bought for nothing when the list is 77 rows of
- * four short strings. Every word of it still holds — and this table is 3,270
+ * and its suggestion is latency bought for nothing when the list is a couple of
+ * hundred rows of four short strings — 184 of them today. Every word of it
+ * still holds — and this table is 3,270
  * rows, which is roughly 200 KB the form would download on its first open, on
  * a phone, to answer four keystrokes. The two designs are not in tension: the
  * client keeps the curated list in memory and paints from it instantly, and

@@ -85,6 +85,26 @@ const onStillnessChange = (event) => {
   reducedMotion.value = event.matches
 }
 
+/*
+ * SAYING THAT THE CAMERA IS DRIVING ITSELF, which is the one thing this screen
+ * never told anybody.
+ *
+ * The UX pass reported the globe as "looks draggable, and tapping it does
+ * nothing". Half of that is a misreading and half of it is ours. Rotate-drag IS
+ * wired and does work: globe.gl builds OrbitControls (`controlType: 'orbit'`),
+ * and globeScene.js turns zoom and pan off and leaves `enableRotate` at its
+ * default of true — which is exactly design/README.md §1's "rotate-drag only".
+ * What the screen never said is that a camera moving on its own is SUPPOSED to
+ * be moving on its own, so a drag that the next leg of the tour overwrites reads
+ * as a control that does not work rather than as a film that is still playing.
+ *
+ * One quiet line under the chip is the whole fix: it names the behaviour, and it
+ * names the one gesture that is not the tour's. Deliberately ABSENT when there
+ * is no film to describe — an empty watchlist tours nothing, and under reduced
+ * motion the globe holds still, where "auto-touring" would be a plain lie.
+ */
+const touring = computed(() => props.routes.length > 0 && !reducedMotion.value)
+
 // --- The scene and its cancellation ----------------------------------------
 
 let scene = null
@@ -162,6 +182,41 @@ function play({ instant = false } = {}) {
   }
 }
 
+/*
+ * =============================================================================
+ * WHY THERE IS NO CAMERA BIAS HERE, MEASURED RATHER THAN ASSUMED
+ * =============================================================================
+ * The UX pass filed "the spotlight card covers the arc's destination" against a
+ * mid-flight screenshot, and the obvious fix is to aim the camera a few degrees
+ * off the subject so that southern destinations render above the card's top
+ * edge. It was measured against the running sandbox before being written, and it
+ * is the wrong fix for all three steps:
+ *
+ *   FIT — needs nothing. At `fitAltitude` (2.4) the whole planet is about 205 px
+ *   across in a 390 px canvas, so its lower limb sits ~48 px clear of the card
+ *   before anything is moved. Both endpoints are on screen. This is the step
+ *   whose job is "here is the whole route", and it already does it.
+ *
+ *   DIVE — cannot be fixed by aiming. At `diveAltitude` (0.42) the globe is far
+ *   larger than the canvas and a European destination is off the BOTTOM EDGE
+ *   entirely, not merely under the 30 px the card overlaps. Bringing it back
+ *   would mean flying higher, i.e. changing the altitude design/README.md §1
+ *   specifies, which is a different screen rather than a fix to this one.
+ *
+ *   FLY — would break something worse. PlaneGlyph.vue is pinned at the exact
+ *   centre of the stage BECAUSE the camera points at the plane; that identity is
+ *   the design's own trick and the reason the heading is one CSS rotation per
+ *   frame instead of a projected screen position. Offset the camera and the
+ *   aeroplane detaches from the arc it is flying, by an amount that varies with
+ *   altitude (0.20 to 0.71 across one flight) and so cannot be cancelled with a
+ *   constant. And it is unnecessary: the flight ENDS with the destination at the
+ *   canvas centre, ~150 px above the card, where it then sits for the whole
+ *   dwell — which is the moment the card underneath is there to be read.
+ *
+ * So the finding is real as a photograph and not as a defect: what it caught is
+ * the middle of a film. What DID come out of it is P1 — the caption over that
+ * same region was genuinely illegible — and that is fixed in the style block.
+ */
 function runStep(step, route, mine) {
   if (mine !== token || !scene) {
     return
@@ -335,9 +390,16 @@ watch(reducedMotion, () => play({ instant: true }))
       {{ orbitingLabel }}
     </p>
 
+    <!-- Why the planet keeps moving, and the one gesture that is the viewer's.
+         See `touring` for what it is answering. -->
+    <p v-if="touring" class="stage__hint">Auto-touring · drag to spin</p>
+
     <PlaneGlyph v-show="flying" :bearing="bearing" />
 
-    <p class="stage__caption">{{ caption }}</p>
+    <!-- The text is in a span of its own so that the scrim behind it is the
+         SHAPE OF THE WORDS rather than a bar across the whole stage — see the
+         style block. -->
+    <p class="stage__caption"><span class="stage__caption-text">{{ caption }}</span></p>
   </div>
 </template>
 
@@ -387,6 +449,27 @@ watch(reducedMotion, () => play({ instant: true }))
   background: var(--accent);
 }
 
+/* Under the chip and quieter than it: the chip is a fact about the watchlist,
+   this is a note about the camera. It is over the Earth like the caption is, so
+   it takes the same scrim — a hint nobody can read is not a hint. */
+.stage__hint {
+  position: absolute;
+  left: var(--gutter);
+  top: 44px;
+
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  /* A drag that starts on this text still has to reach the globe underneath. */
+  pointer-events: none;
+
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink2);
+
+  background: var(--globe-scrim);
+}
+
 /*
  * THE CAPTION SITS ABOVE THE SPOTLIGHT CARD, and the arithmetic is the whole
  * fix. design/README.md §1 asks for two things that are incompatible as
@@ -414,19 +497,64 @@ watch(reducedMotion, () => play({ instant: true }))
      to reach the globe's rotate controls underneath it. */
   pointer-events: none;
 
-  text-align: center;
+  display: flex;
+  justify-content: center;
+}
+
+/*
+ * =============================================================================
+ * A SCRIM, BECAUSE A HALO WAS NOT ENOUGH
+ * =============================================================================
+ * This text is over the EARTH — a photograph, and not a backdrop this palette
+ * gets to choose. It was `--muted` with two soft `text-shadow` haloes in the
+ * page colour, which is the standard answer and which the UX pass judged
+ * insufficient: legible-ish over the Atlantic in the dark theme and very nearly
+ * invisible in the light one, where the ink is dark, the halo is nearly white
+ * and the ocean underneath is neither (screenshot 61-j6-light-home).
+ *
+ * A halo can only ever tint the few pixels around each glyph, and the failure is
+ * not around the glyphs — it is that there is no known background AT ALL. So the
+ * fix is to give it one: an opaque-enough pill in the page colour
+ * (`--globe-scrim`, per theme), with the ink stepped up from `--muted` to
+ * `--ink2` now that it is being read against a surface this file controls
+ * instead of against whatever continent the camera is over.
+ *
+ * ON THE SPAN AND NOT ON THE `<p>`, which is the difference between a pill and a
+ * bar: the paragraph spans the whole stage so the text can be centred in it, and
+ * painting the scrim there would put a full-width band across the planet.
+ */
+.stage__caption-text {
+  padding: 3px 12px;
+  border-radius: var(--radius-pill);
+
   font-family: var(--font-display);
   font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: 0.12em;
-  color: var(--muted);
-  /* A halo in the page colour, because this text is now over the EARTH rather
-     than over the strip of background below it, and a photographic texture is
-     not a backdrop this palette gets to choose: `--muted` reads over the
-     Atlantic and vanishes over the Sahara. Two soft shadows rather than one
-     offset — the glyphs need backing on every side, not underneath.
-     (The design's own screenshot has clear space here because its camera was
-     parked at the fitted altitude; ours is mid-flight most of the time.) */
-  text-shadow: 0 0 4px var(--bg), 0 0 9px var(--bg);
+  color: var(--ink2);
+
+  background: var(--globe-scrim);
+}
+
+/*
+ * A PHONE TURNED SIDEWAYS. The installed app is locked to portrait
+ * (config/orbit.php's manifest), so this is only ever a browser tab — but that
+ * is how somebody who has not installed it yet looks at the app, and with a 360
+ * px globe plus a header there was nothing left of a 390 px viewport for the
+ * card the globe exists to introduce.
+ *
+ * The stage is the only thing here that can give up height without losing
+ * information: the globe is a picture of one route and a smaller picture is the
+ * same route. globeScene.js sizes the renderer from this element's own box
+ * through a ResizeObserver, so nothing else has to know this rule exists.
+ *
+ * `max-height` KEEPS IT OFF LAPTOPS. Every desktop window is "landscape", and a
+ * 1440x900 browser has no fold problem to solve; 560 px of viewport height is a
+ * phone on its side and nothing else.
+ */
+@media (orientation: landscape) and (max-height: 560px) {
+  .stage {
+    height: 40vh;
+  }
 }
 </style>

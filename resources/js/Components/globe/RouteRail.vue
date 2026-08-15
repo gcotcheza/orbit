@@ -13,14 +13,59 @@
  * buttons. The globe and the card are the panel; they are not marked up as one,
  * because `aria-controls` pointing at a decorative canvas would be a lie.
  */
+import { nextTick, useTemplateRef, watch } from 'vue'
 import { euro } from '@/lib/format'
+import { scrollIntoView } from '@/lib/motion'
 
-defineProps({
+const props = defineProps({
   routes: { type: Array, required: true },
   activeCode: { type: String, required: true },
 })
 
 defineEmits(['select'])
+
+const track = useTemplateRef('track')
+
+/*
+ * =============================================================================
+ * THE SELECTED CHIP HAS TO BE ON SCREEN
+ * =============================================================================
+ * The rail is a horizontal scroller and the selection is not always the user's:
+ * the tour advances it every eleven seconds, and it advances it IN ORDER, so a
+ * six-route watchlist spends most of its time with the accent-filled chip
+ * somewhere off the right-hand edge. The screenshot the UX pass caught it in is
+ * exact — the card says Naples, and the AMS→NAP chip is half over the edge of
+ * the screen with two other routes filling the rail.
+ *
+ * It is worse than merely untidy, because the rail is the one control that says
+ * WHERE IN THE LIST the camera currently is. Off screen, it says nothing, and
+ * the screen looks like it has forgotten which route it is showing.
+ *
+ * `inline: 'center'` and NOT 'nearest': a chip nudged just inside the edge is
+ * technically visible and reads as the end of the list rather than as the
+ * selection. `block: 'nearest'` is the other half and is the important one — the
+ * rail sits below a 360 px globe, and without it the browser is entitled to
+ * scroll the PAGE vertically to bring the chip into view, which would drag the
+ * globe off the top of the screen every eleven seconds.
+ *
+ * SMOOTH ONLY IF SMOOTH IS WANTED, which lib/motion.js answers for all three
+ * screens that scroll on somebody's behalf.
+ *
+ * `nextTick` because the chip may not exist yet: the first selection lands in
+ * the same tick the list is rendered in.
+ */
+watch(
+  () => props.activeCode,
+  (code) => {
+    nextTick(() => {
+      scrollIntoView(track.value?.querySelector(`[data-code="${CSS.escape(code)}"]`), {
+        inline: 'center',
+        block: 'nearest',
+      })
+    })
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -30,12 +75,13 @@ defineEmits(['select'])
       <p class="rail__count">{{ routes.length }} watched</p>
     </header>
 
-    <div class="rail__track" role="tablist" aria-label="Watched routes">
+    <div ref="track" class="rail__track" role="tablist" aria-label="Watched routes">
       <button
         v-for="route in routes"
         :key="route.code"
         class="rail__chip"
         :class="{ 'rail__chip--active': route.code === activeCode }"
+        :data-code="route.code"
         type="button"
         role="tab"
         :aria-selected="route.code === activeCode"

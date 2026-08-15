@@ -21,8 +21,8 @@ use Illuminate\Support\Facades\Date;
  * FOUR QUERIES FOR ANY RULE, and the same reasoning as
  * App\Application\Routes\RouteSnapshots: the destinations, the routes, their
  * fares, and this account's watchlist, each fetched once for the whole answer.
- * A per-route lookup would be seventy-seven of them for a rule that says
- * "anywhere cheap".
+ * A per-route lookup would be one per curated destination — a hundred and
+ * eighty-four of them today — for a rule that says "anywhere cheap".
  *
  * TWO OF THE FOUR ARE MEMOISED FOR THE LIFE OF THE INSTANCE — the destination
  * vocabulary and the watchlist — because `GET /api/rules` asks this class once

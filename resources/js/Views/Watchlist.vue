@@ -26,6 +26,7 @@ import { useRouter } from 'vue-router'
 import AddRouteForm from '@/Components/watch/AddRouteForm.vue'
 import RuleRow from '@/Components/rules/RuleRow.vue'
 import WatchRow from '@/Components/watch/WatchRow.vue'
+import { scrollIntoView } from '@/lib/motion'
 import { useRulesStore } from '@/stores/rules'
 import { useWatchlistStore } from '@/stores/watchlist'
 
@@ -88,6 +89,28 @@ let undoTimer = null
 const busyCodes = ref(new Set())
 
 const addForm = useTemplateRef('addForm')
+const rulesSection = useTemplateRef('rulesSection')
+
+/*
+ * =============================================================================
+ * A WAY TO FIND THE RULES, WHICH ARE AT THE BOTTOM OF A SCREEN THAT SCROLLS
+ * =============================================================================
+ * Deal rules are the app's second feature and they live under the boarding
+ * passes, which is the right order — the routes are what the owner chose, a rule
+ * is a standing question. With seven routes on a phone that puts them roughly
+ * two and a half screens down, behind seven near-identical cards, and the UX
+ * pass simply never found them: the + tab writes a rule and then the rule
+ * appears somewhere the person who wrote it has no reason to scroll to.
+ *
+ * A COUNT AND NOT A LINK, because the section is on this screen and not on
+ * another one. "Rules · 2" says the feature exists, says how much of it is
+ * yours, and gets you there; a tab or a route would be a second home for a list
+ * that already has one.
+ *
+ * ONLY WHEN THERE ARE RULES. An anchor to an empty section is an advert, and the
+ * section itself is hidden in exactly the same case and for the same reason.
+ */
+const jumpToRules = () => scrollIntoView(rulesSection.value, { block: 'start' })
 
 const countLine = computed(() => {
   const total = routes.value.length
@@ -331,6 +354,21 @@ function messageFor(failure) {
       </button>
     </header>
 
+    <!-- The rules section is two and a half screens down; this is how anybody
+         finds out it is there. See `jumpToRules`. -->
+    <button
+      v-if="dealRules.length > 0"
+      type="button"
+      class="screen__anchor"
+      :aria-label="`Go to your ${dealRules.length} deal ${dealRules.length === 1 ? 'rule' : 'rules'}`"
+      @click="jumpToRules"
+    >
+      Rules · {{ dealRules.length }}
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M8 3.5v9M4.5 9l3.5 3.5L11.5 9" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </button>
+
     <AddRouteForm v-if="addOpen" ref="addForm" :error="addError" :busy="adding" @lookup="lookUp" @watch="add" />
 
     <p v-if="notice" class="screen__notice" role="alert">{{ notice }}</p>
@@ -386,7 +424,7 @@ function messageFor(failure) {
       would be a promise of a feature rather than the feature, and the + tab is
       where a rule gets written.
     -->
-    <section v-if="dealRules.length > 0 || rulesStatus === 'failed'" class="rules">
+    <section v-if="dealRules.length > 0 || rulesStatus === 'failed'" ref="rulesSection" class="rules">
       <h2 class="rules__title">Deal rules</h2>
 
       <p v-if="rulesError" class="screen__notice" role="alert">{{ rulesError }}</p>
@@ -456,6 +494,32 @@ function messageFor(failure) {
 
 .screen__add path {
   stroke: var(--on-solid);
+}
+
+/* The app's inactive-chip vocabulary — card on the page, a hairline, a pill —
+   which is what the rest of Orbit uses for "a second thing you may tap". It sits
+   under the header rather than in it: the + in the header is the screen's one
+   action, and a second control on that line would compete with it. */
+.screen__anchor {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+
+  margin: 8px 2px 0;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink2);
+
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.screen__anchor path {
+  stroke: var(--muted);
 }
 
 .screen__notice {

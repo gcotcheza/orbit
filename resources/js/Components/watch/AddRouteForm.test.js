@@ -394,7 +394,10 @@ describe('the destination typeahead', () => {
         await press(wrapper, 'Escape')
 
         expect(wrapper.get('.options').isVisible()).toBe(false)
-        expect(box(wrapper).element.value).toBe('BILB')
+        // "What was typed", exactly: the box stopped upper-casing when it
+        // stopped being three letters wide. See the note on `code` in the
+        // component for why there is no middle setting.
+        expect(box(wrapper).element.value).toBe('bilb')
     })
 
     it('walks the list with the arrow keys and takes one with Enter', async () => {
@@ -441,7 +444,11 @@ describe('the destination typeahead', () => {
         const enter = await press(wrapper, 'Enter')
 
         expect(enter.defaultPrevented).toBe(false)
-        expect(box(wrapper).element.value).toBe('LIS')
+        // Lower case IS a code here — `isKnownCode` reads the normalised value,
+        // not the field — which is the whole point of the split: what the box
+        // shows and what the form sends are two different strings, and only one
+        // of them has to be shouted.
+        expect(box(wrapper).element.value).toBe('lis')
     })
 
     /*
@@ -500,14 +507,41 @@ describe('the destination typeahead', () => {
     it('keeps letters, spaces and accents, and still drops digits', async () => {
         const wrapper = await form()
 
+        // AND KEEPS THE CASE THEY WERE TYPED IN. The strip is the only thing
+        // this watcher does now: a box that answered "Lisbon" with "LISBON"
+        // read as a complaint about what had just been typed.
         await box(wrapper).setValue('las palmas')
-        expect(box(wrapper).element.value).toBe('LAS PALMAS')
+        expect(box(wrapper).element.value).toBe('las palmas')
 
-        await box(wrapper).setValue('málaga')
-        expect(box(wrapper).element.value).toBe('MÁLAGA')
+        await box(wrapper).setValue('Málaga')
+        expect(box(wrapper).element.value).toBe('Málaga')
 
         await box(wrapper).setValue('l1s')
-        expect(box(wrapper).element.value).toBe('LS')
+        expect(box(wrapper).element.value).toBe('ls')
+    })
+
+    /*
+     * =========================================================================
+     * THE BOX DOES NOT SHOUT, AND THE FORM STILL SENDS A CODE
+     * =========================================================================
+     * Both halves in one test, because either one alone is a bug. Upper-casing
+     * as you type made "Lisbon" into "LISBON" — a search field answering a
+     * place name with capitals, which reads as an error message about what was
+     * just typed and is what the UX pass caught. Moving the capitals to the
+     * boundary is only correct if the boundary actually applies them: a route is
+     * `AMS-LIS` and always has been (App\Models\Route::codeFor).
+     */
+    it('does not shout a city name back, and still sends an upper-case code', async () => {
+        const wrapper = await form()
+
+        await box(wrapper).setValue('Lisbon')
+        expect(box(wrapper).element.value).toBe('Lisbon')
+
+        await box(wrapper).setValue('lis')
+        await wrapper.get('form').trigger('submit')
+
+        expect(box(wrapper).element.value).toBe('lis')
+        expect(wrapper.emitted('lookup')).toEqual([[{ origin: 'AMS', destination: 'LIS' }]])
     })
 
     /*
@@ -567,7 +601,10 @@ describe('everywhere else', () => {
         await box(wrapper).setValue('por')
         await settle()
 
-        expect(get).toHaveBeenCalledWith('/api/airports', expect.objectContaining({ params: { q: 'POR' } }))
+        // As typed. App\Http\Controllers\AirportController upper-cases for the
+        // code match and lower-cases for the LIKE, so the case the box holds has
+        // never been what made this search work.
+        expect(get).toHaveBeenCalledWith('/api/airports', expect.objectContaining({ params: { q: 'por' } }))
         expect(codes(suggestionRows(wrapper))).toEqual(['OPO', 'LIS', 'PDX'])
 
         expect(split(wrapper).text()).toBe('Everywhere else Orbit can price')
@@ -629,7 +666,7 @@ describe('everywhere else', () => {
         const enter = await press(wrapper, 'Enter')
 
         expect(enter.defaultPrevented).toBe(false)
-        expect(box(wrapper).element.value).toBe('JFK')
+        expect(box(wrapper).element.value).toBe('jfk')
     })
 
     it('stops searching once a suggestion has been taken', async () => {

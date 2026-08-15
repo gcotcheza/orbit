@@ -56,12 +56,37 @@ const flightNumber = computed(() => flightNumberFor(props.route.code))
 const flagStyle = computed(() => ({ background: flagFor(props.route.destination.countryCode) }))
 
 /*
- * The design's "tracking N days" note. Shown while the route has less than a
- * fortnight of history, which is the threshold docs/API.md sets, and phrased
- * for the very first morning when there is nothing at all.
+ * =============================================================================
+ * THE ONE LINE OF THIS CARD THAT SAYS WHAT ORBIT IS DOING WITH THE ROUTE
+ * =============================================================================
+ * The design's "tracking N days" note lives here, shown while the route has less
+ * than a fortnight of history (the threshold docs/API.md sets) and phrased for
+ * the very first morning when there is nothing at all. Otherwise the slot holds
+ * the boarding pass's barcode, which is set dressing.
+ *
+ * AND "PAUSED" NOW WINS BOTH, because a paused row said nothing whatsoever. The
+ * only cues were a 58% opacity — which reads as "loading" or as a rendering
+ * glitch at least as readily as it reads as "off" — and a 46 px switch in the
+ * off position, which somebody has to already know the meaning of. The word is
+ * what a paused route was missing, and this slot is where it belongs: it is
+ * already the line that answers "what is happening with this one", and it is
+ * already beside the switch that changes the answer.
+ *
+ * IT OUTRANKS THE TRACKING NOTE rather than sitting next to it. Both can be true
+ * of a route paused on the day it was added, and only one of them matters then:
+ * "Tracking 1 day" is a promise about tomorrow morning that a paused route is
+ * not going to keep.
  */
-const trackingNote = computed(() => {
+const stubNote = computed(() => {
+  if (!props.route.active) {
+    return 'Paused'
+  }
+
   const days = props.route.trackingDays
+
+  if (days >= 14) {
+    return null
+  }
 
   if (days === 0) {
     return 'Waiting for the first fare'
@@ -69,8 +94,6 @@ const trackingNote = computed(() => {
 
   return days === 1 ? 'Tracking 1 day' : `Tracking ${days} days`
 })
-
-const showTrackingNote = computed(() => props.route.trackingDays < 14)
 
 function askToRemove() {
   confirming.value = true
@@ -168,7 +191,9 @@ function confirmRemove() {
         <p class="stub__price stub__price--usual tabular">{{ euro(route.price.usual) ?? '—' }}</p>
       </div>
 
-      <p v-if="showTrackingNote" class="stub__tracking">{{ trackingNote }}</p>
+      <p v-if="stubNote" class="stub__tracking" :class="{ 'stub__tracking--paused': !route.active }">
+        {{ stubNote }}
+      </p>
       <span v-else class="stub__barcode" aria-hidden="true"></span>
 
       <ToggleSwitch
@@ -400,6 +425,17 @@ function confirmRemove() {
 
   font-size: var(--text-sm);
   color: var(--muted);
+}
+
+/* The one word that is a STATE rather than a progress note, so it is set like
+   one: the card's own ink and a little weight. It is not a warning — pausing is
+   something the owner chose — so it stays out of the tone colours, and the whole
+   row is already dimmed to 58% around it. */
+.stub__tracking--paused {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink2);
 }
 
 .stub__remove {

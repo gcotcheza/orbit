@@ -14,6 +14,77 @@ import { expect, shot, test } from '../fixtures.js'
 const SENTENCE =
     'cheap weekend somewhere sunny in spring, leaving Friday from any NL airport, under €80'
 
+const MONTH_NAMES = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+]
+
+/**
+ * A month Orbit holds no fares for at all — found by ASKING, not by knowing.
+ *
+ * ===========================================================================
+ * WHY THIS IS A PROBE AND NOT A MONTH NAME
+ * ===========================================================================
+ * The test below needs a date window that matches nothing, so that removing it
+ * is the one edit that can move the banner off zero. It used to say "spring",
+ * and the comment underneath said "the fake provider prices a 90-day forward
+ * window, so in August there is not a single March fare" — which was true in
+ * August, true in September, and false the moment the calendar rolled far
+ * enough for March to be inside the window. A premise that expires is a test
+ * that goes red on a date rather than on a change, and it takes an afternoon to
+ * work out which.
+ *
+ * Worse, the number it depended on is not even this spec's: `poll.window_days`
+ * is config, it has already widened once (three months to six), and it is being
+ * widened again. Pinning any month here — March, or a bigger number of months
+ * out — is the same bug with a longer fuse.
+ *
+ * SO THE SPEC ASKS THE APP. `GET /api/routes/{code}/calendar` answers an
+ * out-of-window month with `days: []` and a 200 (docs/API.md: "Empty months are
+ * a 200, not a 404"), so walking forward until a month comes back empty finds
+ * the edge of whatever window this build actually polls. That empty month IS
+ * the premise, stated directly rather than inferred from a constant.
+ *
+ * ONE ROUTE IS ENOUGH, and it is enough because the seeder polls every watched
+ * route over the same `poll.window_days` — the window is a property of the
+ * poller, not of a route. The month it finds is then past the end for all of
+ * them, which is what "matches nothing" needs.
+ *
+ * `page.request` rather than `fetch` in the page: it carries the same session
+ * cookie the browser has and does not disturb the screen under test.
+ */
+async function monthWithNoFares(page, code) {
+    const today = new Date()
+
+    // Two years is far past any window this app could grow; reaching the end of
+    // it means the endpoint is answering something other than what is documented.
+    for (let ahead = 1; ahead <= 24; ahead += 1) {
+        const probe = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + ahead, 1))
+        const month = `${probe.getUTCFullYear()}-${String(probe.getUTCMonth() + 1).padStart(2, '0')}`
+
+        const response = await page.request.get(`/api/routes/${code}/calendar`, { params: { month } })
+        expect(response.ok(), `the calendar endpoint refused ${month}`).toBe(true)
+
+        const body = await response.json()
+
+        if ((body.data?.days ?? []).length === 0) {
+            return { name: MONTH_NAMES[probe.getUTCMonth()], month }
+        }
+    }
+
+    throw new Error('every month for the next two years has fares in it — the poll window cannot be that wide')
+}
+
 // docs/API.md's "the exact reading of the design's own sentence", in the
 // design's order: where from, how much, how long, which day, when, what for.
 const EXPECTED_CHIPS = [
@@ -73,36 +144,75 @@ test('the design sentence is read back as its eight chips', async ({ page }) => 
 })
 
 test('removing a chip re-reads the rule and updates the match banner', async ({ page }) => {
+    /*
+     * REMOVE THE DATE WINDOW, AND SPECIFICALLY THAT ONE.
+     *
+     * It has to be the chip that makes this rule match NOTHING, so that dropping
+     * it is unambiguously what moved the banner. The other seven are not:
+     * measured against the running sandbox, removing the vibe, the departure day
+     * or the price ceiling each leaves the count at 0 because the empty date
+     * window dominates all three — and removing the trip length is documented as
+     * changing nothing at all (docs/API.md: parsed and shown, not matched on). A
+     * test that removed one of those would be asserting that a banner does not
+     * change, and calling it a pass.
+     *
+     * Which month is empty is asked rather than assumed — see `monthWithNoFares`
+     * for the dated premise that used to live here. The sentence is the design's
+     * with its season swapped for that month, so the rule is still the same eight
+     * chips and still the same shape of question.
+     */
+    const outside = await monthWithNoFares(page, 'AMS-LIS')
+    const sentence = SENTENCE.replace('in spring', `in ${outside.name}`)
+
     await page.goto('/create')
-    await page.locator('#rule-text').fill(SENTENCE)
 
     const chips = page.locator('.chips .chip')
+
+    /*
+     * EMPTIED FIRST, AND THAT IS NOT TIDINESS. The textarea is SEEDED with the
+     * design's own sentence (Create.vue's `SEED`) and parsed on mount, so the
+     * screen already shows eight chips — including a date window — before this
+     * test types anything. Filling in a sentence that also reads as eight chips
+     * and then waiting for eight is therefore a wait that is already over: every
+     * assertion after it races the parse that has not landed yet, and the chip
+     * this test is about is read off the SEED's reading rather than off ours.
+     *
+     * Driving the count to zero first makes the wait mean something. It costs
+     * one extra call to `/api/rules/parse`, which is throttled at 20/min and
+     * nowhere near it.
+     */
+    await page.locator('#rule-text').fill('')
+    await expect(chips).toHaveCount(0)
+
+    await page.locator('#rule-text').fill(sentence)
     await expect(chips).toHaveCount(8)
 
     const banner = page.locator('.banner')
     await expect(banner).toBeVisible()
     const before = await banner.textContent()
 
-    /*
-     * REMOVE THE DATE WINDOW, AND SPECIFICALLY THAT ONE.
-     *
-     * "Mar – May" is the chip that makes this rule match nothing: the fake
-     * provider prices a 90-day forward window, so in August there is not a
-     * single March fare in the database and the banner correctly reads
-     * "Nothing matches yet". Dropping it opens the rule to every month Orbit
-     * holds and the count moves off zero.
-     *
-     * The other seven do not. Measured against the running sandbox: removing
-     * the vibe, the departure day or the price ceiling each leaves the count at
-     * 0, because the empty date window dominates all three — and removing the
-     * trip length is documented as changing nothing at all (docs/API.md: parsed
-     * and shown, not matched on). A test that removed one of those would be
-     * asserting that a banner does not change, and calling it a pass.
-     */
-    await page.getByRole('button', { name: 'Remove Date window Mar – May' }).click()
+    // Nothing matches, because nothing has a fare in that month at all. This is
+    // the premise the rest of the test rests on, so it is asserted rather than
+    // assumed — if the probe above ever stops finding a genuinely empty month,
+    // THIS is the line that says so, instead of the banner comparison below
+    // failing for a reason nobody can see.
+    await expect(banner).toContainText('Nothing matches yet')
 
+    /*
+     * The chip's own label, read back rather than constructed: the parser writes
+     * "Mar – May" for a range and its own short form for a single month, and
+     * this test has no business knowing which. `chip__remove`'s accessible name
+     * is `Remove {category} {label}` (RuleChip.vue).
+     */
+    const dateChip = chips.filter({ has: page.locator('.chip__category', { hasText: 'Date window' }) })
+    const dateLabel = (await dateChip.locator('.chip__label').textContent()).trim()
+
+    await page.getByRole('button', { name: `Remove Date window ${dateLabel}` }).click()
+
+    // The chip itself first, then the count: if the removal ever stops working,
+    // "the date window is still there" is a more useful failure than "8 is not 7".
+    await expect(dateChip).toHaveCount(0)
     await expect(chips).toHaveCount(7)
-    await expect(page.locator('.chip__label', { hasText: 'Mar – May' })).toHaveCount(0)
 
     // The server folds the surviving chips back into criteria and re-matches —
     // the client is explicitly told not to reimplement that fold, so this is

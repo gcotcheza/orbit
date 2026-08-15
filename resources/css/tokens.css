@@ -100,6 +100,12 @@
     --globe-destination: #ffd166;
     --globe-plane: #f2f7ff;
     --globe-atmosphere: #6f96ff;
+    /* THE ONLY THING IN THIS BLOCK THAT IS PER-THEME, and it is not part of the
+       globe: it is the page colour, at enough alpha to sit UNDER text that has
+       been laid over a photograph. The Earth texture is the same in both themes
+       and picks its own colours — ocean, Sahara, ice — so a caption on it has no
+       background this palette controls. This gives it one. */
+    --globe-scrim: rgba(10, 15, 30, 0.72);
 
     /* --- Type -----------------------------------------------------------
        The seven steps in design/README.md, no more. A size that is not on this
@@ -182,4 +188,9 @@
         linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, #ffffff) 0%, var(--bg) 60%);
 
     --globe-atmosphere: #7fb2ff;
+    /* Higher alpha than the dark theme's, because it has more to do. The light
+       palette's ink is dark and the Earth underneath it is not: `--muted` over
+       the Atlantic was the one piece of text in this app a person could not
+       read at all (the UX pass, screenshot 61-j6-light-home). */
+    --globe-scrim: rgba(237, 238, 251, 0.82);
 }

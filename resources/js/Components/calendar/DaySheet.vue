@@ -140,27 +140,74 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <p v-if="seen" class="sheet__seen">Seen {{ seen }}</p>
       </div>
 
-      <div class="sheet__swatch" :style="{ background: swatch }" aria-hidden="true"></div>
+      <!--
+        THE SWATCH, WITH THE ONE THING IT WAS MISSING: what it is of.
+
+        It is a 54 px square of a colour whose whole meaning is a comparison —
+        where this day's fare sits between the cheapest and dearest day of THIS
+        month, on the same ramp the grid behind the sheet is painted from
+        (heat.js). Without the grid in front of you that is unguessable, and the
+        UX pass read it as decoration. Four words fix it.
+
+        THE SQUARE STAYS `aria-hidden`; the caption is what a screen reader gets,
+        which is right — the colour is a restatement of the verdict pill below,
+        and the pill says it in words already.
+      -->
+      <div class="sheet__heat">
+        <div class="sheet__swatch" :style="{ background: swatch }" aria-hidden="true"></div>
+        <p class="sheet__swatch-label">Price vs month</p>
+      </div>
     </div>
 
     <p class="pill" :class="`pill--${verdict.tone}`">{{ verdict.label }}</p>
 
-    <!-- Inside the sheet, which is a SIBLING of the backdrop and not a child of
-         it: a tap that lands on either action cannot also be a tap on the
-         backdrop, so nothing here has to stop a propagation. -->
-    <div class="actions">
-      <RouterLink class="action action--quiet" :to="{ name: 'route-detail', params: { id: code } }">
-        Route details
-      </RouterLink>
+    <!--
+      Inside the sheet, which is a SIBLING of the backdrop and not a child of it:
+      a tap that lands on any action cannot also be a tap on the backdrop, so
+      nothing here has to stop a propagation.
 
-      <!-- AVIASALES, BECAUSE THAT IS WHERE THIS PRICE CAME FROM. Orbit's fares
-           are Travelpayouts' — Aviasales' — cache, and this sheet used to send
-           people to Skyscanner, which had never seen many of them (€29 here
-           against €68 there). "See this fare" rather than "Book this day"
-           because neither site is promising a seat and this one is showing a
-           price that may be days old. -->
+      THE WAY OUT, ON ITS OWN LINE. It shared a row with the booking hand-off
+      until the two hand-offs became a pair of their own (below) — and it is the
+      one control here that is not about buying anything, so a row to itself is
+      the honest place for it. Above the pair rather than below: the conclusion
+      of this sheet is the fare, and the conclusion belongs nearest the thumb.
+    -->
+    <RouterLink class="action action--quiet action--wide" :to="{ name: 'route-detail', params: { id: code } }">
+      Route details
+    </RouterLink>
+
+    <!--
+      THE TWO HAND-OFFS, AS A PAIR — the same shape and the same order as
+      Components/route/BookingCta.vue, because they are the same decision on two
+      screens and the owner should not have to learn it twice. Skyscanner on the
+      left as the check, Aviasales on the right with the accent and the wider
+      share.
+
+      AVIASALES IS THE LOUD ONE BECAUSE THAT IS WHERE THIS PRICE CAME FROM.
+      Orbit's fares are Travelpayouts' — Aviasales' — cache, and this sheet used
+      to send people to Skyscanner, which had never seen many of them (€29 here
+      against €68 there). "See this fare" rather than "Book this day" because
+      neither site is promising a seat and this one is showing a price that may
+      be days old.
+
+      AND SKYSCANNER STOPPED BEING A LINE OF TEXT. It was a 12 px centred link
+      under the row, in the same grey as the disclaimer beneath it, which on a
+      phone does not read as something that can be pressed at all. Same
+      correction as BookingCta's, made here so the two sheets agree.
+    -->
+    <div class="actions">
+      <a
+        v-if="skyscannerUrl"
+        class="action action--quiet compare"
+        :href="skyscannerUrl"
+        target="_blank"
+        rel="noopener"
+      >
+        <span>Compare on Skyscanner</span>
+      </a>
+
       <a v-if="aviasalesUrl" class="action action--solid" :href="aviasalesUrl" target="_blank" rel="noopener">
-        See this fare
+        <span>See this fare on Aviasales</span>
         <!-- Stroked from the style block, on the accent fill — the same arrow
              BookingCta uses, for the same reason. -->
         <svg width="15" height="15" viewBox="0 0 17 17" fill="none" aria-hidden="true">
@@ -168,18 +215,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         </svg>
       </a>
     </div>
-
-    <!-- The second opinion, at the weight of a text link: a third equal action
-         in the row above would be a choice the reader has no basis for making. -->
-    <a
-      v-if="skyscannerUrl"
-      class="compare"
-      :href="skyscannerUrl"
-      target="_blank"
-      rel="noopener"
-    >
-      Compare on Skyscanner
-    </a>
 
     <!-- Word for word BookingCta's, and duplicated rather than shared on
          purpose: that component is a full-width 54px button and this is half of
@@ -264,10 +299,28 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   color: var(--muted);
 }
 
+/* The square and its caption as one column, right-aligned with the swatch it
+   labels — the head is a two-column flex and this is the second column. */
+.sheet__heat {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
 .sheet__swatch {
   width: 54px;
   height: 54px;
   border-radius: 14px;
+}
+
+/* The same quiet pair as `.sheet__seen` and the disclaimer, because it is the
+   same kind of line: true, necessary, and not the thing on the screen. */
+.sheet__swatch-label {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .pill {
@@ -299,48 +352,67 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   --tone-ink: var(--neu-ink);
 }
 
-/* Side by side and equal, because neither is the obvious next step: "where is
-   this route going" and "buy this day" are two different intentions and the
-   sheet does not know which one brought the user here. They sit at the bottom
-   of a sheet that is already at the bottom of the screen, which is the part of
-   a phone a thumb reaches without moving. */
+/* The booking pair, in BookingCta.vue's proportions: the check on the left, the
+   search Orbit's own number came from on the right with six-tenths of the line.
+   They sit at the bottom of a sheet that is already at the bottom of the screen,
+   which is the part of a phone a thumb reaches without moving. */
 .actions {
   display: flex;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 10px;
 }
 
 .action {
-  flex: 1;
+  flex: 4;
+  min-width: 0;
+
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
 
-  /* Above the 44px a finger needs, and short enough that two of them plus the
-     disclaimer do not push the fare off a small screen. */
-  height: 48px;
+  /* A FLOOR AND NOT A HEIGHT. Above the 44 px a finger needs, and now a minimum
+     rather than a fixed box: the labels name the site they lead to and take two
+     lines to do it on a narrow phone (see BookingCta.vue for why they are not
+     shortened instead), so the button grows rather than spilling. */
+  min-height: 48px;
+  padding: 7px 11px;
   border-radius: var(--radius-chip);
 
   font-family: var(--font-display);
   font-size: var(--text-lg);
   font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
   text-decoration: none;
-  /* "Route details" is two words on a 320px screen otherwise. */
-  white-space: nowrap;
+}
+
+/* The way into the route, on its own line above the pair. */
+.action--wide {
+  width: 100%;
+  margin-top: 18px;
 }
 
 /* The design's INACTIVE chip — card on panel with a hairline — which is this
-   app's vocabulary for "a second action that is not the loud one". */
+   app's vocabulary for "an action that is not the loud one". Both the route link
+   and the Skyscanner check wear it. */
 .action--quiet {
   background: var(--card);
   color: var(--ink);
   border: 1px solid var(--line);
 }
 
+/* One step quieter again than the route link above it: this is a check on the
+   number, not a way out of the sheet. The same ink BookingCta.vue gives its own
+   Skyscanner button, so the pair reads in the same order on both screens. */
+.compare {
+  color: var(--ink2);
+}
+
 /* The accent, which in this app means "an action", and the same glow the
    design puts under the active chip and the tab bar's + button. */
 .action--solid {
+  flex: 6;
   background: var(--accent);
   color: var(--on-solid);
   box-shadow: 0 6px 16px var(--accent-glow);
@@ -348,19 +420,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 .action--solid path {
   stroke: var(--on-solid);
-}
-
-/* Between the two loud actions and the fine print, which is where it belongs:
-   an option somebody may take, not the conclusion and not a footnote. */
-.compare {
-  display: block;
-  margin-top: 12px;
-  text-align: center;
-
-  font-size: var(--text-md);
-  font-weight: 600;
-  color: var(--accent-ink);
-  text-decoration: none;
 }
 
 .disclaimer {

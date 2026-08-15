@@ -124,10 +124,23 @@ onActivated(() => {
         <h1 class="home__greeting">{{ greeting }}</h1>
       </div>
 
-      <!-- design/README.md §1 notes the prototype pointed this at an
-           onboarding screen that does not exist. Alerts is the nearest real
-           destination: it is where this app's per-person settings live. -->
-      <RouterLink class="home__profile" :to="{ name: 'alerts' }" aria-label="Alerts and settings">
+      <!--
+        design/README.md §1 notes the prototype pointed this at an onboarding
+        screen that does not exist. Alerts is the nearest real destination: it is
+        where this app's per-person settings live.
+
+        AND IT LANDS ON THE ACCOUNT, which is what the glyph promises. This is a
+        drawing of a PERSON, and it was dropping people at the top of a screen
+        headed "Alerts", with email channels, sensitivity and quiet hours between
+        them and anything about themselves — the account card is the fifth
+        section down and off the fold on a phone (the UX pass, screenshot
+        06-j1-after-tapping-profile).
+      -->
+      <RouterLink
+        class="home__profile"
+        :to="{ name: 'alerts', hash: '#account' }"
+        aria-label="Your account and alert settings"
+      >
         <svg width="19" height="19" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <circle cx="10" cy="6.5" r="3.2" stroke="var(--ink2)" stroke-width="1.5" />
           <path d="M4 16.5c0-3 2.7-5 6-5s6 2 6 5" stroke="var(--ink2)" stroke-width="1.5" stroke-linecap="round" />
