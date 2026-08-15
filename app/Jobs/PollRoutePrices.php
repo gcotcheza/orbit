@@ -104,6 +104,42 @@ final class PollRoutePrices implements ShouldQueue
             ->delete();
 
         /*
+         * AND FUTURE DATES THAT HAVE STOPPED BEING QUOTED. The upsert above
+         * only ever writes the dates the provider named this morning, so a
+         * departure date that had a fare last week and has none now keeps that
+         * fare — for as long as the route is watched, silently, with nothing in
+         * the API to mark it (RouteCalendarResource sends a price, not a date
+         * it was fetched on). It would go on colouring a heatmap cell, it is
+         * eligible to be the "cheapest departure" a booking link points at, and
+         * App\Application\Rules\RuleMatches would match a deal rule against it
+         * — which is this app mailing somebody about a flight that cannot be
+         * booked, the one thing it must never do.
+         *
+         * DELETED HERE RATHER THAN FILTERED ON EVERY READ. Four places read
+         * this table and each would have to remember the same clause forever;
+         * a row that is no longer a price is better gone, exactly like the
+         * departures above.
+         *
+         * BY STALENESS, NOT BY ABSENCE FROM THIS RESPONSE. Deleting every
+         * window date the provider did not name would be tighter by a day or
+         * two and is wrong: App\Infrastructure\Pricing\TravelpayoutsPriceProvider
+         * fetches the window a calendar month at a time and deliberately
+         * tolerates one of those four calls failing, because three months of
+         * calendar is worth more than none. The port hands back a flat list, so
+         * this job cannot tell "that month is empty today" from "that month's
+         * request 500'd" — and treating them the same would blank a quarter of
+         * the calendar every time Travelpayouts hiccuped.
+         *
+         * IT RUNS ONLY AFTER A SUCCESSFUL POLL, i.e. below the empty-response
+         * return above. A provider that is down deletes nothing at all, which
+         * is the same promise the rest of this job already makes.
+         */
+        CalendarFare::query()
+            ->where('route_id', $route->id)
+            ->where('fetched_at', '<', $now->copy()->subDays((int) config('orbit.poll.stale_after_days')))
+            ->delete();
+
+        /*
          * AN UPSERT, AND THE DATE AS A BARE 'Y-m-d' STRING — deliberately the
          * same shape as the calendar write above.
          *

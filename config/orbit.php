@@ -64,9 +64,16 @@ return [
     |--------------------------------------------------------------------------
     |
     | Two ports (App\Application\Ports\PriceProvider, PriceStatsProvider),
-    | chosen by name here and bound in AppServiceProvider. Prices have two
-    | adapters — `fake` and `travelpayouts` — and statistics still have one,
-    | because the Amadeus adapter is not written.
+    | chosen by name here and bound in AppServiceProvider. Both have two
+    | adapters now: prices are `fake` or `travelpayouts`, statistics are `fake`
+    | or `self`.
+    |
+    | THERE IS NO THIRD-PARTY STATISTICS ADAPTER AND THERE WILL NOT BE ONE.
+    | The plan was Amadeus' price-analysis endpoint; their Self-Service API was
+    | decommissioned on 2026-07-17 and nothing else sells the quartiles of a
+    | route's fares. `self` computes them out of Orbit's own two tables instead
+    | — see the `selfstats` section below — which is why the deal score now runs
+    | end to end on data this app collected itself.
     |
     | `fake` IS STILL THE DEFAULT, AND THAT IS A SEPARATE DECISION FROM THE
     | ADAPTER EXISTING. It is not a test double: docs/PLAN.md ships the app
@@ -179,6 +186,63 @@ return [
          * read — the line says how many minutes of silence follow it.
          */
         'warn_every_minutes' => 15,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Self-computed statistics — what a route usually costs, from our own data
+    |--------------------------------------------------------------------------
+    |
+    | Read by App\Providers\AppServiceProvider when `providers.stats` is `self`,
+    | and by nothing else. App\Infrastructure\Pricing\SelfStatsProvider is the
+    | adapter; its docblock is the long version of everything below.
+    |
+    | THE TWO HORIZONS IT SUMMARISES, both of them real fares this app fetched:
+    |
+    |   CROSS-SECTIONAL — every cell of `calendar_fares`, i.e. the fares for the
+    |   ~91 departure dates in the current poll window. Available from the FIRST
+    |   poll, which is what makes a deal score possible on the day a route is
+    |   added. Its median answers "what does a typical departure date on this
+    |   route cost right now".
+    |
+    |   LONGITUDINAL — `route_price_history`, one row per morning, each the
+    |   cheapest fare anywhere in that morning's window. It takes weeks to mean
+    |   anything and is the better comparison once it does: the fare being scored
+    |   IS one of these rows (App\Application\Routes\RouteSnapshots reads the
+    |   latest observation as "the current price"), so a percentile against them
+    |   compares today's best against every other day's best — like for like.
+    |
+    | THE BLEND IS ONE LINE OF ARITHMETIC, deliberately:
+    |
+    |     w    = min(1, observations / maturity_observations)
+    |     knot = round((1 - w) * cross_sectional + w * longitudinal)
+    |
+    | applied to each of the five knots (min, p25, median, p75, max) separately.
+    | A convex combination of two non-decreasing five-number summaries is
+    | non-decreasing, so the result cannot violate App\Domain\Pricing\PriceStats'
+    | ordering invariant, and every intermediate value is a euro figure somebody
+    | can read rather than the output of a model.
+    |
+    | MATURITY_OBSERVATIONS = 30 is a month of polling, and is the point at which
+    | the longitudinal view stands entirely on its own. Below it the two are
+    | mixed in proportion to how much history there is, which is the honest
+    | reading: at 15 days the route's usual price is half "what a typical
+    | departure costs" and half "what a typical morning's best fare was".
+    |
+    | HISTORY_DAYS caps how far back the longitudinal pool reaches. A year is
+    | where "usual" stops being a fact about this route and starts being a fact
+    | about a market that has moved on — and it also keeps the pool bounded at
+    | 365 rows per route rather than growing for the life of the app.
+    |
+    | NEITHER HORIZON IS EVER INVENTED. A route with no calendar fares and no
+    | history gets NULL, the port's real answer, and App\Domain\Pricing\
+    | DealScorer renormalises its weights over what is left.
+    |
+    */
+
+    'selfstats' => [
+        'maturity_observations' => 30,
+        'history_days' => 365,
     ],
 
     /*
@@ -351,11 +415,30 @@ return [
     | STAGGER_MINUTES spaces the per-route jobs so six providers calls do not
     | arrive as a burst — the real APIs are rate-limited per minute.
     |
+    | STALE_AFTER_DAYS is how long a calendar cell may go without being repriced
+    | before a successful poll of that route deletes it. A future departure date
+    | that STOPS being quoted — Travelpayouts' cache is patchy and a day that
+    | had a fare this morning may have none tomorrow — is otherwise upserted
+    | once and then kept forever, because an upsert only ever writes the dates
+    | the provider named. Nothing in the API marks a cell as stale
+    | (App\Http\Resources\RouteCalendarResource sends a price, not a date), so
+    | the row would go on claiming to be today's price on the heatmap, in the
+    | "cheapest departure" booking link, and — worst of all — in the fares a
+    | deal rule is matched against, which is how this app would come to mail
+    | somebody about a flight that cannot be booked.
+    |
+    | THREE DAYS, because the poll is daily and the deletion is one-way: two
+    | consecutive mornings may fail, or a date may simply be missing from the
+    | provider's cache for a day, without the calendar losing a cell it would
+    | have got back. See App\Jobs\PollRoutePrices for why this is a delete on a
+    | SUCCESSFUL poll rather than a filter on every read.
+    |
     */
 
     'poll' => [
         'window_days' => 90,
         'stagger_minutes' => 3,
+        'stale_after_days' => 3,
     ],
 
     /*

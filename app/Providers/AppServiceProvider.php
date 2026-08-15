@@ -20,6 +20,7 @@ use App\Infrastructure\Notify\MailDealNotifier;
 use App\Infrastructure\Notify\MarkAlertsDelivered;
 use App\Infrastructure\Pricing\FakePriceProvider;
 use App\Infrastructure\Pricing\FakeStatsProvider;
+use App\Infrastructure\Pricing\SelfStatsProvider;
 use App\Infrastructure\Pricing\TravelpayoutsPriceProvider;
 use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -40,10 +41,11 @@ final class AppServiceProvider extends ServiceProvider
          * THE TWO FARE PORTS, chosen by name in config/orbit.php.
          *
          * This is the whole of the hexagon's wiring: nothing in App\Domain or
-         * App\Application knows an adapter exists, and swapping the fakes for
-         * Travelpayouts and Amadeus when the keys arrive is a class each, a
-         * line each in the match() below, and two variables in .env. No call
-         * site changes because no call site names an adapter.
+         * App\Application knows an adapter exists, so swapping a fake for the
+         * real thing is a class, a line in the match() below and a variable in
+         * .env. No call site changes because no call site names an adapter —
+         * which is how `self` could replace a paid statistics API that no
+         * longer exists without a single reader of a "usual price" moving.
          *
          * AN UNKNOWN NAME THROWS AT RESOLUTION rather than silently falling
          * back to the fake. A production box that answers with invented prices
@@ -59,6 +61,7 @@ final class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(PriceStatsProvider::class, fn (): PriceStatsProvider => match ($name = config('orbit.providers.stats')) {
             'fake' => new FakeStatsProvider,
+            'self' => $this->selfStats(),
             default => throw new InvalidArgumentException(sprintf('Unknown price statistics provider [%s].', is_string($name) ? $name : gettype($name))),
         });
 
@@ -194,6 +197,25 @@ final class AppServiceProvider extends ServiceProvider
             retries: (int) $travelpayouts['retries'],
             retryDelayMs: (int) $travelpayouts['retry_delay_ms'],
             warnEveryMinutes: (int) $travelpayouts['warn_every_minutes'],
+        );
+    }
+
+    /**
+     * The statistics Orbit computes for itself.
+     *
+     * SCALARS OUT OF CONFIG, like every other adapter here. The blend's two
+     * numbers are the whole of its behaviour — how much history makes a route
+     * mature, and how far back "usual" reaches — and a test that wants to see
+     * the immature end of the blend sets them rather than seeding a year.
+     */
+    private function selfStats(): PriceStatsProvider
+    {
+        /** @var array<string, mixed> $selfstats */
+        $selfstats = config('orbit.selfstats');
+
+        return new SelfStatsProvider(
+            maturityObservations: (int) $selfstats['maturity_observations'],
+            historyDays: (int) $selfstats['history_days'],
         );
     }
 
