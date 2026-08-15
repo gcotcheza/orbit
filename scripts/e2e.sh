@@ -1,0 +1,363 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Orbit — the browser gate
+# =============================================================================
+#   scripts/e2e.sh [--keep] [--fresh-env] [--down] [-- <playwright args>]
+#
+# Builds a throwaway copy of production, seeds it with fake fares, drives a real
+# Chromium through eight user journeys against it, and destroys it again.
+#
+# WHY THIS EXISTS. `scripts/check.sh` proves the PHP is well-typed, the styles
+# are consistent and the units pass. None of that has ever seen a screen. The
+# globe is a WebGL canvas whose failure mode is a black circle; the calendar is
+# a grid whose failure mode is 31 identical cells; a 401 from an interceptor is
+# a login screen nobody asked for. Every one of those passes every test in
+# check.sh. This script is the one that looks.
+#
+#   1. generate .env.e2e if it is not there (fresh APP_KEY, throwaway database
+#      password, a seeded login that exists nowhere else)
+#   2. make sure vendor/, node_modules/ and public/build/ are present
+#   3. `up -d --wait` the orbit-e2e stack on 127.0.0.1:3185
+#   4. migrate, then seed — including the 60-day fake price backfill, so the
+#      charts and the calendar have something to draw
+#   5. run Playwright inside the official image, on the host network
+#   6. `down -v`: containers, network and the in-RAM database, gone
+#
+# ⚠ RUN IT AS ROOT (or as a user in the `docker` group), NOT as `sudo -u orbit`.
+#   Talking to /var/run/docker.sock is a group membership, and `orbit` does not
+#   have it. Nothing here writes to the checkout as root: every container runs
+#   as 115:119 (= the host `orbit` user), which is also who ends up owning
+#   e2e/artifacts/.
+#
+# ⚠ IT NEEDS ~2 GB OF DISK for the Playwright image the first time it runs.
+#   That image carries the browsers; it is pulled once and cached.
+#
+# Flags:
+#   --keep        leave the stack up afterwards (it stays on 127.0.0.1:3185 and
+#                 `--down` tears it down later). For looking at a failure by
+#                 hand — the run's traces are in e2e/artifacts/.
+#   --fresh-env   regenerate .env.e2e even though one exists. New key, new
+#                 password, new seeded login.
+#   --down        tear the stack down and exit. Runs nothing.
+#   --            everything after it goes to `playwright test`, e.g.
+#                 `scripts/e2e.sh -- specs/globe.spec.js --headed`
+# =============================================================================
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+ROOT="$PWD"
+
+# Pinned, and it has to be: the browsers live in the IMAGE and the driver that
+# speaks to them lives in package.json. Playwright refuses to run a driver
+# against browsers it did not ship with, so these two versions move together or
+# not at all. See docs/E2E.md.
+PLAYWRIGHT_VERSION='1.62.1'
+PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
+
+# The hostname the app answers to, resolved to the loopback inside Chromium.
+# docs/E2E.md explains why the browser is made to believe in the production
+# hostname rather than the app being made to accept `localhost`.
+E2E_HOST='flights.ghiecode.io'
+E2E_PORT='3185'
+
+APP_UID='115'
+APP_GID='119'
+
+COMPOSE=(docker compose -p orbit-e2e -f docker-compose.e2e.yml --env-file .env.e2e)
+
+step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
+note() { printf '    %s\n' "$1"; }
+fail() { printf '\n\033[1;31m==> %s\033[0m\n' "$1" >&2; exit 1; }
+
+KEEP=0
+FRESH_ENV=0
+DOWN_ONLY=0
+PW_ARGS=()
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --keep)       KEEP=1 ;;
+        --fresh-env)  FRESH_ENV=1 ;;
+        --down)       DOWN_ONLY=1 ;;
+        --)           shift; PW_ARGS=("$@"); break ;;
+        -h|--help)    sed -n '2,50p' "$0"; exit 0 ;;
+        *)            fail "unknown flag: $1 (use -- to pass arguments to playwright)" ;;
+    esac
+    shift
+done
+
+# -----------------------------------------------------------------------------
+# .env.e2e — the sandbox's whole identity
+# -----------------------------------------------------------------------------
+# Generated rather than committed, and regenerated rather than edited. Three
+# things in it are secrets that must never be production's: the APP_KEY (it
+# decrypts session cookies), the database password, and the seeded account the
+# tests sign in as. A committed file would be all three, shared, in git.
+#
+# It is BOTH compose's `--env-file` (for ${DB_PASSWORD} et al) and the app's own
+# `.env` (bind-mounted over it — see docker-compose.e2e.yml), which is the same
+# double duty the production `.env` does.
+write_env_file() {
+    local app_key db_password redis_password seed_password
+    app_key="base64:$(openssl rand -base64 32)"
+    db_password="$(openssl rand -hex 24)"
+    redis_password="$(openssl rand -hex 32)"
+    seed_password="$(openssl rand -hex 16)"
+
+    cat > .env.e2e <<ENV
+# =============================================================================
+# GENERATED by scripts/e2e.sh — do not commit, do not edit, do not reuse.
+# =============================================================================
+# Every secret below was made up for a stack that lives for the length of one
+# test run and is destroyed with \`down -v\` afterwards. None of them is
+# production's, and the seeded login exists on no other box.
+#
+# Regenerate with: scripts/e2e.sh --fresh-env
+# =============================================================================
+
+# Read by docker-compose.e2e.yml as a required variable: it is what stops that
+# file from ever being started against the checkout's real .env.
+ORBIT_E2E=1
+
+APP_NAME=Orbit
+# PRODUCTION, not local. \`local\` would make Laravel's TrustHosts middleware
+# inert (it short-circuits outside production), and the trusted-host list is one
+# of the things this harness is here to exercise — the browser reaches the app
+# under its real hostname precisely so that check runs for real.
+APP_ENV=production
+APP_KEY=${app_key}
+APP_DEBUG=false
+APP_URL=http://${E2E_HOST}:${E2E_PORT}
+
+ORBIT_TIMEZONE=Europe/Amsterdam
+
+# The deterministic fake adapters, which is what production runs too until the
+# provider keys exist (docs/PLAN.md). Same fares every run, so a screenshot
+# baseline is a baseline rather than a lottery ticket.
+ORBIT_PRICE_PROVIDER=fake
+ORBIT_STATS_PROVIDER=fake
+
+# THE REGEX PARSER, PINNED. config/orbit.php picks the Anthropic adapter the
+# moment an ANTHROPIC_API_KEY is present, and a test suite must not spend
+# somebody's metered tokens — or fail because a model phrased a chip
+# differently this morning. rules.spec.js asserts exact chip text.
+ORBIT_NLP_PARSER=regex
+
+APP_MAINTENANCE_DRIVER=file
+BCRYPT_ROUNDS=12
+
+LOG_CHANNEL=stack
+LOG_STACK=single
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=debug
+
+DB_CONNECTION=pgsql
+DB_HOST=postgres
+DB_PORT=5432
+DB_DATABASE=orbit_e2e
+DB_USERNAME=orbit_e2e
+DB_PASSWORD=${db_password}
+
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=false
+SESSION_PATH=/
+SESSION_DOMAIN=null
+
+# FALSE, and this is the one security-relevant setting the sandbox deliberately
+# does not share with production. A \`Secure\` cookie is not stored by a browser
+# on a plain-http origin at all, so with production's \`true\` every request
+# after the login POST would arrive as a guest — a suite that fails for a reason
+# that has nothing to do with the app. The sandbox is http because it is a
+# loopback port with no certificate; TLS is the host nginx's job and the host
+# nginx is not in this stack.
+SESSION_SECURE_COOKIE=false
+SESSION_SAME_SITE=lax
+
+# Both spellings: Sanctum matches the Origin/Referer host INCLUDING the port,
+# and the browser sends \`${E2E_HOST}:${E2E_PORT}\`. It costs nothing here — the
+# endpoints the SPA calls are in the \`web\` group, where the session is
+# unconditional (routes/web.php) — but a list that is wrong for a reason nobody
+# wrote down is a list that wastes an afternoon the day it starts mattering.
+SANCTUM_STATEFUL_DOMAINS=${E2E_HOST}:${E2E_PORT},${E2E_HOST}
+
+BROADCAST_CONNECTION=log
+FILESYSTEM_DISK=local
+
+# SYNC, which is the reason this stack has no horizon and no scheduler. A job
+# dispatched by a request runs inside that request, so a test that taps "create
+# rule" can assert on the sweep's results on the next line instead of polling
+# for a worker.
+QUEUE_CONNECTION=sync
+CACHE_STORE=redis
+
+REDIS_CLIENT=phpredis
+REDIS_HOST=redis
+REDIS_PASSWORD=${redis_password}
+REDIS_PORT=6379
+
+MAIL_MAILER=log
+MAIL_FROM_ADDRESS="flights@ghiecode.io"
+MAIL_FROM_NAME="Orbit"
+
+# THE SEEDED ACCOUNT. Not ghie.cotcheza@gmail.com and not production's password:
+# a suite that types the owner's real credentials into a form is a suite that
+# leaks them into a trace file. \`.test\` is the reserved TLD for exactly this.
+SEED_USER_EMAIL=e2e@orbit.test
+SEED_USER_NAME=E2E
+SEED_USER_PASSWORD=${seed_password}
+
+HORIZON_DASHBOARD_TOKEN=
+ENV
+
+    chown "${APP_UID}:${APP_GID}" .env.e2e 2>/dev/null || true
+    chmod 600 .env.e2e
+}
+
+teardown() {
+    local status=$?
+
+    if [ "$KEEP" -eq 1 ]; then
+        printf '\n\033[1;33m==> stack left up (--keep): http://%s:%s\033[0m\n' "$E2E_HOST" "$E2E_PORT"
+        note "curl -H 'Host: ${E2E_HOST}' http://127.0.0.1:${E2E_PORT}/up"
+        note "tear it down with: scripts/e2e.sh --down"
+        return $status
+    fi
+
+    step 'Tearing the sandbox down'
+    "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
+
+    return $status
+}
+
+# -----------------------------------------------------------------------------
+# --down: nothing else runs
+# -----------------------------------------------------------------------------
+if [ "$DOWN_ONLY" -eq 1 ]; then
+    [ -f .env.e2e ] || fail 'no .env.e2e — nothing to tear down'
+    step 'Tearing the sandbox down'
+    "${COMPOSE[@]}" down -v --remove-orphans
+    exit 0
+fi
+
+# -----------------------------------------------------------------------------
+# Pre-flight
+# -----------------------------------------------------------------------------
+step 'Pre-flight'
+
+docker info >/dev/null 2>&1 || fail 'cannot talk to docker — run this as root, not as `sudo -u orbit` (docker.sock is a group)'
+
+# THE PORT CHECK IS NOT A FORMALITY. 3185 is this sandbox's and nothing else's,
+# but a previous run left with --keep, or a stack somebody started by hand, will
+# be sitting on it — and compose's own error for that is a wall of Go. Our own
+# containers holding it is fine: `up` recreates them.
+if ss -tlnH "sport = :${E2E_PORT}" 2>/dev/null | grep -q .; then
+    if [ -z "$("${COMPOSE[@]}" ps -q web 2>/dev/null)" ]; then
+        ss -tlnp "sport = :${E2E_PORT}" || true
+        fail "port ${E2E_PORT} is taken by something that is not the orbit-e2e stack"
+    fi
+    note "port ${E2E_PORT} is held by this sandbox's own web container — it will be recreated"
+else
+    note "port ${E2E_PORT} is free"
+fi
+
+if [ ! -f .env.e2e ] || [ "$FRESH_ENV" -eq 1 ]; then
+    write_env_file
+    note '.env.e2e generated (fresh key, fresh database password, fresh seeded login)'
+else
+    note '.env.e2e already present (regenerate with --fresh-env)'
+fi
+
+# The three things the stack cannot make for itself. Each is checked rather than
+# rebuilt unconditionally: `composer install` and `npm ci` are minutes, and this
+# script is meant to be run repeatedly.
+if [ ! -d vendor ]; then
+    step 'composer install'
+    docker run --rm -u "${APP_UID}:${APP_GID}" -v "$ROOT":/var/www/html -w /var/www/html \
+        orbit/app:latest composer install --no-interaction --no-progress
+fi
+
+if [ ! -d node_modules ]; then
+    step 'npm ci'
+    docker run --rm -u "${APP_UID}:${APP_GID}" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
+        -v "$ROOT":/var/www/html -w /var/www/html node:24-alpine \
+        npm ci --no-audit --fund=false
+fi
+
+if [ ! -f public/build/manifest.json ]; then
+    step 'vite build'
+    docker run --rm -u "${APP_UID}:${APP_GID}" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
+        -v "$ROOT":/var/www/html -w /var/www/html node:24-alpine \
+        npm run build
+fi
+
+# The two directories the browser container writes into, made and handed over
+# BEFORE it starts. It runs as 115:119, and a checkout whose e2e/ tree is
+# root-owned (a `git pull` as root, which the deploy runbook warns about) gives
+# it EACCES on the first screenshot — reported by Playwright as a failing
+# assertion, which sends you looking at the app.
+#
+# `baselines` is included even though a passing run only READS it: writing is
+# exactly what `--update-snapshots` does, and that is the one run where being
+# unable to is fatal.
+mkdir -p e2e/artifacts e2e/baselines
+chown -R "${APP_UID}:${APP_GID}" e2e 2>/dev/null || true
+
+trap teardown EXIT
+
+# -----------------------------------------------------------------------------
+# The stack
+# -----------------------------------------------------------------------------
+step "Starting the sandbox (project orbit-e2e, 127.0.0.1:${E2E_PORT})"
+"${COMPOSE[@]}" up -d --wait
+
+step 'Migrating'
+"${COMPOSE[@]}" exec -T app php artisan migrate --force
+
+# The seeder is the reason a screenshot has anything in it: the account, the
+# airports, six watched routes and — because the price provider is the fake one
+# — sixty mornings of history replayed through the ordinary poller. See
+# database/seeders/FakeHistorySeeder.php for why that is reconstruction rather
+# than fiction.
+step 'Seeding (account, routes, 60 days of fake fares)'
+"${COMPOSE[@]}" exec -T app php artisan db:seed --force
+
+# -----------------------------------------------------------------------------
+# The browser
+# -----------------------------------------------------------------------------
+# --network host: the app is published on 127.0.0.1 only, so the container has
+#   to be ON the host's loopback to reach it. It is also what makes
+#   `MAP flights.ghiecode.io 127.0.0.1` (e2e/playwright.config.js) resolve to
+#   this stack rather than to the container's own empty loopback.
+# --add-host: belt and braces for anything in the image that resolves through
+#   getaddrinfo rather than through Chromium's own resolver.
+# --shm-size: Chromium's default 64 MB /dev/shm is not enough for a WebGL page
+#   and the failure is a renderer that dies mid-test with no useful message.
+# -u 115:119: artifacts land owned by the host `orbit` user, not by root.
+step 'Running Playwright'
+set +e
+docker run --rm \
+    --network host \
+    --add-host "${E2E_HOST}:127.0.0.1" \
+    --shm-size=512m \
+    -u "${APP_UID}:${APP_GID}" \
+    -e HOME=/tmp \
+    -e npm_config_cache=/tmp/.npm \
+    -e CI=1 \
+    -v "$ROOT":/work \
+    -w /work \
+    "$PLAYWRIGHT_IMAGE" \
+    node_modules/.bin/playwright test --config=e2e/playwright.config.js "${PW_ARGS[@]}"
+PW_STATUS=$?
+set -e
+
+step 'Artifacts'
+note "screenshots  e2e/artifacts/screens/"
+note "html report  e2e/artifacts/report/index.html"
+note "traces       e2e/artifacts/test-results/"
+
+if [ "$PW_STATUS" -ne 0 ]; then
+    fail "playwright failed (exit ${PW_STATUS})"
+fi
+
+printf '\n\033[1;32m==> browser gate passed\033[0m\n'
