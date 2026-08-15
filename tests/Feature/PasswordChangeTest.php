@@ -315,13 +315,11 @@ final class PasswordChangeTest extends TestCase
             'AuthenticateSession is not in the web group — nothing is comparing session hashes, and logoutOtherDevices() is a no-op.'
         );
 
-        $this->flushSession();
-        Auth::forgetGuards();
+        $this->asANewProcessWould();
 
         $this->change(self::body())->assertOk();
 
-        $this->flushSession();
-        Auth::forgetGuards();
+        $this->asANewProcessWould();
 
         // The other device's very next request. 401 rather than 200, and the
         // SPA's interceptor turns that into the login screen (lib/http.js).
@@ -329,6 +327,27 @@ final class PasswordChangeTest extends TestCase
             ->actingAs($this->owner)
             ->getJson('/api/me')
             ->assertUnauthorized();
+    }
+
+    /**
+     * Put back the three pieces of state php-fpm throws away between requests
+     * and the test client keeps: the session bag, the resolved guards, and —
+     * the one that bites — the DEFAULT GUARD NAME.
+     *
+     * `auth:sanctum` calls `Auth::shouldUse('sanctum')` the moment it
+     * authenticates somebody, and that writes into `auth.defaults.guard`, i.e.
+     * into the config repository, which this process shares across every request
+     * in the test. Left alone, the next request's `current_password` rule asks
+     * Sanctum's RequestGuard to validate a password — something it has no
+     * implementation of — and a correct password is refused. Production reads
+     * that key back off disk for every request and never sees it.
+     */
+    private function asANewProcessWould(): void
+    {
+        $this->flushSession();
+
+        Auth::forgetGuards();
+        Auth::shouldUse('web');
     }
 
     /**

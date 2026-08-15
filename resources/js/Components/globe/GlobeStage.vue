@@ -420,5 +420,13 @@ watch(reducedMotion, () => play({ instant: true }))
   font-weight: 600;
   letter-spacing: 0.12em;
   color: var(--muted);
+  /* A halo in the page colour, because this text is now over the EARTH rather
+     than over the strip of background below it, and a photographic texture is
+     not a backdrop this palette gets to choose: `--muted` reads over the
+     Atlantic and vanishes over the Sahara. Two soft shadows rather than one
+     offset — the glyphs need backing on every side, not underneath.
+     (The design's own screenshot has clear space here because its camera was
+     parked at the fitted altitude; ours is mid-flight most of the time.) */
+  text-shadow: 0 0 4px var(--bg), 0 0 9px var(--bg);
 }
 </style>

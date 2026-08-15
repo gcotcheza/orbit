@@ -169,8 +169,8 @@ test('a destination Orbit does not know is refused, in the form', async ({ page,
     await field.fill('12')
     await expect(form.getByRole('button', { name: /add route/i })).toBeDisabled()
 
-    // (What the BOX shows after that is a separate, real problem — see the
-    // `test.fail` below.)
+    // (What the BOX shows after that was a separate, real problem, and it has
+    // its own test below.)
 
     // --- Garbage that is well-formed and still wrong --------------------------
     // Three letters, so the client is satisfied and the request goes; ZZZ is
