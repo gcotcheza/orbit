@@ -66,6 +66,30 @@ export const useAuthStore = defineStore('auth', () => {
         resolved.value = true
     }
 
+    /**
+     * Change the password of the account that is signed in.
+     *
+     * HERE RATHER THAN IN THE COMPONENT because this is the third thing that
+     * knows how authentication works, and the other two are in this file. The
+     * screen that calls it (Components/settings/ChangePassword.vue) should have
+     * to know a URL and a session no more than the login screen does.
+     *
+     * IT THROWS, like `login`, and for the same reason: the 422 is written per
+     * rule by App\Http\Requests\UpdatePasswordRequest and is meant to be read by
+     * a person under the box it belongs to. Swallowing it here would leave the
+     * form with a boolean where the server sent a sentence.
+     *
+     * NOTHING IN THIS STORE CHANGES ON SUCCESS. The session is rotated by the
+     * server and the browser follows the new cookies; `user` describes who is
+     * signed in, and that is the one thing a password change does not alter.
+     *
+     * No `ensureCsrfCookie()` — unlike `login`, the caller is a page that has
+     * been making authenticated requests, so it already holds a current token.
+     */
+    async function changePassword(fields) {
+        await http.put('/api/profile/password', fields)
+    }
+
     async function logout() {
         try {
             await http.post('/logout')
@@ -77,5 +101,5 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
-    return { user, resolved, isAuthenticated, check, ready, login, logout }
+    return { user, resolved, isAuthenticated, check, ready, login, changePassword, logout }
 })

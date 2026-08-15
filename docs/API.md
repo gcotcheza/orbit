@@ -1,22 +1,26 @@
 # Orbit — API
 
-The fourteen endpoints the screens are built from — five reads and nine writes.
+The fifteen endpoints the screens are built from — five reads, nine writes and
+one account action.
 **This file is the contract**: the globe home, the route detail, the price
 calendar, the watchlist, the alerts screen and the rule creator are all built
 against these shapes, and every field below has a feature test behind it
 (`tests/Feature/WatchlistApiTest`, `RouteDetailApiTest`, `RouteCalendarApiTest`,
-`WatchlistWritesTest`, `SettingsApiTest`, `RulesApiTest`, `AlertsApiTest`).
+`WatchlistWritesTest`, `SettingsApiTest`, `RulesApiTest`, `AlertsApiTest`,
+`PasswordChangeTest`).
 
-One of the fourteen has no screen yet: `GET /api/alerts` is the alert ledger,
+One of the fifteen has no screen yet: `GET /api/alerts` is the alert ledger,
 and the alerts screen stays settings-only for now.
 
 ---
 
 ## Conventions
 
-**Auth.** Every endpoint is `auth:sanctum` in cookie/session mode. There are no
-tokens: sign in with `POST /login`, and the browser's own httpOnly session
-cookie authenticates everything afterwards. `resources/js/lib/http.js` is
+**Auth.** Every endpoint is `auth:sanctum` in cookie/session mode — bar
+`PUT /api/profile/password`, which is behind the plain session guard because it
+rotates the session it runs in. There are no tokens either way: sign in with
+`POST /login`, and the browser's own httpOnly session cookie authenticates
+everything afterwards. `resources/js/lib/http.js` is
 already configured for it (`withCredentials`, `withXSRFToken`) — use it and
 nothing else. A guest gets **401** with `{"message": "Unauthenticated."}`, never
 a redirect.
@@ -845,3 +849,74 @@ returns a fare, and a cached fare is a wrong number that looks like a right one.
 It caches content-hashed `/build/` output, the earth textures under `/globe/`
 and the icons — things whose URL is either their version or effectively
 permanent — and nothing else.
+
+---
+
+# The account
+
+One endpoint, and it is the only one in this file that is about the owner rather
+than about fares. `tests/Feature/PasswordChangeTest` holds every line of it.
+
+## `PUT /api/profile/password`
+
+Change the password of the account that is signed in. The alerts screen's
+Account card (`design/README.md` §6) is the only caller.
+
+```json
+{
+  "current_password": "the one it has now",
+  "password": "the new one, twelve characters or more",
+  "password_confirmation": "the new one again"
+}
+```
+
+**200** on success, and the body says only what changed:
+
+```json
+{ "data": { "changed": true } }
+```
+
+**snake_case, on the one endpoint that is not camelCase.** Two of the three
+names belong to Laravel rather than to this API — `confirmed` looks for
+`{field}_confirmation`, and the `current_password` rule reads best on the field
+it guards — and they are also the names a browser's password manager keys on.
+`App\Http\Requests\UpdatePasswordRequest` says so at more length.
+
+**422** per rule, in the standard shape, keyed by the field so the form can put
+each sentence under the box it is about:
+
+| when | message |
+| --- | --- |
+| `current_password` is missing | Enter your current password. |
+| `current_password` is wrong | That is not your current password. |
+| `password` is missing | Choose a new password. |
+| `password` is under 12 characters | Use at least 12 characters. |
+| `password_confirmation` does not match | The new password and its confirmation do not match. |
+| `password` is the current one again | That is already your password. Choose a different one. |
+
+**A wrong current password is a 422 and never a 401.** The distinction is load
+bearing: `resources/js/lib/http.js` reads a 401 as "the session ended" and routes
+to the login screen, which would throw away a form somebody is halfway through
+for a mistyped password.
+
+**429 after five attempts a minute**, keyed on the account (`password-change` in
+`AppServiceProvider`). It is the only authenticated route in this app that checks
+a secret, so a session left open on an unattended phone must not be somewhere to
+guess the current password at machine speed.
+
+**The session survives, rotated.** The device that made the change stays signed
+in — a password change that signs you out of the screen you made it on is a
+security gesture that costs the thing it is for — but it gets a new session id
+and a new CSRF token. The token rides back on the response's `XSRF-TOKEN` cookie
+and `http.js` reads that cookie per request, so the open SPA carries on with no
+reload. **Every remember-me cookie ever issued stops working**, on this device
+and on any other: the recaller is checked against `remember_token`, not against
+the password, so the column is cycled and this device alone is re-issued one.
+A live session on another device is not evicted — that needs
+`AuthenticateSession` in the `web` group, which this app does not register.
+
+**Still no reset flow, and this is not one.** There is no `/register`, no
+`/forgot-password`, no mail-borne token and no way in from the login screen;
+`tests/Feature/AuthenticationTest` asserts each of those is unregistered. This
+endpoint cannot be reached without a session AND the current password, so it is
+a rotation the owner performs, not a recovery anybody can trigger.
