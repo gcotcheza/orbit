@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Routes;
 
 use App\Domain\Pricing\DatedFare;
+use DateTimeImmutable;
 
 /**
  * One month of the price heatmap, with each day already judged.
@@ -30,7 +31,7 @@ final readonly class MonthCalendar
     public const PRICEY = 'pricey';
 
     /**
-     * @param  list<array{date: string, cents: int, verdict: string}>  $days
+     * @param  list<array{date: string, cents: int, verdict: string, foundAt: ?DateTimeImmutable}>  $days
      */
     private function __construct(
         public array $days,
@@ -73,6 +74,16 @@ final readonly class MonthCalendar
                     $position >= $priceyAt => self::PRICEY,
                     default => self::MID,
                 },
+                /*
+                 * CARRIED THROUGH UNTOUCHED, and deliberately NOT folded into
+                 * the verdict. How old a price is and whether it is cheap for
+                 * this month are two independent facts, and a four-day-old €40
+                 * is still the cheapest cell in the grid — it is just a cell the
+                 * sheet has to say "seen four days ago" under. Colouring on age
+                 * would hide the answer to the question the screen exists to
+                 * ask.
+                 */
+                'foundAt' => $fare->foundAt,
             ];
 
             if ($fare->cents === $low && $cheapest === null) {

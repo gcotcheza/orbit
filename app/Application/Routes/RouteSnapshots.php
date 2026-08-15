@@ -155,7 +155,7 @@ final readonly class RouteSnapshots
             ->whereIn('route_id', $ids)
             ->whereRaw('price_cents = (select min(price_cents) from calendar_fares cheapest where cheapest.route_id = calendar_fares.route_id)')
             ->orderBy('departure_date')
-            ->get(['route_id', 'departure_date', 'price_cents']);
+            ->get(['route_id', 'departure_date', 'price_cents', 'found_at']);
 
         $cheapest = [];
 
@@ -163,6 +163,14 @@ final readonly class RouteSnapshots
             $cheapest[$row->route_id] ??= new DatedFare(
                 $row->departure_date->toDateTimeImmutable(),
                 $row->price_cents,
+                /*
+                 * HOW OLD THIS PRICE IS, carried because two callers now need
+                 * it and neither can get it any other way: the route detail
+                 * prints it under the cheapest departure, and App\Domain\Alerts\
+                 * AlertPolicy refuses to mail about a stale fare near its
+                 * departure. Null stays null — see the `found_at` migration.
+                 */
+                $row->found_at?->toDateTimeImmutable(),
             );
         }
 

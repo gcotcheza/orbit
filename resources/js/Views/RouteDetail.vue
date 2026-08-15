@@ -45,7 +45,7 @@ import AdviceCallout from '@/Components/route/AdviceCallout.vue'
 import BookingCta from '@/Components/route/BookingCta.vue'
 import DealScoreGauge from '@/Components/route/DealScoreGauge.vue'
 import PriceHistoryChart from '@/Components/route/PriceHistoryChart.vue'
-import { departureLabel, euro } from '@/lib/format'
+import { departureLabel, euro, hoursSince, seenLabel } from '@/lib/format'
 
 /*
  * The API constrains `{code}` to `[A-Z]{3}-[A-Z]{3}` at the router and answers
@@ -71,6 +71,27 @@ const CODE_PATTERN = /^[A-Z]{3}-[A-Z]{3}$/
  * for the next visit — the timeout ends the WAIT, not the work.
  */
 const LOOKUP_TIMEOUT_MS = 25_000
+
+/*
+ * HOW OLD THE CHEAPEST FARE HAS TO BE BEFORE THIS SCREEN MENTIONS ITS AGE.
+ *
+ * The day sheet prints "Seen …" under EVERY price, because that sheet is one
+ * day and one number and the line is the second thing on it. This screen is a
+ * headline fare, a gauge, a chart, a callout and a button, and a "Seen 2 hours
+ * ago" on a route polled this morning would be one more grey line on a page
+ * that already has several — noise that teaches the reader to skip the place
+ * the important version of this message will appear.
+ *
+ * A DAY, BECAUSE THAT IS THE POLL'S OWN PERIOD (`orbit.poll.window_days` is the
+ * window; the schedule is daily, docs/BUSINESS-LOGIC.md §13). Anything under it
+ * is the ordinary state of a watched route and says nothing; past it, the fare
+ * has survived a morning it should have been repriced in, and that IS worth a
+ * line. It is the same 24 hours the server calls a route's fares fresh for
+ * (`orbit.lookup.fresh_for_hours`) — deliberately the same number, arrived at
+ * from the same fact, though this one is a display threshold and that one
+ * decides whether to spend a provider call.
+ */
+const SEEN_AFTER_HOURS = 24
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -167,6 +188,29 @@ const median = computed(() => detail.value?.stats?.median ?? null)
  * looked. Null before the first poll, and then no line is printed at all.
  */
 const departure = computed(() => departureLabel(detail.value?.cheapest?.date ?? null))
+
+/**
+ * "Seen 4 days ago" — but only once that is worth saying.
+ *
+ * A THIRD DATE, AND THIS SCREEN IS ALREADY THE CAREFUL ONE ABOUT THE OTHER TWO.
+ * `history[].date` is when we LOOKED and `cheapest.date` is when you FLY;
+ * `cheapest.foundAt` is when the PRICE WAS FOUND, which is neither. Orbit's
+ * fares come from a cache of other people's searches, so the big number at the
+ * top of this screen can be days old — €36 shown against a live €56 is what
+ * started this — and the one place that matters most is directly above a button
+ * that leaves for a booking site.
+ *
+ * NULL WHEN THERE IS NOTHING HONEST TO SAY, and that covers three separate
+ * cases which all deserve the same silence: no fare yet, no `foundAt` on the
+ * one there is (an old row, or a provider that will not say), and a fare young
+ * enough that its age is not news. None of them may render as a reassurance.
+ */
+const seen = computed(() => {
+  const foundAt = detail.value?.cheapest?.foundAt ?? null
+  const age = hoursSince(foundAt)
+
+  return age === null || age < SEEN_AFTER_HOURS ? null : seenLabel(foundAt)
+})
 
 /**
  * The line under the price.
@@ -539,6 +583,10 @@ function goBack() {
                dates are the days we LOOKED and the two must never be read for
                each other. -->
           <p v-if="departure" class="price__when">Cheapest departure · {{ departure }}</p>
+          <!-- Next to the departure line because it is a qualifier on THAT
+               fare, and only past a day old — see SEEN_AFTER_HOURS. Absent
+               rather than reassuring when the age is unknown. -->
+          <p v-if="seen" class="price__seen">Seen {{ seen }}</p>
           <p class="price__caption">{{ caption }}</p>
         </div>
 
@@ -561,7 +609,15 @@ function goBack() {
            conclusion of the page. Read off `advice.tone`, which is
            `verdict.tone` (docs/API.md), so the button cannot disagree with the
            sentence above it. -->
-      <BookingCta :url="detail.bookingUrl" :variant="detail.advice.tone === 'warn' ? 'secondary' : 'primary'" />
+      <!-- AVIASALES IS THE PRIMARY HAND-OFF and Skyscanner the second opinion:
+           Orbit's prices come out of Aviasales' cache, and pointing at a
+           different meta-search is how this screen came to show €29 for a fare
+           Skyscanner listed at €68. See App\Application\Routes\BookingLink. -->
+      <BookingCta
+        :aviasales-url="detail.booking.aviasales"
+        :skyscanner-url="detail.booking.skyscanner"
+        :variant="detail.advice.tone === 'warn' ? 'secondary' : 'primary'"
+      />
     </template>
   </section>
 </template>
@@ -629,6 +685,15 @@ function goBack() {
   color: var(--accent-ink);
 }
 
+/* Quieter than the departure line it qualifies, and the same muted ink the day
+   sheet gives the same sentence. It appears only on fares over a day old, so it
+   is a line the reader meets rarely and should notice when they do. */
+.price__seen {
+  margin-top: 3px;
+  font-size: var(--text-md);
+  color: var(--muted);
+}
+
 .price__caption {
   margin-top: 6px;
   font-size: var(--text-lg);
@@ -636,8 +701,9 @@ function goBack() {
 }
 
 /* The gap above the comparison is already carried by the departure line when
-   there is one. */
-.price__when + .price__caption {
+   there is one — or by the freshness line, when that is showing. */
+.price__when + .price__caption,
+.price__seen + .price__caption {
   margin-top: 3px;
 }
 

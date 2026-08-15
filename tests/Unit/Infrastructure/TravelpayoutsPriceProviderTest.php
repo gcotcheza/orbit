@@ -12,6 +12,7 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\RecordingLogger;
 use Tests\TestCase;
@@ -67,6 +68,154 @@ final class TravelpayoutsPriceProviderTest extends TestCase
          * hundred: `value` is whole euros and every column in this app is cents.
          */
         $this->assertSame(15100, $fares[0]->cents);
+    }
+
+    // ------------------------------------------------------- how old the price is
+
+    /**
+     * `found_at` IS CARRIED THROUGH, AND IT IS NOT `fetched_at`.
+     *
+     * This endpoint serves a CACHE of other people's searches, so the moment a
+     * price was found can be days behind the moment Orbit asked for it. The app
+     * showed €36 for a date whose live cheapest was €56 — both true, one of them
+     * four days old — because nothing carried this field out of the adapter.
+     *
+     * THE ASSERTION IS AGAINST THE RECORDING'S OWN VALUE, read out of the
+     * fixture rather than restated here: what is under test is that the
+     * adapter passes the API's answer along unchanged, and a hard-coded string
+     * would pass just as well if the parser were returning a constant.
+     */
+    #[Test]
+    public function it_carries_the_moment_the_provider_found_each_price(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->fixture('month-matrix-ams-lis-2026-08'))]);
+
+        $fares = $this->provider()->cheapestPerDay(
+            'AMS',
+            'LIS',
+            new DateTimeImmutable('2026-08-15'),
+            new DateTimeImmutable('2026-08-31'),
+        );
+
+        $this->assertNotNull($fares[0]->foundAt);
+        $this->assertSame(
+            $this->recordedFindTime('month-matrix-ams-lis-2026-08', '2026-08-16'),
+            $fares[0]->foundAt->format('Y-m-d\TH:i:s\Z'),
+            'the adapter did not pass the recorded found_at through unchanged',
+        );
+
+        /* UTC, because every one of the 116 recorded entries ends in Z. */
+        $this->assertSame('UTC', $fares[0]->foundAt->getTimezone()->getName());
+    }
+
+    /**
+     * EVERY RECORDED ENTRY HAS ONE, so a null anywhere in a real month is the
+     * parser rejecting something it should have accepted rather than the API
+     * being sparse. This is the assertion that would have caught a format
+     * pinned to the wrong shape.
+     */
+    #[Test]
+    public function every_fare_in_a_recorded_month_knows_when_it_was_found(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->fixture('month-matrix-ams-lis-2026-09'))]);
+
+        $fares = $this->provider()->cheapestPerDay(
+            'AMS',
+            'LIS',
+            new DateTimeImmutable('2026-09-01'),
+            new DateTimeImmutable('2026-09-30'),
+        );
+
+        $this->assertNotEmpty($fares);
+
+        $unknown = array_filter($fares, static fn (DatedFare $fare): bool => $fare->foundAt === null);
+
+        $this->assertSame([], $unknown, 'a recorded fare came back with no find time');
+    }
+
+    /**
+     * AND AN ENTRY WITHOUT ONE IS NULL RATHER THAN A GUESS.
+     *
+     * `month-matrix-malformed` is the hand-written fixture and none of its rows
+     * carries `found_at`, which makes it the natural test of the path an older
+     * API answer — or a future one that drops the field — would take. The one
+     * good row in it must come back priced and with its age UNKNOWN.
+     *
+     * NULL AND NOT `now()`, which is the whole discipline: the screens render a
+     * null age as no line at all, and substituting the current clock would
+     * manufacture exactly the "this price is current" claim this field exists
+     * to stop making.
+     */
+    #[Test]
+    public function a_fare_the_api_gives_no_find_time_for_has_none_rather_than_now(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->fixture('month-matrix-malformed'))]);
+
+        $fares = $this->provider()->cheapestPerDay(
+            'AMS',
+            'LIS',
+            new DateTimeImmutable('2026-09-01'),
+            new DateTimeImmutable('2026-09-30'),
+        );
+
+        $this->assertCount(1, $fares);
+        $this->assertSame(8800, $fares[0]->cents);
+        $this->assertNull($fares[0]->foundAt);
+    }
+
+    /**
+     * A `found_at` THAT IS NOT A TIMESTAMP COSTS THE AGE, NOT THE FARE.
+     *
+     * The price is still good — it is the one thing the entry is really for —
+     * so a garbled find time degrades to "we do not know how old this is"
+     * rather than throwing the row away. The loose `new DateTimeImmutable($s)`
+     * this deliberately avoids would accept every one of these: "tomorrow" and
+     * "+3 days" are valid inputs to it, and "13:51" is dated to TODAY, which
+     * would make an unparseable value look like the freshest fare in the app.
+     */
+    #[Test]
+    #[DataProvider('unusableFindTimes')]
+    public function a_find_time_that_cannot_be_read_is_dropped_and_the_fare_is_kept(mixed $value): void
+    {
+        Http::fake([self::ENDPOINT => Http::response([
+            'currency' => 'eur',
+            'data' => [[
+                'actual' => true,
+                'depart_date' => '2026-09-04',
+                'origin' => 'AMS',
+                'destination' => 'LIS',
+                'return_date' => '',
+                'value' => 88,
+                'found_at' => $value,
+            ]],
+        ])]);
+
+        $fares = $this->provider()->cheapestPerDay(
+            'AMS',
+            'LIS',
+            new DateTimeImmutable('2026-09-01'),
+            new DateTimeImmutable('2026-09-30'),
+        );
+
+        $this->assertCount(1, $fares);
+        $this->assertSame(8800, $fares[0]->cents);
+        $this->assertNull($fares[0]->foundAt);
+    }
+
+    /**
+     * @return array<string, array{mixed}>
+     */
+    public static function unusableFindTimes(): array
+    {
+        return [
+            'a relative phrase the loose parser would accept' => ['tomorrow'],
+            'an offset the loose parser would accept' => ['+3 days'],
+            'a bare time, which would be dated to today' => ['13:51'],
+            'a date that does not exist' => ['2026-02-31T00:00:00Z'],
+            'a local time with no zone' => ['2026-08-14 13:51:45'],
+            'a number' => [1_786_752_000],
+            'nothing at all' => [null],
+        ];
     }
 
     #[Test]
@@ -568,6 +717,33 @@ final class TravelpayoutsPriceProviderTest extends TestCase
 
         /** @var array<string, string> $query */
         return $query;
+    }
+
+    /**
+     * The `found_at` a recording actually holds for one departure date.
+     *
+     * READ OUT OF THE FIXTURE rather than restated in the test, so what is
+     * asserted is that the adapter passes the API's own answer along unchanged
+     * — a hard-coded string would be satisfied just as well by a parser that
+     * returned a constant.
+     */
+    private function recordedFindTime(string $fixture, string $departDate): string
+    {
+        /** @var list<array<string, mixed>> $data */
+        $data = $this->fixture($fixture)['data'];
+
+        foreach ($data as $entry) {
+            if (($entry['depart_date'] ?? null) === $departDate) {
+                $this->assertIsString($entry['found_at'] ?? null);
+
+                /** @var string $foundAt */
+                $foundAt = $entry['found_at'];
+
+                return $foundAt;
+            }
+        }
+
+        $this->fail("No entry for {$departDate} in {$fixture}.");
     }
 
     /**

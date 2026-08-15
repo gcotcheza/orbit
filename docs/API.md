@@ -45,13 +45,23 @@ with cents as a two-decimal number (`57.45`). JavaScript sees a `Number` either
 way; round for display as the design does.
 
 **Dates are `YYYY-MM-DD` strings**, in the owner's timezone
-(`Europe/Amsterdam`). There are two different date axes in this API and mixing
+(`Europe/Amsterdam`). There are three different date axes in this API and mixing
 them is the easiest mistake to make here:
 
 | axis | where | means |
 | --- | --- | --- |
 | **observation date** | `history[].date`, `trackingDays` | the day *we looked* |
 | **departure date** | `calendar days[].date`, `cheapest.date` | the day *you fly* |
+| **found-at** | `days[].foundAt`, `cheapest.foundAt` | the moment *the price was found* |
+
+The third one is newer than the other two and is the only one that is a
+**timestamp** rather than a day — `meta.fares.fetchedAt` is the same shape. It
+exists because Orbit's fares come from a cache of other people's searches: a
+price fetched at 06:10 this morning may have been *found* four days ago, and
+until the app said so it was showing €36 for a date whose live cheapest was
+€56. **`fetchedAt` is not a stand-in for it** — that is when Orbit asked, which
+says nothing about how old the answer is, and treating the two as one is the bug
+this axis was added to fix.
 
 **Null means "not known yet", never zero.** A route added this morning has
 `price.current: null`, `stats: null` and `score: 0` with `confident: false`.
@@ -97,7 +107,7 @@ one with more fields on it. Identical either way, so a component can take either
 | `verdict.tone` | `good` \| `info` \| `normal` \| `warn`. **The only thing to switch colours on** — maps onto the token pairs in `resources/css/tokens.css`. Do not derive a colour from `label`. |
 | `sparkline` | Up to 14 daily prices, **oldest first**, one per day we polled. Often fewer, and `[]` for a new route. Draw whatever arrives. |
 | `trackingDays` | Calendar days since the first observation we actually hold, inclusive. `0` when there are none. This is the number for the "tracking N days" note (`< 14` is the design's threshold). |
-| `cheapest` | **The day `price.current` is for**: the cheapest **departure date** still on offer, ties broken to the earliest. `null` before the first poll — and null is not today, so a screen with no date prints no date. This is a *departure* date, the other axis; never render it as an observation date. It was on the detail alone until the UX pass, which is why three screens were printing a fare nobody could act on. |
+| `cheapest` | **The day `price.current` is for**: the cheapest **departure date** still on offer, ties broken to the earliest. `null` before the first poll — and null is not today, so a screen with no date prints no date. This is a *departure* date, the other axis; never render it as an observation date. It was on the detail alone until the UX pass, which is why three screens were printing a fare nobody could act on. On the **summary** it is `{date, price}`; the route detail adds `foundAt` to it. |
 
 ### The score's gauge colour
 
@@ -163,7 +173,11 @@ The route detail screen (`design/README.md` §2). The summary above, plus:
       "body": "€44 against a usual €93, and still sliding — waiting a few days could pay off.",
       "tone": "info"
     },
-    "bookingUrl": "https://www.skyscanner.nl/transport/flights/ams/opo/260915/"
+    "cheapest": { "date": "2026-09-15", "price": 44, "foundAt": "2026-08-11T22:04:13+02:00" },
+    "booking": {
+      "aviasales": "https://www.aviasales.com/search/AMS1509OPO1?marker=123456",
+      "skyscanner": "https://www.skyscanner.nl/transport/flights/ams/opo/260915/"
+    }
   }
 }
 ```
@@ -173,7 +187,18 @@ The route detail screen (`design/README.md` §2). The summary above, plus:
 | `history` | Up to 60 daily observations, **oldest first**. This is the line chart; `sparkline` is its last fortnight. Days we did not poll are simply absent — plot by date, not by index. |
 | `stats` | The dashed "usual price" reference line, and the five-number summary the score is built from. **`null`** when the provider has none; draw the chart without a reference rather than with one at zero. |
 | `advice` | The tinted callout. `title` always equals `verdict.label` and `tone` always equals `verdict.tone` — they are generated together so the prose and the gauge cannot disagree. |
-| `bookingUrl` | Skyscanner deep link, aimed at `cheapest.date` (which is on the **summary** — every screen gets it). Falls back to the route without a date (`…/ams/opo/`) when there are no fares. Always present. |
+| `cheapest.foundAt` | **Detail only** — the summary's `cheapest` carries `date` and `price` alone. When the cheapest fare was *found*, same semantics and same null rule as the calendar's `days[].foundAt`. The detail screen prints "Seen 4 days ago" beside the departure line **only past 24 h**: under that it is the ordinary state of a route polled this morning, and a line nobody needs teaches people to skip the place the important version appears. The three summary-only screens have no room for it and do not get it. |
+| `booking.aviasales` | **The primary hand-off**, aimed at `cheapest.date`. Falls back to Aviasales' *pre-filled search form* (`/?params=AMSOPO1`) when there are no fares — there is no day to show results for, so the reader gets the search box with the route already in it. Carries the affiliate marker when the box has one. Always present. |
+| `booking.skyscanner` | The secondary "compare" link, same date. Falls back to the route without a date (`…/ams/opo/`). No marker — this one has never been monetised. Always present. |
+
+**Aviasales is first because that is where the price came from.** Fares reach
+Orbit through Travelpayouts, which is Aviasales' cache; the app used to quote
+those fares and hand the reader to Skyscanner, a different meta-search with a
+different set of agencies. It showed DUS→AGP at €29 against a Skyscanner
+cheapest of €68 for the same date — nothing had miscalculated, the two sites
+simply never had the same fare. Skyscanner stays as a quiet second opinion.
+Neither link is a promise a seat exists: read `foundAt` for how old the number
+is, and expect the booking site to be the one holding live availability.
 
 …and a `meta` of two facts about the **asking** rather than about the route:
 
@@ -214,9 +239,9 @@ defaults to the current one.
 {
   "data": {
     "days": [
-      { "date": "2026-09-01", "price": 76, "verdict": "pricey" },
-      { "date": "2026-09-02", "price": 75, "verdict": "pricey" },
-      { "date": "2026-09-15", "price": 44, "verdict": "cheap" }
+      { "date": "2026-09-01", "price": 76, "verdict": "pricey", "foundAt": "2026-08-15T06:11:52+02:00" },
+      { "date": "2026-09-02", "price": 75, "verdict": "pricey", "foundAt": "2026-08-11T22:04:13+02:00" },
+      { "date": "2026-09-15", "price": 44, "verdict": "cheap", "foundAt": null }
     ],
     "min": 44,
     "max": 88,
@@ -225,7 +250,10 @@ defaults to the current one.
   "meta": {
     "code": "AMS-OPO",
     "month": "2026-09",
-    "bookingUrlTemplate": "https://www.skyscanner.nl/transport/flights/ams/opo/{date}/"
+    "booking": {
+      "aviasales": "https://www.aviasales.com/search/AMS{ddmm}OPO1?marker=123456",
+      "skyscanner": "https://www.skyscanner.nl/transport/flights/ams/opo/{yymmdd}/"
+    }
   }
 }
 ```
@@ -234,9 +262,20 @@ defaults to the current one.
 | --- | --- |
 | `days` | Ordered by date. **Days with no fare are absent**, not null-priced — lay the grid out from `date`, never from the array index. |
 | `days[].verdict` | `cheap` \| `mid` \| `pricey`, already computed against this month's own range using the design's thresholds (cheap ≤ low + 28% of the range, pricey ≥ 66%). Use it for the bottom sheet's pill; do not recompute. |
+| `days[].foundAt` | **When this price was found — not when Orbit fetched it.** A third date axis (§3): the provider serves a cache of other people's searches, so one grid legitimately mixes a fare found an hour ago with one found last Thursday. ISO-8601 with the offset, in the owner's timezone. **`null` means "not known"** — an older row, or a provider that does not say — and **must render as nothing at all**, never as "just now". |
 | `min` / `max` | This month's bounds — the legend gradient's two labels, and the range to interpolate the five-stop heat scale across. `null` for an empty month. |
 | `cheapest` | The "★ Cheapest this month" banner. `null` for an empty month. |
-| `meta.bookingUrlTemplate` | The day sheet's "Book this day" link, for **whichever** day was tapped. Substitute `{date}` with that departure date as **`yymmdd`** (`2026-09-15` → `260915`) and open the result. **Always present**, including for an empty month — it is a fact about the route, not about the fares. It is the same Skyscanner deep link `bookingUrl` on the route detail is, with the date left as a hole; the host and the path shape stay on the server (`config/orbit.php`, `App\Application\Routes\BookingLink`) so a move to another affiliate is one change. Do not build this URL client-side. |
+| `meta.booking` | The day sheet's two hand-offs, for **whichever** day was tapped, each with a date-shaped hole. **Always present**, including for an empty month — it is a fact about the route, not about the fares. |
+| `meta.booking.aviasales` | **The primary link.** Substitute `{ddmm}` with the tapped departure date as **day-then-month, two digits each** (`2026-09-15` → `1509`). Carries the affiliate marker when the box has one. |
+| `meta.booking.skyscanner` | The secondary "compare" link. Substitute `{yymmdd}` with the same date as **`yymmdd`** (`2026-09-15` → `260915`). |
+
+**Why the holes are named after date formats.** The two sites want the parts of
+a date in different orders and different lengths, so a single `{date}` token
+would force the client to know which URL belonged to which site. `{ddmm}` and
+`{yymmdd}` keep that knowledge on the server: fill whichever holes a string has
+and stay ignorant of who is on the other end. Do not build either URL
+client-side — the hosts, the path shapes, the casing and the marker are
+`config/orbit.php` and `App\Application\Routes\BookingLink`'s.
 
 **Empty months are a 200, not a 404.** The poll window is about six months, so
 paging past it is normal: `days: []`, `min`/`max`/`cheapest` all `null`. Draw an

@@ -75,7 +75,14 @@ final readonly class DealSummary
             score: $snapshot->deal->score,
             verdict: $snapshot->deal->verdict->label,
             departureDate: $snapshot->cheapest?->departureDate->format('Y-m-d'),
-            bookingUrl: BookingLink::for($route, $snapshot->cheapest?->departureDate),
+            /*
+             * THE PRIMARY HAND-OFF, which is now Aviasales — the search Orbit's
+             * fares come out of. A mail is the one place a reader cannot see
+             * two links and pick; it gets the one site that can be expected to
+             * hold the price in the subject line. See App\Application\Routes\
+             * BookingLink.
+             */
+            bookingUrl: BookingLink::aviasales($route, $snapshot->cheapest?->departureDate),
         );
     }
 
@@ -101,7 +108,8 @@ final readonly class DealSummary
             score: null,
             verdict: null,
             departureDate: $match->cheapest->departureDate->format('Y-m-d'),
-            bookingUrl: BookingLink::for($match->route, $match->cheapest->departureDate),
+            /* The primary hand-off — see forRoute() above. */
+            bookingUrl: BookingLink::aviasales($match->route, $match->cheapest->departureDate),
         );
     }
 

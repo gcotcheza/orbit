@@ -105,3 +105,135 @@ export function usualPriceLabel(pctBelow) {
 
     return `${Math.abs(rounded)}% ${rounded > 0 ? 'below' : 'above'} usual`
 }
+
+// =============================================================================
+// HOW OLD A PRICE IS
+// =============================================================================
+// `foundAt` is when the fare was FOUND, which is a third date on top of the two
+// this app is already careful about (docs/API.md): not the day you fly, and not
+// the day we looked. Orbit's prices come from a cache of other people's
+// searches, so a figure fetched this morning can have been found last Thursday
+// — the owner caught the app showing €36 where the live cheapest was €56, and
+// both were true. These two functions are how a screen says so.
+//
+// ONE IMPLEMENTATION FOR BOTH SCREENS. The day sheet prints the age under every
+// price and the route detail prints it only past a threshold, which are two
+// different rules over the same arithmetic — and two copies of "how long ago
+// was this" is how one of them ends up saying "1 days ago".
+// =============================================================================
+
+/** The clock, in ms, as one place so the tests can pass their own. */
+function elapsedMs(iso, now) {
+    if (iso === null || iso === undefined) {
+        return null
+    }
+
+    const then = new Date(iso).getTime()
+
+    // `new Date('nonsense')` is NaN rather than a throw, and NaN arithmetic
+    // propagates silently into "NaN hours ago".
+    return Number.isNaN(then) ? null : now - then
+}
+
+/**
+ * How many hours ago something was seen — for a caller that has a threshold
+ * rather than a sentence. Null when there is no timestamp to measure.
+ *
+ * NOT ROUNDED. The one caller compares it against a bound, and rounding first
+ * would make a fare 23 hours and 40 minutes old "24" and trip a rule meant for
+ * yesterday's prices.
+ *
+ * @param {string|null|undefined} iso
+ * @param {number} [now] epoch ms, injectable for tests
+ * @returns {number|null}
+ */
+export function hoursSince(iso, now = Date.now()) {
+    const elapsed = elapsedMs(iso, now)
+
+    return elapsed === null ? null : elapsed / 3_600_000
+}
+
+/**
+ * "just now", "3 hours ago", "4 days ago" — the age of a price, as a person
+ * says it.
+ *
+ * NULL IN, NULL OUT, and the caller prints NOTHING. This is the rule the whole
+ * feature rests on: `foundAt` is null when Orbit does not know how old a price
+ * is (every row written before the column existed, and any provider that will
+ * not say), and the one thing that must never happen is a made-up age. "Seen
+ * just now" over a fare of unknown vintage is worse than the silence this
+ * feature replaced, because it is a claim rather than an omission.
+ *
+ * UNDER AN HOUR IS "JUST NOW" rather than "0 hours ago" or "43 minutes ago".
+ * Nothing on these screens moves on a scale where forty minutes matters — the
+ * poll is daily and the provider's cache turns over in days — so minute
+ * precision would be false precision, and it would make the commonest state of
+ * a freshly polled route the noisiest line on the sheet.
+ *
+ * HOURS UP TO A DAY, THEN DAYS. "26 hours ago" is a number a reader has to do
+ * arithmetic on; "1 day ago" is the same fact already reduced. The switch is at
+ * exactly 24 hours, which is also the poll's own period, so a route polled this
+ * morning reads in hours and one that missed a morning reads in days.
+ *
+ * A FUTURE TIMESTAMP READS AS "just now". Clock skew between this browser and
+ * the server is a fact of life and small; "in 2 hours" under a price is a bug
+ * report, while "just now" is what a two-minute skew actually means.
+ *
+ * @param {string|null|undefined} iso ISO 8601 WITH an offset — the API sends
+ *                                    one, and a bare local time would be read
+ *                                    in the viewer's zone
+ * @param {number} [now] epoch ms, injectable for tests
+ * @returns {string|null}
+ */
+export function seenLabel(iso, now = Date.now()) {
+    const elapsed = elapsedMs(iso, now)
+
+    if (elapsed === null) {
+        return null
+    }
+
+    const hours = Math.floor(elapsed / 3_600_000)
+
+    if (hours < 1) {
+        return 'just now'
+    }
+
+    if (hours < 24) {
+        return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`
+    }
+
+    const days = Math.floor(elapsed / 86_400_000)
+
+    return `${days} ${days === 1 ? 'day' : 'days'} ago`
+}
+
+/**
+ * Fill the date holes in a booking template.
+ *
+ * The API sends hand-off URLs with named holes in them — `{yymmdd}` for
+ * Skyscanner's path and `{ddmm}` for Aviasales' params — because the two sites
+ * want the parts of a date in different orders and different lengths
+ * (docs/API.md). NAMED RATHER THAN A SINGLE `{date}`, so that this function is
+ * pure date formatting and knows nothing about either site: it fills whichever
+ * holes it finds and has no opinion about which URL it is looking at.
+ *
+ * STRING SURGERY AND NOT A `Date`, for the reason Components/calendar/month.js
+ * opens with: `date` is a calendar day with no time and no zone, and routing it
+ * through `new Date(...)` re-reads it in the viewer's own timezone — which
+ * books the day before for everybody west of London.
+ *
+ * @param {string|null|undefined} template
+ * @param {string|null|undefined} iso `YYYY-MM-DD`
+ * @returns {string|null}
+ */
+export function withDateTokens(template, iso) {
+    if (!template || !iso) {
+        return null
+    }
+
+    const [year, month, day] = iso.split('-')
+
+    return template
+        .replace('{yymmdd}', `${year.slice(2)}${month}${day}`)
+        .replace('{ddmm}', `${day}${month}`)
+}

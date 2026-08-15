@@ -51,6 +51,21 @@ test('the price, the gauge, the chart and the booking link are all really there'
         /^Cheapest departure · (Mon|Tue|Wed|Thu|Fri|Sat|Sun), \w{3} \d{1,2}$/,
     )
 
+    /*
+     * AND NO FRESHNESS LINE, WHICH IS THE CORRECT ANSWER HERE AND IS WORTH
+     * ASSERTING RATHER THAN SKIPPING.
+     *
+     * This screen prints "Seen 4 days ago" only once the cheapest fare is over
+     * a day old. The sandbox's fares were all found by the seeder's final pass,
+     * so they are hours old at most and the line must be ABSENT — which is what
+     * proves the threshold exists. A build that printed "Seen just now" on every
+     * route would pass a test that only checked the line's format, and would be
+     * exactly the grey noise the threshold was put there to avoid. The day sheet
+     * is where the always-on version of this line is checked
+     * (specs/calendar.spec.js).
+     */
+    await expect(page.locator('.price__seen')).toHaveCount(0)
+
     // --- The deal-score gauge ------------------------------------------------
     // The ring is an SVG circle whose dash offset IS the score. Asserting the
     // number is legible AND that the ring was actually swept catches the case
@@ -100,23 +115,48 @@ test('the price, the gauge, the chart and the booking link are all really there'
     await expect(page.locator('svg.chart circle.chart__dot')).toBeVisible()
 
     // --- The booking hand-off ------------------------------------------------
-    // `/transport/flights/{origin}/{dest}/{yymmdd}/`, lower case, two-digit
-    // year — App\Application\Routes\BookingLink. This is the one link in the
-    // app that leaves it, so a malformed one is a dead end at the moment
-    // somebody has decided to buy.
-    const booking = page.getByRole('link', { name: /book on skyscanner/i })
+    // TWO LINKS, AND AVIASALES IS THE LOUD ONE. Orbit's fares come from
+    // Travelpayouts, which is Aviasales' cache; the app used to quote those
+    // fares and hand the reader to Skyscanner, which had often never had them
+    // (€29 here against €68 there). These are the links that leave the app, so
+    // a malformed one is a dead end at the moment somebody has decided to buy.
+    //
+    // `{ORIGIN}{DDMM}{DEST}1` — UPPER case, day before month, one adult in
+    // economy — App\Application\Routes\BookingLink.
+    const booking = page.getByRole('link', { name: /see this fare on aviasales/i })
     await expect(booking).toBeVisible()
 
-    const href = await booking.getAttribute('href')
-    expect(href).toMatch(
+    expect(await booking.getAttribute('href')).toMatch(
+        new RegExp(
+            `^https://www\\.aviasales\\.com/search/${origin}\\d{4}${destination}1(\\?marker=.+)?$`,
+        ),
+    )
+
+    // And the second opinion, at the weight of a text link.
+    const compare = page.getByRole('link', { name: /compare on skyscanner/i })
+
+    expect(await compare.getAttribute('href')).toMatch(
         new RegExp(
             `^https://www\\.skyscanner\\.nl/transport/flights/${origin.toLowerCase()}/${destination.toLowerCase()}/\\d{6}/$`,
         ),
     )
 
-    // It opens away from the app, and safely.
-    await expect(booking).toHaveAttribute('target', '_blank')
-    await expect(booking).toHaveAttribute('rel', /noopener/)
+    // Both open away from the app, and safely.
+    for (const link of [booking, compare]) {
+        await expect(link).toHaveAttribute('target', '_blank')
+        await expect(link).toHaveAttribute('rel', /noopener/)
+    }
+
+    /*
+     * ONE EXPECTATION LINE UNDER THEM, and only one. It says where the number
+     * came from and who has the live one — which is what a reader standing in
+     * front of a possibly-cached fare needs — and it MERGED the old "we don't
+     * sell tickets" disclaimer rather than being stacked under it.
+     */
+    await expect(page.locator('.booking__disclaimer')).toHaveText(
+        'Prices come from recent searches — the booking site shows live availability.',
+    )
+    await expect(page.getByText("We don't sell tickets")).toHaveCount(0)
 
     /*
      * AND IT DOES NOT SHOUT OVER THE ADVICE ABOVE IT. A callout reading "Above
@@ -138,7 +178,7 @@ test('the price, the gauge, the chart and the booking link are all really there'
  * THE APP DOES NOT ARGUE WITH ITSELF
  * ============================================================================
  * "Above usual — wait" in the callout, and directly under it a glowing accent
- * button reading "Book on Skyscanner" — the loudest element on the screen,
+ * button reading "See this fare on Aviasales" — the loudest element on the screen,
  * contradicting the sentence above it, in front of somebody about to spend
  * money. The hand-off is still there for anybody who has decided anyway; it is
  * simply no longer the conclusion of the page.
@@ -166,7 +206,7 @@ test('a route the app says to wait on gets the quiet Book button', async ({ page
     await expect(page.locator('.detail__code')).toHaveText(code.replace('-', ' → '))
     await expect(page.locator('.callout')).toHaveClass(/callout--warn/)
 
-    const booking = page.getByRole('link', { name: /book on skyscanner/i })
+    const booking = page.getByRole('link', { name: /see this fare on aviasales/i })
 
     await expect(booking).toHaveClass(/booking__cta--secondary/)
     // Still the same target, the same size and the same one tap.

@@ -154,13 +154,22 @@ return [
         'token' => env('TRAVELPAYOUTS_TOKEN'),
 
         /*
-         * THE AFFILIATE MARKER, WHICH THE ADAPTER DELIBERATELY DOES NOT SEND.
-         * It identifies whose link a booking came from, and the data API has no
-         * use for it — Orbit's "book this" is a Skyscanner deep link
-         * (`booking.skyscanner_base` above), so today nothing Orbit sends
-         * anybody is monetised. It is read here, and only here, so that the day
-         * those links move to Aviasales there is one obvious place the number
-         * already lives rather than a fresh hunt through the dashboard.
+         * THE AFFILIATE MARKER, WHICH THE DATA ADAPTER STILL DELIBERATELY DOES
+         * NOT SEND. It identifies whose link a BOOKING came from and the fare
+         * API has no use for it, so no request in App\Infrastructure\Pricing
+         * carries it.
+         *
+         * IT IS FINALLY READ BY SOMETHING, THOUGH. This key spent its whole life
+         * unused, with a comment saying it was here so that "the day those links
+         * move to Aviasales" the number would already be in an obvious place.
+         * That day arrived for a reason that had nothing to do with money —
+         * Orbit quotes Aviasales' cached fares and was sending people to
+         * Skyscanner, where those fares often are not — and the attribution
+         * comes along with the fix. App\Application\Routes\BookingLink appends
+         * it to the Aviasales hand-off and to nothing else.
+         *
+         * UNSET IS FINE AND IS THE DEFAULT. The link works without it; what is
+         * lost is the credit, not the destination.
          */
         'marker' => env('TRAVELPAYOUTS_MARKER'),
 
@@ -385,6 +394,50 @@ return [
         'min_tracking_days' => 7,
 
         /*
+         |----------------------------------------------------------------------
+         | HOW OLD A FARE MAY BE BEFORE IT IS NOT WORTH INTERRUPTING SOMEBODY
+         |----------------------------------------------------------------------
+         |
+         | THE TWO NUMBERS ARE ONE RULE and neither does anything alone: an
+         | alert is HELD only when its fare was found more than
+         | `max_fare_age_days` ago AND the flight leaves within
+         | `near_departure_weeks`. App\Domain\Alerts\AlertPolicy answers
+         | `stale-fare`.
+         |
+         | WHY AGE MATTERS AT ALL. Fares come from Travelpayouts, which serves a
+         | CACHE of other people's searches (docs/BUSINESS-LOGIC.md §2), so
+         | `calendar_fares.found_at` — when the price was actually seen — can be
+         | days behind `fetched_at`, when Orbit asked. The owner caught the
+         | consequence twice: €36 on a date whose live cheapest was €56, and €29
+         | against a real €68. On a screen that is a stale number with a line
+         | under it saying so. In a mail it is Orbit waking somebody up about a
+         | flight that is not for sale, which is the single worst thing this app
+         | can do.
+         |
+         | WHY DEPARTURE DATE IS THE OTHER HALF. Fares near departure move fast
+         | and in one direction — seats sell, the cheap fare classes go, and a
+         | four-day-old quote for a flight three weeks out is very often gone.
+         | Far-out fares barely move for weeks at a time, so the same four-day-old
+         | price for next April is still worth saying: holding it would silence
+         | the alerts most likely to be TRUE, on exactly the routes somebody has
+         | time to act on. The asymmetry is the point — this rule is aimed at the
+         | combination, not at age.
+         |
+         | TWO DAYS, because the poll is daily: one missed morning must not make
+         | every fare unalertable, and by the third day a near-departure price is
+         | old enough that Orbit is guessing. THREE WEEKS is where "book it this
+         | week" turns into "keep an eye on it" for a European short-haul.
+         |
+         | NULL `found_at` IS TREATED AS FRESH — see AlertPolicy for the defence.
+         | It means "we do not know how old this is", which is the state of every
+         | row written before the column existed, and a rule that silenced alerts
+         | on not-knowing would have turned the whole alert system off on the
+         | morning this shipped.
+         */
+        'max_fare_age_days' => 2,
+        'near_departure_weeks' => 3,
+
+        /*
          * HOW LONG ONE ROUTE STAYS QUIET after Orbit has mentioned it, per kind
          * of alert. A fare that sits at 95 for a week is one piece of news, and
          * a person mailed about it seven times stops opening the mail — at
@@ -592,12 +645,37 @@ return [
     |--------------------------------------------------------------------------
     |
     | There is no booking API and there will not be one — docs/PLAN.md settles
-    | on Skyscanner deep links. The path shape is
-    | `/transport/flights/{origin}/{dest}/{yymmdd}/` with lower-case IATA.
+    | on deep links into somebody else's search.
+    |
+    | TWO OF THEM NOW, AND AVIASALES IS FIRST. Orbit showed DUS→AGP at €29 on a
+    | date whose cheapest on Skyscanner was €68, and the arithmetic was fine:
+    | fares come from Travelpayouts, which is AVIASALES' cache, and the app then
+    | handed the reader to SKYSCANNER — a different meta-search, a different set
+    | of agencies, and no reason at all to be holding the fare Orbit quoted.
+    | Quoting one shop's price and pointing at another's till is a way to look
+    | wrong while being right. The primary hand-off is now the site the price
+    | came from; Skyscanner stays as the quiet second opinion.
+    |
+    | THE AVIASALES PARAMS SHAPE — `{ORIGIN}{DDMM}{DEST}{passengers}`, upper
+    | case, day before month — is Travelpayouts' documented format, verified
+    | against the live site rather than remembered. App\Application\Routes\
+    | BookingLink carries the evidence and the traps.
+    |
+    | ONLY THE HOSTS ARE HERE. The path shapes are BookingLink's, because they
+    | are a format rather than a setting: an .env that could half-change one of
+    | them is a way to ship a link that 404s.
     |
     */
 
     'booking' => [
+        /*
+         * NO PATH ON THIS ONE, deliberately: Aviasales has two entry points off
+         * the same host — `/search/PARAMS` for a dated search and `/?params=`
+         * for the pre-filled form a route with no fares yet lands on — and
+         * BookingLink picks between them.
+         */
+        'aviasales_base' => 'https://www.aviasales.com',
+
         'skyscanner_base' => 'https://www.skyscanner.nl/transport/flights',
     ],
 

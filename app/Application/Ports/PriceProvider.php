@@ -26,6 +26,14 @@ use DateTimeImmutable;
  *
  * A provider that has nothing for a date simply omits it: a gap in the
  * calendar is "no fare found", which is a real answer and not the same as €0.
+ *
+ * IMPLEMENTATIONS ANSWER AS OF NOW — BUT THE FARES THEMSELVES MAY BE OLDER
+ * THAN THAT, and the port now says so. `DatedFare::$foundAt` is when the price
+ * was found rather than when this call was made, because the real provider is a
+ * cache of other people's searches: "I asked just now" and "this price is
+ * current" are two different claims, and Orbit spent its first months making the
+ * second when only the first was true. An adapter that cannot say leaves it
+ * null, which every reader renders as nothing at all rather than as fresh.
  */
 interface PriceProvider
 {

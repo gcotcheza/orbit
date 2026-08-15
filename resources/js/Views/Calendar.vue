@@ -59,14 +59,14 @@ const monthFailed = ref(false)
 const selected = ref(null)
 
 /*
- * The day sheet's "Book this day" link, with a `{date}` hole in it, exactly as
- * the endpoint's `meta` sent it (docs/API.md). It is read here rather than in
- * the sheet because the sheet is handed a fare and not a response — and it is
- * kept as the ONE string the server sent rather than rebuilt from the route
- * code, because the Skyscanner host and path shape live in config/orbit.php
- * and are not this screen's business.
+ * The day sheet's two hand-off templates — `{ aviasales, skyscanner }`, each
+ * with a named date hole in it, exactly as the endpoint's `meta` sent them
+ * (docs/API.md). Read here rather than in the sheet because the sheet is handed
+ * a fare and not a response — and kept as the STRINGS THE SERVER SENT rather
+ * than rebuilt from the route code, because the hosts, the path shapes and the
+ * affiliate marker live in config/orbit.php and are not this screen's business.
  */
-const bookingUrlTemplate = ref(null)
+const booking = ref(null)
 
 /** The watchlist has answered, one way or the other, and the screen can speak. */
 const booted = computed(() => routesStatus.value !== 'loading')
@@ -180,7 +180,7 @@ async function loadMonth() {
     payload.value = data.data
     // Inside the same guard as `payload`, so a late response cannot leave the
     // sheet booking one route's days against another route's link.
-    bookingUrlTemplate.value = data.meta?.bookingUrlTemplate ?? null
+    booking.value = data.meta?.booking ?? null
   } catch (error) {
     if (mine !== request) {
       return
@@ -189,7 +189,7 @@ async function loadMonth() {
     console.error('Could not load the calendar.', error)
     monthFailed.value = true
     payload.value = null
-    bookingUrlTemplate.value = null
+    booking.value = null
   } finally {
     if (mine === request) {
       loading.value = false
@@ -266,7 +266,7 @@ onMounted(loadRoutes)
         :min="payload.min"
         :max="payload.max"
         :code="code"
-        :booking-url-template="bookingUrlTemplate"
+        :booking="booking"
         @close="selected = null"
       />
     </Teleport>

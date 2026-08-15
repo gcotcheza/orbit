@@ -17,7 +17,7 @@
 //
 // docs/API.md is the fixture, as it is for Home.test.js.
 // =============================================================================
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 
@@ -47,7 +47,12 @@ const DETAIL = {
     verdict: { label: 'Good price — book', short: 'Good', tone: 'good' },
     sparkline: [80, 78, 76, 75],
     trackingDays: 60,
-    cheapest: { date: '2026-09-09', price: 75 },
+    /*
+     * `foundAt` NULL BY DEFAULT — the ordinary state of a route whose fares
+     * predate the column, and the state in which this screen says nothing about
+     * age at all. The tests that are about freshness set it.
+     */
+    cheapest: { date: '2026-09-09', price: 75, foundAt: null },
     history: [
         { date: '2026-08-12', price: 80 },
         { date: '2026-08-13', price: 78 },
@@ -55,7 +60,10 @@ const DETAIL = {
     ],
     stats: { min: 46, p25: 79, median: 111, p75: 130, max: 149 },
     advice: { title: 'Good price — book', body: '€75 is 32% under its usual €111 — a solid time to lock it in.', tone: 'good' },
-    bookingUrl: 'https://www.skyscanner.nl/transport/flights/ams/lis/260909/',
+    booking: {
+        aviasales: 'https://www.aviasales.com/search/AMS0909LIS1?marker=123456',
+        skyscanner: 'https://www.skyscanner.nl/transport/flights/ams/lis/260909/',
+    },
 }
 
 /**
@@ -348,11 +356,119 @@ describe('the watchlist strip', () => {
     })
 })
 
+/*
+ * ============================================================================
+ * HOW OLD THE HEADLINE FARE IS
+ * ============================================================================
+ * A third date axis on the screen that is already careful about the other two:
+ * `history[].date` is when we LOOKED, `cheapest.date` is when you FLY, and
+ * `cheapest.foundAt` is when the PRICE WAS FOUND. Orbit's fares come from a
+ * cache of other people's searches, so the big number at the top of this screen
+ * can be days old — it showed €36 against a live €56 — and this is the screen
+ * with a hand-off button under it.
+ *
+ * UNLIKE THE DAY SHEET, THIS ONE HAS A THRESHOLD. The sheet is one day and one
+ * number and prints the age always; this page is a fare, a gauge, a chart, a
+ * callout and a button, and a "Seen 2 hours ago" on a route polled this morning
+ * would be one more grey line teaching the reader to skip the place the
+ * important version appears.
+ */
+describe('how old the cheapest fare is', () => {
+    /** The clock the assertions below are written against. */
+    const NOW = new Date('2026-08-15T12:00:00+02:00')
+
+    beforeEach(() => {
+        vi.useFakeTimers()
+        vi.setSystemTime(NOW)
+    })
+
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    it('says how old a fare is once it has survived a morning it should have been repriced in', async () => {
+        const wrapper = await detail({
+            cheapest: { date: '2026-09-09', price: 75, foundAt: '2026-08-11T12:00:00+02:00' },
+        })
+
+        expect(wrapper.get('.price__seen').text()).toBe('Seen 4 days ago')
+    })
+
+    /*
+     * THE THRESHOLD, FROM BOTH SIDES. A day is the poll's own period: under it
+     * the fare is in the ordinary state of a watched route and its age says
+     * nothing; past it, it has outlived a morning that should have replaced it.
+     */
+    it.each([
+        ['2026-08-14T13:00:00+02:00', false, 'a fare from this time yesterday'],
+        ['2026-08-14T11:00:00+02:00', true, 'a fare older than a day'],
+    ])('shows the line only past a day (%s)', async (foundAt, shown) => {
+        const wrapper = await detail({
+            cheapest: { date: '2026-09-09', price: 75, foundAt },
+        })
+
+        expect(wrapper.find('.price__seen').exists()).toBe(shown)
+    })
+
+    /*
+     * AND SILENCE WHERE THE AGE IS NOT KNOWN — a row written before the column
+     * existed. The screen must not fill that in from anything else: rendering
+     * "Seen just now", or borrowing `meta.fares.fetchedAt` (which is when ORBIT
+     * ASKED, not when the price was found), would state exactly the false thing
+     * this whole feature was built to stop stating.
+     */
+    it('says nothing at all when the age is unknown', async () => {
+        const wrapper = await detail()
+
+        expect(wrapper.find('.price__seen').exists()).toBe(false)
+        expect(wrapper.text()).not.toContain('Seen ')
+    })
+
+    it('says nothing when there is no fare to be old', async () => {
+        const wrapper = await detail({ cheapest: null, price: { current: null, usual: null, pctBelow: null } })
+
+        expect(wrapper.find('.price__seen').exists()).toBe(false)
+    })
+})
+
 describe('the booking hand-off', () => {
     it('is the loud one when the advice is not a warning', async () => {
         const wrapper = await detail()
 
         expect(wrapper.get('.booking__cta').classes()).toContain('booking__cta--primary')
+    })
+
+    /*
+     * AVIASALES IS THE LOUD ONE, AND THAT IS A CORRECTNESS MATTER. Orbit's
+     * prices come out of Aviasales' cache; this screen used to send people to
+     * Skyscanner, which had often never had the fare — €29 here against €68
+     * there. Skyscanner survives as a text link.
+     */
+    it('leads to the search the price came from, and offers the other as a comparison', async () => {
+        const wrapper = await detail()
+
+        expect(wrapper.get('.booking__cta').attributes('href')).toBe(DETAIL.booking.aviasales)
+        expect(wrapper.get('.booking__cta').text()).toContain('Aviasales')
+
+        const compare = wrapper.get('.booking__compare')
+
+        expect(compare.attributes('href')).toBe(DETAIL.booking.skyscanner)
+        expect(compare.text()).toBe('Compare on Skyscanner')
+    })
+
+    /*
+     * ONE EXPECTATION LINE, word for word the day sheet's — the two are
+     * duplicated rather than shared, so nothing but a test stops them drifting.
+     * It replaced the old "we don't sell tickets" disclaimer rather than
+     * stacking under it.
+     */
+    it('sets one expectation about the price rather than two lines of small print', async () => {
+        const wrapper = await detail()
+
+        expect(wrapper.get('.booking__disclaimer').text()).toBe(
+            'Prices come from recent searches — the booking site shows live availability.',
+        )
+        expect(wrapper.text()).not.toContain("We don't sell tickets")
     })
 
     /*
@@ -372,6 +488,6 @@ describe('the booking hand-off', () => {
 
         expect(wrapper.get('.booking__cta').classes()).toContain('booking__cta--secondary')
         // Still a link, still to the same place.
-        expect(wrapper.get('.booking__cta').attributes('href')).toBe(DETAIL.bookingUrl)
+        expect(wrapper.get('.booking__cta').attributes('href')).toBe(DETAIL.booking.aviasales)
     })
 })

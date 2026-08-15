@@ -101,8 +101,16 @@ trait BuildsRouteData
 
     /**
      * @param  array<string, int>  $pricesByDate  'Y-m-d' => cents
+     * @param  string|null  $foundAt  when the provider found these prices, if
+     *                                the test cares. NULL BY DEFAULT, and that
+     *                                is the honest default rather than a lazy
+     *                                one: a row whose age is unknown is exactly
+     *                                what every row written before the column
+     *                                existed looks like, and every screen and
+     *                                the alert policy have a defined answer for
+     *                                it. Tests about freshness pass a value.
      */
-    protected function offer(Route $route, array $pricesByDate): void
+    protected function offer(Route $route, array $pricesByDate, ?string $foundAt = null): void
     {
         foreach ($pricesByDate as $date => $cents) {
             CalendarFare::query()->create([
@@ -110,6 +118,7 @@ trait BuildsRouteData
                 'departure_date' => $date,
                 'price_cents' => $cents,
                 'fetched_at' => Date::now(),
+                'found_at' => $foundAt === null ? null : Date::parse($foundAt),
             ]);
         }
     }

@@ -44,6 +44,21 @@ function yymmdd(shown) {
 }
 
 /**
+ * `September 15, 2026` → `1509`, the four digits an Aviasales params string
+ * carries — DAY BEFORE MONTH, two digits each.
+ *
+ * Worked out here from the sheet's own heading for the same reason `yymmdd` is:
+ * a check that built the string the way the app does would agree with a bug.
+ * The order is the thing being checked — `1509` and `0915` are both plausible
+ * and only one of them searches September.
+ */
+function ddmm(shown) {
+    const [, month, day] = shown.match(/^(\w+) (\d+), (\d{4})$/)
+
+    return `${day.padStart(2, '0')}${String(MONTHS.indexOf(month) + 1).padStart(2, '0')}`
+}
+
+/**
  * The route code out of a chip — `['AMS→LIS', 'AMS', 'LIS']`.
  *
  * READ WITH A REGEX RATHER THAN BY SPLITTING THE CHIP'S TEXT, because a chip is
@@ -343,39 +358,121 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
     await expect(sheet.locator('.pill')).not.toBeEmpty()
 
     /*
-     * THE BOOKING LINK IS AIMED AT THE DAY THAT WAS TAPPED, and is checked by
-     * READING ITS HREF RATHER THAN BY FOLLOWING IT. Nothing in this suite may
-     * navigate to skyscanner.nl: it is a third party, it is slow, and a run
-     * would then fail whenever somebody else's site was having a bad morning.
-     * The href is the whole of what this app decided.
+     * HOW OLD THIS PRICE IS, WHICH IS THE LINE THE SHEET GAINED.
+     *
+     * Orbit's fares come from a cache of other people's searches, so a number
+     * in this sheet can be days old — the app showed €36 for a date whose live
+     * cheapest was €56 — and this is the screen with a hand-off button on it.
+     *
+     * "just now", BECAUSE THE SANDBOX'S FAKE PROVIDER STAMPS THE CURRENT CLOCK.
+     * That is a render check rather than an assertion about ageing: what it
+     * proves is that `found_at` survives the adapter, the upsert, the resource
+     * and the props and reaches the pixels. The arithmetic that turns an
+     * instant into "3 hours ago" or "4 days ago" is pinned on paper in
+     * resources/js/lib/format.test.js, where the clock can be moved.
+     */
+    await expect(sheet.locator('.sheet__seen')).toHaveText('Seen just now')
+
+    /*
+     * THE HAND-OFFS ARE AIMED AT THE DAY THAT WAS TAPPED, and are checked by
+     * READING THEIR HREFS RATHER THAN BY FOLLOWING THEM. Nothing in this suite
+     * may navigate to aviasales.com or skyscanner.nl: they are third parties,
+     * they are slow, and a run would then fail whenever somebody else's site
+     * was having a bad morning. The hrefs are the whole of what this app
+     * decided.
      *
      * The failure this catches is a link that opens perfectly and books the
-     * wrong date — the route's cheapest day, or the first of the month — which
-     * is what "the sheet has a Book button" alone would pass on.
+     * wrong date — the route's cheapest day, the first of the month, or (for
+     * Aviasales) the day and the month the wrong way round — which is what "the
+     * sheet has a Book button" alone would pass on.
      */
     const [, origin, destination] = await chipCode(page)
     const shownDate = await sheet.locator('.sheet__date').textContent()
 
-    const book = sheet.getByRole('link', { name: 'Book this day' })
-    const path = `${origin.toLowerCase()}/${destination.toLowerCase()}/${yymmdd(shownDate)}/`
+    /*
+     * AVIASALES IS THE PRIMARY, and that is a correctness matter: Orbit prices
+     * from Aviasales' cache and used to hand readers to Skyscanner, which had
+     * often never had the fare. `?marker=` is optional here because the sandbox
+     * has no TRAVELPAYOUTS_MARKER — its presence is asserted on paper in
+     * tests/Feature/BookingLinkTest.php.
+     */
+    const book = sheet.getByRole('link', { name: 'See this fare' })
 
-    await expect(book).toHaveAttribute(
-        'href',
-        `https://www.skyscanner.nl/transport/flights/${path}`,
+    expect(await book.getAttribute('href')).toMatch(
+        new RegExp(
+            `^https://www\\.aviasales\\.com/search/${origin}${ddmm(shownDate)}${destination}1(\\?marker=.+)?$`,
+        ),
     )
 
-    // It leaves the app, so: a new tab, no `window.opener` handle back into
+    // And the quiet second opinion, on the same day in its own encoding.
+    const compare = sheet.getByRole('link', { name: 'Compare on Skyscanner' })
+    const path = `${origin.toLowerCase()}/${destination.toLowerCase()}/${yymmdd(shownDate)}/`
+
+    await expect(compare).toHaveAttribute('href', `https://www.skyscanner.nl/transport/flights/${path}`)
+
+    // They leave the app, so: a new tab, no `window.opener` handle back into
     // this one — and NO `noreferrer`, which is what the affiliate attribution
     // rides on (Components/route/BookingCta.vue).
-    await expect(book).toHaveAttribute('target', '_blank')
-    await expect(book).toHaveAttribute('rel', 'noopener')
+    for (const link of [book, compare]) {
+        await expect(link).toHaveAttribute('target', '_blank')
+        await expect(link).toHaveAttribute('rel', 'noopener')
+    }
+
+    /* One expectation line, and the old "we don't sell tickets" is gone. */
+    await expect(sheet.locator('.disclaimer')).toHaveText(
+        'Prices come from recent searches — the booking site shows live availability.',
+    )
 
     await shot(page, 'calendar-day-sheet')
 
-    // And it closes again on the backdrop — the two actions did not turn the
-    // sheet into something that has to be dismissed some other way.
+    // And it closes again on the backdrop — the actions did not turn the sheet
+    // into something that has to be dismissed some other way.
     await page.locator('.backdrop').click()
     await expect(sheet).toHaveCount(0)
+})
+
+/*
+ * ============================================================================
+ * THE SHEET IN THE LIGHT PALETTE
+ * ============================================================================
+ * The sheet gained two quiet elements — the "Seen …" line and the expectation
+ * line under the hand-offs — and both are drawn in `--muted` on `--panel`.
+ * Muted-on-panel is exactly the pair that survives one theme and disappears in
+ * the other: it is the lowest-contrast text in the app by design, and the whole
+ * point of these two lines is that somebody about to spend money can read them.
+ *
+ * A SCREENSHOT AND TWO ASSERTIONS RATHER THAN A BASELINE COMPARISON. What the
+ * sheet looks like is for a person to judge (docs/E2E.md says why only three
+ * screens are compared automatically); what a test can say is that the lines
+ * are present and non-empty in the palette they were not designed in.
+ */
+test('the day sheet reads in the light theme too', async ({ page }) => {
+    await page.goto('/alerts')
+
+    await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Light' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+
+    await page.goto('/calendar')
+
+    const cell = page.locator('.cell--fare').first()
+    await expect(cell).toBeVisible()
+    await cell.click()
+
+    const sheet = page.getByRole('dialog')
+    await expect(sheet).toBeVisible()
+
+    await expect(sheet.locator('.sheet__seen')).toHaveText('Seen just now')
+    await expect(sheet.locator('.disclaimer')).toHaveText(
+        'Prices come from recent searches — the booking site shows live availability.',
+    )
+
+    await shot(page, 'calendar-day-sheet-light')
+
+    // Put it back for whatever runs next — the suite's default is dark.
+    await page.locator('.backdrop').click()
+    await page.goto('/alerts')
+    await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Dark' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 })
 
 /**
