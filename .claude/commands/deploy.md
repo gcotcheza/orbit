@@ -61,13 +61,53 @@
    on the branch before merge — but a merge commit is code no run has seen. Run it
    once here, on `main`, after step 1's pull:
    ```bash
-   cd /var/www/orbit && sudo -u orbit ./scripts/check.sh
+   cd /var/www/orbit && ./scripts/check.sh
    ```
    **Good:** five headed steps — Pint, PHPStan, ESLint, Vitest, PHPUnit — and a
    final green `==> all checks passed`. It stops at the first failure; a failure
    is a stop, not a note.
    The PHP steps need the stack already up (`docker compose up -d`); the node
    steps bring their own container.
+   - **⚠ NOT `sudo -u orbit ./scripts/check.sh`.** Every step in it shells out to
+     `docker compose`, and talking to `/var/run/docker.sock` is a **group
+     membership** — `orbit` is not in the `docker` group and gets
+     `permission denied while trying to connect to the Docker daemon socket`
+     before the first check runs. Run it as root. Nothing it does lands
+     root-owned files in the checkout: the containers it drives are already
+     `user: '115:119'`, which *is* the `orbit` user (see "How this is wired"), so
+     file ownership is handled inside them rather than by the invoking shell.
+
+5. **`scripts/e2e.sh` — the browser gate. Optional, strongly recommended.**
+   ```bash
+   cd /var/www/orbit && ./scripts/e2e.sh
+   ```
+   **Good:** the `orbit-e2e` stack comes up, migrates, seeds, runs 32 browser
+   tests and tears itself down, ending in a green `==> browser gate passed`.
+   About 90 seconds after the first run.
+
+   **What it adds over step 4, and why it is worth the time.** Not one of
+   `check.sh`'s five checks has ever seen a screen — Vitest runs the front end in
+   jsdom, which has no layout engine and no rasteriser. All five are green on an
+   app whose globe renders as a black circle and whose calendar renders 31
+   identical grey squares. This drives a real Chromium (WebGL on SwiftShader)
+   through the eight journeys and fails on any uncaught exception. `docs/E2E.md`
+   is the full description.
+
+   **Why it is optional.** It pulls a ~2 GB Playwright image the first time it
+   runs, and this box's disk is shared with six other apps. On a box that has it
+   cached there is no reason to skip it.
+
+   - **⚠ Also root, not `sudo -u orbit`** — same docker.sock reason as step 4.
+   - **It cannot touch the live stack.** Different compose project (`orbit-e2e`),
+     different port (`127.0.0.1:3185`, never 3085), its own generated `.env.e2e`
+     and its own volumes. It is safe to run **while the site is up**, which is
+     how it is meant to be run.
+   - It leaves nothing behind: `down -v` at the end, always. `--keep` if you want
+     to look at the sandbox afterwards; `scripts/e2e.sh --down` then tears it down.
+   - **⚠ Three tests are `test.fail()`** — known rendering defects, written down
+     as tests that pass while the bug is there. They print with a `✘` and are
+     counted in the green total. `docs/E2E.md` lists all three. A run is good when
+     the last line is `==> browser gate passed`, not when every line has a tick.
 
 ## Deploy steps
 
@@ -257,6 +297,32 @@ B='http://127.0.0.1:3085'
         -w '\n%{http_code}\n' "$B/api/me"
    rm -f "$HDR" "$OUT"
    ```
+
+   **⚠ AN AUTHENTICATED *POST* NEEDS THE CSRF TOKEN LIFTED AGAIN, FROM THE LOGIN
+   RESPONSE.** Step 3 above is a GET and gets away with it. Anything that writes
+   does not: `Illuminate\Auth\SessionGuard::login()` calls
+   `$session->regenerate()`, which mints a **new session id and a new CSRF
+   token**, and the login response carries both as fresh `Set-Cookie` headers.
+   Re-using `$XSRF` from before the login sends a token that belongs to a session
+   that no longer exists, and Laravel answers **419** — which reads exactly like
+   "CSRF is broken on this deploy" and is not. Take it off `$OUT`, next to
+   `$AUTHED`:
+
+   ```bash
+   AUTH_XSRF=$(printf '%s' "$AUTHED" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
+               | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
+
+   # e.g. pausing a route, then putting it back — both need the NEW token.
+   curl -s -o /dev/null -w '%{http_code}\n' -X PATCH -H "$H" \
+        -H "Cookie: $AUTHED" -H "X-XSRF-TOKEN: $AUTH_XSRF" \
+        -H 'Accept: application/json' -H 'Content-Type: application/json' \
+        -d '{"active":false}' "$B/api/watchlist/AMS-LIS"
+   ```
+   **Good:** `200`. A `419` here means the token, not the app.
+   **Better still: don't.** `scripts/e2e.sh` (pre-flight step 5) drives every one
+   of these writes through a real browser that handles the cookie dance itself,
+   against a sandbox where a mistake costs nothing. Hand-rolled `curl` POSTs
+   against **production** change production's data.
 
    **Good:** `204`, then `200` with `{"data":{"id":1,"name":"Ghie",…}}`, then `200`
    with keys `email, id, name`.

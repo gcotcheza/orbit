@@ -50,6 +50,16 @@ export default [
             // ours to reformat, and a gate whose first run is 37 findings
             // nobody intends to fix is a gate that gets skipped.
             'design/**',
+
+            // What a `scripts/e2e.sh` run leaves behind: screenshots, traces
+            // and Playwright's HTML report — which SHIPS ITS OWN TRACE VIEWER,
+            // a few hundred kilobytes of somebody else's minified bundle.
+            // Linting it is 8,414 findings about single-letter variables in
+            // code we did not write and cannot fix, i.e. a gate that is red
+            // whenever the browser gate has been run and green otherwise. The
+            // directory is gitignored; e2e/specs, e2e/fixtures.js and
+            // e2e/playwright.config.js are ours and are linted.
+            'e2e/artifacts/**',
         ],
     },
 
