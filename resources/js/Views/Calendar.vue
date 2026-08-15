@@ -27,13 +27,25 @@ import { addMonths, currentMonthKey, dayLabel, monthLabel } from '@/Components/c
 import { useWatchlistStore } from '@/stores/watchlist'
 
 /*
- * How far the arrows go. The poller holds about three months of departures
- * (docs/PLAN.md), so anything past that is a guaranteed empty grid: the bounds
- * are the honest edge of what we know rather than an arbitrary limit. The past
- * is not offered at all — a fare you can no longer buy is not a deal.
+ * How far the arrows go. The poller holds about six months of departures
+ * (`orbit.poll.window_days`, 181 days), so anything past that is a guaranteed
+ * empty grid: the bounds are the honest edge of what we know rather than an
+ * arbitrary limit. The past is not offered at all — a fare you can no longer
+ * buy is not a deal.
+ *
+ * SIX AND NOT SEVEN, even though 181 days usually reaches into a seventh
+ * calendar month: that month holds a handful of days at most, and an arrow that
+ * leads to two priced cells is a worse answer than one that stops.
+ *
+ * THE LAST MONTH IS SOMETIMES EMPTY, and on purpose. A window that opens on the
+ * 1st of a short month closes inside the sixth one, so on a few mornings a year
+ * the last reachable grid has nothing in it — and the screen already says so
+ * ("No fares seen for this month yet"), because that is also what every month
+ * of a brand-new route looks like. Stopping at five to guarantee a full grid
+ * would hide a month of real fares on the other 95% of days.
  */
 const FIRST_MONTH = currentMonthKey()
-const LAST_MONTH = addMonths(FIRST_MONTH, 3)
+const LAST_MONTH = addMonths(FIRST_MONTH, 6)
 
 const watchlist = useWatchlistStore()
 const { routes, status: routesStatus } = storeToRefs(watchlist)

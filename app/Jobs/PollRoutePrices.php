@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Date;
  * TWO WRITES FROM ONE CALL, which is the reason this job exists rather than
  * two:
  *
- *   1. `calendar_fares` — the whole 90-day window, upserted. This is the
+ *   1. `calendar_fares` — the whole six-month window, upserted. This is the
  *      heatmap.
  *   2. `route_price_history` — ONE row, today's cheapest fare anywhere in that
  *      window. This is the sparkline, the detail chart, and the trend quarter
@@ -38,12 +38,26 @@ use Illuminate\Support\Facades\Date;
  * unserialize and THROWS if the row is gone; a route removed from the
  * watchlist between 06:10 and the worker picking the job up is a normal
  * Tuesday, not a failure worth a Horizon alert.
+ *
+ * AND IT TAKES A WINDOW, OPTIONALLY. `config('orbit.poll.window_days')` is what
+ * a poll of the WATCHLIST looks ahead, and it is six months. App\Jobs\
+ * SweepRuleFares asks for a shorter one — `orbit.rules.sweep_horizon_days`,
+ * because thirty speculative routes × six months of calendar months is more
+ * requests than the provider allows in an hour, see config/orbit.php's `rules`
+ * section. Everything else dispatches this without the second argument and gets
+ * the full window.
+ *
+ * THE TWO DELETES BELOW READ THOSE TWO NUMBERS DIFFERENTLY, deliberately, and
+ * that distinction is the whole reason the asymmetry is safe. Read them.
  */
 final class PollRoutePrices implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct(public readonly int $routeId) {}
+    public function __construct(
+        public readonly int $routeId,
+        public readonly ?int $windowDays = null,
+    ) {}
 
     public function handle(PriceProvider $provider): void
     {
@@ -60,7 +74,14 @@ final class PollRoutePrices implements ShouldQueue
          * yesterday's observation with today's price. See the migration.
          */
         $timezone = (string) config('orbit.timezone');
-        $windowDays = (int) config('orbit.poll.window_days');
+
+        /*
+         * THE WINDOW THIS RUN ASKED FOR — the sweep's shorter one when it is
+         * the sweep, the full six months otherwise. `$pollWindow` below is the
+         * OTHER number: what the app maintains for a route, whoever polled it.
+         */
+        $pollWindow = (int) config('orbit.poll.window_days');
+        $windowDays = $this->windowDays ?? $pollWindow;
 
         $today = Date::now($timezone)->startOfDay();
         $lastDeparture = $today->copy()->addDays($windowDays);
@@ -104,6 +125,25 @@ final class PollRoutePrices implements ShouldQueue
             ->delete();
 
         /*
+         * AND DEPARTURE DATES PAST THE EDGE OF THE WINDOW THE APP MAINTAINS —
+         * `poll.window_days`, ALWAYS, never this run's shorter one. A cell out
+         * there is a price nothing will ever reprice, which is the same lie as
+         * a withdrawn fare, only permanent: the staleness sweep below would not
+         * reach it either, because it is scoped to the window that was asked
+         * for.
+         *
+         * IT DELETES NOTHING TODAY and that is the point of writing it now.
+         * Rows can only get out there by the window SHRINKING — six months back
+         * to three, or a box that runs a narrower one — and a config change
+         * that quietly leaves half a year of unmaintained prices in the table
+         * is exactly the failure the staleness sweep exists to prevent.
+         */
+        CalendarFare::query()
+            ->where('route_id', $route->id)
+            ->whereDate('departure_date', '>', $today->copy()->addDays($pollWindow)->toDateString())
+            ->delete();
+
+        /*
          * AND FUTURE DATES THAT HAVE STOPPED BEING QUOTED. The upsert above
          * only ever writes the dates the provider named this morning, so a
          * departure date that had a fare last week and has none now keeps that
@@ -124,18 +164,30 @@ final class PollRoutePrices implements ShouldQueue
          * window date the provider did not name would be tighter by a day or
          * two and is wrong: App\Infrastructure\Pricing\TravelpayoutsPriceProvider
          * fetches the window a calendar month at a time and deliberately
-         * tolerates one of those four calls failing, because three months of
-         * calendar is worth more than none. The port hands back a flat list, so
-         * this job cannot tell "that month is empty today" from "that month's
-         * request 500'd" — and treating them the same would blank a quarter of
-         * the calendar every time Travelpayouts hiccuped.
+         * tolerates one of those seven calls failing, because a calendar with a
+         * month missing from it is worth more than none. The port hands back a
+         * flat list, so this job cannot tell "that month is empty today" from
+         * "that month's request 500'd" — and treating them the same would blank
+         * a seventh of the calendar every time Travelpayouts hiccuped.
          *
          * IT RUNS ONLY AFTER A SUCCESSFUL POLL, i.e. below the empty-response
          * return above. A provider that is down deletes nothing at all, which
          * is the same promise the rest of this job already makes.
+         *
+         * AND ONLY OVER THE WINDOW THIS RUN ACTUALLY ASKED FOR. A rule sweep
+         * polls three months deep (`rules.sweep_horizon_days`); the daily poll
+         * polls six. Without this bound, a sweep landing on a watched route
+         * whose morning poll had been failing would refresh the near half of
+         * its calendar and then delete the far half as stale — six months of
+         * heatmap wiped by a job that never asked about those dates and has no
+         * opinion on whether they are still quoted. The dates beyond
+         * `$lastDeparture` keep the `fetched_at` of the last poll that DID ask,
+         * and the next full poll reprices or drops them on the same three-day
+         * grace period as everything else.
          */
         CalendarFare::query()
             ->where('route_id', $route->id)
+            ->whereBetween('departure_date', [$today->toDateString(), $lastDeparture->toDateString()])
             ->where('fetched_at', '<', $now->copy()->subDays((int) config('orbit.poll.stale_after_days')))
             ->delete();
 

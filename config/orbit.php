@@ -107,9 +107,12 @@ return [
     | token.
     |
     | THE ENDPOINT IS `/v2/prices/month-matrix`, one call per calendar month the
-    | poll window touches — four for the standard 90 days. It is the only one of
-    | the three candidates that answers the port's actual question. Measured
-    | against the live API on 2026-08-15:
+    | poll window touches — seven for the standard 181 days, and six on the few
+    | mornings a window that starts on the 1st closes inside the sixth month.
+    | That per-MONTH billing is why `poll.window_days` and
+    | `rules.sweep_horizon_days` are the odd numbers they are. It is the only
+    | one of the three candidates that answers the port's actual question.
+    | Measured against the live API on 2026-08-15:
     |
     |   - `/v2/prices/month-matrix` — ONE-WAY (every one of 433 recorded entries
     |     came back with an empty `return_date`), one entry per departure date,
@@ -133,7 +136,8 @@ return [
     | log, a proxy trace and an exception report by default.
     |
     | TIMEOUTS ARE SHORT AND THE RETRY IS SINGLE. Nobody is waiting on this — it
-    | is a queued job at 06:10 — but the poll is 24 calls in a stagger and a
+    | is a queued job at 06:10 — but the poll is seven calls per watched route
+    | in a stagger (fifty-odd of them across the current watchlist) and a
     | provider that has stopped answering should fail the morning rather than
     | occupy a worker until Horizon's timeout kills it mid-upsert.
     |
@@ -180,10 +184,11 @@ return [
 
         /*
          * HOW OFTEN A FAILING PROVIDER IS ALLOWED TO SAY SO. One morning's poll
-         * is 24 calls; an outage is therefore 24 identical log lines, times the
-         * rule sweep, and a log that repeats itself is a log nobody greps. One
-         * warning per quarter of an hour is enough to notice and few enough to
-         * read — the line says how many minutes of silence follow it.
+         * is seven calls per watched route; an outage is therefore fifty-odd
+         * identical log lines, times the rule sweep, and a log that repeats
+         * itself is a log nobody greps. One warning per quarter of an hour is
+         * enough to notice and few enough to read — the line says how many
+         * minutes of silence follow it.
          */
         'warn_every_minutes' => 15,
     ],
@@ -200,10 +205,12 @@ return [
     | THE TWO HORIZONS IT SUMMARISES, both of them real fares this app fetched:
     |
     |   CROSS-SECTIONAL — every cell of `calendar_fares`, i.e. the fares for the
-    |   ~91 departure dates in the current poll window. Available from the FIRST
+    |   ~182 departure dates in the current poll window. Available from the FIRST
     |   poll, which is what makes a deal score possible on the day a route is
     |   added. Its median answers "what does a typical departure date on this
-    |   route cost right now".
+    |   route cost right now" — over SIX months of departures since
+    |   `poll.window_days` widened, which is a broader question than the three
+    |   months it used to summarise and a slightly different median.
     |
     |   LONGITUDINAL — `route_price_history`, one row per morning, each the
     |   cheapest fare anywhere in that morning's window. It takes weeks to mean
@@ -444,9 +451,29 @@ return [
     |--------------------------------------------------------------------------
     |
     | WINDOW_DAYS is how far ahead a poll looks, and it is the definition of
-    | "the current price": the cheapest fare in the next 90 days. Widening it
+    | "the current price": the cheapest fare in the next six months. Widening it
     | makes every route look cheaper, so it is one number in one place rather
     | than a literal in the job and a different literal in the calendar.
+    |
+    | SIX MONTHS RATHER THAN THREE because the owner asked to see past the edge
+    | of the old window ("can we see beyond that?"), and a summer holiday is
+    | booked in February. Everything downstream follows this number on its own:
+    | the calendar's arrows stop where it stops, and `selfstats`' cross-sectional
+    | median is now the going rate across six months of departures rather than
+    | three — a wider, flatter pool that reads a little differently on day one.
+    | The blend, the score and the thresholds are untouched.
+    |
+    | 181 AND NOT 183, WHICH IS THE ONE NUMBER HERE WORTH THE ARITHMETIC.
+    | Travelpayouts answers a CALENDAR MONTH at a time (see the `travelpayouts`
+    | section), so a window costs one request per month it touches and the cost
+    | steps up at a month boundary rather than at a day. 181 days can never
+    | touch more than seven months — checked against every start date in a
+    | four-year span — while 183 reaches an eighth on 34 mornings a year, from
+    | the 30th of a long month. That eighth request buys two days of departures
+    | at the far end nobody is looking at, and it lands on exactly the mornings
+    | the sweep below is also at its most expensive. Six months of fares is what
+    | this is for; 181 is the widest window that never pays for a month it does
+    | not need.
     |
     | STAGGER_MINUTES spaces the per-route jobs so six providers calls do not
     | arrive as a burst — the real APIs are rate-limited per minute.
@@ -467,12 +494,15 @@ return [
     | consecutive mornings may fail, or a date may simply be missing from the
     | provider's cache for a day, without the calendar losing a cell it would
     | have got back. See App\Jobs\PollRoutePrices for why this is a delete on a
-    | SUCCESSFUL poll rather than a filter on every read.
+    | SUCCESSFUL poll rather than a filter on every read — and for why the
+    | staleness sweep is bounded by the window the poll it belongs to actually
+    | ASKED for, now that a rule sweep asks for a shorter one than the daily
+    | poll does (`rules.sweep_horizon_days`).
     |
     */
 
     'poll' => [
-        'window_days' => 90,
+        'window_days' => 181,
         'stagger_minutes' => 3,
         'stale_after_days' => 3,
     ],
@@ -676,9 +706,40 @@ return [
     |
     | SWEEP_CAP is how many origin×destination pairs one rule may put on the
     | queue. A rule with no vibe at all is 3 origins × 77 destinations = 231
-    | provider calls, which is a rate limit spent on a sentence somebody typed
-    | and may delete a minute later. The cap keeps the best-fitting thirty and
-    | logs the rest — see App\Jobs\SweepRuleFares for what "best" means.
+    | polls, which is a rate limit spent on a sentence somebody typed and may
+    | delete a minute later. The cap keeps the best-fitting thirty and logs the
+    | rest — see App\Jobs\SweepRuleFares for what "best" means.
+    |
+    | SWEEP_HORIZON_DAYS is how far ahead those speculative polls look, and it
+    | is DELIBERATELY SHORTER THAN `poll.window_days`. The asymmetry is the
+    | budget, and the budget is Travelpayouts' ~200 requests an hour per IP:
+    |
+    |   the daily poll  8 watched routes × ≤7 months  =  ≤56 requests
+    |   one rule sweep  30 capped routes × ≤4 months  =  ≤120 requests
+    |                                                    ------------
+    |   06:10 and 06:40 land in the same clock hour       ≤176
+    |
+    | The watchlist is what somebody asked to be told about and gets the wide
+    | window; a rule's candidate routes are a guess at what they might like and
+    | get the near half of it. Sweeping them six months deep would be 30 × 7 =
+    | 210 requests for ONE rule — over the hourly limit on its own, before the
+    | watchlist poll that ran half an hour earlier is counted.
+    |
+    | 89 DAYS, NOT 90, for the reason `poll.window_days` is 181 and not 183: a
+    | 90-day window reaches a fifth calendar month on three mornings a year and
+    | 89 never does, so the 120 above is a ceiling rather than an average. It is
+    | otherwise exactly the horizon every poll in this app had before the window
+    | widened, which is the honest way to describe what this key changed: the
+    | sweep still costs what it always cost.
+    |
+    | WHAT THE SHORTER HORIZON COSTS, stated plainly: a rule whose date window
+    | names a month beyond it — "somewhere sunny in February", written in
+    | August — still MATCHES on any route Orbit already holds fares for, because
+    | App\Application\Rules\RuleMatches reads the calendar rather than the
+    | provider, and a WATCHED route's calendar now runs six months deep. What
+    | the rule does not get is speculative fares for that month on routes nobody
+    | watches: they are fetched three months out, and the far month fills in as
+    | the calendar rolls toward it. See App\Jobs\SweepRuleFares.
     |
     */
 
@@ -686,6 +747,7 @@ return [
         'warm_at' => 4,
         'warm_vibes' => ['sunny', 'beach'],
         'sweep_cap' => 30,
+        'sweep_horizon_days' => 89,
         /* The design's match banner shows a handful, not a list (§4). */
         'sample' => 6,
     ],

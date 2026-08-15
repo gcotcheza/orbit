@@ -151,6 +151,81 @@ final class StaleCalendarFaresTest extends TestCase
         $this->assertSame(2, $this->cells($route));
     }
 
+    /**
+     * THE BUG THE SIX-MONTH WINDOW WOULD HAVE INTRODUCED, and the reason the
+     * staleness sweep is bounded by the window its poll asked for.
+     *
+     * The daily poll looks six months ahead; a rule sweep polls the same route
+     * three months ahead (`orbit.rules.sweep_horizon_days`) because thirty
+     * speculative routes × six months is more requests than the provider
+     * allows. So a sweep that reaches a WATCHED route — which it only does when
+     * that morning's poll failed, since anything priced today is skipped —
+     * refreshes the near half of its calendar and knows nothing whatever about
+     * the far half. An unbounded sweep would read those far cells as stale and
+     * delete three months of heatmap on the strength of a request that never
+     * mentioned them.
+     */
+    #[Test]
+    public function a_short_horizon_poll_leaves_the_far_half_of_the_calendar_alone(): void
+    {
+        $route = $this->route();
+
+        /* One departure inside three months, one only the six-month poll sees. */
+        $this->answering(['2026-09-01', '2026-12-01']);
+        PollRoutePrices::dispatchSync($route->id);
+
+        $this->assertSame(2, $this->cells($route));
+
+        /*
+         * Four mornings later — past the three-day grace period, so every cell
+         * is now stale enough to delete — a rule sweep polls this route with
+         * its own shorter horizon.
+         */
+        Date::setTestNow('2026-08-19 06:10:00');
+        $this->answering(['2026-09-01', '2026-12-01']);
+        PollRoutePrices::dispatchSync($route->id, (int) config('orbit.rules.sweep_horizon_days'));
+
+        $this->assertSame(2, $this->cells($route));
+        $this->assertTrue($this->has($route, '2026-12-01'), 'The sweep deleted a fare it never asked about.');
+    }
+
+    /**
+     * The other edge of the same bound: a departure date the app no longer
+     * maintains at all.
+     *
+     * A cell past `orbit.poll.window_days` can only exist because the window
+     * SHRANK, and nothing will ever reprice it — the staleness sweep is scoped
+     * to the window that was asked for, so it would sit there quoting a price
+     * from the old horizon until its departure date went by. Six months of
+     * unmaintained fares is the same lie as a withdrawn one, only slower, and
+     * it is eligible for a booking link and a deal rule the whole time.
+     */
+    #[Test]
+    public function departures_past_the_poll_horizon_are_dropped_when_the_window_narrows(): void
+    {
+        $route = $this->route();
+
+        $this->answering(['2026-09-01', '2026-12-01']);
+        PollRoutePrices::dispatchSync($route->id);
+
+        $this->assertSame(2, $this->cells($route));
+
+        /* Somebody puts the window back to three months. */
+        config(['orbit.poll.window_days' => 90]);
+
+        /*
+         * THE VERY NEXT MORNING, i.e. well inside the three-day grace period:
+         * what removes the December cell is the horizon and not staleness.
+         */
+        Date::setTestNow('2026-08-16 06:10:00');
+        $this->answering(['2026-09-01', '2026-12-01']);
+        PollRoutePrices::dispatchSync($route->id);
+
+        $this->assertSame(1, $this->cells($route));
+        $this->assertTrue($this->has($route, '2026-09-01'));
+        $this->assertFalse($this->has($route, '2026-12-01'));
+    }
+
     // ----------------------------------------------------------------- helpers
 
     private function route(): Route

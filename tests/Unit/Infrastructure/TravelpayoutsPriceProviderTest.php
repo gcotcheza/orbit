@@ -426,8 +426,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * A morning's poll is twenty-four calls; an outage must not be twenty-four
-     * identical lines in the log.
+     * A morning's poll is seven calls per watched route; an outage must not be
+     * fifty-odd identical lines in the log.
      */
     #[Test]
     public function the_warning_is_rate_limited_across_every_route_and_month(): void
@@ -445,6 +445,63 @@ final class TravelpayoutsPriceProviderTest extends TestCase
         /* Nine failed requests (3 routes × 3 months), one line about it. */
         $this->assertCount(1, $log->warnings());
         $this->assertSame(15, $log->warnings()[0]['context']['further_warnings_suppressed_for_minutes'] ?? null);
+    }
+
+    // ------------------------------------------------------------- the budget
+
+    /**
+     * WHAT THE TWO CONFIGURED WINDOWS COST, COUNTED BY THE THING THAT SPENDS
+     * IT. This endpoint bills per calendar MONTH, so a window's price steps up
+     * at a month boundary and not at a day — which is why
+     * `orbit.poll.window_days` is 181 and `orbit.rules.sweep_horizon_days` is
+     * 89 rather than the round numbers either side of them. 183 days reaches an
+     * eighth month, and 90 a fifth, on the mornings a window opens late in a
+     * long month.
+     *
+     * THE DATES ARE THE EXTREMES, not a sample: a window that opens on the 30th
+     * or 31st of a 31-day month runs through the shortest possible run of
+     * following months, which is where the extra request appears. February is
+     * in the list for the leap year on the other side of it.
+     *
+     * The arithmetic those ceilings feed (all of it inside Travelpayouts' ~200
+     * requests an hour, in the 06:00 clock hour the poll and the sweep share):
+     *
+     *     poll   8 watched routes × 7  =  56
+     *     sweep  30 capped routes × 4  = 120
+     *                                    ---
+     *                                    176
+     */
+    #[Test]
+    public function neither_configured_window_costs_more_requests_than_the_budget_allows(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->fixture('month-matrix-empty'))]);
+
+        $starts = ['2026-01-30', '2026-01-31', '2026-03-01', '2026-07-31', '2026-08-15', '2026-12-31', '2028-02-29'];
+
+        foreach ([['orbit.poll.window_days', 7], ['orbit.rules.sweep_horizon_days', 4]] as [$key, $ceiling]) {
+            $days = (int) config($key);
+            $requests = [];
+
+            foreach ($starts as $start) {
+                $before = count(Http::recorded());
+                $from = new DateTimeImmutable($start);
+
+                $this->provider()->cheapestPerDay('AMS', 'LIS', $from, $from->modify("+{$days} days"));
+
+                $requests[$start] = count(Http::recorded()) - $before;
+            }
+
+            /*
+             * EQUAL, NOT AT MOST: the worst case has to be BOTH within the
+             * ceiling and actually reached by one of these dates, or the day
+             * somebody widens the window this assertion goes quietly slack.
+             */
+            $this->assertSame(
+                $ceiling,
+                max($requests),
+                "{$key} = {$days} costs more provider requests than the budget in config/orbit.php allows.",
+            );
+        }
     }
 
     // ------------------------------------------------------------- configuration

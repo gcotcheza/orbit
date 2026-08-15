@@ -184,6 +184,99 @@ final class RuleSweepTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    // -- The horizon ---------------------------------------------------------
+
+    /**
+     * A SWEEP IS SHALLOWER THAN A POLL, and that is a budget rather than an
+     * opinion about rules.
+     *
+     * Travelpayouts charges a request per CALENDAR MONTH, so sweeping a capped
+     * thirty routes across the watchlist's six-month window is 30 × 7 = 210
+     * requests for one rule — past the provider's ~200 an hour on its own,
+     * before the 06:10 poll half an hour earlier is counted. The sweep asks for
+     * the near three months instead: 30 × 4 = 120, which leaves room for it.
+     */
+    #[Test]
+    public function a_sweep_polls_a_shorter_horizon_than_the_watchlist_gets(): void
+    {
+        Queue::fake();
+
+        $this->makeDestination('FAO', ['beach', 'sunny']);
+
+        $rule = $this->makeRule($this->owner, 'somewhere sunny from AMS', [
+            'origins' => ['AMS'],
+            'vibes' => ['sunny'],
+        ]);
+
+        $this->sweep($rule->id);
+
+        Queue::assertPushed(
+            fn (PollRoutePrices $job): bool => $job->windowDays === (int) config('orbit.rules.sweep_horizon_days'),
+        );
+
+        $this->assertLessThan(
+            (int) config('orbit.poll.window_days'),
+            (int) config('orbit.rules.sweep_horizon_days'),
+            'The sweep horizon is only worth having while it is the shorter of the two.',
+        );
+    }
+
+    /**
+     * From config, not compiled in — a box with a bigger rate limit can widen
+     * it, and the test suite can prove the number travels.
+     */
+    #[Test]
+    public function the_sweep_horizon_comes_from_config(): void
+    {
+        Queue::fake();
+        config(['orbit.rules.sweep_horizon_days' => 45]);
+
+        $this->makeDestination('FAO', ['beach', 'sunny']);
+
+        $rule = $this->makeRule($this->owner, 'somewhere sunny from AMS', [
+            'origins' => ['AMS'],
+            'vibes' => ['sunny'],
+        ]);
+
+        $this->sweep($rule->id);
+
+        Queue::assertPushed(fn (PollRoutePrices $job): bool => $job->windowDays === 45);
+    }
+
+    /**
+     * THE HONEST LIMIT OF THE SHORTER HORIZON, asserted rather than promised.
+     *
+     * A rule whose date window names a month past the sweep horizon still
+     * matches on any route Orbit already holds fares for, because
+     * App\Application\Rules\RuleMatches reads `calendar_fares` and a WATCHED
+     * route's calendar runs the full six months. What it does not get is
+     * speculative fares that far out for pairs nobody watches — those arrive as
+     * the calendar rolls toward the month.
+     */
+    #[Test]
+    public function a_far_month_still_matches_on_a_route_the_watchlist_already_holds_fares_for(): void
+    {
+        $this->makeDestination('FAO', ['beach', 'sunny']);
+
+        /*
+         * Five months out: inside the poll's six-month window, well past the
+         * sweep's three — a fare only the watchlist poll could have fetched.
+         */
+        $this->makeRouteWithFares('AMS', 'FAO', ['2027-01-12' => 4000]);
+
+        $this->makeRule($this->owner, 'somewhere sunny in January under €60', [
+            'origins' => ['AMS'],
+            'vibes' => ['sunny'],
+            'maxPriceCents' => 6000,
+            'dateWindow' => ['from' => 1, 'to' => 1],
+        ]);
+
+        $this->actingAs($this->owner)->getJson('/api/rules')
+            ->assertOk()
+            ->assertJsonPath('data.0.matches.count', 1)
+            ->assertJsonPath('data.0.matches.sample.0.code', 'AMS-FAO');
+    }
+
     /**
      * The whole point, end to end with nothing faked below the port.
      *
