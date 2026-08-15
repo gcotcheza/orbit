@@ -71,25 +71,50 @@ final class ScheduleTest extends TestCase
         $this->assertSame('Europe/Amsterdam', $event->timezone);
     }
 
+    #[Test]
+    public function alerts_are_evaluated_after_both_of_the_runs_that_feed_them(): void
+    {
+        $event = $this->find('orbit:alerts');
+
+        $this->assertSame('55 6 * * *', $event->expression);
+        $this->assertSame('Europe/Amsterdam', $event->timezone);
+    }
+
+    #[Test]
+    public function the_digest_goes_out_on_sunday_morning(): void
+    {
+        $event = $this->find('orbit:digest');
+
+        $this->assertSame('0 9 * * 0', $event->expression);
+        $this->assertSame('Europe/Amsterdam', $event->timezone);
+    }
+
     /**
-     * THE ORDER IS LOAD-BEARING, not a preference. App\Jobs\SweepRuleFares
-     * skips any route the morning has already priced, so sweeping first would
-     * spend a rule's capped budget re-fetching the watchlist and the routes
-     * only a rule cares about would never get their turn.
+     * THE ORDER IS LOAD-BEARING, not a preference.
+     *
+     * App\Jobs\SweepRuleFares skips any route the morning has already priced,
+     * so sweeping before the poll would spend a rule's capped budget
+     * re-fetching the watchlist and the routes only a rule cares about would
+     * never get their turn. And the alert run reads what both of them wrote:
+     * going first would not fail, it would simply mail this morning's verdict
+     * on yesterday's prices, every day, invisibly.
      */
     #[Test]
-    public function the_sweep_is_scheduled_after_the_poll_it_depends_on(): void
+    public function the_morning_runs_in_the_order_each_one_depends_on(): void
     {
-        $poll = $this->find('orbit:poll-fares')->expression;
-        $sweep = $this->find('orbit:sweep-rules')->expression;
+        $poll = $this->minuteOfDay('orbit:poll-fares');
+        $sweep = $this->minuteOfDay('orbit:sweep-rules');
+        $alerts = $this->minuteOfDay('orbit:alerts');
 
-        [$pollMinute, $pollHour] = explode(' ', $poll);
-        [$sweepMinute, $sweepHour] = explode(' ', $sweep);
+        $this->assertGreaterThan($poll, $sweep);
+        $this->assertGreaterThan($sweep, $alerts);
+    }
 
-        $this->assertGreaterThan(
-            ((int) $pollHour) * 60 + (int) $pollMinute,
-            ((int) $sweepHour) * 60 + (int) $sweepMinute,
-        );
+    private function minuteOfDay(string $command): int
+    {
+        [$minute, $hour] = explode(' ', $this->find($command)->expression);
+
+        return ((int) $hour) * 60 + (int) $minute;
     }
 
     /**
@@ -102,6 +127,8 @@ final class ScheduleTest extends TestCase
         $this->assertTrue($this->find('orbit:poll-fares')->withoutOverlapping);
         $this->assertTrue($this->find('orbit:refresh-stats')->withoutOverlapping);
         $this->assertTrue($this->find('orbit:sweep-rules')->withoutOverlapping);
+        $this->assertTrue($this->find('orbit:alerts')->withoutOverlapping);
+        $this->assertTrue($this->find('orbit:digest')->withoutOverlapping);
     }
 
     /**

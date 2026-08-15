@@ -5,20 +5,26 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use Anthropic\Client as AnthropicClient;
+use App\Application\Ports\DealNotifier;
 use App\Application\Ports\PriceProvider;
 use App\Application\Ports\PriceStatsProvider;
 use App\Application\Ports\RuleTextParser;
+use App\Domain\Alerts\AlertPolicy;
 use App\Domain\Pricing\DealScorer;
 use App\Domain\Pricing\ScoringPolicy;
 use App\Domain\Rules\RuleMatcher;
 use App\Domain\Rules\RuleVocabulary;
 use App\Infrastructure\Nlp\AnthropicRuleTextParser;
 use App\Infrastructure\Nlp\RegexRuleTextParser;
+use App\Infrastructure\Notify\MailDealNotifier;
+use App\Infrastructure\Notify\MarkAlertsDelivered;
 use App\Infrastructure\Pricing\FakePriceProvider;
 use App\Infrastructure\Pricing\FakeStatsProvider;
 use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\Events\NotificationSent;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
@@ -95,6 +101,35 @@ final class AppServiceProvider extends ServiceProvider
             return new RuleVocabulary($origins, $aliases, $vibeWords, $vibeLabels);
         });
 
+        /*
+         * THE ALERT RULE BOOK, read once and handed to a pure value — the same
+         * arrangement DealScorer and ScoringPolicy have above, and for the same
+         * reason: App\Domain\Alerts\AlertPolicy decides whether to interrupt
+         * somebody and calls no framework function, config() included.
+         */
+        $this->app->singleton(AlertPolicy::class, fn (): AlertPolicy => new AlertPolicy(
+            cooldownHours: (int) config('orbit.alerts.cooldown_hours'),
+            furtherDropPercent: (int) config('orbit.alerts.further_drop_percent'),
+        ));
+
+        /*
+         * WHERE ALERTS GO — the fourth port, and the only one with a single
+         * adapter today.
+         *
+         * BOUND DIRECTLY RATHER THAN BY NAME IN CONFIG, unlike the fare
+         * providers and the rule parser above, because there is nothing to
+         * choose between: mail is not one of two ways to send an alert, it is
+         * the one that exists. docs/PLAN.md's web push arrives after the PWA
+         * shell and will be an ADDITION rather than an alternative — both
+         * channels at once, gated by their own switches — so the day it lands
+         * this line becomes a small composite over the two adapters, and the
+         * choice it makes will still not be a string in an .env file.
+         *
+         * Whether mail actually leaves the box is MAIL_MAILER's business: `log`
+         * until ghiecode.io is verified as a sending domain in Resend.
+         */
+        $this->app->bind(DealNotifier::class, MailDealNotifier::class);
+
         $this->app->singleton(RuleMatcher::class, function (): RuleMatcher {
             /** @var list<string> $warmVibes */
             $warmVibes = config('orbit.rules.warm_vibes');
@@ -166,6 +201,21 @@ final class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        /*
+         * WHEN AN ALERT BECOMES DELIVERED. Laravel fires NotificationSent after
+         * a channel has returned, which is the only moment in the pipeline that
+         * the word honestly applies to — see App\Infrastructure\Notify\
+         * MarkAlertsDelivered for why stamping the ledger at hand-off instead
+         * would make `delivered_at` a synonym for `triggered_at`.
+         *
+         * REGISTERED EXPLICITLY rather than left to Laravel's listener
+         * discovery: discovery scans app/Listeners, this app has no such
+         * directory, and an alert pipeline whose delivery record depends on a
+         * convention nothing else here follows is one refactor away from
+         * silently never stamping anything.
+         */
+        Event::listen(NotificationSent::class, MarkAlertsDelivered::class);
+
         /*
          * The login throttle, keyed on the email AND the ip.
          *

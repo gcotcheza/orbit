@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\AlertController;
 use App\Http\Controllers\Auth\CurrentUserController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\RouteCalendarController;
@@ -18,8 +19,8 @@ use Illuminate\Support\Facades\Route;
 | Web routes
 |--------------------------------------------------------------------------
 |
-| Four routes are the entire authentication surface, three more are the read
-| API the screens are built on, five more are the writes those screens make,
+| Four routes are the entire authentication surface, five more are the read
+| API the screens are built on, nine more are the writes those screens make,
 | and the last one is the single-page app.
 |
 | WHAT IS DELIBERATELY ABSENT: registration, password reset, email
@@ -90,8 +91,10 @@ Route::middleware('auth:sanctum')->get('/api/me', CurrentUserController::class)-
 | The read API
 |--------------------------------------------------------------------------
 |
-| Three endpoints, and between them they are the entire data supply for the
-| globe home, the route detail, the price calendar and the watchlist screens.
+| Five endpoints, and between them they are the entire data supply for the
+| globe home, the route detail, the price calendar, the watchlist and the
+| rules the watch screen lists — plus the alert ledger, which no screen reads
+| yet and which docs/API.md publishes anyway.
 | Their exact shapes are docs/API.md — that file is the contract those screens
 | are built against, and it is written before they are.
 |
@@ -103,7 +106,7 @@ Route::middleware('auth:sanctum')->get('/api/me', CurrentUserController::class)-
 | is what bootstrap/app.php renders exceptions as JSON under, and what the SPA
 | catch-all at the bottom of this file refuses to swallow.
 |
-| ALL THREE ARE READS. The writes are the group below.
+| ALL FIVE ARE READS. The writes are the group below.
 |
 */
 Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
@@ -135,6 +138,16 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
      * that is wrong from the next poll onwards.
      */
     Route::get('/rules', [RuleController::class, 'index'])->name('rules.index');
+
+    /*
+     * What Orbit has actually sent, newest first — the alert ledger.
+     *
+     * NO SCREEN READS IT YET, deliberately: the alerts screen stays settings-
+     * only in this PR. It is here because the pipeline is otherwise invisible
+     * from outside the database, and a feature whose whole job is to send mail
+     * at 06:55 needs somewhere to answer "did it fire, and did it go out".
+     */
+    Route::get('/alerts', AlertController::class)->name('alerts');
 });
 
 /*

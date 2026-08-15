@@ -53,6 +53,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Everything Orbit has decided to tell this account, newest first.
+     *
+     * ORDERED BY `triggered_at` AND NOT BY `created_at`, which are the same
+     * instant today and will not be the first time a run is retried: the row
+     * records the moment the DECISION was made, and a ledger that listed itself
+     * by the moment it was written would put a re-queued job's rows in the
+     * wrong place in its own history.
+     *
+     * @return HasMany<Alert, $this>
+     */
+    public function alerts(): HasMany
+    {
+        return $this->hasMany(Alert::class)->latest('triggered_at')->latest('id');
+    }
+
+    /**
      * How and when this account wants to be told about a deal.
      *
      * MAY NOT EXIST YET, which is why almost nothing should use this relation
