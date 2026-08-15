@@ -1,0 +1,262 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Application\Ports\PriceProvider;
+use App\Infrastructure\Pricing\FakePriceProvider;
+use App\Infrastructure\Pricing\TravelpayoutsPriceProvider;
+use App\Jobs\PollRoutePrices;
+use App\Models\CalendarFare;
+use App\Models\PriceObservation;
+use App\Models\Route;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\Http;
+use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\Test;
+use ReflectionProperty;
+use Tests\TestCase;
+
+/**
+ * The wiring, and the whole way through.
+ *
+ * tests/Unit/Infrastructure/TravelpayoutsPriceProviderTest is about what the
+ * adapter makes of an answer. This is about the two things either side of it:
+ * that `ORBIT_PRICE_PROVIDER=travelpayouts` reaches the container at all, and
+ * that a poll driven by real recorded fares writes the calendar and the day's
+ * observation the same way the fake one does.
+ *
+ * THE SECOND HALF IS THE ONE THAT MATTERS AT SWITCH TIME. Every poller test in
+ * the suite runs on the fake provider, which answers for EVERY day of the
+ * window. A real one does not — the whole app has never once been exercised
+ * against a calendar with holes in it, and the holes are what a poll is going
+ * to get from Tuesday onwards.
+ */
+final class TravelpayoutsPollTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private const ENDPOINT = 'https://api.travelpayouts.com/v2/prices/month-matrix*';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        /*
+         * The day the fixtures were recorded, so "the next 90 days" is the same
+         * window they were fetched for and their coverage means what it says.
+         */
+        Date::setTestNow('2026-08-15 06:10:00');
+
+        Http::preventStrayRequests();
+    }
+
+    protected function tearDown(): void
+    {
+        Date::setTestNow();
+
+        parent::tearDown();
+    }
+
+    // ------------------------------------------------------------------ wiring
+
+    #[Test]
+    public function the_default_is_still_the_fake_provider(): void
+    {
+        /*
+         * THE ASSERTION THIS PR IS MOST ABOUT. Shipping the adapter and
+         * switching production to it are two separate decisions, and only the
+         * first one is in this branch.
+         */
+        $this->assertSame('fake', config('orbit.providers.price'));
+        $this->assertInstanceOf(FakePriceProvider::class, $this->app->make(PriceProvider::class));
+    }
+
+    #[Test]
+    public function naming_travelpayouts_hands_out_the_travelpayouts_adapter(): void
+    {
+        config([
+            'orbit.providers.price' => 'travelpayouts',
+            'orbit.travelpayouts.token' => 'test-token',
+        ]);
+
+        $this->assertInstanceOf(TravelpayoutsPriceProvider::class, $this->app->make(PriceProvider::class));
+    }
+
+    #[Test]
+    public function selecting_it_without_a_token_refuses_to_resolve(): void
+    {
+        config([
+            'orbit.providers.price' => 'travelpayouts',
+            'orbit.travelpayouts.token' => null,
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+
+        $this->app->make(PriceProvider::class);
+    }
+
+    /**
+     * THE TIMEOUTS AND THE RETRY ARE ONLY REAL IF THEY ARRIVE. They cannot be
+     * asserted through `Http::fake()` — a faked response never times out — so
+     * this reads them off the object the container built. A config key renamed
+     * in one of the two files and not the other is otherwise a silent fall back
+     * to Guzzle's defaults, which is no timeout at all.
+     */
+    #[Test]
+    public function the_configured_timeouts_and_retry_reach_the_adapter(): void
+    {
+        config([
+            'orbit.providers.price' => 'travelpayouts',
+            'orbit.travelpayouts.token' => 'test-token',
+            'orbit.travelpayouts.base_url' => 'https://example.test',
+            'orbit.travelpayouts.connect_timeout' => 3,
+            'orbit.travelpayouts.timeout' => 11,
+            'orbit.travelpayouts.retries' => 2,
+            'orbit.travelpayouts.retry_delay_ms' => 250,
+            'orbit.travelpayouts.warn_every_minutes' => 7,
+        ]);
+
+        $provider = $this->app->make(PriceProvider::class);
+
+        $this->assertSame('https://example.test', $this->readProperty($provider, 'baseUrl'));
+        $this->assertSame(3.0, $this->readProperty($provider, 'connectTimeout'));
+        $this->assertSame(11.0, $this->readProperty($provider, 'timeout'));
+        $this->assertSame(2, $this->readProperty($provider, 'retries'));
+        $this->assertSame(250, $this->readProperty($provider, 'retryDelayMs'));
+        $this->assertSame(7, $this->readProperty($provider, 'warnEveryMinutes'));
+    }
+
+    // ------------------------------------------------------------ the whole way
+
+    #[Test]
+    public function a_poll_on_real_fares_fills_the_calendar_and_records_the_day(): void
+    {
+        $this->useTravelpayouts();
+        $this->fakeRecordedMonths();
+
+        $route = Route::factory()->between('AMS', 'LIS')->create();
+
+        PollRoutePrices::dispatchSync($route->id);
+
+        /*
+         * 79 of the window's 91 days, which is what AMS-LIS actually had on the
+         * morning these were recorded. The fake provider would have written 91.
+         * That gap IS the feature.
+         */
+        $this->assertSame(79, CalendarFare::query()->where('route_id', $route->id)->count());
+
+        $observation = PriceObservation::query()->where('route_id', $route->id)->firstOrFail();
+
+        $this->assertSame('2026-08-15', $observation->observed_on->toDateString());
+        $this->assertSame(
+            (int) CalendarFare::query()->where('route_id', $route->id)->min('price_cents'),
+            $observation->price_cents,
+            'The day\'s observation is the cheapest fare anywhere in the window.',
+        );
+
+        /* €80 was the cheapest AMS-LIS anywhere in the next 90 days that morning. */
+        $this->assertSame(8000, $observation->price_cents);
+    }
+
+    #[Test]
+    public function no_departure_outside_the_window_reaches_the_calendar(): void
+    {
+        $this->useTravelpayouts();
+        $this->fakeRecordedMonths();
+
+        $route = Route::factory()->between('AMS', 'LIS')->create();
+
+        PollRoutePrices::dispatchSync($route->id);
+
+        /*
+         * November's recording runs to the 30th and the window closes on the
+         * 13th — the calendar must stop there rather than carrying a fortnight
+         * of departures the "cheapest in the next 90 days" banner never meant.
+         */
+        $this->assertSame(0, CalendarFare::query()
+            ->where('route_id', $route->id)
+            ->where('departure_date', '>', '2026-11-13')
+            ->count());
+
+        $this->assertSame(0, CalendarFare::query()
+            ->where('route_id', $route->id)
+            ->where('departure_date', '<', '2026-08-15')
+            ->count());
+    }
+
+    #[Test]
+    public function a_provider_outage_leaves_yesterdays_fares_standing(): void
+    {
+        $this->useTravelpayouts();
+        $this->fakeRecordedMonths();
+
+        $route = Route::factory()->between('AMS', 'LIS')->create();
+
+        PollRoutePrices::dispatchSync($route->id);
+        $yesterday = CalendarFare::query()->where('route_id', $route->id)->count();
+
+        /* The next morning, and Travelpayouts is down. */
+        Date::setTestNow('2026-08-16 06:10:00');
+        Http::fake([self::ENDPOINT => Http::response('', 503)]);
+
+        PollRoutePrices::dispatchSync($route->id);
+
+        /*
+         * App\Jobs\PollRoutePrices returns without writing when the provider
+         * answers with nothing, so the calendar keeps what it had. One
+         * departure date (the 15th) has gone by, which the job would have
+         * deleted — it never gets that far, and that is the point: an outage
+         * changes nothing at all.
+         */
+        $this->assertSame($yesterday, CalendarFare::query()->where('route_id', $route->id)->count());
+        $this->assertSame(1, PriceObservation::query()->where('route_id', $route->id)->count());
+    }
+
+    // ----------------------------------------------------------------- helpers
+
+    private function useTravelpayouts(): void
+    {
+        config([
+            'orbit.providers.price' => 'travelpayouts',
+            'orbit.travelpayouts.token' => 'test-token',
+            'orbit.travelpayouts.retry_delay_ms' => 0,
+        ]);
+    }
+
+    /**
+     * The four months a 90-day window from 2026-08-15 touches, answered in the
+     * order the adapter asks for them.
+     */
+    private function fakeRecordedMonths(): void
+    {
+        Http::fake([self::ENDPOINT => Http::sequence()
+            ->push($this->fixture('month-matrix-ams-lis-2026-08'))
+            ->push($this->fixture('month-matrix-ams-lis-2026-09'))
+            ->push($this->fixture('month-matrix-ams-lis-2026-10'))
+            ->push($this->fixture('month-matrix-ams-lis-2026-11')),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function fixture(string $name): array
+    {
+        $raw = file_get_contents(base_path("tests/Fixtures/travelpayouts/{$name}.json"));
+
+        $this->assertIsString($raw, "No fixture called {$name}.");
+
+        /** @var array<string, mixed> $decoded */
+        $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+
+        return $decoded;
+    }
+
+    private function readProperty(object $object, string $name): mixed
+    {
+        return (new ReflectionProperty($object, $name))->getValue($object);
+    }
+}

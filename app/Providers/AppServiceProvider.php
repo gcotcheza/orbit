@@ -20,8 +20,10 @@ use App\Infrastructure\Notify\MailDealNotifier;
 use App\Infrastructure\Notify\MarkAlertsDelivered;
 use App\Infrastructure\Pricing\FakePriceProvider;
 use App\Infrastructure\Pricing\FakeStatsProvider;
+use App\Infrastructure\Pricing\TravelpayoutsPriceProvider;
 use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Support\Facades\Event;
@@ -51,6 +53,7 @@ final class AppServiceProvider extends ServiceProvider
          */
         $this->app->bind(PriceProvider::class, fn (): PriceProvider => match ($name = config('orbit.providers.price')) {
             'fake' => new FakePriceProvider,
+            'travelpayouts' => $this->travelpayoutsPrices(),
             default => throw new InvalidArgumentException(sprintf('Unknown price provider [%s].', is_string($name) ? $name : gettype($name))),
         });
 
@@ -158,6 +161,40 @@ final class AppServiceProvider extends ServiceProvider
                 default => throw new InvalidArgumentException(sprintf('Unknown rule parser [%s].', is_string($name) ? $name : gettype($name))),
             };
         });
+    }
+
+    /**
+     * The real fare adapter, with its numbers read out of config once.
+     *
+     * THE SAME ARRANGEMENT `anthropicParser()` BELOW HAS, and for the same
+     * reason: the adapter is handed scalars rather than being allowed to call
+     * config() itself, so `php artisan config:cache` and a test that overrides
+     * a timeout both behave the way a reader expects.
+     *
+     * A MISSING TOKEN THROWS FROM THE ADAPTER'S CONSTRUCTOR — i.e. here, at
+     * resolution, exactly like the unknown-name arm above. That is deliberate:
+     * `ORBIT_PRICE_PROVIDER=travelpayouts` on a box with no token is a deploy
+     * that must fail loudly at the first poll rather than serve an app with a
+     * calendar that is quietly, permanently empty.
+     */
+    private function travelpayoutsPrices(): PriceProvider
+    {
+        /** @var array<string, mixed> $travelpayouts */
+        $travelpayouts = config('orbit.travelpayouts');
+
+        return new TravelpayoutsPriceProvider(
+            http: $this->app->make(HttpFactory::class),
+            logger: $this->app->make('log'),
+            /* The default store, which is redis in production and an array in the suite. */
+            cache: $this->app->make('cache.store'),
+            baseUrl: (string) $travelpayouts['base_url'],
+            token: (string) $travelpayouts['token'],
+            connectTimeout: (float) $travelpayouts['connect_timeout'],
+            timeout: (float) $travelpayouts['timeout'],
+            retries: (int) $travelpayouts['retries'],
+            retryDelayMs: (int) $travelpayouts['retry_delay_ms'],
+            warnEveryMinutes: (int) $travelpayouts['warn_every_minutes'],
+        );
     }
 
     /**

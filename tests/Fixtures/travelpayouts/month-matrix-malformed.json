@@ -1,0 +1,76 @@
+{
+    "_comment": [
+        "THE ONLY FIXTURE IN THIS DIRECTORY THAT WAS NOT RECORDED FROM THE LIVE API,",
+        "and it is here because the failures it describes cannot be recorded on demand:",
+        "in 433 real entries across six routes and four months, every single one was",
+        "well-formed and carried actual=true. That is exactly why the parser's",
+        "defences need a fixture of their own — untested defences are decoration.",
+        "",
+        "One good row and seven bad ones. App\\Infrastructure\\Pricing\\",
+        "TravelpayoutsPriceProvider must return precisely the good one.",
+        "",
+        "Travelpayouts ignores unknown keys, so this leading _comment is inert: the",
+        "adapter reads `data`, and a fixture that explains itself beats a README",
+        "nobody opens next to a file of numbers."
+    ],
+    "currency": "eur",
+    "data": [
+        {
+            "actual": true,
+            "depart_date": "2026-09-04",
+            "destination": "LIS",
+            "origin": "AMS",
+            "return_date": "",
+            "value": 88
+        },
+        {
+            "actual": true,
+            "depart_date": "2026-09-05",
+            "destination": "LIS",
+            "origin": "AMS",
+            "return_date": "",
+            "value": "not a number"
+        },
+        {
+            "actual": true,
+            "destination": "LIS",
+            "origin": "AMS",
+            "return_date": "",
+            "value": 91
+        },
+        {
+            "actual": true,
+            "depart_date": "the seventh of never",
+            "destination": "LIS",
+            "origin": "AMS",
+            "return_date": "",
+            "value": 92
+        },
+        {
+            "actual": true,
+            "depart_date": "2026-09-08",
+            "destination": "LIS",
+            "origin": "AMS",
+            "return_date": "",
+            "value": 0
+        },
+        {
+            "actual": true,
+            "depart_date": "2026-09-09",
+            "destination": "LIS",
+            "origin": "AMS",
+            "return_date": "",
+            "value": -40
+        },
+        {
+            "actual": false,
+            "depart_date": "2026-09-10",
+            "destination": "LIS",
+            "origin": "AMS",
+            "return_date": "",
+            "value": 61
+        },
+        "a bare string where an object belongs"
+    ],
+    "success": true
+}
