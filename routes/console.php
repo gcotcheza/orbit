@@ -77,3 +77,22 @@ Schedule::command('orbit:sweep-rules')
     ->dailyAt('06:40')
     ->timezone($timezone)
     ->withoutOverlapping();
+
+/*
+ * 03:10 — the quietest hour, and nowhere near the two above.
+ *
+ * NOT A FAN-OUT, unlike its neighbours: this one does its own work, and its
+ * work is a manifest read and a handful of unlinks. It has no reason to queue
+ * behind anything.
+ *
+ * WHY IT IS ON THE SCHEDULE AT ALL, when the deploy runs it straight after the
+ * asset build: `vite.config.js` sets `emptyOutDir: false`, which turns a
+ * forgotten deploy step from "the pruning did not happen" into "the disk fills
+ * up". A daily run means the worst case is a day of extra chunks. It is
+ * idempotent — a run with no new build re-reads the same manifest, finds its
+ * snapshot already recorded, and deletes nothing that is still referenced.
+ */
+Schedule::command('build:retain')
+    ->dailyAt('03:10')
+    ->timezone($timezone)
+    ->withoutOverlapping();
