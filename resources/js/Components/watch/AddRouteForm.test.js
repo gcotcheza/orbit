@@ -111,10 +111,10 @@ describe('searchDestinations', () => {
 // The form
 // -----------------------------------------------------------------------------
 
-async function form(destinations = ALL) {
+async function form(destinations = ALL, options = {}) {
     get.mockResolvedValue({ data: { data: destinations, meta: { count: destinations.length } } })
 
-    const wrapper = mount(AddRouteForm, { global: { plugins: [createPinia()] } })
+    const wrapper = mount(AddRouteForm, { ...options, global: { plugins: [createPinia()] } })
 
     await flushPromises()
 
@@ -186,6 +186,42 @@ describe('the destination typeahead', () => {
 
         expect(options(wrapper)).toHaveLength(0)
         expect(wrapper.get('.option--empty').text()).toBe('No matching destination.')
+    })
+
+    /*
+     * A DEFECT THE BROWSER GATE FOUND, written down here as well because the
+     * shape of it is testable even though the symptom was not.
+     *
+     * The list used to close on the input's `@blur`. Blur fires on MOUSEDOWN,
+     * the panel is in the flow, and removing it moves the Add button ~50 px up
+     * — so the mouseup landed on empty space and the press never became a
+     * click. The button was unpressable whenever there were suggestions.
+     *
+     * What is asserted is the rule that replaced it: focus moving INSIDE the
+     * form leaves the list alone, focus leaving the form closes it. jsdom
+     * cannot show the missed click; it can hold the rule that prevents it.
+     */
+    it('stays open while focus moves to the button that sends it', async () => {
+        // `attachTo`, uniquely in this file: focus events on a tree that is not
+        // in a document are not the events this is about.
+        const wrapper = await form(ALL, { attachTo: document.body })
+
+        await box(wrapper).setValue('bilb')
+
+        const leave = (relatedTarget) => {
+            box(wrapper).element.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget }))
+
+            return flushPromises()
+        }
+
+        await leave(wrapper.get('.add__submit').element)
+        expect(wrapper.get('.options').isVisible()).toBe(true)
+
+        // And closes when focus leaves the form for good.
+        await leave(null)
+        expect(wrapper.get('.options').isVisible()).toBe(false)
+
+        wrapper.unmount()
     })
 
     it('closes on Escape and leaves what was typed alone', async () => {

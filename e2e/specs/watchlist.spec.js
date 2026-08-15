@@ -176,6 +176,20 @@ test('a destination Orbit does not know is refused, in the form', async ({ page,
     // Three letters, so the client is satisfied and the request goes; ZZZ is
     // not an airport, so AddWatchedRouteRequest refuses it with a sentence.
     await field.fill('ZZZ')
+
+    // The typeahead had nothing to offer either, and says so rather than
+    // showing an empty panel.
+    await expect(form.locator('.option--empty')).toHaveText('No matching destination.')
+
+    /*
+     * AND THE BUTTON IS STILL PRESSABLE WITH THE PANEL OPEN, which is not a
+     * given and was not true the first time this ran. The panel is in the flow;
+     * closing it on the input's blur removed ~50 px from between the box and
+     * this button ON MOUSEDOWN, so the mouseup landed on nothing and the press
+     * never became a click. See AddRouteForm.vue's `onFocusOut`. This click is
+     * the regression — it times out on a build where the form reflows under
+     * the pointer.
+     */
     await form.getByRole('button', { name: /add route/i }).click()
 
     const error = form.getByRole('alert')
@@ -185,10 +199,6 @@ test('a destination Orbit does not know is refused, in the form', async ({ page,
     // Nothing was added, and the form stayed open holding what was typed.
     await expect(page.locator('.pass')).toHaveCount(6)
     await expect(field).toHaveValue('ZZZ')
-
-    // The typeahead had nothing to offer either, and said so rather than
-    // showing an empty panel.
-    await expect(form.locator('.option--empty')).toHaveText('No matching destination.')
 
     await shot(page, 'watchlist-add-refused')
 })

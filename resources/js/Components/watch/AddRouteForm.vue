@@ -177,6 +177,30 @@ function choose(suggestion) {
   active.value = -1
 }
 
+/*
+ * CLOSING WHEN FOCUS LEAVES THE FORM — not when it leaves the BOX, and the
+ * difference is a defect the browser gate found rather than a preference.
+ *
+ * WHAT WAS WRONG. `@blur` on the input closed the list. The panel is in the
+ * flow, so closing it moves everything below it up — and blur fires on
+ * MOUSEDOWN. Press the Add button with the list open and the sequence is:
+ * mousedown, blur, panel gone, button jumps ~50 px up, mouseup lands on empty
+ * space, and no click event is ever produced. The button was unpressable
+ * whenever there were suggestions on screen, on a phone exactly as much as in
+ * Playwright, and nothing anywhere said so — the press simply did nothing.
+ *
+ * `focusout` with a containment check is the fix: focus moving to something
+ * INSIDE the form (which is where the button and the origin buttons are)
+ * leaves the list alone, so nothing reflows under the pointer, and the button's
+ * own submit closes it half a millisecond later. Focus leaving the form for
+ * good still closes it.
+ */
+function onFocusOut(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    open.value = false
+  }
+}
+
 /**
  * Enter, and the one judgement in this component.
  *
@@ -275,7 +299,7 @@ defineExpose({ reset })
 </script>
 
 <template>
-  <form class="add rise-in" novalidate @submit.prevent="submit">
+  <form class="add rise-in" novalidate @submit.prevent="submit" @focusout="onFocusOut">
     <p id="add-origin-label" class="add__label">From</p>
     <div class="add__origins" role="radiogroup" aria-labelledby="add-origin-label">
       <button
@@ -311,7 +335,6 @@ defineExpose({ reset })
         :aria-activedescendant="active === -1 ? undefined : `add-destination-option-${active}`"
         placeholder="City or code — e.g. Lisbon"
         @input="onType"
-        @blur="open = false"
         @keydown.down.prevent="move(1)"
         @keydown.up.prevent="move(-1)"
         @keydown.esc.prevent="open = false"
