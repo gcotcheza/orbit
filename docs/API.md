@@ -1,15 +1,15 @@
 # Orbit — API
 
-The fifteen endpoints the screens are built from — five reads, nine writes and
+The sixteen endpoints the screens are built from — six reads, nine writes and
 one account action.
 **This file is the contract**: the globe home, the route detail, the price
 calendar, the watchlist, the alerts screen and the rule creator are all built
 against these shapes, and every field below has a feature test behind it
 (`tests/Feature/WatchlistApiTest`, `RouteDetailApiTest`, `RouteCalendarApiTest`,
 `WatchlistWritesTest`, `SettingsApiTest`, `RulesApiTest`, `AlertsApiTest`,
-`PasswordChangeTest`).
+`DestinationsApiTest`, `PasswordChangeTest`).
 
-One of the fifteen has no screen yet: `GET /api/alerts` is the alert ledger,
+One of the sixteen has no screen yet: `GET /api/alerts` is the alert ledger,
 and the alerts screen stays settings-only for now.
 
 ---
@@ -277,7 +277,8 @@ comes back with its existing history immediately.
 | already on the watchlist | `destination` | You are already watching AMS-LIS. |
 
 The origins are `config('orbit.origins')` — `AMS`, `EIN`, `DUS`, the three
-airports within a drive. Destinations are anywhere in the `airports` table.
+airports within a drive. Destinations are anywhere in the `airports` table,
+which is broader than what the form OFFERS — see `GET /api/destinations` below.
 
 ---
 
@@ -318,6 +319,46 @@ next spring picks up where it left off. The route detail screen is not scoped
 to the watchlist, so `/api/routes/AMS-LIS` still answers afterwards.
 
 **404** as above.
+
+---
+
+## `GET /api/destinations`
+
+Everywhere Orbit knows how to fly **to** — the add-route form's typeahead
+(`design/README.md` §5's destination box, which assumed the person filling it
+in already knew that Bilbao is `BIO`).
+
+**200**, alphabetical by city:
+
+```json
+{
+  "data": [
+    { "iata": "ALC", "city": "Alicante", "country": "Spain", "countryCode": "ES" },
+    { "iata": "BIO", "city": "Bilbao", "country": "Spain", "countryCode": "ES" },
+    { "…": "…" }
+  ],
+  "meta": { "count": 77 }
+}
+```
+
+**Seventy-seven rows, and the whole list every time.** There is no `?q=`: the
+list comes from a checked-in file
+(`database/seeders/data/european_destinations.php`), it is a few kilobytes, and
+it changes on a deploy rather than during a session. The client fetches it once
+when the form opens and filters in the browser, so a suggestion appears on the
+keystroke instead of a round trip later. `Cache-Control: private, max-age=3600`
+— private because the response is behind a session, an hour because that is
+already longer than it can go stale.
+
+**The three origins are not in it.** `AMS`, `EIN` and `DUS` are airports with no
+row in `destinations`, which is what makes them departures rather than places to
+go, and a dropdown that offered Amsterdam under "From: AMS" would be offering a
+route to itself.
+
+**This is not the validation list.** `POST /api/watchlist` still accepts any
+code in `airports` — see its `destination.exists` rule — and deliberately: what
+a form offers and what the API accepts are two decisions, and narrowing the
+second to match a dropdown would break a code somebody typed from memory.
 
 ---
 

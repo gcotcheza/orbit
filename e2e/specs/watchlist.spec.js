@@ -176,6 +176,20 @@ test('a destination Orbit does not know is refused, in the form', async ({ page,
     // Three letters, so the client is satisfied and the request goes; ZZZ is
     // not an airport, so AddWatchedRouteRequest refuses it with a sentence.
     await field.fill('ZZZ')
+
+    // The typeahead had nothing to offer either, and says so rather than
+    // showing an empty panel.
+    await expect(form.locator('.option--empty')).toHaveText('No matching destination.')
+
+    /*
+     * AND THE BUTTON IS STILL PRESSABLE WITH THE PANEL OPEN, which is not a
+     * given and was not true the first time this ran. The panel is in the flow;
+     * closing it on the input's blur removed ~50 px from between the box and
+     * this button ON MOUSEDOWN, so the mouseup landed on nothing and the press
+     * never became a click. See AddRouteForm.vue's `onFocusOut`. This click is
+     * the regression — it times out on a build where the form reflows under
+     * the pointer.
+     */
     await form.getByRole('button', { name: /add route/i }).click()
 
     const error = form.getByRole('alert')
@@ -256,4 +270,147 @@ test('a real route can be added and removed again', async ({ page }) => {
 
     await page.reload()
     await expect(page.locator('.pass')).toHaveCount(6)
+})
+
+/*
+ * ============================================================================
+ * TAPPING A ROW OPENS IT — and the controls on it still do not
+ * ============================================================================
+ * The design gave this card a switch and a bin and no way into the route
+ * detail, so the only detail screen reachable on a phone was whichever route
+ * the globe happened to be flying. The owner tapped a row, twice, and nothing
+ * happened.
+ *
+ * THE INTERESTING HALF IS THE NEGATIVE ONE. A card that navigates is one line;
+ * a card that navigates WITHOUT stealing the taps meant for the switch and the
+ * bin is the thing worth a browser. Both controls sit outside the link rather
+ * than inside it with a stopped event, and this is what says so — including for
+ * the confirmation, which appears where the switch was and would be the easiest
+ * of the three to swallow.
+ */
+test('tapping a row opens that route, and its controls do not', async ({ page }) => {
+    await page.goto('/watch')
+
+    const row = page.locator('.pass').first()
+    const code = `${await row.locator('.end__code').first().textContent()}-${await row
+        .locator('.end--to .end__code')
+        .textContent()}`
+
+    // --- The switch: flips, stays put -----------------------------------------
+    const toggle = row.getByRole('switch')
+    await toggle.click()
+
+    await expect(toggle).toHaveAttribute('aria-checked', 'false')
+    await expect(page).toHaveURL(/\/watch$/)
+
+    // Back on, and that does not navigate either.
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-checked', 'true')
+    await expect(page).toHaveURL(/\/watch$/)
+
+    // --- The bin, and the question it asks ------------------------------------
+    await row.getByRole('button', { name: /stop watching/i }).click()
+
+    const keep = row.getByRole('button', { name: 'Keep' })
+    await expect(keep).toBeVisible()
+    await expect(page).toHaveURL(/\/watch$/)
+
+    await keep.click()
+    await expect(page).toHaveURL(/\/watch$/)
+    await expect(page.locator('.pass')).toHaveCount(6)
+
+    // --- The row body: opens it -----------------------------------------------
+    await row.getByRole('link', { name: `Open ${code}` }).click()
+
+    await expect(page).toHaveURL(new RegExp(`/route/${code}$`))
+    await expect(page.locator('.detail__code')).toHaveText(code.replace('-', ' → '))
+})
+
+/*
+ * ============================================================================
+ * THE DESTINATION BOX SUGGESTS PLACES
+ * ============================================================================
+ * The design drew a three-letter field, which assumed the person filling it in
+ * knew that Bilbao is BIO. The owner does not, and said so — this is the
+ * deviation, asked for on 2026-08-15.
+ *
+ * THE BROWSER IS WHERE THIS HAS TO BE TESTED, twice over. A tap on a
+ * suggestion has to beat the blur that closes the list, which is a real
+ * pointer sequence and not something jsdom dispatches; and the panel has to
+ * leave the Add button reachable, which is layout. AddRouteForm.test.js holds
+ * the ranking and the keyboard.
+ */
+test('the destination box finds a city by name and adds it', async ({ page }) => {
+    await page.goto('/watch')
+    await page.getByRole('button', { name: 'Add a route' }).click()
+
+    const form = page.locator('form.add')
+    const field = form.locator('#add-destination')
+    const listbox = form.getByRole('listbox', { name: 'Destination suggestions' })
+
+    // An empty box suggests nothing at all.
+    await expect(listbox).toBeHidden()
+
+    await field.fill('bilb')
+
+    await expect(listbox).toBeVisible()
+
+    const option = listbox.getByRole('option').first()
+    await expect(option).toContainText('Bilbao')
+    await expect(option).toContainText('BIO')
+    await expect(option).toContainText('Spain')
+
+    // What was typed, bolded inside what was found, in the original spelling.
+    await expect(option.locator('b').first()).toHaveText('Bilb')
+
+    await shot(page, 'watchlist-typeahead')
+
+    // --- Taking one ----------------------------------------------------------
+    // A click, not a keypress: this is the focus race, and the assertion that
+    // it was won is that anything happened at all.
+    await option.click()
+
+    await expect(field).toHaveValue('BIO')
+    await expect(listbox).toBeHidden()
+
+    // --- And the add is the add it always was --------------------------------
+    await form.getByRole('radio', { name: 'AMS' }).click()
+    await form.getByRole('button', { name: /add route/i }).click()
+
+    await expect(form).toHaveCount(0)
+    await expect(page.locator('.pass')).toHaveCount(7)
+
+    const added = page.locator('.pass').filter({ hasText: 'BIO' }).first()
+    await expect(added).toContainText('Bilbao')
+
+    // Back to the seeded six for whatever runs next.
+    await added.getByRole('button', { name: /stop watching/i }).click()
+    await added.getByRole('button', { name: 'Remove' }).click()
+    await expect(page.locator('.pass')).toHaveCount(6)
+})
+
+/*
+ * The `Remove` half of that confirmation, which is destructive and so is asked
+ * on a route this test brings with it rather than on one the other specs need.
+ * A remove that also navigated would land on the detail screen of a route that
+ * no longer exists.
+ */
+test('confirming a removal stays on the list', async ({ page }) => {
+    await page.goto('/watch')
+    await page.getByRole('button', { name: 'Add a route' }).click()
+
+    const form = page.locator('form.add')
+    await form.getByRole('radio', { name: 'AMS' }).click()
+    await form.locator('#add-destination').fill('MAD')
+    await form.getByRole('button', { name: /add route/i }).click()
+
+    await expect(page.locator('.pass')).toHaveCount(7)
+
+    const added = page.locator('.pass').filter({ hasText: 'MAD' }).first()
+    await added.getByRole('button', { name: /stop watching/i }).click()
+    await added.getByRole('button', { name: 'Remove' }).click()
+
+    await expect(page).toHaveURL(/\/watch$/)
+    await expect(page.locator('.pass')).toHaveCount(6)
+    await expect(page.locator('.screen__title')).toHaveText('Watch list')
 })
