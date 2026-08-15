@@ -64,6 +64,42 @@ test('pausing a route dims the row and survives a reload', async ({ page }) => {
 
 /*
  * ============================================================================
+ * AND A PAUSED ROW SAYS THE WORD
+ * ============================================================================
+ * The test above proves the row is dimmed. Dimming is not a sentence: 58%
+ * opacity reads as "loading" or as a rendering glitch at least as readily as it
+ * reads as "off", and the only other cue was a 46 px switch somebody has to
+ * already know the meaning of. The stub's own line — which otherwise holds
+ * "Tracking 3 days", or a decorative barcode once a route is established — is
+ * where the row says what Orbit is doing with it, and for a paused route it was
+ * saying nothing at all.
+ */
+test('a paused row says "Paused" where its tracking note goes', async ({ page }) => {
+    await page.goto('/watch')
+
+    const row = page.locator('.pass').first()
+    const toggle = row.getByRole('switch')
+
+    await expect(toggle).toHaveAttribute('aria-checked', 'true')
+    // An established route draws the barcode there and no prose.
+    await expect(row.locator('.stub__tracking')).toHaveCount(0)
+
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-checked', 'false')
+
+    await expect(row.locator('.stub__tracking')).toHaveText('Paused')
+    await expect(row.locator('.stub__barcode')).toHaveCount(0)
+
+    await shot(page, 'watchlist-paused-row')
+
+    // Back on, for whatever runs next.
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-checked', 'true')
+    await expect(row.locator('.stub__barcode')).toHaveCount(1)
+})
+
+/*
+ * ============================================================================
  * A DEFECT, WRITTEN DOWN AS A TEST RATHER THAN AS A COMMENT
  * ============================================================================
  * WHAT WAS WRONG. Watchlist.vue dims a paused route with
@@ -267,9 +303,55 @@ test('a rejected character does not stay in the destination box', async ({ page 
     await field.fill('12')
     await expect(field).toHaveValue('')
 
-    // And the ordinary path still works: letters are kept, upper-cased, as typed.
+    // And the ordinary path still works: letters are kept, as typed.
     await field.fill('l1s')
-    await expect(field).toHaveValue('LS')
+    await expect(field).toHaveValue('ls')
+})
+
+/*
+ * ============================================================================
+ * THE BOX STOPPED SHOUTING
+ * ============================================================================
+ * It upper-cased every keystroke, which is right for a three-letter code and
+ * wrong for everything it has taken since it grew a typeahead: typing "Lisbon"
+ * produced "LISBON". A search field rewriting a place name in capitals reads as
+ * a complaint about what was just typed, and it is the first thing anybody does
+ * on this screen.
+ *
+ * THE ELEMENT, NOT THE MODEL, WHICH IS WHY THIS IS HERE AND NOT IN VITEST. The
+ * same file already carries one defect (a rejected character the DOM kept) that
+ * was invisible to jsdom for exactly this reason: the model was right and the
+ * box was wrong. The upper-casing was the reverse — the model and the box agreed
+ * with each other and both disagreed with the person typing — but the assertion
+ * worth making is still "what does the field say", and a real browser is where
+ * `autocapitalize` lives too.
+ */
+test('typing a city name does not shout it back', async ({ page }) => {
+    await page.goto('/watch')
+    await page.getByRole('button', { name: 'Add a route' }).click()
+
+    const form = page.locator('form.add')
+    const field = form.locator('#add-destination')
+
+    await field.fill('Lisbon')
+    await expect(field).toHaveValue('Lisbon')
+
+    // The keyboard is not allowed to do it either — `autocapitalize="characters"`
+    // was the same shouting one layer down, where no watcher of ours can see it.
+    await expect(field).toHaveAttribute('autocapitalize', 'none')
+
+    /*
+     * And a code typed in lower case is still a code — the capitals moved to the
+     * boundary rather than being dropped. The button going live is that boundary
+     * being read: `canSubmit` tests the NORMALISED value, not the field.
+     *
+     * Asserted rather than pressed, deliberately: a look-up navigates to a
+     * screen that prices the pair, which would create a route this spec has no
+     * business creating. AddRouteForm.test.js holds the emit.
+     */
+    await field.fill('mad')
+    await expect(field).toHaveValue('mad')
+    await expect(form.getByRole('button', { name: 'Look up' })).toBeEnabled()
 })
 
 test('a real route can be added and removed again', async ({ page }) => {
@@ -645,6 +727,65 @@ test('a route is looked up first, and watched from the screen that priced it', a
     await added.getByRole('button', { name: 'Remove' }).click()
 
     await expect(page.locator('.pass')).toHaveCount(6)
+})
+
+/*
+ * ============================================================================
+ * THE RULES ARE TWO AND A HALF SCREENS DOWN, AND NOW SOMETHING SAYS SO
+ * ============================================================================
+ * Deal rules live under the boarding passes, which is the right order — the
+ * routes are what the owner chose, a rule is a standing question. With seven
+ * routes on a phone that puts the section far below the fold behind seven
+ * near-identical cards, and the UX pass simply never found it: the + tab writes
+ * a rule, and the rule then appears somewhere the person who wrote it has no
+ * reason to scroll to.
+ *
+ * IT HAS TO CREATE ONE, because nothing is seeded with rules — and that is also
+ * the honest version of the journey: write a rule, go to the list, find it. The
+ * rule is removed again at the end, so the screen is left as it was found.
+ *
+ * THE ASSERTION IS A SCROLL POSITION, which is the whole reason this is a
+ * browser test. jsdom has no layout and no viewport, so "is the section on
+ * screen" has no meaning in it; the anchor could be wired to the wrong element
+ * and every component test would still pass.
+ */
+test('a count chip finds the rules section that is below the fold', async ({ page }) => {
+    await page.goto('/create')
+    await page.locator('#rule-text').fill('cheap city break under €90')
+
+    await page.getByRole('button', { name: /create rule/i }).click()
+    await expect(page.locator('.screen__title')).toHaveText('Rule created')
+
+    await page.goto('/watch')
+
+    const anchor = page.getByRole('button', { name: /go to your 1 deal rule/i })
+    await expect(anchor).toHaveText(/Rules · 1/)
+
+    // Below the fold to begin with — which is the defect, stated as a
+    // measurement rather than as an opinion.
+    const section = page.locator('.rules')
+    const viewport = page.viewportSize()
+
+    expect((await section.boundingBox()).y).toBeGreaterThan(viewport.height)
+
+    await shot(page, 'watchlist-rules-anchor')
+
+    await anchor.click()
+
+    await expect
+        .poll(async () => (await section.boundingBox()).y, {
+            message: 'the rules section never came into view',
+        })
+        .toBeLessThan(viewport.height)
+
+    // --- And away again, so the next run starts where this one did -----------
+    await page.locator('.rules .rule__open').first().click()
+    await page.getByRole('button', { name: 'Remove rule' }).click()
+    await page.getByRole('button', { name: 'Remove', exact: true }).click()
+
+    await expect(page.locator('.rules')).toHaveCount(0)
+    // The anchor is an advert with nothing behind it once the section is gone.
+    await expect(page.getByRole('button', { name: /deal rule/i })).toHaveCount(0)
 })
 
 test('confirming a removal stays on the list', async ({ page }) => {

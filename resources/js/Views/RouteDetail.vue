@@ -600,7 +600,15 @@ function goBack() {
         :tracking-days="detail.trackingDays"
       />
 
-      <AdviceCallout :title="detail.advice.title" :body="detail.advice.body" :tone="detail.advice.tone" />
+      <!-- `confident` is passed for the GLYPH and not for the words: the
+           sentence already says "not enough data yet", and the tick that used to
+           sit beside it said the opposite. See AdviceCallout.vue. -->
+      <AdviceCallout
+        :title="detail.advice.title"
+        :body="detail.advice.body"
+        :tone="detail.advice.tone"
+        :confident="detail.confident"
+      />
 
       <!-- A CALLOUT THAT SAYS "WAIT" ABOVE A BUTTON THAT SHOUTS "BOOK" is the
            app arguing with itself, and the button wins because it is the

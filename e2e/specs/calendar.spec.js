@@ -396,7 +396,7 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
      * has no TRAVELPAYOUTS_MARKER — its presence is asserted on paper in
      * tests/Feature/BookingLinkTest.php.
      */
-    const book = sheet.getByRole('link', { name: 'See this fare' })
+    const book = sheet.getByRole('link', { name: 'See this fare on Aviasales' })
 
     expect(await book.getAttribute('href')).toMatch(
         new RegExp(
@@ -404,8 +404,16 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
         ),
     )
 
-    // And the quiet second opinion, on the same day in its own encoding.
+    /*
+     * And the second opinion, on the same day in its own encoding. It is a
+     * BUTTON beside the one above now rather than a line of grey text under it —
+     * the owner reported that the text link did not read as pressable, and both
+     * hand-offs are the same control in the same row on both booking surfaces
+     * (Components/route/BookingCta.vue draws the other one).
+     */
     const compare = sheet.getByRole('link', { name: 'Compare on Skyscanner' })
+
+    await expect(compare).toHaveClass(/action/)
     const path = `${origin.toLowerCase()}/${destination.toLowerCase()}/${yymmdd(shownDate)}/`
 
     await expect(compare).toHaveAttribute('href', `https://www.skyscanner.nl/transport/flights/${path}`)
@@ -422,6 +430,16 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
     await expect(sheet.locator('.disclaimer')).toHaveText(
         'Prices come from recent searches — the booking site shows live availability.',
     )
+
+    /*
+     * THE SWATCH SAYS WHAT IT IS OF. It is a 54 px square whose whole meaning is
+     * a comparison — where this day's fare sits between the cheapest and dearest
+     * day of this month, on the same ramp the grid behind the sheet is painted
+     * from — and the sheet covers that grid, so with the swatch unlabelled there
+     * is nothing on screen to read the colour against. The UX pass took it for
+     * decoration.
+     */
+    await expect(sheet.locator('.sheet__swatch-label')).toHaveText('Price vs month')
 
     await shot(page, 'calendar-day-sheet')
 
@@ -465,6 +483,10 @@ test('the day sheet reads in the light theme too', async ({ page }) => {
     await expect(sheet.locator('.disclaimer')).toHaveText(
         'Prices come from recent searches — the booking site shows live availability.',
     )
+
+    // The swatch caption is the third line in this family — same `--muted` on
+    // `--panel`, same reason for checking it in the palette it was not drawn in.
+    await expect(sheet.locator('.sheet__swatch-label')).toHaveText('Price vs month')
 
     await shot(page, 'calendar-day-sheet-light')
 

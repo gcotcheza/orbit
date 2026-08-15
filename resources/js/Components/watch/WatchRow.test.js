@@ -115,3 +115,44 @@ describe('the controls still work', () => {
         expect(wrapper.emitted('remove')).toHaveLength(1)
     })
 })
+
+/*
+ * ============================================================================
+ * THE STUB'S ONE LINE OF PROSE
+ * ============================================================================
+ * A mature, watched route shows the barcode, which is set dressing. Anything
+ * else the row has to SAY about what Orbit is doing with it goes in that slot —
+ * and a paused route said nothing at all. The cues were an opacity of 0.58,
+ * which reads as "loading" at least as readily as "off", and a switch somebody
+ * has to already know the meaning of.
+ */
+describe('what the stub says', () => {
+    it('says nothing but the barcode once a route is established', () => {
+        const wrapper = pass()
+
+        expect(wrapper.find('.stub__tracking').exists()).toBe(false)
+        expect(wrapper.find('.stub__barcode').exists()).toBe(true)
+    })
+
+    it('counts the mornings while a route is still new', () => {
+        expect(pass({ trackingDays: 0 }).get('.stub__tracking').text()).toBe('Waiting for the first fare')
+        expect(pass({ trackingDays: 1 }).get('.stub__tracking').text()).toBe('Tracking 1 day')
+        expect(pass({ trackingDays: 5 }).get('.stub__tracking').text()).toBe('Tracking 5 days')
+    })
+
+    it('says "Paused" when the switch is off', () => {
+        const wrapper = pass({ active: false })
+
+        expect(wrapper.get('.stub__tracking').text()).toBe('Paused')
+        expect(wrapper.find('.stub__barcode').exists()).toBe(false)
+    })
+
+    /*
+     * Both are true of a route paused on the day it was added, and only one of
+     * them matters then: "Tracking 1 day" is a promise about tomorrow morning
+     * that a paused route is not going to keep.
+     */
+    it('says "Paused" rather than counting days a paused route will not have', () => {
+        expect(pass({ active: false, trackingDays: 1 }).get('.stub__tracking').text()).toBe('Paused')
+    })
+})

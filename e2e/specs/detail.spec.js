@@ -132,8 +132,31 @@ test('the price, the gauge, the chart and the booking link are all really there'
         ),
     )
 
-    // And the second opinion, at the weight of a text link.
+    /*
+     * AND THE SECOND OPINION, WHICH IS A BUTTON NOW. It shipped as a 12 px
+     * centred text link under the hand-off, in the same grey as the disclaimer
+     * beneath it, and the owner reported that on a phone it does not read as
+     * something that can be pressed at all — one of only two controls on this
+     * screen that do anything. The pair is now side by side: the check on the
+     * left, the search Orbit's own number came from on the right with the
+     * accent and the wider share.
+     */
     const compare = page.getByRole('link', { name: /compare on skyscanner/i })
+
+    const layout = await page.evaluate(() => {
+        const quiet = document.querySelector('.booking__compare').getBoundingClientRect()
+        const loud = document.querySelector('.booking__cta').getBoundingClientRect()
+
+        return {
+            sameRow: Math.abs(quiet.top - loud.top) < 2,
+            skyscannerFirst: quiet.right <= loud.left,
+            loudIsWider: loud.width > quiet.width,
+            /* A finger, not a line of text. */
+            tappable: Math.min(quiet.height, loud.height) >= 44,
+        }
+    })
+
+    expect(layout).toEqual({ sameRow: true, skyscannerFirst: true, loudIsWider: true, tappable: true })
 
     expect(await compare.getAttribute('href')).toMatch(
         new RegExp(
@@ -211,6 +234,22 @@ test('a route the app says to wait on gets the quiet Book button', async ({ page
     await expect(booking).toHaveClass(/booking__cta--secondary/)
     // Still the same target, the same size and the same one tap.
     await expect(booking).toHaveAttribute('target', '_blank')
+
+    /*
+     * AND THE WHOLE PAIR GOES QUIET, which is what "secondary" has to mean now
+     * that there are two controls on the line. Leaving the accent on one of them
+     * would keep the page arguing with itself — "wait", under a glowing button —
+     * just more quietly. So: no fill on either, and the accent is reserved for
+     * the case where the app is actually saying yes.
+     */
+    const fills = await page.evaluate(() =>
+        [...document.querySelectorAll('.booking__link')].map(
+            (link) => getComputedStyle(link).backgroundColor,
+        ),
+    )
+
+    expect(fills).toHaveLength(2)
+    expect(new Set(fills).size, 'one of the two hand-offs is still filled under a warning').toBe(1)
 
     await shot(page, 'route-detail-wait')
 })

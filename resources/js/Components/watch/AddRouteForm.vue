@@ -185,7 +185,42 @@ const emptyText = computed(() => {
     : 'No matching destination.'
 })
 
-const canSubmit = computed(() => CODE.test(destination.value) && !props.busy)
+/*
+ * =============================================================================
+ * WHAT THE BOX SHOWS, AND WHAT THE FORM SENDS — two different strings
+ * =============================================================================
+ * They used to be one, and the box shouted. Every keystroke was upper-cased into
+ * the model, which is right for a three-letter code and wrong for everything the
+ * box has taken since it grew a typeahead: typing "Lisbon" produced "LISBON",
+ * typing "las palmas" produced "LAS PALMAS" (the UX pass, screenshot
+ * 23-j3-type-lisbon-already-watched). A search field that rewrites a place name
+ * in capitals reads as an error message about what was just typed.
+ *
+ * THERE IS NO MIDDLE SETTING, and that is worth writing down because the obvious
+ * one does not work. "Upper-case only while it is three characters or fewer"
+ * cannot un-do itself: by the time "LIS" becomes four characters the first three
+ * are already capitals in the model and there is nothing left to recover the
+ * original case from, so "Lisbon" comes out as "LISbon". The transform has to be
+ * all or nothing, and nothing is the honest choice — the box is a search box now,
+ * and searching is case-insensitive at both ends (`fold()` in
+ * stores/destinations.js, an ILIKE on the server).
+ *
+ * SO THE UPPER-CASING MOVED TO THE BOUNDARY. `code` is what this form means by
+ * "the destination": trimmed, upper-cased, and the only value the three checks
+ * below and the two emits are ever allowed to look at. Somebody who types "lis"
+ * still watches AMS-LIS; what changed is that the field stops arguing with them
+ * while they do it. Taking a suggestion writes `suggestion.iata`, which is
+ * already capitals, so the ordinary path shows a code in the case a code is
+ * written in.
+ *
+ * `autocapitalize` HAD TO GO WITH IT. It was "characters", which is the mobile
+ * keyboard doing the same shouting one layer down where no watcher of ours could
+ * see it — the model would receive "LISBON" already capitalised and this file
+ * would be none the wiser.
+ */
+const code = computed(() => destination.value.trim().toUpperCase())
+
+const canSubmit = computed(() => CODE.test(code.value) && !props.busy)
 
 /*
  * A CODE ORBIT ACTUALLY KNOWS, which is not the same question as "three
@@ -203,9 +238,9 @@ const canSubmit = computed(() => CODE.test(destination.value) && !props.busy)
  * outside Europe.
  */
 const isKnownCode = computed(() =>
-  CODE.test(destination.value)
-  && (destinations.value.some((place) => place.iata === destination.value)
-    || suggestions.value.some((suggestion) => suggestion.iata === destination.value)),
+  CODE.test(code.value)
+  && (destinations.value.some((place) => place.iata === code.value)
+    || suggestions.value.some((suggestion) => suggestion.iata === code.value)),
 )
 
 /*
@@ -218,9 +253,14 @@ onMounted(() => {
 })
 
 /*
- * Upper-cased and stripped of anything that is not part of a place's name AS
- * IT IS TYPED, rather than on submit. A destination box that shows `lis` and
- * sends `LIS` is a box that disagrees with the row it produces.
+ * Stripped of anything that is not part of a place's name AS IT IS TYPED, rather
+ * than on submit — so a character the form will not accept never sits in the box
+ * looking accepted.
+ *
+ * IT NO LONGER UPPER-CASES, and the note on `code` above is the whole argument:
+ * this box takes city names now, and a city name in capitals is a box shouting
+ * at the person filling it in. The capitals moved to the boundary, where they
+ * belong.
  *
  * WHAT SURVIVES THE STRIP CHANGED WHEN THE BOX STOPPED BEING THREE LETTERS
  * WIDE. It used to be `[^A-Z]` and a cut at three characters, which is right
@@ -254,7 +294,7 @@ onMounted(() => {
  * box and reads it back.
  */
 watch(destination, (typed) => {
-  const cleaned = typed.toUpperCase().replace(/[^\p{L} ’'.-]/gu, '').slice(0, 40)
+  const cleaned = typed.replace(/[^\p{L} ’'.-]/gu, '').slice(0, 40)
 
   if (cleaned !== typed) {
     destination.value = cleaned
@@ -461,7 +501,7 @@ function attempt(intent) {
 
   open.value = false
 
-  if (!CODE.test(destination.value)) {
+  if (!CODE.test(code.value)) {
     localError.value = suggestions.value.length > 0
       ? 'Pick a destination from the list, or type its three-letter code.'
       : 'A destination is a three-letter airport code, like LIS.'
@@ -469,13 +509,13 @@ function attempt(intent) {
     return
   }
 
-  if (destination.value === origin.value) {
+  if (code.value === origin.value) {
     localError.value = 'A route needs two different airports.'
 
     return
   }
 
-  emit(intent, { origin: origin.value, destination: destination.value })
+  emit(intent, { origin: origin.value, destination: code.value })
 }
 
 /** Called by the parent once the route has actually landed. */
@@ -523,7 +563,7 @@ defineExpose({ reset })
         type="text"
         role="combobox"
         inputmode="text"
-        autocapitalize="characters"
+        autocapitalize="none"
         autocomplete="off"
         spellcheck="false"
         aria-autocomplete="list"

@@ -108,6 +108,27 @@ self.addEventListener('activate', (event) => {
     )
 })
 
+/**
+ * "Stop waiting and take over" — the page asking, on the user's behalf.
+ *
+ * ADDITIVE AND, TODAY, UNREACHABLE. `install` above already calls
+ * `skipWaiting()`, so this worker never parks in the `waiting` state and nothing
+ * ever needs to ask it to leave. It is here because resources/js/lib/pwa.js
+ * handles both shapes of the update handshake and this is the half that lives in
+ * the worker: the day the install-time skip is reconsidered — it is a real
+ * trade-off, and the note on `activate` argues one side of it — the toast keeps
+ * working instead of quietly doing nothing.
+ *
+ * NARROW BY DESIGN. Exactly one message type does exactly one thing; a worker
+ * that dispatched on arbitrary payloads from a page would be a second, quieter
+ * API surface for the app.
+ */
+self.addEventListener('message', (event) => {
+    if (event.data?.type === 'SKIP_WAITING') {
+        self.skipWaiting()
+    }
+})
+
 self.addEventListener('fetch', (event) => {
     const request = event.request
 

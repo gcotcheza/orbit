@@ -27,13 +27,14 @@
  * day the tier is retuned — on the one screen whose entire job is to say what
  * will happen.
  */
-import { computed, onMounted } from 'vue'
+import { computed, nextTick, onMounted, useTemplateRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import ChangePassword from '@/Components/settings/ChangePassword.vue'
 import SegmentedControl from '@/Components/settings/SegmentedControl.vue'
 import SettingRow from '@/Components/settings/SettingRow.vue'
 import ToggleSwitch from '@/Components/ToggleSwitch.vue'
+import { scrollIntoView } from '@/lib/motion'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import { useThemeStore } from '@/stores/theme'
@@ -70,6 +71,45 @@ const quietNote = computed(() => {
 })
 
 onMounted(settingsStore.load)
+
+/*
+ * =============================================================================
+ * ARRIVING AT THE ACCOUNT, WHEN THAT IS WHAT WAS ASKED FOR
+ * =============================================================================
+ * The home screen's round PERSON button points here with `#account` on it,
+ * because that glyph promises the account and this screen opens on alerts. The
+ * tab bar's own Alerts item carries no hash and lands at the top, as it should —
+ * the two entrances mean different things and now arrive in different places.
+ *
+ * WHY NOT THE ROUTER'S `scrollBehavior`. It runs one tick after the navigation
+ * is confirmed, which on this screen is while `GET /api/settings` is still in
+ * flight: the account card is rendered (it is outside the loading gate, because
+ * it needs no settings) but everything ABOVE it is not, so it is a few hundred
+ * pixels higher than where it will end up. Scrolling to it then and letting four
+ * cards appear above it afterwards lands the reader in the middle of the quiet
+ * hours. Waiting for the request to settle — either way, `ready` or `failed` —
+ * is the difference between arriving at the account and arriving near it.
+ *
+ * `immediate`, so a screen whose settings were already in the store (this
+ * component is not kept alive, but the store is) does not wait for a status
+ * change that has already happened.
+ */
+const route = useRoute()
+const accountHeading = useTemplateRef('accountHeading')
+
+watch(
+  status,
+  async (value) => {
+    if (route.hash !== '#account' || value === 'loading') {
+      return
+    }
+
+    await nextTick()
+
+    scrollIntoView(accountHeading.value, { block: 'start' })
+  },
+  { immediate: true },
+)
 
 function save(patch) {
   settingsStore.change(patch)
@@ -203,7 +243,7 @@ async function signOut() {
       </section>
     </template>
 
-    <h2 class="section">Account</h2>
+    <h2 id="account" ref="accountHeading" class="section">Account</h2>
     <section class="card">
       <!-- Who this is, above the one thing that can be changed about it. The
            name and address are not editable and are not meant to be: they are

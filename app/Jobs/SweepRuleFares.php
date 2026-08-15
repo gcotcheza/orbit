@@ -32,9 +32,11 @@ use Psr\Log\LoggerInterface;
  * the owner promotes one to the watchlist they get the history this job
  * already paid for.
  *
- * THE CAP IS THE POINT. A rule with no vibe is 3 origins × 77 destinations,
- * and running that would spend a morning's rate limit on a sentence somebody
- * may delete. config('orbit.rules.sweep_cap') keeps the best-fitting pairs —
+ * THE CAP IS THE POINT. A rule with no vibe is 3 origins × every curated
+ * destination — 184 of them today, and growing every time
+ * database/seeders/data/ is edited — and running that would spend a morning's
+ * rate limit on a sentence somebody may delete.
+ * config('orbit.rules.sweep_cap') keeps the best-fitting pairs —
  * "best" is App\Domain\Rules\RuleMatcher::rank(), most matching vibes then
  * warmest then alphabetical, so the same rule sweeps the same places every
  * morning rather than a different thirty each time — and logs what it dropped,

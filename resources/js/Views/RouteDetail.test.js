@@ -157,6 +157,32 @@ describe('the caption under the price', () => {
         // And the ring says the same thing in its own language.
         expect(wrapper.get('.gauge__value').text()).toBe('—')
         expect(wrapper.get('.gauge__caption').text()).toBe('Deal score')
+
+        /*
+         * SO DOES THE CALLOUT'S GLYPH, and it is the third reader of the same
+         * flag. It was a white TICK — the identical mark "Good price — book"
+         * carries — beside the sentence "Not enough data yet", on the screen a
+         * route reaches on the day it is added, above a booking button. A tick
+         * means "checked, and fine"; putting it on an admission that nothing
+         * has been checked is the callout contradicting its own words.
+         *
+         * The path data is the assertion because that is what a reader sees:
+         * the hourglass is drawn as two paths, the tick as one.
+         */
+        const glyph = wrapper.findAll('.callout__icon path')
+
+        expect(glyph).toHaveLength(2)
+        expect(glyph[0].attributes('d')).not.toContain('M4 9.5l3 3 7-8')
+    })
+
+    /* The tick survives everywhere Orbit does have an opinion. */
+    it('keeps the tick on advice Orbit stands behind', async () => {
+        const wrapper = await detail()
+
+        const glyph = wrapper.findAll('.callout__icon path')
+
+        expect(glyph).toHaveLength(1)
+        expect(glyph[0].attributes('d')).toBe('M4 9.5l3 3 7-8')
     })
 
     it('says the scale out loud when there is a score to scale', async () => {

@@ -19,6 +19,8 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import TabBar from '@/Components/TabBar.vue'
+import UpdateToast from '@/Components/UpdateToast.vue'
+import { applyUpdate, dismissUpdate, updateReady } from '@/lib/pwa'
 
 /*
  * Screens kept alive across navigation, by component name.
@@ -51,5 +53,20 @@ const hasTabBar = computed(() => route.meta.layout === 'tabs')
     </main>
 
     <TabBar v-if="hasTabBar" />
+
+    <!--
+      A SIBLING OF <main>, NOT SOMETHING INSIDE IT. It is fixed to the viewport
+      and lives for as long as the app does, so putting it in the RouterView
+      would tie an announcement about the whole app to whichever screen happened
+      to be mounted — and would put a node inside the <KeepAlive> that caches the
+      globe. `updateReady` is a module-level ref in lib/pwa.js rather than a
+      store: one boolean, one writer, no server state.
+    -->
+    <UpdateToast
+      v-if="updateReady"
+      :above-tab-bar="hasTabBar"
+      @refresh="applyUpdate"
+      @dismiss="dismissUpdate"
+    />
   </div>
 </template>
