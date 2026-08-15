@@ -228,6 +228,7 @@ final class AppServiceProvider extends ServiceProvider
         return new SelfStatsProvider(
             maturityObservations: (int) $selfstats['maturity_observations'],
             historyDays: (int) $selfstats['history_days'],
+            crossSectionDays: (int) $selfstats['cross_section_days'],
         );
     }
 

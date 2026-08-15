@@ -114,6 +114,35 @@ final class WatchlistApiTest extends TestCase
     }
 
     /**
+     * AND IT IS THE CHEAPEST DEPARTURE IN THE NEAR WINDOW, NOT IN THE CALENDAR.
+     *
+     * docs/API.md defines `cheapest` as "the day `price.current` is for", and
+     * `price.current` is the last observation — which App\Jobs\PollRoutePrices
+     * takes as the minimum over the six-month near window however deep that
+     * morning's fetch went. `calendar_fares` runs eleven months deep now
+     * (`orbit.poll.horizon_days`), so an unbounded MIN would publish a cheap
+     * June fare beside a dearer "current price" the API says is the same number
+     * — and point the booking link at a date nothing was scored on.
+     *
+     * The far fare below is half the price of everything in the near window,
+     * which is exactly the case that would win an unbounded comparison.
+     */
+    #[Test]
+    public function a_fare_beyond_the_near_window_is_not_published_as_the_cheapest_departure(): void
+    {
+        $route = $this->seedOneRoute();
+
+        $far = Date::now()->startOfDay()->addDays((int) config('orbit.poll.window_days') + 30)->toDateString();
+
+        $this->offer($route, ['2026-09-15' => 4400, $far => 2200]);
+
+        $response = $this->actingAs($this->owner)->getJson('/api/watchlist');
+
+        $response->assertJsonPath('data.0.cheapest.date', '2026-09-15');
+        $response->assertJsonPath('data.0.cheapest.price', 44);
+    }
+
+    /**
      * NULL IS NOT TODAY. A route with no fares has no date to put on a price it
      * also does not have, and a screen that printed one would be inventing a
      * departure.

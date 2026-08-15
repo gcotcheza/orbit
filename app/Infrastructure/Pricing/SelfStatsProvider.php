@@ -26,16 +26,17 @@ use Illuminate\Support\Facades\Date;
  * IT ANSWERS THE SAME QUESTION FROM TWO DIFFERENT HORIZONS, and the difference
  * between them is the whole design:
  *
- *   CROSS-SECTIONAL — `calendar_fares`, the ~182 departure dates in the current
- *   poll window. It exists from the FIRST poll, which is the only reason a
- *   route added this morning can be scored at all, and its median is "what a
- *   typical departure date on this route costs right now".
+ *   CROSS-SECTIONAL — `calendar_fares`, the ~182 departure dates in the NEAR
+ *   window. It exists from the FIRST poll, which is the only reason a route
+ *   added this morning can be scored at all, and its median is "what a typical
+ *   departure date on this route costs right now".
  *
  *   IT IS SIX MONTHS OF DEPARTURES, NOT THREE, since `orbit.poll.window_days`
- *   widened. Nothing in the arithmetic below changed and nothing needed to —
- *   the pool is simply whatever the window holds — but the number it produces
- *   moved: a median over half a year spans two seasons and a school holiday,
- *   so it is a broader and usually flatter "usual" than the quarter it used to
+ *   widened — and it is SIX AND NOT ELEVEN even though the calendar now runs
+ *   that far (`orbit.selfstats.cross_section_days`, and see `windowFares()`
+ *   below for why the far months would poison this number rather than enrich
+ *   it). A median over half a year spans two seasons and a school holiday, so
+ *   it is a broader and usually flatter "usual" than the quarter it used to
  *   summarise. That only touches a route's first month, after which the
  *   longitudinal half carries the answer.
  *
@@ -80,6 +81,8 @@ final readonly class SelfStatsProvider implements PriceStatsProvider
         private int $maturityObservations,
         /** How far back the longitudinal pool reaches. */
         private int $historyDays,
+        /** How far FORWARD the cross-sectional pool reaches — the near window. */
+        private int $crossSectionDays,
     ) {}
 
     public function statsFor(string $originIata, string $destinationIata): ?PriceStats
@@ -153,19 +156,56 @@ final readonly class SelfStatsProvider implements PriceStatsProvider
     }
 
     /**
-     * Every fare in the route's calendar, unordered — PriceStats sorts.
+     * The route's calendar as far as the NEAR window reaches, unordered —
+     * PriceStats sorts.
+     *
+     * BOUNDED, AND IT DID NOT USED TO BE. `calendar_fares` was the poll window
+     * and nothing else, so "every row for this route" and "the window" were the
+     * same set. Orbit now maintains ELEVEN months of calendar
+     * (`orbit.poll.horizon_days`) and this pool must stay at six, for two
+     * reasons that are really one:
+     *
+     *   WHAT IS OUT THERE IS NOT A SAMPLE OF ANYTHING. Travelpayouts' cache
+     *   thins with distance, and what survives eleven months out is
+     *   disproportionately the dates people search — Christmas, Easter, the
+     *   school holidays. Pooling those with the near six months does not widen
+     *   the distribution, it lifts the upper knots with a handful of peak-season
+     *   fares, and every route quietly scores as a better deal than it is
+     *   against a "usual" nobody moved on purpose.
+     *
+     *   AND THE FARE BEING SCORED COMES FROM THE NEAR WINDOW. App\Jobs\
+     *   PollRoutePrices writes one observation a morning and takes it from those
+     *   181 days; scoring it against a distribution drawn from a wider set is
+     *   the same category error the longitudinal half exists to avoid.
      *
      * NO FRESHNESS CLAUSE, because there is nothing stale in there to exclude:
-     * App\Jobs\PollRoutePrices deletes departure dates that have gone by and
-     * cells that have stopped being repriced, so the table holds the window as
-     * the last successful poll found it.
+     * PollRoutePrices deletes departure dates that have gone by and cells that
+     * have stopped being repriced, so the table holds the window as the last
+     * successful poll found it.
      *
      * @return list<int>
      */
     private function windowFares(int $routeId): array
     {
+        /*
+         * THE OWNER'S TODAY, like every other date boundary in this app.
+         *
+         * `whereDate` AND NOT A BARE `<=`, WHICH IS NOT PEDANTRY. Postgres holds
+         * a `date` column and coerces either shape; SQLite stores the string it
+         * was handed, and this table is written two ways — App\Jobs\
+         * PollRoutePrices upserts a bare 'Y-m-d' while anything going through
+         * the model's cast writes 'Y-m-d H:i:s'. A string comparison then puts
+         * '2027-02-14 00:00:00' AFTER '2027-02-14' and silently drops the last
+         * day of the window. `whereDate` asks the driver for the date part.
+         */
+        $edge = Date::now((string) config('orbit.timezone'))
+            ->startOfDay()
+            ->addDays(max(1, $this->crossSectionDays))
+            ->toDateString();
+
         return array_values(CalendarFare::query()
             ->where('route_id', $routeId)
+            ->whereDate('departure_date', '<=', $edge)
             ->get(['price_cents'])
             ->map(static fn (CalendarFare $fare): int => $fare->price_cents)
             ->all());

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Application\Ports\PriceProvider;
+use App\Domain\Pricing\DatedFare;
 use App\Jobs\PollRoutePrices;
 use App\Jobs\RefreshRouteStats;
 use App\Models\CalendarFare;
@@ -12,6 +14,7 @@ use App\Models\Route;
 use App\Models\RouteStats;
 use App\Models\User;
 use App\Models\WatchlistItem;
+use DateTimeImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
@@ -59,6 +62,50 @@ final class PollersTest extends TestCase
         ]);
     }
 
+    /**
+     * Bind a provider that answers with exactly these departure dates and
+     * prices, dropping any that fall outside the window it is asked for.
+     *
+     * THE FAKE CANNOT PRODUCE THE CASES BELOW: it prices every day of whatever
+     * window it is handed, always, so "a cheap fare only the far run can see" is
+     * not a shape it can make. Same stub as tests/Feature/StaleCalendarFaresTest,
+     * with the price named rather than derived.
+     *
+     * @param  array<string, int>  $fares  'Y-m-d' => cents
+     */
+    private function answeringWith(array $fares): void
+    {
+        $this->app->bind(PriceProvider::class, fn (): PriceProvider => new class($fares) implements PriceProvider
+        {
+            /**
+             * @param  array<string, int>  $fares
+             */
+            public function __construct(private readonly array $fares) {}
+
+            /**
+             * @return list<DatedFare>
+             */
+            public function cheapestPerDay(
+                string $originIata,
+                string $destinationIata,
+                DateTimeImmutable $from,
+                DateTimeImmutable $to,
+            ): array {
+                $answered = [];
+
+                foreach ($this->fares as $date => $cents) {
+                    $departure = new DateTimeImmutable((string) $date, $from->getTimezone());
+
+                    if ($departure >= $from && $departure <= $to) {
+                        $answered[] = new DatedFare($departure, $cents);
+                    }
+                }
+
+                return $answered;
+            }
+        });
+    }
+
     // ------------------------------------------------------ PollRoutePrices
 
     #[Test]
@@ -83,10 +130,11 @@ final class PollersTest extends TestCase
     }
 
     /**
-     * THE HORIZON ITSELF, WRITTEN OUT AS DATES. Every other test here asks the
-     * config what the window is and would go on passing if it said a fortnight;
-     * this one is the statement that Orbit shows six months of departures, and
-     * it fails the day somebody edits that number without meaning to.
+     * THE NEAR WINDOW ITSELF, WRITTEN OUT AS DATES. Every other test here asks
+     * the config what the window is and would go on passing if it said a
+     * fortnight; this one is the statement that an ordinary morning fetches six
+     * months of departures, and it fails the day somebody edits that number
+     * without meaning to.
      */
     #[Test]
     public function the_window_is_six_months_of_departures(): void
@@ -107,7 +155,90 @@ final class PollersTest extends TestCase
         $this->assertSame(
             '2027-02-11',
             (clone $fares)->orderByDesc('departure_date')->firstOrFail()->departure_date->toDateString(),
-            '2026-08-14 plus 181 days — six months out, which is what the calendar arrows walk to.',
+            '2026-08-14 plus 181 days — six months out, which is what the daily poll pays for.',
+        );
+    }
+
+    /**
+     * AND THE HORIZON, THE SAME WAY. `orbit:poll-fares --far` runs once a week
+     * and is the only thing in the app that reaches months 7 to 11; this is the
+     * statement that "eleven months" is eleven months, in dates, so that a
+     * horizon quietly edited to 300 fails here rather than on the far end of the
+     * calendar screen months later.
+     */
+    #[Test]
+    public function the_far_run_reaches_eleven_months_of_departures(): void
+    {
+        $route = $this->route();
+
+        PollRoutePrices::dispatchSync($route->id, (int) config('orbit.poll.horizon_days'));
+
+        $this->assertSame(334, (int) config('orbit.poll.horizon_days'));
+
+        $fares = CalendarFare::query()->where('route_id', $route->id);
+
+        $this->assertSame(335, (clone $fares)->count(), 'Today plus the whole horizon, inclusive at both ends.');
+        $this->assertSame(
+            '2027-07-14',
+            (clone $fares)->orderByDesc('departure_date')->firstOrFail()->departure_date->toDateString(),
+            '2026-08-14 plus 334 days — the airline booking edge, and what the calendar arrows walk to.',
+        );
+    }
+
+    /**
+     * THE ONE THING THE FAR RUN MUST NOT DO: move the history.
+     *
+     * `route_price_history` is one row a morning and every row means "the
+     * cheapest fare in the next six months" — it is `price.current`, the
+     * sparkline, and the trend quarter of the deal score. If the weekly
+     * eleven-month run took its minimum over everything it fetched, every route
+     * would post a lower figure on Saturdays and recover on Sundays: a sawtooth
+     * through the one series in this app nobody can re-derive, read by the trend
+     * component as a fall and a recovery, week after week.
+     *
+     * The stub answers with a dear fare inside the near window and a much
+     * cheaper one beyond it, which is exactly the shape of a cheap February that
+     * only the far run can see.
+     */
+    #[Test]
+    public function a_far_poll_records_the_near_windows_cheapest_fare_and_not_its_own(): void
+    {
+        $route = $this->route();
+
+        $this->answeringWith(['2026-09-01' => 9000, '2027-06-01' => 1000]);
+
+        PollRoutePrices::dispatchSync($route->id, (int) config('orbit.poll.horizon_days'));
+
+        /* Both cells are written — the far one is the whole point of the run. */
+        $this->assertSame(2, CalendarFare::query()->where('route_id', $route->id)->count());
+
+        $observation = PriceObservation::query()->where('route_id', $route->id)->firstOrFail();
+
+        $this->assertSame(
+            9000,
+            $observation->price_cents,
+            'The day\'s observation is the near window\'s minimum, however deep the fetch went.',
+        );
+    }
+
+    /**
+     * And the far tranche is not silently priced by an ordinary morning either:
+     * a poll asked for the near window writes six months and stops, which is
+     * what makes the weekly run the only thing that pays for the other five.
+     */
+    #[Test]
+    public function an_ordinary_poll_does_not_reach_the_far_months(): void
+    {
+        $route = $this->route();
+
+        $this->answeringWith(['2026-09-01' => 9000, '2027-06-01' => 1000]);
+
+        PollRoutePrices::dispatchSync($route->id);
+
+        $this->assertSame(1, CalendarFare::query()->where('route_id', $route->id)->count());
+        $this->assertSame(
+            '2026-09-01',
+            CalendarFare::query()->where('route_id', $route->id)->firstOrFail()->departure_date->toDateString(),
         );
     }
 
@@ -275,6 +406,46 @@ final class PollersTest extends TestCase
 
         // The second route is held back so the provider sees a trickle.
         Queue::assertPushed(fn (PollRoutePrices $job): bool => $job->delay !== null);
+
+        // And it asks for the NEAR window, which is what makes the far run below
+        // the only thing in the app that pays for months 7 to 11.
+        Queue::assertPushed(
+            fn (PollRoutePrices $job): bool => $job->windowDays === (int) config('orbit.poll.window_days'),
+        );
+    }
+
+    /**
+     * THE SECOND SPEED. `orbit:poll-fares --far` is the same fan-out asking for
+     * the whole horizon, and the depth is in the PAYLOAD rather than in the job:
+     * a poll that decided for itself which day of the week it was would fetch a
+     * different window on a retry than the one it was queued for, and would make
+     * a person's synchronous lookup cost twelve provider calls one morning a
+     * week (App\Application\Routes\FareFreshness dispatches the same job).
+     */
+    #[Test]
+    public function the_far_flag_queues_the_same_fan_out_asking_for_the_whole_horizon(): void
+    {
+        Queue::fake();
+
+        $watched = $this->route('AMS', 'LIS');
+        $paused = $this->route('EIN', 'BCN');
+
+        $this->watch($watched);
+        $this->watch($paused, active: false);
+
+        $this->runCommand('orbit:poll-fares --far')->assertSuccessful();
+
+        Queue::assertPushed(PollRoutePrices::class, 1);
+        Queue::assertPushed(
+            fn (PollRoutePrices $job): bool => $job->routeId === $watched->id
+                && $job->windowDays === (int) config('orbit.poll.horizon_days'),
+        );
+
+        $this->assertGreaterThan(
+            (int) config('orbit.poll.window_days'),
+            (int) config('orbit.poll.horizon_days'),
+            'The far run has to be deeper than the daily one or it is not a second speed.',
+        );
     }
 
     #[Test]

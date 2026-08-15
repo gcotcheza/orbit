@@ -193,15 +193,15 @@ final class StaleCalendarFaresTest extends TestCase
      * The other edge of the same bound: a departure date the app no longer
      * maintains at all.
      *
-     * A cell past `orbit.poll.window_days` can only exist because the window
-     * SHRANK, and nothing will ever reprice it — the staleness sweep is scoped
+     * A cell past `orbit.poll.horizon_days` can only exist because the HORIZON
+     * shrank, and nothing will ever reprice it — the staleness passes are scoped
      * to the window that was asked for, so it would sit there quoting a price
-     * from the old horizon until its departure date went by. Six months of
+     * from the old horizon until its departure date went by. Half a year of
      * unmaintained fares is the same lie as a withdrawn one, only slower, and
      * it is eligible for a booking link and a deal rule the whole time.
      */
     #[Test]
-    public function departures_past_the_poll_horizon_are_dropped_when_the_window_narrows(): void
+    public function departures_past_the_maintained_horizon_are_dropped_when_it_narrows(): void
     {
         $route = $this->route();
 
@@ -210,8 +210,8 @@ final class StaleCalendarFaresTest extends TestCase
 
         $this->assertSame(2, $this->cells($route));
 
-        /* Somebody puts the window back to three months. */
-        config(['orbit.poll.window_days' => 90]);
+        /* Somebody puts the whole horizon back to three months. */
+        config(['orbit.poll.horizon_days' => 90]);
 
         /*
          * THE VERY NEXT MORNING, i.e. well inside the three-day grace period:
@@ -224,6 +224,112 @@ final class StaleCalendarFaresTest extends TestCase
         $this->assertSame(1, $this->cells($route));
         $this->assertTrue($this->has($route, '2026-09-01'));
         $this->assertFalse($this->has($route, '2026-12-01'));
+    }
+
+    /**
+     * THE REGRESSION THE ELEVEN-MONTH CALENDAR IS ONE LINE AWAY FROM, and the
+     * reason the retention delete reads `poll.horizon_days` rather than
+     * `poll.window_days`.
+     *
+     * The far months are fetched once a week and read on all seven days. Bound
+     * that delete by the NEAR window instead and every far cell is removed by
+     * the next ordinary morning — six days out of seven the calendar would lose
+     * everything past month six, silently, and the feature would look like a
+     * provider that keeps dropping months.
+     */
+    #[Test]
+    public function the_far_tranche_survives_every_ordinary_morning_after_it(): void
+    {
+        $route = $this->route();
+
+        /* Saturday's far run: one near departure, one only it can see. */
+        $this->answering(['2026-09-01', '2027-06-01']);
+        PollRoutePrices::dispatchSync($route->id, (int) config('orbit.poll.horizon_days'));
+
+        $this->assertSame(2, $this->cells($route));
+
+        /* Sunday, Monday, Tuesday: the ordinary near-window poll. */
+        foreach (['2026-08-16', '2026-08-17', '2026-08-18'] as $morning) {
+            Date::setTestNow($morning.' 06:10:00');
+            $this->answering(['2026-09-01', '2027-06-01']);
+            PollRoutePrices::dispatchSync($route->id);
+        }
+
+        $this->assertSame(2, $this->cells($route));
+        $this->assertTrue(
+            $this->has($route, '2027-06-01'),
+            'A daily poll deleted a far cell it never asked about.',
+        );
+    }
+
+    /**
+     * AND THE FAR TRANCHE GETS THE GRACE PERIOD ITS OWN CLOCK DESERVES.
+     *
+     * Three days is "two missed mornings plus a day" and it is right for cells
+     * refreshed daily. A far cell is SEVEN days old by the time anything asks
+     * about it again, so the daily rule would delete a month of the far calendar
+     * every time one of the twelve monthly requests failed — which the adapter
+     * deliberately tolerates. `poll.far_stale_after_days` is the same sentence
+     * on the weekly clock: two missed far refreshes, plus the cushion.
+     */
+    #[Test]
+    public function a_far_cell_is_kept_across_a_missed_weekly_refresh_and_dropped_after_two(): void
+    {
+        $route = $this->route();
+
+        /*
+         * THE NEAR DEPARTURE IS IN DECEMBER, NOT NEXT WEEK, because this test
+         * walks three weeks forward: a stub only answers with dates inside the
+         * window it is asked for, so a September departure would simply stop
+         * being offered by the last poll — which returns empty, and an empty
+         * answer deletes nothing at all. That would pass the assertion below for
+         * entirely the wrong reason.
+         */
+        $this->answering(['2026-12-01', '2027-06-01']);
+        PollRoutePrices::dispatchSync($route->id, (int) config('orbit.poll.horizon_days'));
+
+        /*
+         * A week later the far run happens, and June's month request 500s — the
+         * adapter answers with what it did get rather than nothing, so this poll
+         * SUCCEEDS and simply does not name that date.
+         */
+        Date::setTestNow('2026-08-22 04:10:00');
+        $this->answering(['2026-12-01']);
+        PollRoutePrices::dispatchSync($route->id, (int) config('orbit.poll.horizon_days'));
+
+        $this->assertTrue(
+            $this->has($route, '2027-06-01'),
+            'One failed month request must not cost a month of the far calendar.',
+        );
+
+        /* Two more weeks with the same failure, and it is not a price any more. */
+        Date::setTestNow('2026-09-05 04:10:00');
+        $this->answering(['2026-12-01']);
+        PollRoutePrices::dispatchSync($route->id, (int) config('orbit.poll.horizon_days'));
+
+        $this->assertFalse($this->has($route, '2027-06-01'));
+        $this->assertTrue($this->has($route, '2026-12-01'));
+    }
+
+    /**
+     * The near tranche keeps the DAILY rule even on the morning a far run reads
+     * over both of them — one poll, two passes, two grace periods.
+     */
+    #[Test]
+    public function a_far_run_still_prunes_the_near_window_on_the_three_day_rule(): void
+    {
+        $route = $this->route();
+
+        $this->answering(['2026-09-01', '2026-09-02', '2027-06-01']);
+        PollRoutePrices::dispatchSync($route->id, (int) config('orbit.poll.horizon_days'));
+
+        /* Four mornings later — past three days, nowhere near seventeen. */
+        Date::setTestNow('2026-08-19 04:10:00');
+        $this->answering(['2026-09-01', '2027-06-01']);
+        PollRoutePrices::dispatchSync($route->id, (int) config('orbit.poll.horizon_days'));
+
+        $this->assertFalse($this->has($route, '2026-09-02'), 'The near window kept a fare nobody quotes.');
+        $this->assertTrue($this->has($route, '2027-06-01'));
     }
 
     // ----------------------------------------------------------------- helpers

@@ -19,11 +19,11 @@ use Illuminate\Support\Facades\Date;
  * TWO WRITES FROM ONE CALL, which is the reason this job exists rather than
  * two:
  *
- *   1. `calendar_fares` — the whole six-month window, upserted. This is the
- *      heatmap.
- *   2. `route_price_history` — ONE row, today's cheapest fare anywhere in that
- *      window. This is the sparkline, the detail chart, and the trend quarter
- *      of the deal score.
+ *   1. `calendar_fares` — every departure date this run asked for, upserted.
+ *      This is the heatmap.
+ *   2. `route_price_history` — ONE row, today's cheapest fare anywhere in the
+ *      NEAR window, however deep this run went. This is the sparkline, the
+ *      detail chart, and the trend quarter of the deal score.
  *
  * Splitting them would mean two provider calls a day per route for the same
  * data, on APIs that charge by the call and rate-limit by the minute.
@@ -39,16 +39,25 @@ use Illuminate\Support\Facades\Date;
  * watchlist between 06:10 and the worker picking the job up is a normal
  * Tuesday, not a failure worth a Horizon alert.
  *
- * AND IT TAKES A WINDOW, OPTIONALLY. `config('orbit.poll.window_days')` is what
- * a poll of the WATCHLIST looks ahead, and it is six months. App\Jobs\
- * SweepRuleFares asks for a shorter one — `orbit.rules.sweep_horizon_days`,
- * because thirty speculative routes × six months of calendar months is more
- * requests than the provider allows in an hour, see config/orbit.php's `rules`
- * section. Everything else dispatches this without the second argument and gets
- * the full window.
+ * AND IT TAKES A WINDOW, OPTIONALLY, WHICH IS NOW THE MOST IMPORTANT ARGUMENT
+ * IN THIS FILE. Three callers ask for three different depths:
  *
- * THE TWO DELETES BELOW READ THOSE TWO NUMBERS DIFFERENTLY, deliberately, and
- * that distinction is the whole reason the asymmetry is safe. Read them.
+ *   181 days  the daily 06:10 poll and every synchronous lookup — the NEAR
+ *             window, `orbit.poll.window_days`.
+ *   334 days  the weekly `orbit:poll-fares --far` run — the whole horizon Orbit
+ *             maintains, `orbit.poll.horizon_days`.
+ *    89 days  App\Jobs\SweepRuleFares, because thirty speculative routes × seven
+ *             calendar months is more requests than the provider allows in an
+ *             hour (config/orbit.php, `rules`).
+ *
+ * THE DEPTH IS ALWAYS PASSED IN, never decided here from the day of the week.
+ * A job that chose its own window would answer differently depending on when a
+ * worker happened to pick it up — a Saturday poll retried on Sunday would fetch
+ * half of what its payload promised — and the same gate would silently make a
+ * person's lookup cost twelve provider calls on one morning a week.
+ *
+ * THE DELETES BELOW READ THREE DIFFERENT NUMBERS, deliberately, and that is the
+ * whole reason a horizon polled at two speeds is safe. Read them.
  */
 final class PollRoutePrices implements ShouldQueue
 {
@@ -76,15 +85,27 @@ final class PollRoutePrices implements ShouldQueue
         $timezone = (string) config('orbit.timezone');
 
         /*
-         * THE WINDOW THIS RUN ASKED FOR — the sweep's shorter one when it is
-         * the sweep, the full six months otherwise. `$pollWindow` below is the
-         * OTHER number: what the app maintains for a route, whoever polled it.
+         * THREE NUMBERS, AND THEY ARE NOT INTERCHANGEABLE.
+         *
+         * `$windowDays` is what THIS run asked the provider for — 89 for a rule
+         * sweep, 334 for the weekly far run, 181 for everything else.
+         *
+         * `$nearWindow` is the six months that define "the current price": the
+         * pool the day's one observation is taken from, whatever this run
+         * fetched, and the edge the ordinary daily staleness rule stops at.
+         *
+         * `$horizon` is how far ahead the app MAINTAINS a calendar at all.
+         * Anything past it is a cell nothing will ever reprice.
          */
-        $pollWindow = (int) config('orbit.poll.window_days');
-        $windowDays = $this->windowDays ?? $pollWindow;
+        $nearWindow = (int) config('orbit.poll.window_days');
+        $horizon = (int) config('orbit.poll.horizon_days');
+        $windowDays = $this->windowDays ?? $nearWindow;
 
         $today = Date::now($timezone)->startOfDay();
         $lastDeparture = $today->copy()->addDays($windowDays);
+
+        /* The far edge of the near window, or of this run if it is shallower. */
+        $nearEdge = $today->copy()->addDays(min($windowDays, $nearWindow));
 
         $fares = $provider->cheapestPerDay(
             $route->origin->iata,
@@ -146,22 +167,29 @@ final class PollRoutePrices implements ShouldQueue
             ->delete();
 
         /*
-         * AND DEPARTURE DATES PAST THE EDGE OF THE WINDOW THE APP MAINTAINS —
-         * `poll.window_days`, ALWAYS, never this run's shorter one. A cell out
-         * there is a price nothing will ever reprice, which is the same lie as
-         * a withdrawn fare, only permanent: the staleness sweep below would not
-         * reach it either, because it is scoped to the window that was asked
-         * for.
+         * AND DEPARTURE DATES PAST THE EDGE OF WHAT THE APP MAINTAINS —
+         * `poll.horizon_days`, ALWAYS, never this run's shorter one and never
+         * the near window. A cell out there is a price nothing will ever
+         * reprice, which is the same lie as a withdrawn fare, only permanent:
+         * the staleness passes below would not reach it either, because they are
+         * scoped to the window that was asked for.
+         *
+         * THE HORIZON AND NOT `poll.window_days`, WHICH IS THE ONE LINE THE
+         * ELEVEN-MONTH CALENDAR TURNS ON. The far tranche is fetched once a week
+         * and read on all seven days; a clause bounded by the NEAR window would
+         * delete every far cell on the next ordinary morning, six days out of
+         * seven, and the feature would look like a provider that keeps losing
+         * months.
          *
          * IT DELETES NOTHING TODAY and that is the point of writing it now.
-         * Rows can only get out there by the window SHRINKING — six months back
-         * to three, or a box that runs a narrower one — and a config change
+         * Rows can only get out there by the horizon SHRINKING — eleven months
+         * back to six, or a box that runs a narrower one — and a config change
          * that quietly leaves half a year of unmaintained prices in the table
          * is exactly the failure the staleness sweep exists to prevent.
          */
         CalendarFare::query()
             ->where('route_id', $route->id)
-            ->whereDate('departure_date', '>', $today->copy()->addDays($pollWindow)->toDateString())
+            ->whereDate('departure_date', '>', $today->copy()->addDays($horizon)->toDateString())
             ->delete();
 
         /*
@@ -205,12 +233,72 @@ final class PollRoutePrices implements ShouldQueue
          * `$lastDeparture` keep the `fetched_at` of the last poll that DID ask,
          * and the next full poll reprices or drops them on the same three-day
          * grace period as everything else.
+         *
+         * IN TWO PASSES, BECAUSE THE TWO TRANCHES ARE POLLED AT TWO SPEEDS.
+         * Three days is "two missed mornings plus a day" and it is the right
+         * grace period for cells the 06:10 poll refreshes daily. Months 7 to 11
+         * are only refreshed by the weekly `--far` run, so those cells are SEVEN
+         * days old by the time anything asks about them again — under the daily
+         * rule, one failed month request out of twelve would delete a month of
+         * the far calendar every single Saturday. `poll.far_stale_after_days` is
+         * the identical sentence on the weekly clock: two missed far refreshes
+         * plus the same cushion.
          */
         CalendarFare::query()
             ->where('route_id', $route->id)
-            ->whereBetween('departure_date', [$today->toDateString(), $lastDeparture->toDateString()])
+            ->whereBetween('departure_date', [$today->toDateString(), $nearEdge->toDateString()])
             ->where('fetched_at', '<', $now->copy()->subDays((int) config('orbit.poll.stale_after_days')))
             ->delete();
+
+        if ($lastDeparture->greaterThan($nearEdge)) {
+            CalendarFare::query()
+                ->where('route_id', $route->id)
+                ->whereBetween('departure_date', [
+                    $nearEdge->copy()->addDay()->toDateString(),
+                    $lastDeparture->toDateString(),
+                ])
+                ->where('fetched_at', '<', $now->copy()->subDays((int) config('orbit.poll.far_stale_after_days')))
+                ->delete();
+        }
+
+        /*
+         * THE DAY'S OBSERVATION IS A NEAR-WINDOW MINIMUM, WHATEVER THIS RUN
+         * FETCHED, and that bound is not a detail — it is what stops the weekly
+         * far run from putting a sawtooth through every route's history.
+         *
+         * `route_price_history` is one row a morning and each row means "the
+         * cheapest fare in the next six months" (docs/API.md's `price.current`,
+         * the sparkline, the detail chart, and the trend quarter of the deal
+         * score). Taken over whatever this run happened to ask for, a Saturday's
+         * row would be the cheapest fare in the next ELEVEN months — a minimum
+         * over five extra months of departures, which is lower on most routes
+         * for no reason but the depth of the fetch. The series would dip every
+         * Saturday and recover every Sunday, the trend component would read that
+         * as a fall and a recovery, and the percentile would score a perfectly
+         * ordinary Saturday as the cheapest morning of the month.
+         *
+         * FILTERED BY DATE STRING rather than by comparing DateTimeImmutables:
+         * `$nearEdge` is midnight in the owner's timezone and a provider's
+         * departure date carries whatever zone the adapter built it in, so two
+         * instants for the same calendar day can be hours apart. 'Y-m-d' against
+         * 'Y-m-d' is the same comparison the upsert above writes with.
+         */
+        $edge = $nearEdge->toDateString();
+
+        $near = array_values(array_filter(
+            $fares,
+            static fn (DatedFare $fare): bool => $fare->departureDate->format('Y-m-d') <= $edge,
+        ));
+
+        if ($near === []) {
+            /*
+             * A run that fetched nothing inside the near window at all — only
+             * reachable if a provider answers exclusively with far dates. There
+             * is no honest number for today, and yesterday's row is a better
+             * answer than an invented one.
+             */
+            return;
+        }
 
         /*
          * AN UPSERT, AND THE DATE AS A BARE 'Y-m-d' STRING — deliberately the
@@ -228,7 +316,7 @@ final class PollRoutePrices implements ShouldQueue
             [[
                 'route_id' => $route->id,
                 'observed_on' => $today->toDateString(),
-                'price_cents' => min(array_map(static fn (DatedFare $fare): int => $fare->cents, $fares)),
+                'price_cents' => min(array_map(static fn (DatedFare $fare): int => $fare->cents, $near)),
                 'created_at' => $now,
                 'updated_at' => $now,
             ]],

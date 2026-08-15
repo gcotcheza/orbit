@@ -53,6 +53,42 @@ final class ScheduleTest extends TestCase
         $this->assertSame('Europe/Amsterdam', $event->timezone);
     }
 
+    /**
+     * THE SECOND SPEED, AND THE HOUR IS THE POINT OF IT.
+     *
+     * Orbit maintains eleven months of calendar and fetches the near six every
+     * morning; this run fills in months 7 to 11. It costs twelve provider calls
+     * per watched route where the daily poll costs seven, and Travelpayouts
+     * allows ~200 an hour per IP — so in the 06:00 hour, beside the rule sweep's
+     * 120, nine watched routes would be 228 and over the limit. In an otherwise
+     * empty 04:00 hour it is 108, and the ordinary morning is left exactly as it
+     * was. config/orbit.php's `poll` section carries the whole table.
+     *
+     * IT DOES NOT REPLACE THAT DAY'S POLL: the daily entry still runs four hours
+     * later, and both write the same observation from the same near window.
+     */
+    #[Test]
+    public function the_far_months_are_refreshed_once_a_week_in_an_hour_of_their_own(): void
+    {
+        $event = $this->find('orbit:poll-fares --far');
+
+        $this->assertSame('10 4 * * 6', $event->expression);
+        $this->assertSame('Europe/Amsterdam', $event->timezone);
+        $this->assertTrue($event->withoutOverlapping);
+
+        /* The expression above is that config key, not a coincidence. */
+        $this->assertSame(6, (int) config('orbit.poll.far_refresh_weekday'));
+
+        $sweep = $this->minuteOfDay('orbit:sweep-rules');
+        $far = $this->minuteOfDay('orbit:poll-fares --far');
+
+        $this->assertLessThan(
+            intdiv($sweep, 60),
+            intdiv($far, 60),
+            'The far run has to land in an earlier clock hour than the sweep, or the two share a rate limit.',
+        );
+    }
+
     #[Test]
     public function statistics_are_refreshed_on_monday_ahead_of_that_mornings_poll(): void
     {

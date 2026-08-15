@@ -27,25 +27,31 @@ import { addMonths, currentMonthKey, dayLabel, monthLabel } from '@/Components/c
 import { useWatchlistStore } from '@/stores/watchlist'
 
 /*
- * How far the arrows go. The poller holds about six months of departures
- * (`orbit.poll.window_days`, 181 days), so anything past that is a guaranteed
- * empty grid: the bounds are the honest edge of what we know rather than an
- * arbitrary limit. The past is not offered at all — a fare you can no longer
- * buy is not a deal.
+ * How far the arrows go. Orbit maintains about eleven months of departures
+ * (`orbit.poll.horizon_days`, 334 days — the airline booking edge), so anything
+ * past that is a guaranteed empty grid: the bounds are the honest edge of what
+ * we know rather than an arbitrary limit. The past is not offered at all — a
+ * fare you can no longer buy is not a deal.
  *
- * SIX AND NOT SEVEN, even though 181 days usually reaches into a seventh
- * calendar month: that month holds a handful of days at most, and an arrow that
- * leads to two priced cells is a worse answer than one that stops.
+ * ELEVEN, WHICH IS ELEVEN STEPS AND TWELVE GRIDS. 334 days can never touch more
+ * than twelve calendar months — brute-forced over every start date in a
+ * four-year span, which is the same arithmetic that picked the number — so
+ * `+11` is the last month the poller can ever have put a fare in. One arrow
+ * fewer would hide a month of real fares; one more is a promise of data that
+ * cannot exist.
  *
- * THE LAST MONTH IS SOMETIMES EMPTY, and on purpose. A window that opens on the
- * 1st of a short month closes inside the sixth one, so on a few mornings a year
- * the last reachable grid has nothing in it — and the screen already says so
- * ("No fares seen for this month yet"), because that is also what every month
- * of a brand-new route looks like. Stopping at five to guarantee a full grid
- * would hide a month of real fares on the other 95% of days.
+ * THE FAR MONTHS ARE LEGITIMATELY THIN, AND SOMETIMES EMPTY. Three separate
+ * reasons, none of them a bug: a window that opens early in a month closes
+ * inside the twelfth one; the provider's cache thins with distance, so months 7
+ * to 11 come back patchy where the near ones are solid; and those months are
+ * only refreshed once a week (`orbit.poll.far_refresh_weekday`), so a route
+ * added on Sunday has nothing out there until Saturday. The screen already says
+ * so ("No fares seen for this month yet"), because that is also what every month
+ * of a brand-new route looks like — stopping short to guarantee a full grid
+ * would hide real fares on every other day.
  */
 const FIRST_MONTH = currentMonthKey()
-const LAST_MONTH = addMonths(FIRST_MONTH, 6)
+const LAST_MONTH = addMonths(FIRST_MONTH, 11)
 
 const watchlist = useWatchlistStore()
 const { routes, status: routesStatus } = storeToRefs(watchlist)

@@ -134,13 +134,31 @@ final readonly class RouteSnapshots
     }
 
     /**
-     * The cheapest departure still on offer for each route.
+     * The cheapest departure still on offer for each route, inside the near
+     * window.
+     *
+     * BOUNDED TO `orbit.poll.window_days`, WHICH IS AN API CONTRACT AND NOT A
+     * PREFERENCE. docs/API.md defines `cheapest` as "the day `price.current` is
+     * for", and `price.current` is the latest observation — which App\Jobs\
+     * PollRoutePrices takes as the minimum over the NEAR six months, whatever
+     * depth that morning's fetch went to. `calendar_fares` now runs eleven
+     * months deep (`orbit.poll.horizon_days`), so an unbounded MIN would find a
+     * cheaper March fare, publish it as `cheapest`, and leave the watchlist card
+     * printing "€120" beside "cheapest departure €78" — two numbers the API says
+     * are the same one, and a booking link aimed at a date the score was never
+     * computed from.
+     *
+     * THE FAR MONTHS ARE THE CALENDAR SCREEN'S, then, and only its: they are
+     * drawn, paged and tapped there, and every summary number in the app stays
+     * a statement about the six months it has always been about.
      *
      * A CORRELATED SUBQUERY rather than loading the window and taking the min
-     * in PHP: the window is ninety rows per route and only one of them is ever
-     * used. It is written as raw SQL because neither Postgres' `DISTINCT ON`
-     * nor a window function is portable to the SQLite the test suite runs on,
-     * and this form is. No value from the request reaches it.
+     * in PHP: the window is a hundred and eighty rows per route and only one of
+     * them is ever used. It is written as raw SQL because neither Postgres'
+     * `DISTINCT ON` nor a window function is portable to the SQLite the test
+     * suite runs on, and this form is. THE ONE BINDING IS A DATE THIS APP
+     * COMPUTED from config and the clock — no value from the request reaches it,
+     * and it is bound rather than interpolated regardless.
      *
      * A route can come back with several rows when two dates tie on price;
      * keying the result by route id keeps the FIRST, and the ordering below
@@ -151,9 +169,30 @@ final readonly class RouteSnapshots
      */
     private function cheapestFares(array $ids): array
     {
+        /*
+         * THE DAY AFTER THE EDGE, COMPARED WITH `<`, which is the same bound as
+         * `<= $edge` and is the one that survives both databases. Postgres holds
+         * a `date` column and coerces whatever it is given; SQLite stores the
+         * string it was handed, and this table is written two ways — App\Jobs\
+         * PollRoutePrices upserts a bare 'Y-m-d' while anything going through
+         * the model's cast writes 'Y-m-d H:i:s'. `<= '2027-02-14'` then drops a
+         * row stored as '2027-02-14 00:00:00', i.e. the last day of the window,
+         * on the database the test suite runs on and not on the one production
+         * uses. `whereDate` would fix the outer clause and cannot reach inside
+         * the raw subquery, so both halves use this form rather than two.
+         */
+        $edge = Date::now((string) config('orbit.timezone'))
+            ->startOfDay()
+            ->addDays((int) config('orbit.poll.window_days') + 1)
+            ->toDateString();
+
         $rows = CalendarFare::query()
             ->whereIn('route_id', $ids)
-            ->whereRaw('price_cents = (select min(price_cents) from calendar_fares cheapest where cheapest.route_id = calendar_fares.route_id)')
+            ->where('departure_date', '<', $edge)
+            ->whereRaw(
+                'price_cents = (select min(price_cents) from calendar_fares cheapest where cheapest.route_id = calendar_fares.route_id and cheapest.departure_date < ?)',
+                [$edge],
+            )
             ->orderBy('departure_date')
             ->get(['route_id', 'departure_date', 'price_cents', 'found_at']);
 
