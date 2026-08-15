@@ -26,10 +26,18 @@ use Illuminate\Support\Facades\Date;
  * IT ANSWERS THE SAME QUESTION FROM TWO DIFFERENT HORIZONS, and the difference
  * between them is the whole design:
  *
- *   CROSS-SECTIONAL — `calendar_fares`, the ~91 departure dates in the current
+ *   CROSS-SECTIONAL — `calendar_fares`, the ~182 departure dates in the current
  *   poll window. It exists from the FIRST poll, which is the only reason a
  *   route added this morning can be scored at all, and its median is "what a
  *   typical departure date on this route costs right now".
+ *
+ *   IT IS SIX MONTHS OF DEPARTURES, NOT THREE, since `orbit.poll.window_days`
+ *   widened. Nothing in the arithmetic below changed and nothing needed to —
+ *   the pool is simply whatever the window holds — but the number it produces
+ *   moved: a median over half a year spans two seasons and a school holiday,
+ *   so it is a broader and usually flatter "usual" than the quarter it used to
+ *   summarise. That only touches a route's first month, after which the
+ *   longitudinal half carries the answer.
  *
  *   LONGITUDINAL — `route_price_history`, one row per morning, each the
  *   cheapest fare anywhere in that morning's window. It takes weeks to say

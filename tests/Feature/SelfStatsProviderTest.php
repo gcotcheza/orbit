@@ -267,7 +267,7 @@ final class SelfStatsProviderTest extends TestCase
 
     /**
      * THE MONDAY-MORNING CASE, and the one that has to work on the day the
-     * switch is thrown: a route polled once has 91 calendar cells and a single
+     * switch is thrown: a route polled once has 182 calendar cells and a single
      * observation, and the weekly refresh must turn that into a usable row
      * rather than into nothing.
      */

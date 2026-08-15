@@ -85,7 +85,7 @@ one with more fields on it. Identical either way, so a component can take either
 | --- | --- |
 | `code` | `AMS-OPO`. The URL key, and the only id the client needs. |
 | `origin` / `destination` | `lat`/`lng` are the AIRPORT's, for the globe's great-circle arc. `countryCode` is what the design's flag swatches key off. |
-| `price.current` | The cheapest fare in the next ~90 days, as of the last poll. Same number as the last point of `sparkline`. **`null`** before the first poll. |
+| `price.current` | The cheapest fare in the next ~6 months (`orbit.poll.window_days`, 181 days), as of the last poll. Same number as the last point of `sparkline`. **`null`** before the first poll. |
 | `price.usual` | The route's median price from the statistics provider. **`null`** when it has none. |
 | `price.pctBelow` | Whole percent under `usual`; **negative when above it** ("14% above usual" is `-14`). `null` when either half is missing. |
 | `score` | 0–100. See "How the score works" below. |
@@ -217,7 +217,7 @@ defaults to the current one.
 | `cheapest` | The "★ Cheapest this month" banner. `null` for an empty month. |
 | `meta.bookingUrlTemplate` | The day sheet's "Book this day" link, for **whichever** day was tapped. Substitute `{date}` with that departure date as **`yymmdd`** (`2026-09-15` → `260915`) and open the result. **Always present**, including for an empty month — it is a fact about the route, not about the fares. It is the same Skyscanner deep link `bookingUrl` on the route detail is, with the date left as a hole; the host and the path shape stay on the server (`config/orbit.php`, `App\Application\Routes\BookingLink`) so a move to another affiliate is one change. Do not build this URL client-side. |
 
-**Empty months are a 200, not a 404.** The poll window is about three months, so
+**Empty months are a 200, not a 404.** The poll window is about six months, so
 paging past it is normal: `days: []`, `min`/`max`/`cheapest` all `null`. Draw an
 empty grid.
 
@@ -517,7 +517,7 @@ Self-Service API was decommissioned on 2026-07-17.
 Two horizons go into it, and which one dominates depends on how long the route
 has been watched:
 
-- **Cross-sectional** — the ~91 `calendar_fares` of the current poll window.
+- **Cross-sectional** — the ~182 `calendar_fares` of the current poll window.
   Available from the **first** poll, which is what lets a route added this
   morning carry a score at all. Its median is *what a typical departure date on
   this route costs right now*.
@@ -529,7 +529,7 @@ They are blended linearly by how much history there is —
 `w = min(1, observations / 30)`, then `round((1-w)·cross + w·long)` on each of
 the five numbers — so a route is scored cross-sectionally on day 1, half and
 half around day 15, and purely against its own past mornings from day 30.
-`usual` therefore means *the going rate across the next three months* on a new
+`usual` therefore means *the going rate across the next six months* on a new
 route and *what this route's cheapest fare has actually been* on a mature one.
 
 **A route with no fares and no history has no statistics at all.** The provider
@@ -806,7 +806,19 @@ either way**, and nothing above tells a client which one answered.
 
 Rules are swept by `orbit:sweep-rules` at 06:40 Europe/Amsterdam, after the
 06:10 fare poll — it skips any route the poll has already priced, which only
-works in that order. It can be run by hand:
+works in that order.
+
+**A sweep is shallower than a poll.** The watchlist is priced six months ahead
+(`orbit.poll.window_days`); a rule's speculative routes are priced three
+(`orbit.rules.sweep_horizon_days`), because the provider bills per calendar
+month and thirty routes × six months is more requests than it allows in an
+hour. A rule whose date window names a month beyond that still matches on any
+route Orbit already holds fares for — matching reads `calendar_fares`, and a
+watched route's calendar runs the full six months — but city pairs nobody
+watches are not priced that far out until the calendar rolls toward the month.
+This affects `matches.count`, never the shape of a response.
+
+It can be run by hand:
 
 ```
 docker compose exec app php artisan orbit:sweep-rules --now

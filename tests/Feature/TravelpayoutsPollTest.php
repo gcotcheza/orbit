@@ -50,6 +50,26 @@ final class TravelpayoutsPollTest extends TestCase
          */
         Date::setTestNow('2026-08-15 06:10:00');
 
+        /*
+         * AND THE WINDOW THEY WERE RECORDED FOR, PINNED, which is not the one
+         * production polls any more — `orbit.poll.window_days` is six months
+         * since PR "six-month fare horizon".
+         *
+         * These four files are a recording of four real calendar months of
+         * AMS-LIS on 2026-08-15, and the numbers this test asserts (79 covered
+         * days, €80 the cheapest) are facts about that recording. Running them
+         * against a six-month window would ask for three months nobody
+         * recorded, and `Http::preventStrayRequests()` would fail the test —
+         * correctly, because the alternative is inventing fares for the missing
+         * months and then asserting on them.
+         *
+         * WHAT THIS TEST IS FOR is unchanged by that: it is the one place the
+         * app is driven end to end on REAL fares with holes in them. How wide
+         * the window is belongs to tests/Feature/PollersTest and to the budget
+         * assertion in tests/Unit/Infrastructure/TravelpayoutsPriceProviderTest.
+         */
+        config(['orbit.poll.window_days' => 90]);
+
         Http::preventStrayRequests();
     }
 

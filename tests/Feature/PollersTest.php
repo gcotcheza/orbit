@@ -34,7 +34,7 @@ final class PollersTest extends TestCase
     {
         parent::setUp();
 
-        // Fixed, so "today" and the 90-day window are the same in every run.
+        // Fixed, so "today" and the six-month window are the same in every run.
         Date::setTestNow('2026-08-14 06:10:00');
     }
 
@@ -80,6 +80,58 @@ final class PollersTest extends TestCase
         $this->assertSame('2026-08-14', $observation->observed_on->toDateString());
         $this->assertSame($cheapest, $observation->price_cents, 'The observation is the window minimum.');
         $this->assertGreaterThanOrEqual(2900, $observation->price_cents);
+    }
+
+    /**
+     * THE HORIZON ITSELF, WRITTEN OUT AS DATES. Every other test here asks the
+     * config what the window is and would go on passing if it said a fortnight;
+     * this one is the statement that Orbit shows six months of departures, and
+     * it fails the day somebody edits that number without meaning to.
+     */
+    #[Test]
+    public function the_window_is_six_months_of_departures(): void
+    {
+        $route = $this->route();
+
+        PollRoutePrices::dispatchSync($route->id);
+
+        $this->assertSame(181, (int) config('orbit.poll.window_days'));
+
+        $fares = CalendarFare::query()->where('route_id', $route->id);
+
+        $this->assertSame(
+            '2026-08-14',
+            (clone $fares)->orderBy('departure_date')->firstOrFail()->departure_date->toDateString(),
+            'The window opens today: a fare you can no longer buy is not a deal.',
+        );
+        $this->assertSame(
+            '2027-02-11',
+            (clone $fares)->orderByDesc('departure_date')->firstOrFail()->departure_date->toDateString(),
+            '2026-08-14 plus 181 days — six months out, which is what the calendar arrows walk to.',
+        );
+    }
+
+    /**
+     * THE SWEEP'S HALF OF THE ASYMMETRY, from the job's side. A poll can be
+     * asked for a narrower window than the watchlist gets
+     * (`orbit.rules.sweep_horizon_days`, see App\Jobs\SweepRuleFares), and the
+     * request it makes has to actually be that narrow — the whole point is the
+     * provider calls it does NOT make.
+     */
+    #[Test]
+    public function a_poll_can_be_asked_for_a_shorter_window_than_the_watchlist_gets(): void
+    {
+        $route = $this->route();
+
+        PollRoutePrices::dispatchSync($route->id, 30);
+
+        $fares = CalendarFare::query()->where('route_id', $route->id);
+
+        $this->assertSame(31, (clone $fares)->count());
+        $this->assertSame(
+            '2026-09-13',
+            (clone $fares)->orderByDesc('departure_date')->firstOrFail()->departure_date->toDateString(),
+        );
     }
 
     #[Test]

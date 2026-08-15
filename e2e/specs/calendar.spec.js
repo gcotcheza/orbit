@@ -52,7 +52,7 @@ test('the month grid is a heat map, not a table of identical squares', async ({ 
     /*
      * NEXT MONTH, NOT THIS ONE, AND THAT IS ABOUT THE DATA RATHER THAN THE UI.
      *
-     * The poll window is 90 days FORWARD (config/orbit.php), so the current
+     * The poll window is 181 days FORWARD (config/orbit.php), so the current
      * month is priced from today onwards and empty behind it — on the 15th it
      * has 17 priced cells and the grid is half grey, correctly. Next month is
      * entirely inside the window whatever day the suite runs on, which is what
@@ -100,6 +100,62 @@ test('the month grid is a heat map, not a table of identical squares', async ({ 
     await expect(page.locator('.banner')).toContainText(/Cheapest this month: .+ · €\d+/)
 
     await shot(page, 'calendar')
+})
+
+/**
+ * THE EDGE OF THE POLL WINDOW, walked in a real browser.
+ *
+ * `orbit.poll.window_days` is six months, so the arrows offer this month and
+ * six more and then stop. The failure this catches is the pair of numbers
+ * drifting apart — a config widened without the screen following it hides half
+ * a year of fares behind a disabled arrow, and a screen that walks further than
+ * the poller reaches promises months that can never have anything in them.
+ *
+ * WHAT THE LAST MONTH CONTAINS IS NOT ASSERTED HERE, deliberately. A window
+ * that opens on the 1st of a short month closes inside the sixth one, so on a
+ * few mornings a year the last grid is legitimately empty — and a suite that
+ * only passes on the other 95% of days is worse than no suite. That the empty
+ * state renders is pinned deterministically in resources/js/Views/
+ * Calendar.test.js, against a stubbed endpoint. What matters HERE is that the
+ * screen is showing a calendar rather than an error at the far end.
+ */
+test('the month arrows walk six months forward and stop', async ({ page }) => {
+    await page.goto('/calendar')
+
+    const subtitle = page.locator('.calendar__subtitle')
+    await expect(subtitle).toHaveText(/Cheapest fare per day · /)
+
+    const prev = page.locator('.month-nav__button').first()
+    const next = page.locator('.month-nav__button').last()
+
+    // The past is not offered at all: a fare you can no longer buy is not a deal.
+    await expect(prev).toBeDisabled()
+
+    /* The label the screen should be showing `ahead` months from now. */
+    const label = (ahead) => {
+        const now = new Date()
+        const month = new Date(Date.UTC(now.getFullYear(), now.getMonth() + ahead, 1))
+
+        return `${MONTHS[month.getUTCMonth()]} ${month.getUTCFullYear()}`
+    }
+
+    for (let ahead = 1; ahead <= 6; ahead += 1) {
+        await expect(next, `the arrow was already dead at +${ahead - 1}`).toBeEnabled()
+        await next.click()
+        await expect(subtitle).toHaveText(`Cheapest fare per day · ${label(ahead)}`)
+    }
+
+    await expect(next).toBeDisabled()
+    await expect(prev).toBeEnabled()
+
+    // A calendar, not a failure. The grid is drawn whether or not this last
+    // month has fares in it, and the load-failure copy is nowhere.
+    await expect(page.locator('.grid-card')).toBeVisible()
+    await expect(page.getByText('Could not load this month')).toHaveCount(0)
+
+    if ((await page.locator('.cell--fare').count()) === 0) {
+        await expect(page.locator('.calendar__note--centred')).toHaveText('No fares seen for this month yet.')
+    }
 })
 
 test('tapping a day opens the sheet for that day', async ({ page }) => {

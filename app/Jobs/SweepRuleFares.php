@@ -41,6 +41,26 @@ use Psr\Log\LoggerInterface;
  * because a rule permanently losing its tail is a thing somebody should be
  * able to find out about.
  *
+ * IT SWEEPS SHALLOWER THAN THE WATCHLIST IS POLLED, and that asymmetry is a
+ * budget rather than an opinion about rules. The daily poll looks six months
+ * ahead (`orbit.poll.window_days`); Travelpayouts charges a request per
+ * CALENDAR MONTH, so sweeping thirty speculative routes that deep is 30 × 7 =
+ * 210 requests for one rule — past the provider's ~200 an hour before the
+ * morning's watchlist poll is even counted. `orbit.rules.sweep_horizon_days` is
+ * the near three months of that window, capping a full sweep at 30 × 4 = 120
+ * and leaving room for the poll that ran half an hour earlier. config/orbit.php
+ * carries the whole table.
+ *
+ * WHAT THAT COSTS A RULE, precisely, because it is not nothing: a date window
+ * naming a month past the sweep horizon — "somewhere sunny in February",
+ * written in August — still MATCHES on every route Orbit already holds fares
+ * for, since App\Application\Rules\RuleMatches reads `calendar_fares` and a
+ * watched route's calendar runs the full six months. What the rule does not get
+ * is February fares for city pairs NOBODY watches: those are fetched three
+ * months out, and February arrives in the sweep's own window in November. A
+ * rule about the far future is answered from the watchlist until then, rather
+ * than being answered wrongly or not at all.
+ *
  * IT TAKES AN ID, NOT A MODEL, for the reason PollRoutePrices does: a rule
  * deleted between the tap and the worker is a normal Tuesday.
  */
@@ -80,6 +100,9 @@ final class SweepRuleFares implements ShouldQueue
         $sweeping = array_slice($wanted, 0, $cap);
         $dropped = count($wanted) - count($sweeping);
 
+        /* The shorter horizon — see the class docblock and config/orbit.php. */
+        $horizon = (int) config('orbit.rules.sweep_horizon_days');
+
         $airports = $this->airportIds($sweeping);
 
         foreach ($sweeping as $code) {
@@ -98,7 +121,7 @@ final class SweepRuleFares implements ShouldQueue
                 ],
             );
 
-            PollRoutePrices::dispatch($route->id);
+            PollRoutePrices::dispatch($route->id, $horizon);
         }
 
         $logger->info('Swept a deal rule.', [
@@ -108,6 +131,8 @@ final class SweepRuleFares implements ShouldQueue
             'fresh' => count($codes) - count($wanted),
             'dropped' => $dropped,
             'cap' => $cap,
+            /* The other half of the budget, so one line says what a sweep cost. */
+            'horizon_days' => $horizon,
         ]);
     }
 
