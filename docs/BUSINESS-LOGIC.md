@@ -30,21 +30,72 @@ route was a real morning's fare that cost a provider call to gather. Dropping
 `AMS-LIS` in September and adding it back next spring hands the owner back the
 history they already paid for, rather than starting from nothing — so
 `store()` is a `firstOrCreate` on the route and a plain `create` on the row.
-Routes also arrive without anybody watching them: `SweepRuleFares` creates the
-pairs a rule is about. Nothing shows them until a rule matches one, and the
-route-detail screen is deliberately *not* scoped to the watchlist.
+Routes also arrive without anybody watching them, by **two** paths:
+`SweepRuleFares` creates the pairs a rule is about, and `POST /api/routes/lookup`
+creates the pair somebody typed into the box. Nothing shows either until it is
+asked for, and the route-detail screen is deliberately *not* scoped to the
+watchlist.
 
-**Adding is asynchronous.** `POST /api/watchlist` queues `PollRoutePrices` and
-`RefreshRouteStats` and answers before either has run, so a brand-new row is
-`confident: false` with no prices — see §8.
+**Adding is asynchronous. Looking up is not.** `POST /api/watchlist` queues
+`PollRoutePrices` and `RefreshRouteStats` and answers before either has run, so
+a brand-new row is `confident: false` with no prices — see §8.
+`POST /api/routes/lookup` cannot do that: nobody is coming back tomorrow to see
+what a route they were curious about costs, so it runs the same two jobs
+**synchronously** and answers with the prices. That is the whole difference
+between the two writes, and it is why the lookup is the one endpoint in the app
+where a single tap can spend six or seven metered provider calls — hence
+`orbit.lookup.fresh_for_hours` (a pair is not re-fetched inside it, even if the
+answer was "no fares") and the `route-lookup` throttle.
+
+**A lookup is not a commitment, in either direction.** It writes no watchlist
+row, and it is refused for nothing that `POST /api/watchlist` would refuse
+except "you are already watching this" — looking at a route you watch is an
+ordinary thing to do. A pair the rule sweep priced this morning is answered out
+of the fares the sweep already paid for.
 
 **Origins are closed, destinations are not.** `config('orbit.origins')` is
 `['AMS', 'EIN', 'DUS']` and `AddWatchedRouteRequest` accepts nothing else as an
 origin: a fare from Málaga is not a flight this person can take. The
-destination may be any row in `airports`. What the *form offers* is narrower
-still — `GET /api/destinations` returns the 77 places that have a `destinations`
-row — and that is deliberately not the validation list, because a code somebody
-types from memory should still work.
+destination may be any row in `airports`, and that is deliberately not the same
+thing as what the form offers — a code somebody types from memory should still
+work.
+
+### The two tiers of "somewhere Orbit knows"
+
+Since **world flights** those two lists are very different sizes, and which one
+a feature reads is a decision rather than an accident.
+
+| | rows | table | seeded by | what it is for |
+| --- | --- | --- | --- | --- |
+| **Tier 1 — the world** | 3,270 | `airports` | `WorldAirportSeeder`, from `database/seeders/data/world_airports.csv` | **look-up and watch.** `exists:airports,iata`, `GET /api/airports?q=` |
+| **Tier 2 — the curated set** | 184 | `destinations` (+ their `airports` rows) | `DestinationSeeder`, from `european_destinations.php` and `world_destinations.php` | **rules.** vibes, month-by-month warmth, `GET /api/destinations` |
+
+**Tier 1 is a third-party snapshot and carries no opinion.** It is every
+airport OurAirports lists as having scheduled service and an IATA code
+(public domain; the filter and the retrieval date are in
+`world_airports.README.md`). It has a name, a city, a country and a coordinate,
+and nothing else — nobody has decided what Ouagadougou is *for*.
+
+**Tier 2 is editorial, and the rule engine reads only it.** "Cheap weekend
+somewhere sunny in February" is answered by filtering `vibes` and reading
+`warmth` (§11), and both of those are judgements a person made. A rule that
+could fire on all 3,270 would be a rule fired on rows nobody has ever looked
+at — so `RuleMatches` and `SweepRuleFares` walk `destinations` and never
+`airports`. Growing tier 1 does not grow the rule sweep's budget by a single
+poll.
+
+**The curated row wins where the two overlap.** 187 of the 3,270 codes (184
+destinations and the three origins) are in both, and `WorldAirportSeeder` skips
+every one of them: the snapshot calls `JFK` "John F. Kennedy International
+Airport" and files Sydney's city as "Sydney (Mascot)", and one of the
+disagreements is a correction — Dakar is `DSS`, not the `DKR` the snapshot still
+marks as served. `tests/Feature/SeedersTest` asserts the two sets stay disjoint.
+
+**What the owner sees.** The add-route box paints the curated matches
+instantly from memory and adds the world matches under a divider 250 ms later
+(`resources/js/stores/airports.js`). Both halves are watchable and both land on
+the same route-detail screen; only the curated half can ever be *suggested by a
+rule*.
 
 ---
 
@@ -772,19 +823,35 @@ two equally cheap flights is the one to show.
 
 Nine words — `sunny`, `beach`, `city`, `culture`, `food`, `islands`, `nature`,
 `party`, `ski` — and they are the keys of `orbit.nlp.vibe_words`, of
-`orbit.nlp.vibe_labels`, and of the vibes in
-`database/seeders/data/european_destinations.php`. `tests/Feature/SeedersTest`
-asserts the three agree.
+`orbit.nlp.vibe_labels`, and of the vibes in **both** curated data files
+(`database/seeders/data/european_destinations.php` and `world_destinations.php`).
+`tests/Feature/SeedersTest` asserts the three agree. World flights added a
+hundred and seven destinations and **not one new vibe**: an open vocabulary is
+one the parser can never be complete against, so Bangkok is `city food party
+culture` and Queenstown is `ski nature`, in the same nine words Faro uses.
 
 The **values** of `vibe_words` are the open half: what somebody might actually
 type. Adding a synonym is safe; adding a **key** is not, because no destination
 carries it and the rule would match nothing. Longest phrases first within a
 vibe, so "city break" is not eaten by "city".
 
-The seed data is 77 destinations and 3 origins, each destination carrying a
-climate profile expanded into twelve monthly warmth ratings (1 "pack a coat" to
-5 "beach"). It is a checked-in file rather than an API because nobody sells "is
-Faro sunny in March" in a usable form and the answer does not change.
+The seed data is **184 destinations** (77 European, 107 long-haul) and 3
+origins, each destination carrying a climate profile expanded into twelve
+monthly warmth ratings (1 "pack a coat" to 5 "beach"). It is a checked-in file
+rather than an API because nobody sells "is Faro sunny in March" in a usable
+form and the answer does not change.
+
+**Half the world's climate profiles are upside down, which is new.** Cape Town,
+Sydney and Buenos Aires are 5 in January and 2 in July, so "somewhere warm in
+the winter" finally has an answer beyond the Canaries. Two honest strains on the
+1–5 scale are documented where they live, in `world_destinations.php`: a
+tropical **wet** season is rated 4 rather than 5 (the thermometer says beach and
+the afternoon does not), and a Gulf summer is 5 because "beach" is the hottest
+thing this vocabulary can say — a ceiling, not a recommendation.
+
+**The 3,270 airports in tier 1 are not in any of this.** They have no
+`destinations` row, so no vibe, no warmth, and no rule can ever match them (§1).
+They are watchable and priceable; they are not suggestible.
 
 ### Sweeping
 
@@ -801,15 +868,26 @@ written, which reads as a broken feature rather than an empty cupboard. So
 creating a rule queues a sweep, and the schedule runs it again every morning
 after the watchlist poll.
 
-**The cap is the point.** A rule with no vibe at all is 3 origins × 77
-destinations = 231 provider calls, spent on a sentence somebody may delete a
+**The cap is the point.** A rule with no vibe at all is 3 origins × 184
+destinations = 552 provider calls, spent on a sentence somebody may delete a
 minute later. The cap keeps the best-fitting thirty — "best" is the matcher's
-ranking — and logs what it dropped.
+ranking — and logs what it dropped. **World flights more than doubled the
+number that cap protects against and did not change the cap**, which is exactly
+why it was written as a budget rather than as a percentage: a sweep still costs
+at most thirty routes × four months however many places the rule could have
+meant.
 
 **Already-priced-today routes are skipped *before* the cap is applied**, not
 after: the cap is a budget for provider calls, and spending it on routes the
 06:10 poll already fetched would mean a rule overlapping the watchlist never
 reaches its own tail. This is also why the sweep runs *after* the poll.
+
+**The routes a sweep creates are the ones a lookup lands on for free.** A rule
+that swept `AMS-CTG` this morning left a route row and four months of calendar
+behind it; opening that pair from the add-route box costs nothing, because
+`FareFreshness` finds fares younger than `orbit.lookup.fresh_for_hours` and
+fetches nothing. The two features pay into the same table — see §1 for why the
+lookup is synchronous and the watchlist add is not.
 
 It creates `routes` rows for pairs nobody is watching, which is fine — a route
 is a fact about the world. Nothing shows them until a rule matches one, and

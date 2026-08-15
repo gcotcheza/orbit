@@ -20,7 +20,7 @@
 // anger), and whether the panel is actually on top of the button it covers.
 // Both are in e2e/specs/watchlist.spec.js.
 // =============================================================================
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 
@@ -30,6 +30,7 @@ vi.mock('@/lib/http', () => ({ http: { get: (...args) => get(...args) } }))
 
 import AddRouteForm from './AddRouteForm.vue'
 import { editDistance, fold, nearestDestination, searchDestinations } from '@/stores/destinations'
+import { DEBOUNCE_MS } from '@/stores/airports'
 
 const BIO = { iata: 'BIO', city: 'Bilbao', country: 'Spain', countryCode: 'ES' }
 const OPO = { iata: 'OPO', city: 'Porto', country: 'Portugal', countryCode: 'PT' }
@@ -178,8 +179,21 @@ describe('nearestDestination', () => {
 // The form
 // -----------------------------------------------------------------------------
 
-async function form(destinations = ALL, options = {}) {
-    get.mockResolvedValue({ data: { data: destinations, meta: { count: destinations.length } } })
+/**
+ * The form, mounted, with both halves of the typeahead answered.
+ *
+ * `world` is what `GET /api/airports?q=` comes back with. It is EMPTY BY
+ * DEFAULT and, more to the point, never arrives at all unless a test advances
+ * the clock — see `settle()` — which is what keeps every test written before
+ * world flights asserting exactly what it always asserted.
+ *
+ * @param {Array<object>} destinations `GET /api/destinations`
+ * @param {{world?: Array<object>}} options mount options plus the world answer
+ */
+async function form(destinations = ALL, { world = [], ...options } = {}) {
+    get.mockImplementation((url) => Promise.resolve(url === '/api/destinations'
+        ? { data: { data: destinations, meta: { count: destinations.length } } }
+        : { data: { data: world, meta: { count: world.length } } }))
 
     const wrapper = mount(AddRouteForm, { ...options, global: { plugins: [createPinia()] } })
 
@@ -188,8 +202,26 @@ async function form(destinations = ALL, options = {}) {
     return wrapper
 }
 
+/**
+ * Let the world search's debounce fire and its answer land.
+ *
+ * FAKE TIMERS ARE ON FOR THE WHOLE FILE (see `beforeEach`), so a test that does
+ * not call this never makes the second request at all — which is deliberate.
+ * The curated list is instant and the panel it paints is the one a person sees
+ * first; every assertion about that state is an assertion about the first 250
+ * milliseconds, and it should not have to opt out of a timer to make it.
+ */
+async function settle() {
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    await flushPromises()
+}
+
 const box = (wrapper) => wrapper.get('#add-destination')
 const options = (wrapper) => wrapper.findAll('[role="option"]')
+
+/** The suggestion rows, as the codes they print — the guess row is not one. */
+const suggestionRows = (wrapper) => wrapper.findAll('.option:not(.option--guess):not(.option--empty)')
+    .map((row) => ({ iata: row.get('.option__code').text() }))
 
 /** A real event, so `defaultPrevented` can be read back off it. */
 async function press(wrapper, key) {
@@ -202,7 +234,12 @@ async function press(wrapper, key) {
 }
 
 beforeEach(() => {
+    vi.useFakeTimers()
     vi.clearAllMocks()
+})
+
+afterEach(() => {
+    vi.useRealTimers()
 })
 
 describe('the destination typeahead', () => {
@@ -251,6 +288,16 @@ describe('the destination typeahead', () => {
 
         await box(wrapper).setValue('zzz')
 
+        /*
+         * "SEARCHING…" FIRST, AND IT IS NOT A SPINNER. The curated list has
+         * been searched and found nothing; the other 3,086 airports are being
+         * asked about, and a panel that said "No matching destination." in the
+         * meantime would be a verdict delivered before the evidence.
+         */
+        expect(wrapper.get('.option--empty').text()).toBe('Searching…')
+
+        await settle()
+
         expect(options(wrapper)).toHaveLength(0)
         expect(wrapper.get('.option--empty').text()).toBe('No matching destination.')
     })
@@ -265,6 +312,9 @@ describe('the destination typeahead', () => {
         const wrapper = await form(WIDER)
 
         await box(wrapper).setValue('barcelna')
+        // The guess waits for the world search too: a suggestion that appeared
+        // and vanished under the thumb would be worse than a slower one.
+        await settle()
 
         const guess = wrapper.get('.option--guess')
 
@@ -284,6 +334,7 @@ describe('the destination typeahead', () => {
         const wrapper = await form(WIDER)
 
         await box(wrapper).setValue('barcelna')
+        await settle()
 
         const enter = await press(wrapper, 'Enter')
 
@@ -472,9 +523,139 @@ describe('the destination typeahead', () => {
         await flushPromises()
 
         await box(wrapper).setValue('lis')
+        await settle()
+
         expect(wrapper.get('.option--empty').text()).toContain('a three-letter code still works')
 
         await wrapper.get('form').trigger('submit')
         expect(wrapper.emitted('lookup')).toEqual([[{ origin: 'AMS', destination: 'LIS' }]])
+    })
+})
+
+// -----------------------------------------------------------------------------
+// The world half
+// -----------------------------------------------------------------------------
+// The curated list is 184 places with opinions attached; the box now also finds
+// the other 3,086 airports Orbit can price, from `GET /api/airports?q=`. What is
+// tested here is the JOIN — that the instant half still paints first, that the
+// slow half lands under it, and that the panel never shows the same airport
+// twice or a divider with nothing above it.
+//
+// The debounce, the abort and the sequence guard belong to the store and are
+// tested in stores/airports.test.js.
+
+const PDX = { iata: 'PDX', city: 'Portland', country: 'United States', countryCode: 'US' }
+const JFK = { iata: 'JFK', city: 'New York', country: 'United States', countryCode: 'US' }
+
+const split = (wrapper) => wrapper.find('.options__split')
+
+describe('everywhere else', () => {
+    it('paints the curated matches before the request is even made', async () => {
+        const wrapper = await form(ALL, { world: [PDX] })
+
+        await box(wrapper).setValue('por')
+
+        // Instantly: Porto, and Portugal's other airport. No request yet.
+        expect(codes(suggestionRows(wrapper))).toEqual(['OPO', 'LIS'])
+        expect(get).toHaveBeenCalledTimes(1)
+        expect(split(wrapper).exists()).toBe(false)
+    })
+
+    it('adds the world matches underneath, behind one divider', async () => {
+        const wrapper = await form(ALL, { world: [PDX] })
+
+        await box(wrapper).setValue('por')
+        await settle()
+
+        expect(get).toHaveBeenCalledWith('/api/airports', expect.objectContaining({ params: { q: 'POR' } }))
+        expect(codes(suggestionRows(wrapper))).toEqual(['OPO', 'LIS', 'PDX'])
+
+        expect(split(wrapper).text()).toBe('Everywhere else Orbit can price')
+        // One divider, however many rows are under it.
+        expect(wrapper.findAll('.options__split')).toHaveLength(1)
+    })
+
+    it('draws no divider when the panel is only one list', async () => {
+        const wrapper = await form(ALL, { world: [PDX] })
+
+        // "portland" is nowhere in the curated list, so there is nothing above
+        // the world rows for a divider to divide them from.
+        await box(wrapper).setValue('portland')
+        await settle()
+
+        expect(codes(suggestionRows(wrapper))).toEqual(['PDX'])
+        expect(split(wrapper).exists()).toBe(false)
+    })
+
+    it('never offers the same airport twice', async () => {
+        // The world endpoint searches the WHOLE airports table, curated rows
+        // included, so LIS comes back from both halves.
+        const wrapper = await form(ALL, { world: [{ ...LIS }, PDX] })
+
+        await box(wrapper).setValue('lis')
+        await settle()
+
+        expect(codes(suggestionRows(wrapper))).toEqual(['LIS', 'PDX'])
+    })
+
+    it('highlights a world row the way the curated ones are highlighted', async () => {
+        const wrapper = await form(ALL, { world: [PDX] })
+
+        await box(wrapper).setValue('portl')
+        await settle()
+
+        const row = options(wrapper)[0]
+
+        expect(row.text()).toContain('Portland')
+        // The ORIGINAL spelling, with the matched run bold — the same index
+        // arithmetic the curated rows get, over a string the server sent.
+        expect(row.get('b').text()).toBe('Portl')
+    })
+
+    /*
+     * THE DOUBLE-PRESS, WHICH THIS FEATURE COULD EASILY HAVE REINTRODUCED. A
+     * three-letter code that Orbit knows submits on Enter — that is the whole
+     * point of `isKnownCode`, and before world flights "knows" meant the
+     * curated list. "JFK" is not in it, so without counting the world
+     * suggestions Enter would have "taken" the suggestion the box already held
+     * and needed a second press to send.
+     */
+    it('sends a world code on the first Enter', async () => {
+        const wrapper = await form(ALL, { world: [JFK] })
+
+        await box(wrapper).setValue('jfk')
+        await settle()
+
+        const enter = await press(wrapper, 'Enter')
+
+        expect(enter.defaultPrevented).toBe(false)
+        expect(box(wrapper).element.value).toBe('JFK')
+    })
+
+    it('stops searching once a suggestion has been taken', async () => {
+        const wrapper = await form(ALL, { world: [PDX] })
+
+        await box(wrapper).setValue('portl')
+        await settle()
+
+        const asked = get.mock.calls.length
+
+        await options(wrapper)[0].trigger('click')
+        await settle()
+
+        // The box now holds PDX, the panel is shut, and nobody is going to look
+        // at the answer to a query for "PDX".
+        expect(box(wrapper).element.value).toBe('PDX')
+        expect(get).toHaveBeenCalledTimes(asked)
+    })
+
+    it('asks nothing about a single letter', async () => {
+        const wrapper = await form(ALL, { world: [PDX] })
+
+        await box(wrapper).setValue('p')
+        await settle()
+
+        expect(get).toHaveBeenCalledTimes(1)
+        expect(get).toHaveBeenCalledWith('/api/destinations')
     })
 })

@@ -3,14 +3,18 @@
 // =============================================================================
 // The add-route form's suggestion list, and the search that filters it.
 //
-// FETCHED ONCE, FILTERED IN THE BROWSER. `GET /api/destinations` is
-// seventy-seven rows of four short strings — a few kilobytes — and the list
+// FETCHED ONCE, FILTERED IN THE BROWSER. `GET /api/destinations` is a hundred
+// and eighty-four rows of four short strings — a few kilobytes — and the list
 // changes when somebody edits a file in the repository, not while an app is
 // open. So it is loaded the first time the add form is opened and kept for the
 // life of the page, and every keystroke after that is an array filter rather
 // than a request. A `?q=` endpoint here would put a network round trip between
 // a letter and the suggestion it should produce, on a phone, for no freshness
 // anybody could observe.
+//
+// THE OTHER 3,086 AIRPORTS ARE stores/airports.js, and they ARE a `?q=`
+// endpoint — 3,270 rows is 200 KB, which is a different argument with a
+// different answer. This file is still the instant half, and still first.
 //
 // THE SEARCH IS EXPORTED AS A PURE FUNCTION rather than living in the
 // component, because the ranking is the part with opinions in it — a person
@@ -168,6 +172,38 @@ export function searchDestinations(destinations, query, limit = MAX_SUGGESTIONS)
         }))
 }
 
+/**
+ * One row from somewhere else, given the same highlight these produce.
+ *
+ * WHY IT IS SEPARATE FROM THE SEARCH ABOVE. `GET /api/airports` ranks and
+ * returns its own ten rows (App\Http\Controllers\AirportController) — it has
+ * to, because it is searching 3,270 of them and the browser has none of them —
+ * and those rows arrive without marks. Running them back through
+ * `searchDestinations` to get some would silently DROP the ones the server
+ * matched on the airport's own name, which is not one of the fields ranked
+ * here: search "kennedy", the server answers JFK, and the client throws it
+ * away. So the server's order is kept and only the highlight is added.
+ *
+ * A field the query is not in keeps its text and marks nothing, which is what
+ * `mark` already does with a needle it cannot find.
+ *
+ * @param {object} row `{ iata, city, country, countryCode }`
+ * @param {string} query what is in the box
+ * @returns {object} the row with a `marks` field
+ */
+export function markRow(row, query) {
+    const needle = fold(query.trim())
+
+    return {
+        ...row,
+        marks: {
+            city: mark(row.city, fold(row.city), needle),
+            iata: mark(row.iata, fold(row.iata), needle),
+            country: mark(row.country, fold(row.country), needle),
+        },
+    }
+}
+
 // -----------------------------------------------------------------------------
 // The typo fallback
 // -----------------------------------------------------------------------------
@@ -200,7 +236,7 @@ const MIN_TYPO_LENGTH = 4
  * Levenshtein distance, abandoned as soon as it passes `max`.
  *
  * TWO ROWS, NOT A MATRIX: the recurrence only ever reads the previous row, and
- * this runs over seventy-seven names on a keystroke. The early exits are what
+ * this runs over a hundred and eighty-four names on a keystroke. The early exits are what
  * make that free — a length difference bigger than `max` cannot be closed by
  * substitutions, and a row whose cheapest cell already exceeds `max` cannot
  * produce a final cell below it, because every step costs at least zero.

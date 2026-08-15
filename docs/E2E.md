@@ -51,7 +51,7 @@ browser.** Not "assert the component mounted". Look at it.
    to be run twenty times an afternoon.
 3. **Brings up the `orbit-e2e` stack** on `127.0.0.1:3185` and waits for it to
    be healthy.
-4. **Migrates and seeds** — the account, 80 airports, six watched routes, and
+4. **Migrates and seeds** — the account, 3,270 airports, six watched routes, and
    sixty mornings of price history replayed through the ordinary poller
    (`FakeHistorySeeder`). This is why the charts have curves and the calendar
    has colours.

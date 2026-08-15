@@ -22,6 +22,13 @@ use Illuminate\Database\Seeder;
  * ORDER MATTERS AND IS THE ONLY REASON THESE ARE SEPARATE CALLS: the watchlist
  * needs an account and airports, and the poller needs a watchlist.
  *
+ * THE TWO AIRPORT SEEDERS ARE IN THE ORDER THEY ARE FOR A REASON THAT IS NOT
+ * DEPENDENCY. DestinationSeeder writes the 184 airports somebody sat down and
+ * described; WorldAirportSeeder imports the other 3,083 from a third-party
+ * snapshot and skips every code the first one owns. Running the import second
+ * is what makes "the curated row wins" true by construction rather than by a
+ * correction pass afterwards — see WorldAirportSeeder.
+ *
  * This runs on every deploy, so everything it calls has to be idempotent.
  */
 final class DatabaseSeeder extends Seeder
@@ -33,6 +40,7 @@ final class DatabaseSeeder extends Seeder
         $this->call([
             SingleUserSeeder::class,
             DestinationSeeder::class,
+            WorldAirportSeeder::class,
             WatchlistSeeder::class,
             FakeHistorySeeder::class,
         ]);

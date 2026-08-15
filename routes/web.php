@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\AirportController;
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\Auth\CurrentUserController;
 use App\Http\Controllers\Auth\LoginController;
@@ -186,12 +187,32 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
      * (design/README.md §5's destination box, which the owner cannot use
      * without knowing IATA codes off by heart).
      *
-     * THE WHOLE LIST, AND NO `?q=`. Seventy-seven rows from a checked-in file
-     * — the client fetches it once and filters as somebody types. See
-     * App\Http\Controllers\DestinationController for why that is the cheaper
-     * of the two designs rather than the lazier one.
+     * THE WHOLE LIST, AND NO `?q=`. A hundred and eighty-four rows from two
+     * checked-in files — the client fetches it once and filters as somebody
+     * types. See App\Http\Controllers\DestinationController for why that is
+     * the cheaper of the two designs rather than the lazier one, and the route
+     * below for the half of the world this one deliberately does not carry.
      */
     Route::get('/destinations', DestinationController::class)->name('destinations');
+
+    /*
+     * All 3,270 of them — every scheduled airport on Earth, searched.
+     *
+     * THE ONE THAT IS NOT THE WHOLE LIST, and the endpoint above explains why
+     * it is allowed to be: 3,270 rows is 200 KB the form would download before
+     * anybody typed anything, so this half is a query and the curated half
+     * stays a load-once list. The client shows them merged, curated first.
+     *
+     * A READ IN THE READ GROUP, and the only one here that is THROTTLED. It
+     * costs no third-party money — the reason the parser and the lookup are
+     * limited — but it is the one endpoint in this file that a keystroke can
+     * fire, and sixty a minute is a debounce that has failed rather than a
+     * person typing. See the `airport-search` limiter in
+     * App\Providers\AppServiceProvider.
+     */
+    Route::get('/airports', AirportController::class)
+        ->middleware('throttle:airport-search')
+        ->name('airports');
 
     /*
      * What Orbit has actually sent, newest first — the alert ledger.

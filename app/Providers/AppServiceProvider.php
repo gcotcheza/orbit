@@ -344,6 +344,27 @@ final class AppServiceProvider extends ServiceProvider
             ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
 
         /*
+         * The airport search's throttle (`GET /api/airports`).
+         *
+         * SIXTY A MINUTE, WHICH IS GENEROUS ON PURPOSE. This is the only
+         * limiter in this file that does not stand in front of a cost: the
+         * query is one indexed-ish scan of 3,270 rows and reaches no third
+         * party. What it stands in front of is a CLIENT BUG — a debounce that
+         * stopped debouncing, a watcher that re-fires on its own result — and
+         * the number is chosen so that a person can never meet it: the box asks
+         * at most once per 250 ms of typing (resources/js/stores/airports.js),
+         * so four a second is the theoretical ceiling of continuous typing and
+         * the debounce means the real figure is a handful.
+         *
+         * A limiter a person can trip is a feature that breaks while being
+         * used, which is worse here than the thing it prevents.
+         *
+         * BY THE ACCOUNT, like everything else behind `auth` in this file.
+         */
+        RateLimiter::for('airport-search', fn (Request $request): Limit => Limit::perMinute(60)
+            ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
+
+        /*
          * The route lookup's throttle (`POST /api/routes/lookup`).
          *
          * THIS IS THE ONE ENDPOINT WHERE A TAP SPENDS THE FARE BUDGET DIRECTLY,

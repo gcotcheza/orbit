@@ -1,0 +1,21 @@
+{
+    "currency": "eur",
+    "data": [
+        {
+            "actual": true,
+            "depart_date": "2026-11-02",
+            "destination": "NYC",
+            "distance": 5847,
+            "duration": 1085,
+            "found_at": "2026-08-09T13:48:28Z",
+            "gate": "Aviakassa",
+            "number_of_changes": 1,
+            "origin": "AMS",
+            "return_date": "",
+            "show_to_affiliates": true,
+            "trip_class": 0,
+            "value": 351
+        }
+    ],
+    "success": true
+}

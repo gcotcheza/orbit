@@ -372,8 +372,15 @@ comes back with its existing history immediately.
 | already on the watchlist | `destination` | You are already watching AMS-LIS. |
 
 The origins are `config('orbit.origins')` — `AMS`, `EIN`, `DUS`, the three
-airports within a drive. Destinations are anywhere in the `airports` table,
-which is broader than what the form OFFERS — see `GET /api/destinations` below.
+airports within a drive, and world flights did not widen them: a fare from
+Bangkok is not a flight this person can take.
+
+**The destination may be any code in the `airports` table, which since world
+flights is every scheduled airport on Earth** — 3,270 of them, from the
+OurAirports snapshot in `database/seeders/data/world_airports.csv`. The rule
+itself (`exists:airports,iata`) is unchanged; the table under it grew. That is
+broader than what the form's curated list OFFERS — see `GET /api/destinations`
+and `GET /api/airports` below.
 
 ---
 
@@ -432,18 +439,25 @@ in already knew that Bilbao is `BIO`).
     { "iata": "BIO", "city": "Bilbao", "country": "Spain", "countryCode": "ES" },
     { "…": "…" }
   ],
-  "meta": { "count": 77 }
+  "meta": { "count": 184 }
 }
 ```
 
-**Seventy-seven rows, and the whole list every time.** There is no `?q=`: the
-list comes from a checked-in file
-(`database/seeders/data/european_destinations.php`), it is a few kilobytes, and
-it changes on a deploy rather than during a session. The client fetches it once
-when the form opens and filters in the browser, so a suggestion appears on the
-keystroke instead of a round trip later. `Cache-Control: private, max-age=3600`
-— private because the response is behind a session, an hour because that is
-already longer than it can go stale.
+**A hundred and eighty-four rows, and the whole list every time.** There is no
+`?q=`: the list comes from two checked-in files
+(`database/seeders/data/european_destinations.php` and `world_destinations.php`),
+it is a few kilobytes, and it changes on a deploy rather than during a session.
+The client fetches it once when the form opens and filters in the browser, so a
+suggestion appears on the keystroke instead of a round trip later.
+`Cache-Control: private, max-age=3600` — private because the response is behind
+a session, an hour because that is already longer than it can go stale.
+
+**This is the CURATED list, not the airport table.** Since world flights the
+`airports` table holds 3,270 rows; the 184 here are the ones a person wrote down,
+with vibes and month-by-month warmth attached, and they are the only ones the
+rule engine can ever match. Everywhere else is searched through
+`GET /api/airports?q=` below. See `docs/BUSINESS-LOGIC.md` §1 for why the two
+tiers exist.
 
 **The three origins are not in it.** `AMS`, `EIN` and `DUS` are airports with no
 row in `destinations`, which is what makes them departures rather than places to
@@ -453,7 +467,74 @@ route to itself.
 **This is not the validation list.** `POST /api/watchlist` still accepts any
 code in `airports` — see its `destination.exists` rule — and deliberately: what
 a form offers and what the API accepts are two decisions, and narrowing the
-second to match a dropdown would break a code somebody typed from memory.
+second to match a dropdown would break a code somebody typed from memory. Since
+world flights that gap is the whole feature rather than a nicety: the form's
+curated list is 184 places, and the API accepts 3,270.
+
+---
+
+## `GET /api/airports?q=`
+
+Everywhere Orbit can **price** — the other half of the add-route form's
+typeahead, and the endpoint that makes "look up JFK" possible.
+
+**Query parameters**
+
+| name | required | notes |
+| --- | --- | --- |
+| `q` | yes | 2–60 characters, trimmed. Matched against city, airport name, IATA code and country. |
+
+**200**, best match first, at most ten rows:
+
+```json
+{
+  "data": [
+    { "iata": "JFK", "city": "New York", "country": "United States", "countryCode": "US" },
+    { "iata": "LGA", "city": "New York", "country": "United States", "countryCode": "US" }
+  ],
+  "meta": { "count": 2, "query": "new york" }
+}
+```
+
+**The same four fields `GET /api/destinations` returns**, deliberately: the two
+answers are merged into one panel, and a suggestion that arrived from here must
+be indistinguishable in shape from one that arrived from there. Which tier a row
+belongs to is knowable from the curated list the client already holds, so it is
+not a field.
+
+**The ranking**, which is the one the browser applies to the curated list:
+
+1. an exact IATA code — `jfk` is the airport, never a substring of something else;
+2. a city that starts with it — `new` is New York before Newark's airport name;
+3. an airport name that starts with it — `suvarna` finds `BKK`;
+4. a country that starts with it — `indo` finds Bali;
+5. anything that merely contains it,
+
+then alphabetically by city, then by code, so the answer is total and a
+re-render cannot reshuffle it.
+
+**422** when `q` is missing (`Say what to look for.`) or shorter than two
+characters (`Two letters is the shortest thing worth searching for.`). One letter
+matches about a third of the table and the ten rows it would return are ten
+arbitrary ones.
+
+**Throttled: 60/minute**, keyed on the account — `throttle:airport-search`. It
+guards against a debounce that stopped debouncing rather than against a cost;
+the client asks at most once per 250 ms of typing.
+
+`Cache-Control: private, max-age=300`, so a backspace is free.
+
+**The origins ARE in this answer**, unlike in `GET /api/destinations`, and the
+difference is deliberate. That endpoint answers "where can I fly to" and must
+never offer Amsterdam; this one answers "which airport is that", and `DUS-AMS`
+is a pair `POST /api/routes/lookup` accepts — an airport search that hid it
+would disagree with the API it exists to help somebody use. The form drops the
+*currently selected* origin, which is the precise version of the rule.
+
+**Accents are not folded.** The browser folds `Málaga` to `malaga` before
+searching the curated list; Postgres would need the `unaccent` extension, which
+this database does not install for one typeahead. Every accented city in the
+curated set is therefore already answered instantly, client-side.
 
 ---
 
