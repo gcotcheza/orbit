@@ -15,8 +15,8 @@ use App\Models\WatchlistItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
-use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\RunsCommands;
 use Tests\TestCase;
 
 /**
@@ -28,7 +28,7 @@ use Tests\TestCase;
  */
 final class PollersTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, RunsCommands;
 
     protected function setUp(): void
     {
@@ -48,21 +48,6 @@ final class PollersTest extends TestCase
     private function route(string $origin = 'AMS', string $destination = 'LIS'): Route
     {
         return Route::factory()->between($origin, $destination)->create();
-    }
-
-    /**
-     * `$this->artisan()` is typed PendingCommand|int — it answers an int when
-     * console output is not being mocked — so the assertion helpers are only
-     * there on one of the two. Narrowed once, here, rather than at six call
-     * sites.
-     */
-    private function runCommand(string $command): PendingCommand
-    {
-        $pending = $this->artisan($command);
-
-        $this->assertInstanceOf(PendingCommand::class, $pending);
-
-        return $pending;
     }
 
     private function watch(Route $route, bool $active = true): void

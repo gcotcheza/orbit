@@ -62,15 +62,46 @@ final class ScheduleTest extends TestCase
         $this->assertSame('Europe/Amsterdam', $event->timezone);
     }
 
+    #[Test]
+    public function rules_are_swept_every_morning_after_the_watchlist_poll(): void
+    {
+        $event = $this->find('orbit:sweep-rules');
+
+        $this->assertSame('40 6 * * *', $event->expression);
+        $this->assertSame('Europe/Amsterdam', $event->timezone);
+    }
+
+    /**
+     * THE ORDER IS LOAD-BEARING, not a preference. App\Jobs\SweepRuleFares
+     * skips any route the morning has already priced, so sweeping first would
+     * spend a rule's capped budget re-fetching the watchlist and the routes
+     * only a rule cares about would never get their turn.
+     */
+    #[Test]
+    public function the_sweep_is_scheduled_after_the_poll_it_depends_on(): void
+    {
+        $poll = $this->find('orbit:poll-fares')->expression;
+        $sweep = $this->find('orbit:sweep-rules')->expression;
+
+        [$pollMinute, $pollHour] = explode(' ', $poll);
+        [$sweepMinute, $sweepHour] = explode(' ', $sweep);
+
+        $this->assertGreaterThan(
+            ((int) $pollHour) * 60 + (int) $pollMinute,
+            ((int) $sweepHour) * 60 + (int) $sweepMinute,
+        );
+    }
+
     /**
      * Two polls writing the same day's observation at once would race on the
      * upsert; the second one is held instead.
      */
     #[Test]
-    public function neither_job_can_start_on_top_of_itself(): void
+    public function no_job_can_start_on_top_of_itself(): void
     {
         $this->assertTrue($this->find('orbit:poll-fares')->withoutOverlapping);
         $this->assertTrue($this->find('orbit:refresh-stats')->withoutOverlapping);
+        $this->assertTrue($this->find('orbit:sweep-rules')->withoutOverlapping);
     }
 
     /**

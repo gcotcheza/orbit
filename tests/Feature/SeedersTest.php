@@ -86,6 +86,78 @@ final class SeedersTest extends TestCase
         );
     }
 
+    /**
+     * The SAME DRIFT GUARD, one layer up: the rule parser's vibe vocabulary
+     * and the tags the seeder actually writes.
+     *
+     * A key in `config('orbit.nlp.vibe_words')` that no destination carries is
+     * a rule somebody can write that matches nothing, forever, with no error
+     * anywhere — the worst shape of bug this feature can have. A tag in the
+     * data that the parser has no words for is the opposite: a place nobody
+     * can ask for. Both are silent, so they are asserted.
+     */
+    #[Test]
+    public function the_parsers_vibe_vocabulary_is_exactly_the_one_the_seeder_writes(): void
+    {
+        $this->seed(DestinationSeeder::class);
+
+        $seeded = [];
+
+        foreach (Destination::query()->cursor() as $destination) {
+            foreach ($destination->vibes as $vibe) {
+                $seeded[$vibe] = true;
+            }
+        }
+
+        $seeded = array_keys($seeded);
+        sort($seeded);
+
+        $configured = array_keys((array) config('orbit.nlp.vibe_words'));
+        sort($configured);
+
+        $this->assertSame($seeded, $configured);
+    }
+
+    #[Test]
+    public function every_vibe_the_parser_knows_has_a_chip_to_show_for_it(): void
+    {
+        $labels = (array) config('orbit.nlp.vibe_labels');
+
+        foreach (array_keys((array) config('orbit.nlp.vibe_words')) as $vibe) {
+            $this->assertArrayHasKey($vibe, $labels, "No chip label for the [{$vibe}] vibe.");
+            $this->assertNotSame('', $labels[$vibe]);
+        }
+    }
+
+    /**
+     * The words somebody types for an airport, against the airports that exist.
+     * An alias pointing at a fourth airport would be a rule that reads as
+     * departing from somewhere Orbit cannot fly from.
+     */
+    #[Test]
+    public function every_origin_alias_names_a_configured_origin_and_every_origin_has_one(): void
+    {
+        $this->seed(DestinationSeeder::class);
+
+        /** @var array<string, string> $aliases */
+        $aliases = config('orbit.nlp.origin_aliases');
+        /** @var list<string> $origins */
+        $origins = config('orbit.origins');
+
+        foreach ($aliases as $word => $iata) {
+            $this->assertContains($iata, $origins, "The alias [{$word}] points at an airport Orbit does not fly from.");
+            $this->assertSame(mb_strtolower($word), $word, 'Aliases are matched against lower-cased text.');
+        }
+
+        foreach ($origins as $iata) {
+            $this->assertContains($iata, $aliases, "Nobody can name [{$iata}] in a rule.");
+
+            /* The city the seeder gave it is one of the words a person can type. */
+            $city = Airport::query()->where('iata', $iata)->firstOrFail()->city;
+            $this->assertArrayHasKey(mb_strtolower($city), $aliases, "[{$city}] is not a word this app answers to.");
+        }
+    }
+
     #[Test]
     public function seeding_the_destinations_twice_changes_nothing(): void
     {

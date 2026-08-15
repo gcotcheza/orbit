@@ -6,6 +6,8 @@ use App\Http\Controllers\Auth\CurrentUserController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\RouteCalendarController;
 use App\Http\Controllers\RouteController;
+use App\Http\Controllers\RuleController;
+use App\Http\Controllers\RuleParseController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\WatchlistController;
 use App\Http\Controllers\WatchlistItemController;
@@ -124,6 +126,15 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
     Route::get('/routes/{code}/calendar', RouteCalendarController::class)
         ->where('code', '[A-Z]{3}-[A-Z]{3}')
         ->name('routes.calendar');
+
+    /*
+     * The owner's standing rules, each with what it matches this morning
+     * (design/README.md §4). A read, in the read group, even though the
+     * matching happens at request time rather than being stored — see
+     * App\Application\Rules\RuleViews for why a cached count would be a number
+     * that is wrong from the next poll onwards.
+     */
+    Route::get('/rules', [RuleController::class, 'index'])->name('rules.index');
 });
 
 /*
@@ -170,6 +181,44 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
      */
     Route::get('/settings', [SettingsController::class, 'show'])->name('settings.show');
     Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
+
+    /*
+     * Reading a sentence back to the person typing it.
+     *
+     * A POST THAT WRITES NOTHING, which is deliberate: the rule is a
+     * 500-character free-text field and a GET would put the owner's sentence
+     * in every access log and browser history between here and the phone. It
+     * also takes exactly the body the create call below takes, so the create
+     * screen sends its last parse straight on.
+     *
+     * THE ONLY THROTTLED ROUTE IN THIS FILE BAR LOGIN. The create screen calls
+     * it on a 500 ms debounce while somebody types, and the moment an
+     * Anthropic key exists (config('orbit.nlp.parser')) every one of those
+     * keystrokes is a metered third-party request. Twenty a minute is roughly
+     * a minute of continuous typing and far more than a person produces in
+     * practice; adding the limiter on the day the key arrives would be a
+     * limiter tuned in a hurry, next to a bill.
+     */
+    Route::post('/rules/parse', RuleParseController::class)
+        ->middleware('throttle:rules-parse')
+        ->name('rules.parse');
+
+    Route::post('/rules', [RuleController::class, 'store'])->name('rules.store');
+
+    /*
+     * Numeric ids rather than a natural key, and the pattern says so. A rule
+     * has no code to be looked up by — two rules can be the same sentence with
+     * different chips removed — so this is the one place in this API that
+     * keys on a database id, and a path segment that is not a number is a
+     * malformed request rather than a miss.
+     */
+    Route::patch('/rules/{id}', [RuleController::class, 'update'])
+        ->whereNumber('id')
+        ->name('rules.update');
+
+    Route::delete('/rules/{id}', [RuleController::class, 'destroy'])
+        ->whereNumber('id')
+        ->name('rules.destroy');
 });
 
 /*

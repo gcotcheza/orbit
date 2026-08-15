@@ -1,11 +1,11 @@
 # Orbit — API
 
-The eight endpoints the screens are built from — three reads and five writes.
+The thirteen endpoints the screens are built from — four reads and nine writes.
 **This file is the contract**: the globe home, the route detail, the price
-calendar, the watchlist and the alerts screen are all built against these
-shapes, and every field below has a feature test behind it
+calendar, the watchlist, the alerts screen and the rule creator are all built
+against these shapes, and every field below has a feature test behind it
 (`tests/Feature/WatchlistApiTest`, `RouteDetailApiTest`, `RouteCalendarApiTest`,
-`WatchlistWritesTest`, `SettingsApiTest`).
+`WatchlistWritesTest`, `SettingsApiTest`, `RulesApiTest`).
 
 ---
 
@@ -421,4 +421,270 @@ Both can be run by hand:
 ```
 docker compose exec app php artisan orbit:poll-fares --now
 docker compose exec app php artisan orbit:refresh-stats --now
+```
+
+---
+
+# Deal rules
+
+A rule is a trip described in English — "cheap weekend somewhere sunny in
+spring, leaving Friday from any NL airport, under €80" — that Orbit reads into
+criteria and then watches for (`design/README.md` §4). Rules and the watchlist
+are **separate concepts** (`docs/PLAN.md`): a rule lists what it currently
+matches and one tap promotes a match to the watchlist, but a rule never adds a
+route on the owner's behalf.
+
+## The shared shape: a reading
+
+Every rules endpoint answers with these three fields, and a saved rule adds
+four more on top. One shape, two screens.
+
+```json
+{
+  "chips": [
+    { "id": "origin:AMS",  "category": "From",        "label": "AMS" },
+    { "id": "origin:EIN",  "category": "From",        "label": "EIN" },
+    { "id": "origin:DUS",  "category": "From",        "label": "DUS" },
+    { "id": "max_price",   "category": "Max price",   "label": "€80" },
+    { "id": "trip_length", "category": "Trip length", "label": "2–3 nights" },
+    { "id": "depart",      "category": "Depart",      "label": "Fridays" },
+    { "id": "date_window", "category": "Date window", "label": "Mar – May" },
+    { "id": "vibe:sunny",  "category": "Vibe",        "label": "☀ Sunny" }
+  ],
+  "criteria": {
+    "origins": ["AMS", "EIN", "DUS"],
+    "maxPriceCents": 8000,
+    "tripLengthNights": [2, 3],
+    "departDows": [5],
+    "dateWindow": { "from": 3, "to": 5, "label": "Mar – May" },
+    "vibes": ["sunny"]
+  },
+  "matches": {
+    "count": 6,
+    "cheapest": 34,
+    "sample": [
+      {
+        "code": "AMS-FAO",
+        "origin":      { "iata": "AMS", "city": "Amsterdam", "country": "Netherlands", "countryCode": "NL", "lat": 52.3105, "lng": 4.7683 },
+        "destination": { "iata": "FAO", "city": "Faro",      "country": "Portugal",    "countryCode": "PT", "lat": 37.0144, "lng": -7.9659 },
+        "cheapest": { "date": "2027-04-09", "price": 34 },
+        "watched": false
+      }
+    ]
+  }
+}
+```
+
+**That is the exact reading of the design's own sentence** — the eight chips in
+`design/screenshots/04-create-rule.png`, in that order. The create screen ships
+with it pre-typed, and `tests/Unit/Infrastructure/RegexRuleTextParserTest`
+asserts it chip for chip.
+
+### Chips
+
+| field | notes |
+| --- | --- |
+| `id` | **Stable across re-parses of the same sentence** — the kind plus the value, never a position. Send it back in `removed` to take the chip off. A client holds its removed ids while the owner keeps typing, so an id must not start meaning a different chip when a word earlier in the sentence changes. |
+| `category` | The eyebrow: `From`, `Max price`, `Trip length`, `Depart`, `Date window`, `Vibe`. Sentence case; upper-casing is the stylesheet's job. |
+| `label` | The value under it. Show it verbatim — the en dashes in `2–3 nights` and `Mar – May` and the `☀` on a vibe are the design's, and the vibe wording comes from `config/orbit.php` rather than from the client. |
+
+Chips arrive **in the design's order**: where from, how much, how long, which
+day, when, what for. There is one chip per origin and one per vibe, and at most
+one of each of the other four.
+
+The chip's own value is **not** published. Removing a chip is `POST
+/api/rules/parse` again with its id in `removed`; the server folds what is left
+back into criteria. Do not reimplement that fold in the client.
+
+### Criteria
+
+What the surviving chips add up to, and what gets stored.
+
+| field | notes |
+| --- | --- |
+| `origins` | Subset of `AMS` / `EIN` / `DUS`. **`[]` means all three**, not none — every field here reads absence as "no preference". |
+| `maxPriceCents` | **Cents, and the one exception to this API's euros rule.** It is a criterion rather than a fare: it is stored, compared against `calendar_fares.price_cents`, and never rendered as a price — the chip's `label` is what a screen shows. `null` for no ceiling. |
+| `tripLengthNights` | `[min, max]`, or `null`. **Parsed, stored and shown — but not matched on.** The provider answers with the cheapest fare per *departure* date and no return leg, so Orbit does not hold the fact this would filter. The chip is still produced because the sentence really does say it; it starts filtering the day the provider grows return fares, with no shape change here. |
+| `departDows` | ISO weekday numbers, 1 (Monday) to 7. `[]` means any day. |
+| `dateWindow` | `{from, to}` month numbers with the label the chip shows, or `null`. **Months and not dates**: a rule is a standing alert, so "spring" means every spring — a window stored as two dates would expire on its own anniversary. `to < from` wraps the year (winter is `{from: 12, to: 2}`). |
+| `vibes` | From the closed nine-word vocabulary in `config/orbit.php` (`beach`, `city`, `culture`, `food`, `islands`, `nature`, `party`, `ski`, `sunny`). `[]` means anywhere. |
+
+### Matches
+
+| field | notes |
+| --- | --- |
+| `count` | **Every** match, not the length of `sample` — the design's banner quotes it, and a rule matching sixty routes is a rule worth tightening. |
+| `cheapest` | Euros, as everywhere else. `null` when nothing matched. |
+| `sample` | Up to six, **cheapest first**, ties broken by route code. Both ends are the same airport object every other screen gets, so a rule row can draw a city name and a flag without a second request. |
+| `sample[].cheapest` | The cheapest departure **that fits the rule** — not the route's cheapest fare. A rule about Fridays is answered by the cheapest Friday; quoting Tuesday's €38 would be a price nobody can book. |
+| `sample[].watched` | Already on this account's watchlist. Branch the one-tap "watch" button on it, or it offers to add something that comes back 422. |
+
+**An empty `matches` is normal, not an error.** A rule created ten seconds ago
+matches nothing until `SweepRuleFares` has priced the routes it named — the
+same day-1 honesty a new watchlist route has. Say so in words rather than
+rendering "0 trips".
+
+---
+
+## `POST /api/rules/parse`
+
+Read a sentence back. **Writes nothing and queues nothing.**
+
+```json
+{ "text": "cheap weekend somewhere sunny in spring, leaving Friday from any NL airport, under €80", "removed": ["origin:EIN"] }
+```
+
+**200** with `{"data": …}` in the reading shape above.
+
+| field | notes |
+| --- | --- |
+| `text` | Required (the key must be present), may be empty, max 500 characters. An empty box is a **200 with no chips**, not a 422 — the create screen calls this on a 500 ms debounce while somebody types, including while they delete. |
+| `removed` | Optional list of chip ids to leave out, max 50. **Unknown ids are ignored, deliberately**: a client holds this list across re-parses of a sentence still being edited, so an id the current text no longer produces is the ordinary case. |
+
+**A POST that is a read**, because the sentence is 500 characters of free text
+and a query string would put it in every access log and browser history between
+here and the phone. It also takes exactly the body `POST /api/rules` takes, so
+a screen can hand its last parse straight on.
+
+**Throttled: 20 a minute, keyed on the account** — the only endpoint here that
+is, bar login. It runs regexes today and becomes a metered third-party call the
+day an Anthropic key lands in `.env`; a limiter added on that day would be a
+limiter tuned in a hurry. **429** with Laravel's standard body over the limit.
+
+**422** when `text` is missing (`Send the text to read, even if it is empty.`)
+or longer than 500 characters.
+
+---
+
+## `GET /api/rules`
+
+Every rule on this account, **newest first**, each with what it matches right
+now. Paused rules are included with `active: false` — the switch that turns one
+back on lives on the row that turned it off.
+
+```json
+{
+  "data": [
+    {
+      "id": 3,
+      "text": "cheap weekend somewhere sunny in spring, leaving Friday from any NL airport, under €80",
+      "active": true,
+      "createdAt": "2026-08-15T09:12:44+00:00",
+      "chips": [ "…as above…" ],
+      "criteria": { "…": "…" },
+      "matches": { "…": "…" }
+    }
+  ],
+  "meta": { "count": 2, "active": 1 }
+}
+```
+
+| field | notes |
+| --- | --- |
+| `text` | What was typed. **Not derivable from the chips** — a rule whose chips read "From AMS · Max €80" could have been written a dozen ways, and this is the one the textarea should show. |
+| `active` | Paused rules match nothing and are never swept. |
+| `chips` | **Rebuilt from the stored criteria, never by re-parsing `text`.** The criteria are what the owner accepted after removing the chips they disagreed with; re-parsing would put every removed chip straight back. |
+
+The match counts are computed per request rather than stored: "how many trips
+match" is a fact about this morning's fares, and a cached count is a number
+that is wrong from the next poll onwards.
+
+---
+
+## `POST /api/rules`
+
+Save the rule currently on the create screen. Same body as `/parse`.
+
+```json
+{ "text": "cheap weekend somewhere sunny in spring, under €80", "removed": ["depart"] }
+```
+
+**201** with the row, in exactly the shape `GET /api/rules` returns.
+
+**The sweep is queued, not run.** A new rule names routes Orbit has never
+priced, so its honest match count on creation is often zero and fills in within
+the hour — running thirty provider calls inside the request would put the tap
+behind them.
+
+**422** when nothing could be read out of the sentence, or when every chip was
+removed:
+
+```json
+{ "message": "…", "errors": { "text": ["Orbit could not read a trip out of that. Try naming a price, a season, a day or what the trip is for."] } }
+```
+
+Empty criteria would mean "every fare from every airport to everywhere, at any
+price" — not a deal tracker, a firehose. That is also exactly the state
+somebody reaches by removing every chip, so the message names the way out.
+
+---
+
+## `PATCH /api/rules/{id}`
+
+Pause a rule or start it again.
+
+```json
+{ "active": false }
+```
+
+**200** with the row. `active` is **required** — an empty body is a 422, not a
+no-op (`Say whether the rule should be on or off.`), for the same reason the
+watchlist toggle requires it: once a boolean is optional, "absent" and "false"
+are the same request.
+
+Resuming a rule re-queues its sweep; pausing queues nothing.
+
+**404** `{"message": "No such rule."}` when the id is not on *this* account.
+`id` is constrained to digits at the router, so `/api/rules/abc` is a 404 too.
+
+---
+
+## `DELETE /api/rules/{id}`
+
+Drop a rule. **204**, no body.
+
+**The routes it surfaced survive, and so do their fares.** Every one cost a
+provider call, several may be on the watchlist by now, and a rule is a question
+rather than a possession — deleting the question does not unask what it already
+found out.
+
+**404** as above.
+
+---
+
+## Promoting a match
+
+There is no "add this match" endpoint. Use the existing `POST /api/watchlist`
+with the match's two IATA codes; it reuses the route the rule created, so the
+history the sweep already paid for comes with it. The response is a watchlist
+row, so a screen holding that list can drop it straight in.
+
+---
+
+## How a rule is read
+
+`config('orbit.nlp.parser')` picks the adapter behind
+`App\Application\Ports\RuleTextParser`:
+
+- **`regex`** — the default, and what production runs today. Deterministic, no
+  network, no key. It reads prices, airports by code or city, "any NL airport",
+  weekdays, weekends, trip lengths, seasons, months and month ranges, and the
+  vibe vocabulary.
+- **`anthropic`** — selected automatically when `ANTHROPIC_API_KEY` is set.
+  Claude Haiku with a server-enforced JSON schema built from the same
+  vocabulary, so the model cannot answer with an airport this app does not fly
+  from or a vibe no destination carries.
+
+**The two are layered, not alternatives.** The Anthropic adapter composes the
+regex one and hands over whenever the model refuses, runs out of room, answers
+unreadably or cannot be reached — so a bad afternoon at a third party costs a
+less clever reading rather than a broken screen. **No response shape changes
+either way**, and nothing above tells a client which one answered.
+
+Rules are swept by `orbit:sweep-rules` at 06:40 Europe/Amsterdam, after the
+06:10 fare poll — it skips any route the poll has already priced, which only
+works in that order. It can be run by hand:
+
+```
+docker compose exec app php artisan orbit:sweep-rules --now
 ```

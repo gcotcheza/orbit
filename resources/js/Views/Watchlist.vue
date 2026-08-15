@@ -22,11 +22,33 @@
  * meaning what it shows.
  */
 import { computed, onMounted, ref, useTemplateRef } from 'vue'
+import { storeToRefs } from 'pinia'
 import AddRouteForm from '@/Components/watch/AddRouteForm.vue'
+import RuleRow from '@/Components/rules/RuleRow.vue'
 import WatchRow from '@/Components/watch/WatchRow.vue'
 import { http } from '@/lib/http'
+import { useRulesStore } from '@/stores/rules'
 
 const routes = ref([])
+
+/*
+ * THE RULES SECTION (design/README.md §4's rules, listed on §5's screen).
+ *
+ * It reads a STORE while the routes above it are fetched by hand, and the
+ * mismatch is deliberate rather than sloppy: the create screen and this one
+ * are two views of the same list — a rule written on that tab has to appear on
+ * this one — while the watchlist is only ever drawn here and by the globe.
+ * When the parallel branches are folded together the routes get a store too
+ * and this file loses its own `routes` ref.
+ */
+const rules = useRulesStore()
+const { rules: dealRules, status: rulesStatus, error: rulesError } = storeToRefs(rules)
+
+/** Rule ids with a write in flight, so their switch can go inert. */
+const busyRules = ref(new Set())
+
+/** The code of the match currently being promoted to the watchlist. */
+const watchingCode = ref('')
 
 /** loading | ready | failed */
 const status = ref('loading')
@@ -56,7 +78,10 @@ const countLine = computed(() => {
     : `${total} ${routeWord}, ${total - active} paused.`
 })
 
-onMounted(load)
+onMounted(() => {
+  load()
+  rules.load()
+})
 
 async function load() {
   status.value = 'loading'
@@ -163,6 +188,54 @@ function markBusy(code, busy) {
   busyCodes.value = next
 }
 
+/*
+ * Pause or resume a rule. The store is optimistic and puts the switch back if
+ * the write fails, exactly like the route toggle above.
+ */
+async function toggleRule(rule, active) {
+  markRuleBusy(rule.id, true)
+
+  try {
+    await rules.toggle(rule, active)
+  } finally {
+    markRuleBusy(rule.id, false)
+  }
+}
+
+/**
+ * Promote one of a rule's matches to the watchlist.
+ *
+ * THE SAME WRITE THE ADD FORM MAKES, and the new row is dropped straight into
+ * the list above rather than triggering a re-fetch — the response is in the
+ * shape `GET /api/watchlist` sends, which is exactly why the API answers every
+ * write with the row.
+ */
+async function watchMatch(match) {
+  watchingCode.value = match.code
+
+  try {
+    const added = await rules.watch(match)
+
+    if (added) {
+      routes.value.push(added)
+    }
+  } finally {
+    watchingCode.value = ''
+  }
+}
+
+function markRuleBusy(id, busy) {
+  const next = new Set(busyRules.value)
+
+  if (busy) {
+    next.add(id)
+  } else {
+    next.delete(id)
+  }
+
+  busyRules.value = next
+}
+
 function messageFor(failure) {
   const response = failure.response
 
@@ -231,6 +304,40 @@ function messageFor(failure) {
         @remove="remove(route)"
       />
     </div>
+
+    <!--
+      DEAL RULES, below the routes and deliberately quieter than them
+      (design/README.md §4). The boarding passes above are the routes the owner
+      chose; a rule is a standing question that may or may not have found
+      anything yet, so it gets a hairline row rather than a card.
+
+      The section is hidden entirely when there are no rules — an empty heading
+      would be a promise of a feature rather than the feature, and the + tab is
+      where a rule gets written.
+    -->
+    <section v-if="dealRules.length > 0 || rulesStatus === 'failed'" class="rules">
+      <h2 class="rules__title">Deal rules</h2>
+
+      <p v-if="rulesError" class="screen__notice" role="alert">{{ rulesError }}</p>
+
+      <p v-if="rulesStatus === 'failed' && dealRules.length === 0" class="screen__state">
+        Could not load your rules.
+        <button type="button" class="screen__retry" @click="rules.load()">Try again</button>
+      </p>
+
+      <div class="rules__list">
+        <RuleRow
+          v-for="rule in dealRules"
+          :key="rule.id"
+          :rule="rule"
+          :busy="busyRules.has(rule.id)"
+          :watching="watchingCode"
+          @toggle="toggleRule(rule, $event)"
+          @remove="rules.remove(rule)"
+          @watch="watchMatch"
+        />
+      </div>
+    </section>
   </div>
 </template>
 
@@ -324,5 +431,31 @@ function messageFor(failure) {
    hidden, because the switch that brings it back is on the card. */
 .is-paused {
   opacity: 0.58;
+}
+
+/* -- Deal rules -----------------------------------------------------------
+   Set apart from the routes by space and a hairline rather than by another
+   card: the section is secondary to the boarding passes above it, and two
+   competing card treatments on one screen is how a phone stops having a
+   focal point. */
+.rules {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line2);
+}
+
+.rules__title {
+  margin: 0 2px 11px;
+
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rules__list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
 }
 </style>
