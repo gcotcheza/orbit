@@ -1,11 +1,14 @@
 # Orbit — API
 
-The thirteen endpoints the screens are built from — four reads and nine writes.
+The fourteen endpoints the screens are built from — five reads and nine writes.
 **This file is the contract**: the globe home, the route detail, the price
 calendar, the watchlist, the alerts screen and the rule creator are all built
 against these shapes, and every field below has a feature test behind it
 (`tests/Feature/WatchlistApiTest`, `RouteDetailApiTest`, `RouteCalendarApiTest`,
-`WatchlistWritesTest`, `SettingsApiTest`, `RulesApiTest`).
+`WatchlistWritesTest`, `SettingsApiTest`, `RulesApiTest`, `AlertsApiTest`).
+
+One of the fourteen has no screen yet: `GET /api/alerts` is the alert ledger,
+and the alerts screen stays settings-only for now.
 
 ---
 
@@ -688,6 +691,134 @@ works in that order. It can be run by hand:
 ```
 docker compose exec app php artisan orbit:sweep-rules --now
 ```
+
+---
+
+## `GET /api/alerts`
+
+Everything Orbit has decided to tell this account, **newest first**. The alert
+ledger — what fired, what it said, and whether it actually went out.
+
+```json
+{
+  "data": [
+    {
+      "id": 41,
+      "type": "route_deal",
+      "route": "AMS-OPO",
+      "rule": null,
+      "score": 94,
+      "price": 44,
+      "triggeredAt": "2026-08-15T04:55:00+00:00",
+      "deliveredAt": "2026-08-15T06:00:00+00:00",
+      "summary": "AMS→OPO €44 — 53% below usual"
+    },
+    {
+      "id": 40,
+      "type": "rule_match",
+      "route": "AMS-FAO",
+      "rule": { "id": 3, "text": "a beach weekend under €80", "chips": ["AMS", "€80", "🏖 Beach"] },
+      "score": null,
+      "price": 39,
+      "triggeredAt": "2026-08-14T04:55:00+00:00",
+      "deliveredAt": "2026-08-14T04:55:00+00:00",
+      "summary": "AMS→FAO €39 — Fri 11 Sep"
+    },
+    {
+      "id": 38,
+      "type": "weekly_digest",
+      "route": null,
+      "rule": null,
+      "score": null,
+      "price": null,
+      "triggeredAt": "2026-08-09T07:00:00+00:00",
+      "deliveredAt": "2026-08-09T07:00:00+00:00",
+      "summary": "Your week in fares — 3 deals Orbit flagged"
+    }
+  ],
+  "meta": { "count": 3, "limit": 20, "total": 47 }
+}
+```
+
+| field | notes |
+| --- | --- |
+| `type` | `route_deal` \| `rule_match` \| `weekly_digest`. |
+| `route` | The route **code**, the same key every other endpoint uses. `null` on the digest, which is about no route in particular. |
+| `rule` | `{id, text, chips}` on a rule match, `null` otherwise. **It survives the rule being deleted** — the row keeps what the rule said, and `id` then points at nothing. |
+| `score` | 0–100 for a watched route. **`null` on a rule match**, which has no score: the rule's own maximum price was its threshold. |
+| `price` | Euros, as everywhere else. `null` on the digest. |
+| `triggeredAt` | When Orbit **decided**. This is what the cooldown measures from. |
+| `deliveredAt` | When a channel actually took it. **`null` while quiet hours hold a mail** — and permanently null if that channel is switched off. |
+| `summary` | The subject line that landed, stored at send time. Not re-rendered, so it still reads the way the mail did. |
+
+**Everything except `id` and the timestamps is frozen history.** A row from
+March quotes March's price and March's percentage under usual; it is not
+recomputed against today's statistics, because the question this endpoint
+answers is "what did Orbit say", not "what is true now".
+
+| query | notes |
+| --- | --- |
+| `limit` | Optional, 1–50, default **20**. **422** above 50 (`Fifty rows is the most this endpoint returns at once.`) or if it is not a number. |
+
+**A limit and not a page number.** The list is strictly newest-first and is read
+as "what happened lately"; an offset into a table that grows at the top is a
+page that shifts under the reader between two requests. `meta.total` is the
+whole ledger, so a client can tell whether it is looking at everything.
+
+---
+
+## How an alert is decided
+
+Three scheduled commands, all **Europe/Amsterdam**, in an order that is
+load-bearing:
+
+| when | command | what |
+| --- | --- | --- |
+| 06:10 daily | `orbit:poll-fares` | fares for every actively watched route |
+| 06:40 daily | `orbit:sweep-rules` | fares for the routes each active rule is about |
+| **06:55 daily** | `orbit:alerts` | decides what is worth sending, and sends it |
+| **Sunday 09:00** | `orbit:digest` | the weekly summary |
+
+`orbit:alerts` talks to no provider — everything it reads was written by the two
+runs before it. Running it first would not fail; it would mail this morning's
+verdict on yesterday's prices, every day, invisibly.
+
+**A watched route fires** when its deal score reaches the account's sensitivity
+(`GET /api/settings` publishes the three levels and their thresholds: Relaxed
+≥80, Balanced ≥65, Eager ≥50).
+
+**A rule fires** on any fare it matches — the rule's own maximum price is its
+threshold, applied by the matching engine before the alert pipeline sees it.
+Every new match from one rule arrives as **one mail**, not one per route.
+
+**The cooldown is 24 hours per route, per kind, per rule.** Inside it, the same
+route says nothing — **unless the fare has fallen a further 5%**, which is new
+information rather than a repeat. Two different rules matching the same route
+are two cooldowns: each rule is a separate question the owner asked.
+
+**Quiet hours defer delivery, not the decision.** A deal found inside the window
+is written to the ledger at 06:55 with `deliveredAt: null` and the mail is
+queued for the end of the window (08:00 by default) in the owner's timezone. The
+cooldown therefore measures from when the deal was found, not from when somebody
+woke up.
+
+**The digest ignores all of that.** It repeats routes the cooldown has been
+suppressing all week, because it is not an interruption — and it is not sent at
+all when there would be nothing in it.
+
+Both runs can be triggered by hand:
+
+```
+docker compose exec app php artisan orbit:alerts --now
+docker compose exec app php artisan orbit:digest --now
+```
+
+**Mail is the only channel today.** `email_alerts` gates the deal alerts and
+`weekly_digest` gates the Sunday mail (`PUT /api/settings`); `push_alerts` is
+stored and ignored — the PWA shell has landed, but nothing subscribes a device
+to web push yet, and the port is shaped so that adapter is an addition rather
+than a change. Whether a mail leaves the box is `MAIL_MAILER` — `log` until
+`ghiecode.io` is verified as a sending domain in Resend.
 
 ---
 

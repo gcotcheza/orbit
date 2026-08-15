@@ -148,10 +148,16 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Alert sensitivity
+    | Alerts
     |--------------------------------------------------------------------------
     |
-    | The three positions of the segmented control on the alerts screen
+    | WHEN ORBIT IS ALLOWED TO INTERRUPT SOMEBODY. The four numbers below the
+    | sensitivities are App\Domain\Alerts\AlertPolicy's whole rule book, read
+    | once by App\Providers\AppServiceProvider and handed to it — the policy is
+    | pure PHP and calls no config(), the same arrangement DealScorer has.
+    |
+    | `sensitivities` is the three positions of the segmented control on the
+    | alerts screen
     | (design/README.md §6), stored as `user_settings.sensitivity` and read by
     | App\Models\UserSettings::minimumScore().
     |
@@ -173,6 +179,48 @@ return [
     */
 
     'alerts' => [
+        /*
+         * HOW LONG ONE ROUTE STAYS QUIET after Orbit has mentioned it, per kind
+         * of alert. A fare that sits at 95 for a week is one piece of news, and
+         * a person mailed about it seven times stops opening the mail — at
+         * which point the eighth, about a route they would have booked, is not
+         * read either. docs/PLAN.md's number, read by App\Domain\Alerts\
+         * AlertPolicy.
+         */
+        'cooldown_hours' => 24,
+
+        /*
+         * WHAT BEATS THE COOLDOWN. A price that has fallen a further 5% since
+         * the last alert is new information rather than a repeat: "€44, 53%
+         * below usual" yesterday and €38 today is the morning somebody
+         * actually books. Without this the cooldown would turn the one thing
+         * worth interrupting for — a fare still falling — into a day of
+         * silence.
+         */
+        'further_drop_percent' => 5,
+
+        /*
+         * HOW MANY TRIPS ONE MAIL SPELLS OUT. A rule that matched thirty routes
+         * is a mail nobody scrolls to the end of, so the cheapest few are
+         * listed and the rest are counted ("and 24 more"). Every one of them is
+         * still written to the ledger, because the cooldown's promise is that
+         * a route Orbit has mentioned stays quiet — and the mail did mention
+         * them, in aggregate.
+         *
+         * The same handful the create screen's match banner shows
+         * (`rules.sample`), and separate from it on purpose: one is what fits
+         * on a phone screen next to a textarea, this is what fits in an inbox.
+         */
+        'mail_deals' => 6,
+
+        /*
+         * WHAT "THIS WEEK" MEANS in the Sunday digest's callout — the window it
+         * counts already-sent alerts over. Seven days rather than "since the
+         * last digest", so a digest that failed to send once does not produce a
+         * fortnight of deals the following week under a heading that says week.
+         */
+        'digest_days' => 7,
+
         'sensitivities' => [
             0 => [
                 'name' => 'Relaxed',

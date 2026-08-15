@@ -79,7 +79,46 @@ Schedule::command('orbit:sweep-rules')
     ->withoutOverlapping();
 
 /*
- * 03:10 — the quietest hour, and nowhere near the two above.
+ * 06:55 — LAST OF THE THREE, and that ordering is the entire point of the time.
+ *
+ * This is the run that decides what is worth an alert (App\Jobs\EvaluateAlerts)
+ * and it talks to no provider at all: every fare it reads was written by the
+ * 06:10 poll and the 06:40 sweep. Running it first would not fail, which is
+ * what makes the ordering worth stating — it would simply mail this morning's
+ * verdict on yesterday's prices, every day, invisibly.
+ *
+ * Fifteen minutes after the sweep, which queues one capped fan-out of polls per
+ * rule. A rule whose polls have not landed yet costs a matching route one day's
+ * delay in being noticed, and never a wrong alert: nothing here invents a fare
+ * it cannot see.
+ *
+ * ALERTS ARE STILL DECIDED DURING QUIET HOURS — they are DELIVERED after them.
+ * The ledger records the decision at 06:55 and the notification is delayed to
+ * the end of the window (App\Application\Alerts\DeliveryWindow), so a cooldown
+ * measures from when the deal was found rather than from when somebody woke up.
+ */
+Schedule::command('orbit:alerts')
+    ->dailyAt('06:55')
+    ->timezone($timezone)
+    ->withoutOverlapping();
+
+/*
+ * Sunday 09:00, which is docs/PLAN.md's and is a statement about a weekend
+ * morning rather than about a time — hence the timezone, like everything else
+ * in this file.
+ *
+ * LATER THAN THE WEEKDAY RUNS ON PURPOSE. Every other entry here is scheduled
+ * to be finished before the owner is awake; this one is meant to be read over
+ * coffee, and it is the only mail Orbit sends that nothing crossed a threshold
+ * to earn.
+ */
+Schedule::command('orbit:digest')
+    ->weeklyOn(0, '09:00')
+    ->timezone($timezone)
+    ->withoutOverlapping();
+
+/*
+ * 03:10 — the quietest hour, and nowhere near the morning's runs above.
  *
  * NOT A FAN-OUT, unlike its neighbours: this one does its own work, and its
  * work is a manifest read and a handful of unlinks. It has no reason to queue
