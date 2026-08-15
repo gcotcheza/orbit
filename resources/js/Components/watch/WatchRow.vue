@@ -17,6 +17,22 @@
  * of `VerdictPill.vue` while that file was being written in a parallel branch;
  * the two were the same pill in the same tone colours, so the copy went on the
  * DRY pass and the size difference is a prop.
+ *
+ * THE TOP HALF OPENS THE ROUTE. The design gave this card two controls and no
+ * way into /route/AMS-LIS, so the only route detail reachable on a phone was
+ * whichever one the globe happened to be flying — tapping a row you can see,
+ * named, in a list, did nothing. Everything above the tear line is now a link
+ * to that route's detail screen, for paused rows as much as for active ones.
+ *
+ * IT IS A REAL <a>, AND IT STOPS AT THE TEAR LINE. Wrapping the WHOLE card
+ * would put a switch and a remove button inside a link — nested interactives,
+ * which is both an accessibility fault and a row where a tap near the switch is
+ * a coin toss. The half above the tear has no controls in it at all, so it can
+ * be an ordinary RouterLink: long-pressable, openable in a new tab, announced
+ * as a link, keyboard-activated by the browser rather than by a keydown handler
+ * of ours. The stub below keeps the switch and the bin, and neither of them can
+ * navigate anywhere because neither is inside the link. Same reasoning as
+ * SpotlightCard.vue, which is the other way into this screen.
  */
 import { computed, ref } from 'vue'
 import ToggleSwitch from '@/Components/ToggleSwitch.vue'
@@ -68,41 +84,64 @@ function confirmRemove() {
 
 <template>
   <article class="pass">
-    <div class="pass__top">
-      <div class="pass__eyebrow">
-        <svg width="15" height="15" viewBox="0 0 30 30" fill="none" aria-hidden="true">
-          <path d="M7 19 Q15 6 23 11" stroke="var(--accent)" stroke-width="1.8" stroke-dasharray="2.4 2.4" fill="none" />
-          <circle cx="7" cy="19" r="2.4" fill="var(--good)" />
-          <path d="M22 9.5l2 1.4-1.1 2.2-.9-.6.3-1-1.1-.5z" fill="var(--accent)" />
+    <!--
+      `aria-label` rather than the eight words of content this link contains:
+      the name would otherwise open with a flight number that is set dressing
+      (boardingPass.js — there is no flight) and continue into two IATA codes
+      read out a letter at a time. "Open AMS-LIS" is what the link does, phrased
+      like the "Stop watching AMS-LIS" button in the stub below it, and the row
+      it labels is still read normally.
+    -->
+    <RouterLink
+      class="pass__open"
+      :to="{ name: 'route-detail', params: { id: route.code } }"
+      :aria-label="`Open ${route.code}`"
+    >
+      <div class="pass__top">
+        <div class="pass__eyebrow">
+          <svg width="15" height="15" viewBox="0 0 30 30" fill="none" aria-hidden="true">
+            <path d="M7 19 Q15 6 23 11" stroke="var(--accent)" stroke-width="1.8" stroke-dasharray="2.4 2.4" fill="none" />
+            <circle cx="7" cy="19" r="2.4" fill="var(--good)" />
+            <path d="M22 9.5l2 1.4-1.1 2.2-.9-.6.3-1-1.1-.5z" fill="var(--accent)" />
+          </svg>
+          <span class="pass__flight">Flight watch · {{ flightNumber }}</span>
+        </div>
+
+        <VerdictPill :label="route.verdict.short" :tone="route.verdict.tone" size="sm" />
+      </div>
+
+      <div class="pass__itinerary">
+        <div class="end">
+          <p class="end__code">{{ route.origin.iata }}</p>
+          <p class="end__city">{{ route.origin.city }}</p>
+        </div>
+
+        <div class="path" aria-hidden="true">
+          <span class="path__line"></span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+            <path d="M2 13.5l20-7-7 16-3-7-7-2z" fill="var(--accent)" />
+          </svg>
+          <span class="path__line"></span>
+        </div>
+
+        <div class="end end--to">
+          <p class="end__code">{{ route.destination.iata }}</p>
+          <p class="end__city">
+            <span class="flag" :style="flagStyle" aria-hidden="true"></span>
+            {{ route.destination.city }}
+          </p>
+        </div>
+
+        <!-- The affordance. Same glyph, same weight and same colour as the one
+             on the home screen's spotlight card, at the row's icon size — this
+             card and that one now do the same thing, and they should look like
+             it. Stroked from the style block so the colour is a token in both
+             themes rather than a var() in a presentation attribute. -->
+        <svg class="chevron" width="15" height="15" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <path d="M6 4l5 5-5 5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <span class="pass__flight">Flight watch · {{ flightNumber }}</span>
       </div>
-
-      <VerdictPill :label="route.verdict.short" :tone="route.verdict.tone" size="sm" />
-    </div>
-
-    <div class="pass__itinerary">
-      <div class="end">
-        <p class="end__code">{{ route.origin.iata }}</p>
-        <p class="end__city">{{ route.origin.city }}</p>
-      </div>
-
-      <div class="path" aria-hidden="true">
-        <span class="path__line"></span>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-          <path d="M2 13.5l20-7-7 16-3-7-7-2z" fill="var(--accent)" />
-        </svg>
-        <span class="path__line"></span>
-      </div>
-
-      <div class="end end--to">
-        <p class="end__code">{{ route.destination.iata }}</p>
-        <p class="end__city">
-          <span class="flag" :style="flagStyle" aria-hidden="true"></span>
-          {{ route.destination.city }}
-        </p>
-      </div>
-    </div>
+    </RouterLink>
 
     <div class="pass__tear">
       <span class="pass__notch pass__notch--left"></span>
@@ -157,6 +196,16 @@ function confirmRemove() {
   border-radius: 18px;
   background: var(--card);
   box-shadow: var(--shadow);
+}
+
+/* The link over the itinerary half. It carries no look of its own — the card
+   already has one — so all it does here is refuse the two things a browser
+   gives an <a> for free and this one has no use for: the underline and the
+   link colour. The focus ring is the global one in app.css. */
+.pass__open {
+  display: block;
+  color: inherit;
+  text-decoration: none;
 }
 
 .pass__top {
@@ -246,6 +295,19 @@ function confirmRemove() {
   flex: 1;
   height: 0;
   border-top: 1.5px dashed var(--line);
+}
+
+/* Centred on the itinerary rather than sitting on its baseline: the row's flex
+   line is bottom-aligned so that the two city names line up under the two IATA
+   codes, and a chevron following that alignment would hang off the bottom of a
+   block it is pointing out of. */
+.chevron {
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.chevron path {
+  stroke: var(--muted);
 }
 
 /* --- The tear line ------------------------------------------------------
