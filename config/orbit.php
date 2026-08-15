@@ -509,6 +509,50 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Looking a route up before watching it
+    |--------------------------------------------------------------------------
+    |
+    | `POST /api/routes/lookup` (docs/API.md) prices a pair the owner has not
+    | committed to yet: it finds-or-creates the route and, when Orbit has no
+    | recent fares for it, asks the provider RIGHT THERE — inside the request,
+    | while somebody waits — rather than queueing a poll they would have to come
+    | back for. The daily poll is for routes on the watchlist; this is the one
+    | path in the app where a person's tap costs provider calls directly, which
+    | is what both numbers below exist to bound.
+    |
+    | FRESH_FOR_HOURS IS THE WHOLE FRESHNESS RULE, and it is deliberately one
+    | number used for two things:
+    |
+    |   1. A route is FRESH when it has a calendar fare fetched inside this
+    |      window (`App\Application\Routes\FareFreshness`). Fresh routes are
+    |      served from the database and cost nothing.
+    |   2. Having ASKED the provider is remembered for the same window, in the
+    |      cache, keyed on the route code. That is what stops a pair
+    |      Travelpayouts has no fares for — an empty answer is a real answer,
+    |      see the adapter — from being re-fetched on every single view: no
+    |      rows are written, so rule 1 would say "stale" forever.
+    |
+    | TWENTY-FOUR HOURS BECAUSE THE POLL IS DAILY. A watched route's fares are
+    | at most a morning old, so the same number is what makes a looked-up route
+    | worth as much as a watched one — and any shorter would mean a route looked
+    | up twice in an evening being fetched twice for figures that cannot have
+    | moved by a poll.
+    |
+    | WHAT ONE MISS COSTS, because it is the reason the endpoint is throttled at
+    | all (`route-lookup` in App\Providers\AppServiceProvider): a fetch is the
+    | same full `poll.window_days` window a watched route gets, and Travelpayouts
+    | bills one request per calendar month that window touches — so SIX OR SEVEN
+    | provider calls, out of the ~200 an hour the token allows. The limiter's
+    | hourly ceiling is set from that multiplication.
+    |
+    */
+
+    'lookup' => [
+        'fresh_for_hours' => 24,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | How much history the screens get
     |--------------------------------------------------------------------------
     |

@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 |
 | Five routes are the entire authentication surface, six more are the read
-| API the screens are built on, nine more are the writes those screens make,
+| API the screens are built on, ten more are the writes those screens make,
 | and the last one is the single-page app.
 |
 | WHAT IS DELIBERATELY ABSENT: registration, password RESET, email
@@ -210,8 +210,9 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
 |--------------------------------------------------------------------------
 |
 | Everything the watchlist and alerts screens (design/README.md §5 and §6) can
-| change: which routes are watched, whether each one is paused, and how the
-| owner wants to be told. Their shapes are docs/API.md, same as the reads.
+| change: which routes are watched, whether each one is paused, how the owner
+| wants to be told — and, since "look before you watch", which pairs Orbit has
+| gone and priced. Their shapes are docs/API.md, same as the reads.
 |
 | IN THE `web` GROUP, WHICH IS WHY THEY ARE CSRF-PROTECTED. That is the reason
 | this app has no routes/api.php at all: Laravel's `api` group has no CSRF
@@ -226,6 +227,34 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
 |
 */
 Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
+    /*
+     * LOOK BEFORE YOU WATCH. Prices a pair the owner has not committed to,
+     * creating the route row if Orbit has never seen it and asking the provider
+     * right there when it has no fresh fares for it.
+     *
+     * A WRITE, AND IN THE WRITE GROUP, even though the client reads the answer
+     * like a detail screen: it can create a row and it can spend six or seven
+     * metered provider calls (App\Application\Routes\FareFreshness). A GET that
+     * does either is one a browser prefetch or a link preview will eventually
+     * do on somebody's behalf — which is also why this is not a `?refresh` flag
+     * on `GET /api/routes/{code}` above.
+     *
+     * THROTTLED, and it is the third route in this file to be. The rule parser
+     * is throttled because a keystroke can cost an Anthropic call; this is
+     * throttled because a TAP can cost the better part of a minute of
+     * Travelpayouts' hourly allowance. See the `route-lookup` limiter in
+     * App\Providers\AppServiceProvider for the arithmetic.
+     *
+     * NO `{code}` IN THE PATH, deliberately: the pair arrives in the body as
+     * `origin` and `destination`, the same two fields `POST /api/watchlist`
+     * takes, so both writes are validated by the same rules
+     * (App\Http\Requests\RoutePairRequest) and answer with the same sentences.
+     * A path segment would be a third spelling of a route code to keep in step.
+     */
+    Route::post('/routes/lookup', [RouteController::class, 'lookup'])
+        ->middleware('throttle:route-lookup')
+        ->name('routes.lookup');
+
     Route::post('/watchlist', [WatchlistItemController::class, 'store'])->name('watchlist.store');
 
     /*

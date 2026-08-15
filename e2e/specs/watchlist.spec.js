@@ -566,6 +566,87 @@ test('with nothing to tour, the home still draws the globe and one thing to do',
     }
 })
 
+/*
+ * ============================================================================
+ * LOOK BEFORE YOU WATCH — the round trip, through the browser
+ * ============================================================================
+ * The form used to have exactly one action and it was a COMMITMENT: the only
+ * way to find out what Amsterdam to Prague costs was to start watching
+ * Amsterdam to Prague. This is the journey that replaced it, end to end — type
+ * a place, get a price, decide afterwards — and the assertion in the middle is
+ * the one that matters: THE LIST IS STILL SIX. A lookup that quietly added a
+ * route would pass every other check in this file.
+ *
+ * IT GOES THROUGH THE SERVER TWICE AND THROUGH A REAL FETCH ONCE. AMS-PRG is
+ * not seeded, so the detail screen's read comes back 404 and the lookup that
+ * follows creates the route and prices it against the fake provider — the same
+ * two steps a real one takes, minus the metered call.
+ */
+test('a route is looked up first, and watched from the screen that priced it', async ({ page, browserConsole }) => {
+    /*
+     * THE 404 IS THE QUESTION, NOT A FAULT. `GET /api/routes/AMS-PRG` answering
+     * "no such route" is how the screen finds out Orbit has never priced this
+     * pair, and the lookup it makes next is the answer (docs/API.md).
+     * RouteDetail.vue deliberately does not console.error on it; Chromium logs
+     * the failed request itself, and that one line is what this waives.
+     */
+    browserConsole.allow(/Failed to load resource.*404/)
+
+    await page.goto('/watch')
+    await expect(page.locator('.pass')).toHaveCount(6)
+
+    await page.getByRole('button', { name: 'Add a route' }).click()
+
+    const form = page.locator('form.add')
+    await form.getByRole('radio', { name: 'AMS' }).click()
+    await form.locator('#add-destination').fill('PRG')
+
+    /*
+     * PRESSED WITH THE SUGGESTION PANEL OPEN, which is the same reflow trap the
+     * Add button fell into when this form grew a typeahead: the panel is in the
+     * flow, and anything that closes it on mousedown moves the button out from
+     * under the pointer between press and release. The primary button is new
+     * and sits in exactly the same place.
+     */
+    await form.getByRole('button', { name: 'Look up' }).click()
+
+    await expect(page).toHaveURL(/\/route\/AMS-PRG$/)
+    await expect(page.locator('.detail__code')).toHaveText('AMS → PRG')
+
+    // Priced, on the spot, by a route that did not exist a second ago.
+    await expect(page.locator('.price__value')).toHaveText(/^€\d+$/)
+
+    const offer = page.getByRole('button', { name: 'Watch this route' })
+    await expect(offer).toBeVisible()
+
+    await shot(page, 'route-lookup-unwatched')
+
+    // --- And nothing was written to get here ---------------------------------
+    await page.goto('/watch')
+    await expect(page.locator('.pass')).toHaveCount(6)
+
+    // --- Now decide, on the screen that showed the price ---------------------
+    await page.goto('/route/AMS-PRG')
+    await page.getByRole('button', { name: 'Watch this route' }).click()
+
+    await expect(page.locator('.watch--on')).toContainText('On your watch list')
+    await expect(page.getByRole('button', { name: 'Watch this route' })).toHaveCount(0)
+
+    await shot(page, 'route-lookup-watched')
+
+    // The write really happened, and the shared store carried it to the list.
+    await page.goto('/watch')
+    await expect(page.locator('.pass')).toHaveCount(7)
+    await expect(page.locator('.pass').filter({ hasText: 'PRG' })).toHaveCount(1)
+
+    // --- Back to the seeded six for whatever runs next ------------------------
+    const added = page.locator('.pass').filter({ hasText: 'PRG' }).first()
+    await added.getByRole('button', { name: /stop watching/i }).click()
+    await added.getByRole('button', { name: 'Remove' }).click()
+
+    await expect(page.locator('.pass')).toHaveCount(6)
+})
+
 test('confirming a removal stays on the list', async ({ page }) => {
     await page.goto('/watch')
     await page.getByRole('button', { name: 'Add a route' }).click()

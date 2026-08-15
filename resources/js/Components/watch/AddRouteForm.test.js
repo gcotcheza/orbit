@@ -393,6 +393,12 @@ describe('the destination typeahead', () => {
         expect(box(wrapper).element.value).toBe('LIS')
     })
 
+    /*
+     * THE FORM'S OWN SUBMIT IS NOW THE LOOK-UP — the primary button and the
+     * Enter key both — because the owner asked to see a price before committing
+     * to watching a route. The pair it sends is unchanged; what changed is what
+     * the screen does with it (see the component, and Watchlist.vue).
+     */
     it('still sends a typed code, upper-cased, with the chosen origin', async () => {
         const wrapper = await form()
 
@@ -400,17 +406,38 @@ describe('the destination typeahead', () => {
         await box(wrapper).setValue('lis')
         await wrapper.get('form').trigger('submit')
 
-        expect(wrapper.emitted('submit')).toEqual([[{ origin: 'EIN', destination: 'LIS' }]])
+        expect(wrapper.emitted('lookup')).toEqual([[{ origin: 'EIN', destination: 'LIS' }]])
+        // And it did not quietly do both.
+        expect(wrapper.emitted('watch')).toBeUndefined()
     })
 
-    it('refuses to send a half-typed place name', async () => {
+    /*
+     * AND THE COMMITMENT IS STILL ONE TAP, on its own button, emitting its own
+     * event. The two actions take the same pair and are refused by the same two
+     * checks; the difference is entirely which one the screen was asked for.
+     */
+    it('sends the same pair as a watch when the second button is used', async () => {
+        const wrapper = await form()
+
+        await box(wrapper).setValue('lis')
+        await wrapper.get('.add__watch').trigger('click')
+
+        expect(wrapper.emitted('watch')).toEqual([[{ origin: 'AMS', destination: 'LIS' }]])
+        expect(wrapper.emitted('lookup')).toBeUndefined()
+    })
+
+    it('refuses to send a half-typed place name, whichever button asks', async () => {
         const wrapper = await form()
 
         await box(wrapper).setValue('bilb')
         await wrapper.get('form').trigger('submit')
 
-        expect(wrapper.emitted('submit')).toBeUndefined()
+        expect(wrapper.emitted('lookup')).toBeUndefined()
         expect(wrapper.get('.add__error').text()).toContain('Pick a destination from the list')
+
+        await wrapper.get('.add__watch').trigger('click')
+
+        expect(wrapper.emitted('watch')).toBeUndefined()
     })
 
     /*
@@ -448,6 +475,6 @@ describe('the destination typeahead', () => {
         expect(wrapper.get('.option--empty').text()).toContain('a three-letter code still works')
 
         await wrapper.get('form').trigger('submit')
-        expect(wrapper.emitted('submit')).toEqual([[{ origin: 'AMS', destination: 'LIS' }]])
+        expect(wrapper.emitted('lookup')).toEqual([[{ origin: 'AMS', destination: 'LIS' }]])
     })
 })

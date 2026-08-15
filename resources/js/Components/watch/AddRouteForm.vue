@@ -1,7 +1,36 @@
 <script setup>
 /*
- * The "Add route" expander (design/README.md §5): three origin buttons, a
- * destination box that suggests as you type, one button.
+ * The route expander (design/README.md §5): three origin buttons, a destination
+ * box that suggests as you type, and two things to do with what it holds.
+ *
+ * =============================================================================
+ * LOOK BEFORE YOU WATCH — the second departure from the design, asked for by
+ * the owner on 2026-08-15 for the same reason as the first one
+ * =============================================================================
+ * This form had exactly one action, and it was a COMMITMENT: the only way to
+ * find out what Amsterdam to Palma costs was to start watching Amsterdam to
+ * Palma, at which point it was a card on the list, in the globe's tour, and in
+ * tomorrow morning's alerts — for a question somebody asked once. The list
+ * filled up with routes nobody meant to keep, and the way to un-ask was a bin
+ * and a confirmation.
+ *
+ * So the PRIMARY action is now "Look up", and it opens the route's own screen
+ * without writing anything: the detail screen prices the pair on arrival if
+ * Orbit has nothing recent for it (docs/API.md, `POST /api/routes/lookup`).
+ * "Add route" is still here, still one tap, for somebody who already knows they
+ * want it — it is simply no longer the toll on the way to a price.
+ *
+ * THE LOOK-UP DOES NOT TOUCH THE NETWORK FROM HERE. It is a navigation, and a
+ * form that sat spinning for three seconds before the screen changed would be
+ * the app freezing on the page you are leaving. The screen being opened is the
+ * one that has to handle a route with no fares anyway — for a bookmark, a
+ * shared link, or a lookup made a month ago — so putting the fetch there is one
+ * path rather than two.
+ *
+ * WHAT THAT COSTS, stated plainly: a well-formed code Orbit has no airport for
+ * ("ZZZ") is refused on the detail screen rather than in this form, because
+ * only the server knows. The ADD path still answers here, beside the field,
+ * exactly as it always did.
  *
  * THE TYPEAHEAD IS A DELIBERATE DEPARTURE FROM THE DESIGN, asked for by the
  * owner on 2026-08-15 after using the app. The handoff draws a bare three-
@@ -43,10 +72,16 @@ const props = defineProps({
   /** The server's 422 message for the last attempt, if there was one. */
   error: { type: String, default: '' },
 
+  /** An ADD is in flight. The look-up makes no request from here. */
   busy: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['submit'])
+/**
+ * `lookup` opens the route; `watch` puts it on the list. Both carry the same
+ * `{ origin, destination }` and both are refused by the same two checks below —
+ * the difference is entirely what the screen does with them.
+ */
+const emit = defineEmits(['lookup', 'watch'])
 
 const ORIGINS = ['AMS', 'EIN', 'DUS']
 
@@ -293,7 +328,17 @@ function scrollActiveIntoView() {
   })
 }
 
-function submit() {
+/**
+ * Send the pair, whichever of the two buttons asked for it.
+ *
+ * ONE CHECK FOR BOTH, because both mean the same thing by "a route": three
+ * letters, and two different airports. A look-up that accepted `BILB` would
+ * navigate to a screen that could only apologise, which is the dead end this
+ * form exists to prevent.
+ *
+ * @param {'lookup'|'watch'} intent
+ */
+function attempt(intent) {
   if (props.busy) {
     return
   }
@@ -314,7 +359,7 @@ function submit() {
     return
   }
 
-  emit('submit', { origin: origin.value, destination: destination.value })
+  emit(intent, { origin: origin.value, destination: destination.value })
 }
 
 /** Called by the parent once the route has actually landed. */
@@ -329,7 +374,10 @@ defineExpose({ reset })
 </script>
 
 <template>
-  <form class="add rise-in" novalidate @submit.prevent="submit" @focusout="onFocusOut">
+  <!-- The form's own submit — the Enter key, and the primary button — is the
+       LOOK-UP, which is what lookup-first means at the keyboard as well as
+       under the thumb. -->
+  <form class="add rise-in" novalidate @submit.prevent="attempt('lookup')" @focusout="onFocusOut">
     <p id="add-origin-label" class="add__label">From</p>
     <div class="add__origins" role="radiogroup" aria-labelledby="add-origin-label">
       <button
@@ -448,7 +496,15 @@ defineExpose({ reset })
 
     <p v-if="localError || error" class="add__error" role="alert">{{ localError || error }}</p>
 
-    <button class="add__submit" type="submit" :disabled="!canSubmit">
+    <button class="add__submit" type="submit" :disabled="!canSubmit">Look up</button>
+
+    <!--
+      THE COMMITMENT, KEPT AND MADE QUIETER. It is the same write it always
+      was and it is still one tap; what changed is that it is no longer the
+      only way to find out what a route costs. Its label is unchanged on
+      purpose — "Add route" is what the person who wants it is looking for.
+    -->
+    <button class="add__watch" type="button" :disabled="!canSubmit" @click="attempt('watch')">
       {{ busy ? 'Adding…' : 'Add route' }}
     </button>
   </form>
@@ -669,7 +725,22 @@ defineExpose({ reset })
   font-weight: 600;
 }
 
-.add__submit:disabled {
+/* The second action, and it looks like one: no fill, no border, the accent the
+   rest of the app uses for "this is a thing you can tap". Full width and 40 px
+   tall so it is still a thumb target on a phone — quieter than the button
+   above it, not smaller than a finger. */
+.add__watch {
+  width: 100%;
+  height: 40px;
+  margin-top: 4px;
+
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+
+.add__submit:disabled,
+.add__watch:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
