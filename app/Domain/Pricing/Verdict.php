@@ -9,7 +9,8 @@ namespace App\Domain\Pricing;
  *
  * `$label` is the sentence the spotlight card and the route detail show
  * ("Cheap & still falling"); `$short` is the single word the watchlist's status
- * pill has room for (Good / Falling / Normal / Wait — design/README.md §5).
+ * pill has room for (Good / Falling / Normal / Wait — design/README.md §5, plus
+ * `New` for a route Orbit has no opinion about yet).
  * BOTH ARE EMITTED BY THE API rather than the client deriving one from the
  * other, because the mapping is a product decision and four screens deriving
  * it independently is four places for it to drift.

@@ -95,11 +95,58 @@ const hasFares = computed(() => payload.value?.min != null && payload.value?.max
  */
 let request = 0
 
+/**
+ * The month to OPEN a route on: the one its cheapest departure is in.
+ *
+ * THE SCREEN USED TO OPEN ON TODAY, ALWAYS, and that is a wrong answer often
+ * enough to be the screen's biggest defect. "When is it cheap?" was answered
+ * with the current month — which the poll window only half covers, because the
+ * days before today are gone — while the route's actual cheapest day sat two
+ * taps away in September, unmentioned. The banner at the foot of the grid says
+ * "cheapest THIS month"; nothing said which month to be in.
+ *
+ * `cheapest.date` is a DEPARTURE date and the summary now carries it for every
+ * route (docs/API.md), so this is a lookup rather than a request.
+ *
+ * CLAMPED INTO THE WINDOW THE ARROWS CAN REACH. A landing month outside
+ * FIRST_MONTH..LAST_MONTH would be a grid with both arrows pointing back the
+ * way it came, or one the `canPrev`/`canNext` bounds disagree with. The clamp
+ * is written against those two constants rather than against a number, so it
+ * follows the window when the window changes.
+ */
+function monthFor(routeCode) {
+  const date = routes.value.find((route) => route.code === routeCode)?.cheapest?.date ?? null
+
+  // No fare seen yet: the month we are in is the honest place to start.
+  if (date === null) {
+    return FIRST_MONTH
+  }
+
+  const key = date.slice(0, 7)
+
+  if (key < FIRST_MONTH) {
+    return FIRST_MONTH
+  }
+
+  return key > LAST_MONTH ? LAST_MONTH : key
+}
+
+/**
+ * Pick a route, and land on the month worth looking at for it.
+ *
+ * Both refs are written in the same tick, so the watcher below fires once and
+ * one request goes out — not one for the route and a second for the month.
+ */
+function select(next) {
+  code.value = next
+  month.value = next === null ? FIRST_MONTH : monthFor(next)
+}
+
 async function loadRoutes() {
   await watchlist.refresh()
 
-  // The first chip, which the watcher below turns into the first month.
-  code.value = routes.value[0]?.code ?? null
+  // The first chip, and the month its cheapest day is in.
+  select(routes.value[0]?.code ?? null)
 
   // Nothing to ask the calendar endpoint about — either the list is empty or
   // it could not be fetched — so the load that would have cleared this flag is
@@ -174,7 +221,7 @@ onMounted(loadRoutes)
       />
     </header>
 
-    <RouteChips v-if="routes.length" :routes="routes" :active="code" @pick="code = $event" />
+    <RouteChips v-if="routes.length" :routes="routes" :active="code" @pick="select" />
 
     <p v-if="booted && !routes.length && !failed" class="calendar__note">
       Nothing on your watchlist yet — add a route and its cheapest days show up here.

@@ -150,13 +150,40 @@ onActivated(() => {
       <button class="home__retry" type="button" @click="load">Try again</button>
     </div>
 
-    <div v-else-if="activeRoutes.length === 0" class="home__notice">
-      <h2 class="home__notice-title">Nothing orbiting yet</h2>
-      <p class="home__quiet">
-        Add a route on the
-        <RouterLink class="home__link" :to="{ name: 'watch' }">Watch</RouterLink>
-        tab and the globe will start touring it.
-      </p>
+    <!--
+      DAY ONE, AND IT IS THE ONLY VERSION OF THIS SCREEN MOST PEOPLE SEE FIRST.
+      It was a small card floating in six hundred pixels of nothing: the
+      signature screen of a flight tracker, on the morning somebody installed
+      it, showing no flight and no tracker. The globe is what this app IS, so
+      it is drawn — empty, no arcs, no tour, just the planet — and the card sits
+      on it exactly the way the spotlight card does once there is something to
+      spotlight. Nothing here pretends to data: an unpopulated Earth is the
+      honest picture of an empty watchlist, and it is the picture of what the
+      screen becomes.
+
+      GlobeStage with no routes builds the scene and plays nothing — `play()`
+      returns early without an active route — so this costs the textures and no
+      camera work. It still reports a missing GPU the same way, which is why
+      the fallback below is shared with the ordinary state.
+    -->
+    <div v-else-if="activeRoutes.length === 0" class="home__day1">
+      <GlobeStage
+        v-if="globeAvailable"
+        class="home__day1-globe"
+        :routes="[]"
+        active-code=""
+        @unavailable="globeAvailable = false"
+      />
+
+      <div class="home__notice" :class="{ 'home__notice--over': globeAvailable }">
+        <h2 class="home__notice-title">Nothing orbiting yet</h2>
+        <p class="home__quiet">Add a route and the globe starts touring it — Orbit prices it every morning.</p>
+
+        <!-- A BUTTON, not a link inside a sentence. This is the one thing to
+             do on this screen and it was four words of body copy with an
+             underline on two of them. -->
+        <RouterLink class="home__cta" :to="{ name: 'watch' }">Add your first route</RouterLink>
+      </div>
     </div>
 
     <template v-else>
@@ -285,6 +312,15 @@ onActivated(() => {
   box-shadow: var(--shadow);
 }
 
+/* The empty globe carries no arcs and no route caption, so the two overlays
+   that would be talking about nothing are hidden rather than left to say "0
+   routes orbiting" over an empty planet. Scoped to this state only — the real
+   screen needs both. */
+.home__day1-globe :deep(.stage__chip),
+.home__day1-globe :deep(.stage__caption) {
+  display: none;
+}
+
 .home__notice {
   margin: 24px var(--gutter);
   padding: 22px 20px;
@@ -292,6 +328,40 @@ onActivated(() => {
   border-radius: var(--radius-card);
   background: var(--card);
   box-shadow: var(--shadow);
+}
+
+/* The card rides up over the globe's lower edge, which is the same overlap the
+   spotlight card uses (design/README.md §1) and from the same token — so the
+   day-1 screen is laid out like the screen it turns into.
+
+   AFTER `.home__notice`, and that is load-bearing: the rule above sets `margin`
+   as a shorthand, so a `margin-top` written before it would be overwritten by
+   the 24px it re-declares. */
+.home__notice--over {
+  position: relative;
+  z-index: 4;
+  margin-top: calc(-1 * var(--spotlight-overlap));
+}
+
+.home__cta {
+  display: block;
+  width: 100%;
+  height: 48px;
+  margin-top: 16px;
+  border-radius: 14px;
+
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: 48px;
+  text-align: center;
+  text-decoration: none;
+
+  /* The accent, because in this app the accent means "an action" — the tab
+     bar's + and the booking hand-off are the other two. */
+  background: var(--accent);
+  color: var(--on-solid);
+  box-shadow: 0 6px 16px var(--accent-glow);
 }
 
 .home__notice-title {
@@ -310,11 +380,6 @@ onActivated(() => {
 .home__skeleton .home__quiet {
   margin-top: 14px;
   text-align: center;
-}
-
-.home__link {
-  color: var(--accent-ink);
-  font-weight: 600;
 }
 
 .home__retry {

@@ -78,7 +78,13 @@ final class RuleMatches
             ->get();
 
         if ($routes->isEmpty()) {
-            return RuleMatchSummary::none();
+            /*
+             * EVERY CANDIDATE IS STILL PENDING, which is not the same answer as
+             * "nothing matches" and is the ordinary state of a rule about
+             * places Orbit has never been asked to price. A route with no row
+             * at all is as unpriced as one with a row and no fares.
+             */
+            return RuleMatchSummary::none(count($codes));
         }
 
         $fares = CalendarFare::query()
@@ -116,7 +122,19 @@ final class RuleMatches
         usort($matches, static fn (RuleMatch $a, RuleMatch $b): int => $a->cheapest->cents <=> $b->cheapest->cents
             ?: strcmp($a->route->code, $b->route->code));
 
-        return RuleMatchSummary::of($matches, (int) config('orbit.rules.sample'));
+        /*
+         * HOW MUCH OF THE QUESTION IS STILL UNANSWERED.
+         *
+         * `$fares` is keyed by route id and only holds the routes that have at
+         * least one departure in the window, so its count is exactly the
+         * candidates Orbit has a price for; everything else in `$codes` is a
+         * route it has never priced, or has no route row for at all. A
+         * candidate that IS priced and matches nothing is not pending — the
+         * answer for it is in, and the answer is no.
+         */
+        $pending = count($codes) - $fares->count();
+
+        return RuleMatchSummary::of($matches, (int) config('orbit.rules.sample'), $pending);
     }
 
     /**

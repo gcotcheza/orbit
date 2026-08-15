@@ -55,6 +55,33 @@ test('the caption and the spotlight card name the route the camera is on', async
     // The spotlight card is showing the SAME route the caption is.
     const codes = (await caption.textContent()).match(/([A-Z]{3}) → ([A-Z]{3})/)
     await expect(page.locator('.spotlight__code')).toHaveText(`${codes[1]} → ${codes[2]}`)
+
+    /*
+     * AND THE CARD SAYS WHICH DAY ITS FARE IS FOR. €74 to Lisbon is not an
+     * offer until it has a date on it, and this card printed the number alone
+     * — the one thing the whole screen exists to hand somebody was the one
+     * thing it left out.
+     */
+    await expect(page.locator('.spotlight__when')).toHaveText(
+        /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), \w{3} \d{1,2}$/,
+    )
+
+    /*
+     * THE RAIL NAMES PLACES, not only codes. AMS→OPO, AMS→FAO and EIN→LIS are
+     * anagrams to anybody who does not already know them, and "fly to a route"
+     * is exactly the moment somebody is choosing a PLACE. The active chip's
+     * city has to be the city on the card, or the rail is labelling the wrong
+     * route.
+     *
+     * Both are READ AND THEN COMPARED rather than asserted with a retrying
+     * matcher: the auto-tour moves the selection every eleven seconds, and a
+     * matcher that kept re-reading would eventually be comparing two different
+     * routes and calling it a failure.
+     */
+    const city = await page.locator('.spotlight__city').textContent()
+    const railCity = await page.locator('.rail__chip--active .rail__city').textContent()
+
+    expect(railCity).toBe(city)
 })
 
 /*

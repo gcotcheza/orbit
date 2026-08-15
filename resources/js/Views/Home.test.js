@@ -54,6 +54,7 @@ const LIS = {
     verdict: { label: 'Good price — book', short: 'Good', tone: 'good' },
     sparkline: [65, 68, 71, 74],
     trackingDays: 60,
+    cheapest: { date: '2026-09-09', price: 74 },
     active: true,
 }
 
@@ -75,9 +76,13 @@ const BRAND_NEW = {
     score: 0,
     tier: 'none',
     confident: false,
-    verdict: { label: 'Not enough data yet', short: 'Normal', tone: 'normal' },
+    // `New`, not `Normal`: a route Orbit has no opinion about must not wear the
+    // same word as one it has judged and found unremarkable (docs/API.md).
+    verdict: { label: 'Not enough data yet', short: 'New', tone: 'normal' },
     sparkline: [],
     trackingDays: 3,
+    // No poll, no fare, and therefore no date to put on one.
+    cheapest: null,
 }
 
 const watchlist = (data) => ({ data: { data, meta: { count: data.length, active: data.filter((r) => r.active).length } } })
@@ -141,6 +146,9 @@ describe('the tour', () => {
         expect(wrapper.text()).toContain('€74')
         expect(wrapper.text()).toContain('33% below usual')
         expect(wrapper.text()).toContain('Good price — book')
+        // The DAY the €74 is for. A fare with no date on it is not something
+        // anybody can act on, and this card printed one for months.
+        expect(wrapper.find('.spotlight__when').text()).toBe('Wed, Sep 9')
     })
 
     it('moves the whole screen on when the globe has finished a route', async () => {
@@ -189,11 +197,40 @@ describe('a route we know nothing about yet', () => {
         expect(wrapper.text()).not.toContain('0% below usual')
         // No sparkline to draw, so none is drawn.
         expect(wrapper.find('.spark').exists()).toBe(false)
+        // And no departure date either: `cheapest: null` is not today.
+        expect(wrapper.find('.spotlight__when').exists()).toBe(false)
     })
 })
 
 describe('nothing to show', () => {
-    it('points at the watch tab when every route is paused', async () => {
+    /*
+     * DAY ONE IS STILL THIS APP'S SCREEN, and that is what changed here. The
+     * empty state used to be a card in a void — the globe was not drawn at all,
+     * so the signature screen of a flight tracker showed neither a flight nor a
+     * tracker on the morning somebody installed it. The planet is now drawn
+     * with NOTHING ON IT: no routes, so no arcs and no tour, which is the
+     * honest picture of an empty watchlist and the picture of what the screen
+     * becomes. The assertion is the empty `routes` prop, because a globe handed
+     * the paused route would be the actual bug this state exists to avoid.
+     */
+    it('draws an empty globe and one way out of the empty state', async () => {
+        const wrapper = await mountHome([PAUSED])
+
+        expect(wrapper.text()).toContain('Nothing orbiting yet')
+
+        expect(stage(wrapper).exists()).toBe(true)
+        expect(stage(wrapper).props('routes')).toEqual([])
+        expect(wrapper.text()).not.toContain('Barcelona')
+
+        const cta = wrapper.findAllComponents(RouterLinkStub).find((link) => link.classes().includes('home__cta'))
+
+        expect(cta.text()).toBe('Add your first route')
+        expect(cta.props('to')).toEqual({ name: 'watch' })
+    })
+
+    it('drops the globe from the empty state too when there is no GPU', async () => {
+        webgl = false
+
         const wrapper = await mountHome([PAUSED])
 
         expect(wrapper.text()).toContain('Nothing orbiting yet')

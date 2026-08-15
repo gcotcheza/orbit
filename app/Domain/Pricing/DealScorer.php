@@ -71,7 +71,21 @@ final readonly class DealScorer
      */
     public function noOpinion(): DealScore
     {
-        $verdict = new Verdict('Not enough data yet', 'Normal', Verdict::TONE_NORMAL);
+        /*
+         * THE SHORT IS 'New', NOT 'Normal', AND THE TONE STAYS NORMAL.
+         *
+         * The pill has room for one word and that word was doing the opposite
+         * of this method's whole job: a route Orbit has no opinion about was
+         * labelled with the same word as a route it has judged and found
+         * unremarkable. Two different answers — "we have not learned this yet"
+         * and "we looked, and it is ordinary" — read identically on the
+         * watchlist, which is the screen where they sit side by side.
+         *
+         * 'New' is the state and not a verdict, which is what makes it the
+         * honest word here. The TONE is untouched: this is still not a warning
+         * and still not good news, and colouring it would be an opinion.
+         */
+        $verdict = new Verdict('Not enough data yet', 'New', Verdict::TONE_NORMAL);
 
         return new DealScore(
             score: 0,

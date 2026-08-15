@@ -29,7 +29,7 @@ const get = vi.fn()
 vi.mock('@/lib/http', () => ({ http: { get: (...args) => get(...args) } }))
 
 import AddRouteForm from './AddRouteForm.vue'
-import { fold, searchDestinations } from '@/stores/destinations'
+import { editDistance, fold, nearestDestination, searchDestinations } from '@/stores/destinations'
 
 const BIO = { iata: 'BIO', city: 'Bilbao', country: 'Spain', countryCode: 'ES' }
 const OPO = { iata: 'OPO', city: 'Porto', country: 'Portugal', countryCode: 'PT' }
@@ -104,6 +104,73 @@ describe('searchDestinations', () => {
         for (const word of ['Málaga', 'Düsseldorf', 'Reykjavík', 'Lisbon', 'Las Palmas']) {
             expect(fold(word)).toHaveLength(word.length)
         }
+    })
+})
+
+// -----------------------------------------------------------------------------
+// The typo fallback
+// -----------------------------------------------------------------------------
+// Every rank above is a prefix or substring test, so ONE WRONG LETTER fails all
+// six at once and the panel says "No matching destination." about a place three
+// rows down the list it is refusing to show. These are the tests for the way
+// out of that.
+
+const BCN = { iata: 'BCN', city: 'Barcelona', country: 'Spain', countryCode: 'ES' }
+
+/** ALL plus a city far enough from the rest to be typo'd unambiguously. */
+const WIDER = [...ALL, BCN]
+
+describe('editDistance', () => {
+    it('is zero for the same word and one per slip', () => {
+        expect(editDistance('barcelona', 'barcelona')).toBe(0)
+        // A dropped letter, a wrong letter, an extra one.
+        expect(editDistance('barcelna', 'barcelona')).toBe(1)
+        expect(editDistance('barcelona', 'barcelena')).toBe(1)
+        expect(editDistance('barcelonaa', 'barcelona')).toBe(1)
+    })
+
+    it('counts a transposition as the two edits it is', () => {
+        // Plain Levenshtein, not Damerau — and two is still inside the budget,
+        // which is the whole reason the budget is two.
+        expect(editDistance('bracelona', 'barcelona')).toBe(2)
+    })
+
+    it('gives up rather than measuring a distance nobody asked for', () => {
+        // Over the budget, so the answer is only "further than max" — and it is
+        // reached without walking the whole matrix.
+        expect(editDistance('lisbon', 'barcelona')).toBe(3)
+        expect(editDistance('zzz', 'barcelona')).toBe(3)
+        expect(editDistance('barcelona', 'barcelona', 0)).toBe(0)
+        expect(editDistance('barcelna', 'barcelona', 0)).toBe(1)
+    })
+})
+
+describe('nearestDestination', () => {
+    it('finds the city behind one wrong letter', () => {
+        expect(nearestDestination(WIDER, 'barcelna').iata).toBe('BCN')
+        expect(nearestDestination(WIDER, 'lisbn').iata).toBe('LIS')
+        // Two edits is still a typo somebody makes.
+        expect(nearestDestination(WIDER, 'bracelona').iata).toBe('BCN')
+    })
+
+    it('ignores accents and capitals, like the search does', () => {
+        expect(nearestDestination(WIDER, 'MALGA').iata).toBe('AGP')
+    })
+
+    it('guesses nothing when there is nothing close', () => {
+        expect(nearestDestination(WIDER, 'qwertyuiop')).toBeNull()
+    })
+
+    /*
+     * THE SHORT-QUERY GUARD, and it is not fussiness. Three characters are
+     * within two edits of half this list — "bar" reaches Bari, Basel and
+     * Barcelona — so a guess made from one is a coin toss dressed up as help.
+     * The ranked search answers short queries well, and this only ever runs
+     * when the ranked search found nothing.
+     */
+    it('refuses to guess from a query too short to mean anything', () => {
+        expect(nearestDestination(WIDER, 'bar')).toBeNull()
+        expect(nearestDestination(WIDER, 'zzz')).toBeNull()
     })
 })
 
@@ -186,6 +253,51 @@ describe('the destination typeahead', () => {
 
         expect(options(wrapper)).toHaveLength(0)
         expect(wrapper.get('.option--empty').text()).toBe('No matching destination.')
+    })
+
+    /*
+     * THE DEAD END, and the way out of it. "barcelna" is one letter away from a
+     * place this app knows, and every rank in the search is a prefix or
+     * substring test — so one slip fails all six and the panel answers "No
+     * matching destination." about a city it holds.
+     */
+    it('offers what was probably meant when one letter is wrong', async () => {
+        const wrapper = await form(WIDER)
+
+        await box(wrapper).setValue('barcelna')
+
+        const guess = wrapper.get('.option--guess')
+
+        expect(guess.text()).toContain('Did you mean')
+        expect(guess.text()).toContain('Barcelona')
+        // It stands in FOR the dead end rather than sitting under it.
+        expect(wrapper.find('.option--empty').exists()).toBe(false)
+
+        // And taking it behaves like taking any other suggestion.
+        await guess.trigger('click')
+
+        expect(box(wrapper).element.value).toBe('BCN')
+        expect(wrapper.get('.options').isVisible()).toBe(false)
+    })
+
+    it('takes the guess on Enter, which is the only key that reaches it', async () => {
+        const wrapper = await form(WIDER)
+
+        await box(wrapper).setValue('barcelna')
+
+        const enter = await press(wrapper, 'Enter')
+
+        expect(enter.defaultPrevented).toBe(true)
+        expect(box(wrapper).element.value).toBe('BCN')
+    })
+
+    it('does not guess beside real results', async () => {
+        const wrapper = await form(WIDER)
+
+        await box(wrapper).setValue('bilb')
+
+        expect(options(wrapper)).toHaveLength(1)
+        expect(wrapper.find('.option--guess').exists()).toBe(false)
     })
 
     /*

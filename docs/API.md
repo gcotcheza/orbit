@@ -77,7 +77,8 @@ one with more fields on it. Identical either way, so a component can take either
   "confident": true,
   "verdict": { "label": "Cheap & still falling", "short": "Falling", "tone": "info" },
   "sparkline": [46, 46, 45, 45, 45, 45, 44, 44, 44, 44, 44, 44, 44, 44],
-  "trackingDays": 60
+  "trackingDays": 60,
+  "cheapest": { "date": "2026-09-15", "price": 44 }
 }
 ```
 
@@ -92,10 +93,11 @@ one with more fields on it. Identical either way, so a component can take either
 | `tier` | `insane` (≥80) / `great` (≥65) / `good` (≥50) / `none`. What the alert sensitivities in PR11 fire on. |
 | `confident` | `false` means **Orbit is not expressing an opinion**: `score: 0`, `tier: "none"` and the "Not enough data yet" verdict. It is false with no prices and no statistics, *and* for the first `orbit.alerts.min_tracking_days` (7) mornings of a route's life — see "The day-1 floor" below. **Branch on this**, not on `score === 0`. |
 | `verdict.label` | The sentence: spotlight card, route-detail header. |
-| `verdict.short` | The single word the watchlist pill has room for: `Good` / `Falling` / `Normal` / `Wait`. |
+| `verdict.short` | The single word the watchlist pill has room for: `Good` / `Falling` / `Normal` / `Wait`, and `New` when `confident` is false. `New` and `Normal` are deliberately different words: "we have not learned this route yet" and "we looked, and it is ordinary" are different answers, and they sit next to each other on the watchlist. |
 | `verdict.tone` | `good` \| `info` \| `normal` \| `warn`. **The only thing to switch colours on** — maps onto the token pairs in `resources/css/tokens.css`. Do not derive a colour from `label`. |
 | `sparkline` | Up to 14 daily prices, **oldest first**, one per day we polled. Often fewer, and `[]` for a new route. Draw whatever arrives. |
 | `trackingDays` | Calendar days since the first observation we actually hold, inclusive. `0` when there are none. This is the number for the "tracking N days" note (`< 14` is the design's threshold). |
+| `cheapest` | **The day `price.current` is for**: the cheapest **departure date** still on offer, ties broken to the earliest. `null` before the first poll — and null is not today, so a screen with no date prints no date. This is a *departure* date, the other axis; never render it as an observation date. It was on the detail alone until the UX pass, which is why three screens were printing a fare nobody could act on. |
 
 ### The score's gauge colour
 
@@ -161,7 +163,6 @@ The route detail screen (`design/README.md` §2). The summary above, plus:
       "body": "€44 against a usual €93, and still sliding — waiting a few days could pay off.",
       "tone": "info"
     },
-    "cheapest": { "date": "2026-09-15", "price": 44 },
     "bookingUrl": "https://www.skyscanner.nl/transport/flights/ams/opo/260915/"
   }
 }
@@ -172,8 +173,7 @@ The route detail screen (`design/README.md` §2). The summary above, plus:
 | `history` | Up to 60 daily observations, **oldest first**. This is the line chart; `sparkline` is its last fortnight. Days we did not poll are simply absent — plot by date, not by index. |
 | `stats` | The dashed "usual price" reference line, and the five-number summary the score is built from. **`null`** when the provider has none; draw the chart without a reference rather than with one at zero. |
 | `advice` | The tinted callout. `title` always equals `verdict.label` and `tone` always equals `verdict.tone` — they are generated together so the prose and the gauge cannot disagree. |
-| `cheapest` | The cheapest **departure date** still on offer, ties broken to the earliest. `null` before the first poll. |
-| `bookingUrl` | Skyscanner deep link, aimed at `cheapest.date`. Falls back to the route without a date (`…/ams/opo/`) when there are no fares. Always present. |
+| `bookingUrl` | Skyscanner deep link, aimed at `cheapest.date` (which is on the **summary** — every screen gets it). Falls back to the route without a date (`…/ams/opo/`) when there are no fares. Always present. |
 
 `code` is constrained to `[A-Z]{3}-[A-Z]{3}` at the router: **upper case, with
 the hyphen**. `ams-lis` does not match and is a 404, not a redirect.
@@ -584,6 +584,7 @@ four more on top. One shape, two screens.
   },
   "matches": {
     "count": 6,
+    "partial": true,
     "cheapest": 34,
     "sample": [
       {
@@ -636,7 +637,8 @@ What the surviving chips add up to, and what gets stored.
 
 | field | notes |
 | --- | --- |
-| `count` | **Every** match, not the length of `sample` — the design's banner quotes it, and a rule matching sixty routes is a rule worth tightening. |
+| `count` | **Every** match, not the length of `sample` — the design's banner quotes it, and a rule matching sixty routes is a rule worth tightening. It is counted over the candidate routes Orbit **has already priced**; see `partial`. |
+| `partial` | **`true` means `count` is a floor, not a total**, because some of the routes this rule is about have no fare yet (`SweepRuleFares` prices them after the rule is saved). Phrase the banner as *"At least 6 match so far — Orbit is still pricing the rest"* rather than as a total: the measured jump was **2 before saving and 32 a minute after**, which reads as the app having been wrong when it was only busy. `false` means every candidate has been priced and the number is final. **Do not quote `cheapest` while this is true** — it is a superlative over a set that is still being assembled. |
 | `cheapest` | Euros, as everywhere else. `null` when nothing matched. |
 | `sample` | Up to six, **cheapest first**, ties broken by route code. Both ends are the same airport object every other screen gets, so a rule row can draw a city name and a flag without a second request. |
 | `sample[].cheapest` | The cheapest departure **that fits the rule** — not the route's cheapest fare. A rule about Fridays is answered by the cheapest Friday; quoting Tuesday's €38 would be a price nobody can book. |

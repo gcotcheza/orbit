@@ -53,6 +53,13 @@ final class RuleReadingResource extends JsonResource
             'matches' => [
                 /* Every match, not just the sampled ones — the banner's number. */
                 'count' => $matches->count(),
+                /*
+                 * TRUE MEANS `count` IS A FLOOR AND THE BANNER MUST SAY SO.
+                 * Some of the routes this rule is about have no fare yet, so
+                 * the number can only grow — see RuleMatchSummary. The client
+                 * phrases it as "at least N so far" rather than as a total.
+                 */
+                'partial' => $matches->partial(),
                 /* NULL when nothing matched: no trips is not a €0 trip. */
                 'cheapest' => $cheapest === null ? null : Euros::from($cheapest->cents),
                 /* The handful a phone can show, cheapest first. */

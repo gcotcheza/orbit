@@ -11,7 +11,7 @@
 // state optimistically and swallows the failed PATCH passes the first check and
 // fails the second, which is exactly the bug worth having a browser for.
 // =============================================================================
-import { expect, shot, tab, test } from '../fixtures.js'
+import { expect, shot, tab, test, waitForGlobe } from '../fixtures.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -134,9 +134,38 @@ test('a paused route drops out of the globe tour', async ({ page }) => {
     await page.locator('.pass').first().getByRole('switch').click()
     await expect(page.locator('.pass').first().getByRole('switch')).toHaveAttribute('aria-checked', 'false')
 
+    const paused = await page.locator('.pass').first().locator('.end--to .end__code').textContent()
+
     await tab(page, 'Orbit').click()
     await expect(page.locator('.rail__chip')).toHaveCount(5)
     await expect(page.locator('.stage__chip')).toContainText('5')
+
+    /*
+     * AND THE CALENDAR'S CHIPS SAY SO TOO. That screen keeps paused routes —
+     * their cheapest days are still worth reading, and docs/API.md is explicit
+     * that paused routes are not filtered out — but it drew them identically to
+     * live ones, so the screen quietly disagreed with the switch that had just
+     * been moved.
+     *
+     * THE ASSERTION IS THE COMPUTED OPACITY, not the class. The watch screen's
+     * own dimming was broken for exactly as long as it was tested by asserting
+     * a class name: `.rise-in` was filling forwards and won the cascade, so the
+     * class was there and the row was not dimmed. Only a real renderer knows.
+     */
+    await tab(page, 'Calendar').click()
+
+    const chip = page.locator('.chip', { hasText: paused })
+    await expect(chip).toBeVisible()
+    await expect(chip).toHaveClass(/chip--paused/)
+
+    expect(
+        await chip.evaluate((element) => Number(getComputedStyle(element).opacity)),
+        'a paused route is drawn on the calendar exactly like a live one',
+    ).toBeLessThan(1)
+
+    // Still selectable, which is the other half of "dimmed, not hidden".
+    await chip.click()
+    await expect(chip).toHaveAttribute('aria-pressed', 'true')
 
     // Restore.
     await tab(page, 'Watch').click()
@@ -390,11 +419,153 @@ test('the destination box finds a city by name and adds it', async ({ page }) =>
 })
 
 /*
+ * ============================================================================
+ * REMOVE SAYS SO, AND IT CAN BE TAKEN BACK
+ * ============================================================================
+ * The row simply vanished: nothing said it had gone, nothing named what had
+ * gone, and the only way back was to remember the pair and type it in again —
+ * on the one screen where a mis-tap on a 26 px bin is the likeliest mistake
+ * there is. The confirmation catches the mis-tap; it does nothing for somebody
+ * who meant to remove one route and removed its neighbour.
+ *
+ * THE ROUND TRIP IS THE TEST, AND IT GOES THROUGH THE SERVER TWICE. Undo is the
+ * ordinary add write, which is only honest because removing a route does not
+ * delete its history — the route, its observations and its fares are Orbit's,
+ * and only the watchlist row is the owner's. A reload at the end is what says
+ * the row really came back rather than being put back on screen.
+ */
+test('a removed route says so and can be put straight back', async ({ page }) => {
+    await page.goto('/watch')
+    await page.getByRole('button', { name: 'Add a route' }).click()
+
+    const form = page.locator('form.add')
+    await form.getByRole('radio', { name: 'AMS' }).click()
+    await form.locator('#add-destination').fill('MAD')
+    await form.getByRole('button', { name: /add route/i }).click()
+
+    await expect(page.locator('.pass')).toHaveCount(7)
+
+    // --- Gone, and named ------------------------------------------------------
+    const added = page.locator('.pass').filter({ hasText: 'MAD' }).first()
+    await added.getByRole('button', { name: /stop watching/i }).click()
+    await added.getByRole('button', { name: 'Remove' }).click()
+
+    await expect(page.locator('.pass')).toHaveCount(6)
+
+    const notice = page.locator('.screen__notice--undo')
+    await expect(notice).toContainText('Stopped watching AMS→MAD')
+
+    await shot(page, 'watchlist-removed-with-undo')
+
+    // --- And back -------------------------------------------------------------
+    await notice.getByRole('button', { name: 'Undo' }).click()
+
+    await expect(page.locator('.pass')).toHaveCount(7)
+    await expect(page.locator('.pass').filter({ hasText: 'MAD' })).toHaveCount(1)
+    // The offer is spent: it named one removal and that removal is undone.
+    await expect(notice).toHaveCount(0)
+
+    // The write really happened, and not just the optimism.
+    await page.reload()
+    await expect(page.locator('.pass').filter({ hasText: 'MAD' })).toHaveCount(1)
+
+    // --- Put the list back to the seeded six ----------------------------------
+    const again = page.locator('.pass').filter({ hasText: 'MAD' }).first()
+    await again.getByRole('button', { name: /stop watching/i }).click()
+    await again.getByRole('button', { name: 'Remove' }).click()
+
+    await expect(page.locator('.pass')).toHaveCount(6)
+
+    /*
+     * AND THE OFFER GOES QUIETLY. Six seconds, then it is gone: a notice that
+     * stays forever becomes furniture, and this one sits above the list it is
+     * about. The generous timeout is for the machine, not for the timer.
+     */
+    await expect(page.locator('.screen__notice--undo')).toHaveCount(0, { timeout: 12_000 })
+})
+
+/*
  * The `Remove` half of that confirmation, which is destructive and so is asked
  * on a route this test brings with it rather than on one the other specs need.
  * A remove that also navigated would land on the detail screen of a route that
  * no longer exists.
  */
+/*
+ * ============================================================================
+ * THE EMPTY HOME IS STILL THIS APP'S SCREEN
+ * ============================================================================
+ * With nothing to tour, the globe home was a small card floating in six
+ * hundred pixels of nothing: the signature screen of a flight tracker, on the
+ * morning somebody installed it, showing neither a flight nor a tracker. And
+ * the one thing to do next was four words of body copy with an underline on
+ * two of them.
+ *
+ * REACHED BY PAUSING RATHER THAN BY REMOVING, because `activeRoutes` is what
+ * this state branches on and pausing is the reversible way to empty it — this
+ * spec runs against a database the rest of the suite shares, and six removals
+ * would be six routes to add back by hand.
+ */
+test('with nothing to tour, the home still draws the globe and one thing to do', async ({ page }) => {
+    await page.goto('/watch')
+
+    /*
+     * THE COUNT IS ASSERTED BEFORE EVERY SWEEP, and that is not belt and
+     * braces. `Locator.all()` does not wait for anything — it resolves however
+     * many rows exist at that instant — so calling it on a screen whose
+     * watchlist request is still in flight returns an empty array and the loop
+     * below silently does nothing at all. The restore sweep after the
+     * navigation is where this actually bit.
+     */
+    const switches = page.locator('.pass').getByRole('switch')
+
+    await expect(switches).toHaveCount(6)
+
+    for (const toggle of await switches.all()) {
+        await toggle.click()
+        await expect(toggle).toHaveAttribute('aria-checked', 'false')
+    }
+
+    await tab(page, 'Orbit').click()
+
+    await expect(page.locator('.home__notice-title')).toHaveText('Nothing orbiting yet')
+
+    // The planet is drawn — empty, with nothing on it. `play()` has no active
+    // route so there is no arc and no camera work, which is the honest picture
+    // of an empty watchlist and the picture of what the screen becomes.
+    await waitForGlobe(page)
+
+    // …and neither overlay is left talking about the nothing: no "0 routes
+    // orbiting" chip, no route caption.
+    await expect(page.locator('.stage__chip')).toBeHidden()
+    await expect(page.locator('.stage__caption')).toBeHidden()
+
+    // A real button, and it goes where it says.
+    const cta = page.getByRole('link', { name: 'Add your first route' })
+    await expect(cta).toBeVisible()
+
+    await shot(page, 'home-nothing-to-tour')
+
+    await cta.click()
+    await expect(page).toHaveURL(/\/watch$/)
+
+    // --- Every route back on, for whatever runs next --------------------------
+    await expect(switches).toHaveCount(6)
+
+    for (const toggle of await switches.all()) {
+        await toggle.click()
+        await expect(toggle).toHaveAttribute('aria-checked', 'true')
+    }
+
+    // Every one of them, from the server — the restore is this test's mess to
+    // clean up and a spec that left five of six paused would fail the next one.
+    await page.reload()
+    await expect(switches).toHaveCount(6)
+
+    for (const toggle of await switches.all()) {
+        await expect(toggle).toHaveAttribute('aria-checked', 'true')
+    }
+})
+
 test('confirming a removal stays on the list', async ({ page }) => {
     await page.goto('/watch')
     await page.getByRole('button', { name: 'Add a route' }).click()

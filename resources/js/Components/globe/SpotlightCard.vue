@@ -20,7 +20,7 @@
 import { computed } from 'vue'
 import PriceSparkline from '@/Components/PriceSparkline.vue'
 import VerdictPill from '@/Components/VerdictPill.vue'
-import { euro, usualPriceLabel } from '@/lib/format'
+import { departureLabel, euro, usualPriceLabel } from '@/lib/format'
 
 const props = defineProps({
   /** One `GET /api/watchlist` row. */
@@ -33,6 +33,16 @@ const TRACKING_NOTE_DAYS = 14
 const price = computed(() => euro(props.route.price.current))
 
 const comparison = computed(() => usualPriceLabel(props.route.price.pctBelow))
+
+/*
+ * THE DAY THE FARE IS FOR, compactly — "Wed, Sep 9" and nothing else, because
+ * the card has a 27 px price, a comparison and sometimes a tracking note in a
+ * right-hand column that must not become a paragraph. It is a DEPARTURE date
+ * (docs/API.md's other axis) and it is the answer to the first question this
+ * card used to leave hanging: €74 to Lisbon, yes, but WHEN. Null before the
+ * first poll, when there is no fare to date either.
+ */
+const departure = computed(() => departureLabel(props.route.cheapest?.date ?? null))
 
 const trackingNote = computed(() => {
   const days = props.route.trackingDays
@@ -58,6 +68,7 @@ const trackingNote = computed(() => {
         <p class="spotlight__price tabular" :class="{ 'spotlight__price--empty': price === null }">
           {{ price ?? 'No fare yet' }}
         </p>
+        <p v-if="departure" class="spotlight__when">{{ departure }}</p>
         <p v-if="comparison" class="spotlight__usual">{{ comparison }}</p>
         <p v-if="trackingNote" class="spotlight__tracking">{{ trackingNote }}</p>
       </div>
@@ -141,6 +152,15 @@ const trackingNote = computed(() => {
 .spotlight__price--empty {
   font-size: var(--text-xl);
   color: var(--muted);
+}
+
+/* Directly under the price and in the accent ink, so the pair reads as one
+   fact — "€74, Wed Sep 9" — rather than as a price with a note beneath it. */
+.spotlight__when {
+  margin-top: 5px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--accent-ink);
 }
 
 .spotlight__usual {

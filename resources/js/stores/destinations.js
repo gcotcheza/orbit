@@ -168,6 +168,114 @@ export function searchDestinations(destinations, query, limit = MAX_SUGGESTIONS)
         }))
 }
 
+// -----------------------------------------------------------------------------
+// The typo fallback
+// -----------------------------------------------------------------------------
+// "No matching destination." was a DEAD END, and the way people spell is what
+// makes it one. Type "barcelna" — one missing letter — and every rank above
+// fails, because they are all prefix and substring tests and a typo breaks all
+// of them at once. The screen then says nothing matches, which is true and
+// useless: the answer is three feet away and the box will not admit it.
+//
+// EDIT DISTANCE ≤ 2, AGAINST CITY NAMES ONLY. Two is one transposition plus one
+// slip, which is what a thumb produces; three starts matching words that are
+// genuinely different places. Codes and countries are deliberately not fuzzed —
+// a three-letter code is two edits from dozens of others, and "Did you mean
+// Spain?" for a mistyped code would be a guess with nothing behind it.
+//
+// IT ONLY RUNS WHEN THE ORDINARY SEARCH FOUND NOTHING. It is a fallback, not a
+// rank: a query with real matches must never have a guess mixed into them.
+
+/** One transposition plus one slip. Three is a different word. */
+export const MAX_TYPO_DISTANCE = 2
+
+/**
+ * Shorter than this and a "did you mean" is a coin toss: "bar" is within two
+ * edits of Bari, Basel, Barcelona and a dozen more, and the ranked search
+ * already answers short queries well.
+ */
+const MIN_TYPO_LENGTH = 4
+
+/**
+ * Levenshtein distance, abandoned as soon as it passes `max`.
+ *
+ * TWO ROWS, NOT A MATRIX: the recurrence only ever reads the previous row, and
+ * this runs over seventy-seven names on a keystroke. The early exits are what
+ * make that free — a length difference bigger than `max` cannot be closed by
+ * substitutions, and a row whose cheapest cell already exceeds `max` cannot
+ * produce a final cell below it, because every step costs at least zero.
+ *
+ * Returns `max + 1` rather than the true distance once it has given up: every
+ * caller is asking "is this within max", and the exact value of a distance that
+ * is not is nobody's business.
+ *
+ * @param {string} one
+ * @param {string} other
+ * @param {number} max
+ * @returns {number}
+ */
+export function editDistance(one, other, max = MAX_TYPO_DISTANCE) {
+    if (Math.abs(one.length - other.length) > max) {
+        return max + 1
+    }
+
+    let previous = Array.from({ length: other.length + 1 }, (_, index) => index)
+
+    for (let i = 1; i <= one.length; i += 1) {
+        const current = [i]
+        let best = i
+
+        for (let j = 1; j <= other.length; j += 1) {
+            const cost = one[i - 1] === other[j - 1] ? 0 : 1
+
+            current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost)
+            best = Math.min(best, current[j])
+        }
+
+        if (best > max) {
+            return max + 1
+        }
+
+        previous = current
+    }
+
+    return previous[other.length]
+}
+
+/**
+ * The one destination somebody probably meant, or null.
+ *
+ * Nearest wins; ties keep the server's alphabetical order, because `<` rather
+ * than `<=` leaves the first one in place.
+ *
+ * @param {Array<object>} destinations `GET /api/destinations`'s rows
+ * @param {string} query what is in the box
+ * @returns {object|null} one row, in the same shape a suggestion has minus the
+ *                        marks — there is nothing to highlight in a word that
+ *                        was not typed
+ */
+export function nearestDestination(destinations, query) {
+    const needle = fold(query.trim())
+
+    if (needle.length < MIN_TYPO_LENGTH) {
+        return null
+    }
+
+    let best = null
+    let distance = MAX_TYPO_DISTANCE + 1
+
+    for (const destination of destinations) {
+        const found = editDistance(needle, fold(destination.city))
+
+        if (found < distance) {
+            best = destination
+            distance = found
+        }
+    }
+
+    return distance <= MAX_TYPO_DISTANCE ? best : null
+}
+
 /**
  * One field split into what comes before the match, the match, and the rest.
  *

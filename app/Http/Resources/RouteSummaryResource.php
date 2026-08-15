@@ -75,6 +75,23 @@ class RouteSummaryResource extends JsonResource
             ),
 
             'trackingDays' => $snapshot->trackingDays,
+
+            /*
+             * THE DAY THE PRICE IS FOR, and it is on the SUMMARY rather than on
+             * the detail alone because every screen that prints `price.current`
+             * was printing a fare with no date attached to it: a €75 that could
+             * be next Tuesday or in eleven weeks, which is not a fare anybody
+             * can act on. The detail sent this already; the three screens that
+             * read the summary could not.
+             *
+             * A DEPARTURE DATE, NOT AN OBSERVATION DATE — the other axis
+             * (docs/API.md). `null` before the first poll, and null is not
+             * "today": a screen with no date must print no date.
+             */
+            'cheapest' => $snapshot->cheapest === null ? null : [
+                'date' => $snapshot->cheapest->departureDate->format('Y-m-d'),
+                'price' => Euros::from($snapshot->cheapest->cents),
+            ],
         ];
     }
 

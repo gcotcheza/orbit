@@ -67,7 +67,9 @@ final class WatchlistApiTest extends TestCase
     #[Test]
     public function it_returns_the_full_summary_for_every_watched_route(): void
     {
-        $this->seedOneRoute();
+        $route = $this->seedOneRoute();
+        /* A departure to hang `cheapest` on — see the note in the structure. */
+        $this->offer($route, ['2026-09-15' => 4400]);
 
         $response = $this->actingAs($this->owner)->getJson('/api/watchlist');
 
@@ -79,9 +81,51 @@ final class WatchlistApiTest extends TestCase
                 'destination' => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
                 'price' => ['current', 'usual', 'pctBelow'],
                 'verdict' => ['label', 'short', 'tone'],
+                /*
+                 * THE DAY THE PRICE IS FOR, on the summary and not only on the
+                 * detail. Every screen that draws `price.current` was drawing a
+                 * fare with no date attached to it, which is not a fare
+                 * anybody can act on.
+                 */
+                'cheapest' => ['date', 'price'],
             ]],
             'meta' => ['count', 'active'],
         ]);
+    }
+
+    /**
+     * The cheapest DEPARTURE, on the list endpoint.
+     *
+     * Ties break to the earliest date, the same way the detail's does — it is
+     * the same snapshot field, which is the point: one number, computed once,
+     * on both shapes.
+     */
+    #[Test]
+    public function every_row_carries_the_day_its_price_is_for(): void
+    {
+        $route = $this->seedOneRoute();
+
+        $this->offer($route, ['2026-09-15' => 4400, '2026-09-03' => 5000]);
+
+        $response = $this->actingAs($this->owner)->getJson('/api/watchlist');
+
+        $response->assertJsonPath('data.0.cheapest.date', '2026-09-15');
+        $response->assertJsonPath('data.0.cheapest.price', 44);
+    }
+
+    /**
+     * NULL IS NOT TODAY. A route with no fares has no date to put on a price it
+     * also does not have, and a screen that printed one would be inventing a
+     * departure.
+     */
+    #[Test]
+    public function a_route_with_no_fares_has_no_date_either(): void
+    {
+        $this->seedOneRoute();
+
+        $this->actingAs($this->owner)
+            ->getJson('/api/watchlist')
+            ->assertJsonPath('data.0.cheapest', null);
     }
 
     #[Test]
@@ -191,6 +235,15 @@ final class WatchlistApiTest extends TestCase
         $response->assertJsonPath('data.0.confident', false);
         $response->assertJsonPath('data.0.verdict.label', 'Not enough data yet');
         $response->assertJsonPath('data.0.verdict.tone', 'normal');
+
+        /*
+         * AND THE ONE WORD THE PILL SHOWS IS 'New', NOT 'Normal'. The short was
+         * the same word a judged-and-unremarkable route wears, so the two
+         * answers Orbit is most careful to keep apart — "we have not learned
+         * this route yet" and "we looked, and it is ordinary" — arrived at the
+         * watchlist identical, on rows sitting next to each other.
+         */
+        $response->assertJsonPath('data.0.verdict.short', 'New');
 
         /* The price itself is real and is still published — only the JUDGEMENT is withheld. */
         $response->assertJsonPath('data.0.price.current', 50);

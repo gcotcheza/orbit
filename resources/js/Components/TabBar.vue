@@ -45,6 +45,20 @@
           <path d="M11 5v12M5 11h12" stroke-width="2.2" stroke-linecap="round" />
         </svg>
       </span>
+      <!--
+        LABELLED, LIKE THE FOUR EITHER SIDE OF IT. This button was the only
+        unlabelled thing in the app, and there is a second blue + on the watch
+        screen — in its header, forty pixels from this one — that adds a ROUTE.
+        Two identical accent squares, two entirely different writes, and
+        nothing on either saying which. The four neighbours already prove a
+        10 px word fits under an icon; this one was the only item that thought
+        it did not need one.
+
+        The word is "Rule" and not "Create" or "New": what is on the other side
+        of this tap is a rule, and naming the noun is what distinguishes it
+        from the + that takes a route.
+      -->
+      <span class="tab__label">Rule</span>
     </RouterLink>
 
     <RouterLink class="tab" :to="{ name: 'watch' }">
@@ -112,7 +126,12 @@
 
 /* The centre button sits proud of the bar and is the only item that keeps its
    accent fill whether or not it is the current screen — it reads as an action,
-   not as a destination. */
+   not as a destination.
+
+   THE -6px IS WHAT ITS LABEL FITS IN. The bar gives its content 67px (78px
+   less the 11px top padding); this item is 42px of button, a 4px gap and a
+   13px line of text, which is 59px starting 6px high — so the word clears the
+   bottom edge without the bar growing. */
 .tab--create {
   margin-top: -6px;
 }

@@ -22,7 +22,7 @@ import AdviceCallout from '@/Components/route/AdviceCallout.vue'
 import BookingCta from '@/Components/route/BookingCta.vue'
 import DealScoreGauge from '@/Components/route/DealScoreGauge.vue'
 import PriceHistoryChart from '@/Components/route/PriceHistoryChart.vue'
-import { euro } from '@/lib/format'
+import { departureLabel, euro } from '@/lib/format'
 
 /*
  * The API constrains `{code}` to `[A-Z]{3}-[A-Z]{3}` at the router and answers
@@ -52,6 +52,18 @@ const code = computed(() => props.id.toUpperCase())
 const median = computed(() => detail.value?.stats?.median ?? null)
 
 /**
+ * THE DAY THE BIG NUMBER IS FOR.
+ *
+ * The headline fare had no date on it, and a fare without one is not something
+ * anybody can act on: €75 could be this Friday or eleven weeks out, and the two
+ * are different answers to "should I book". `cheapest` is a DEPARTURE date
+ * (docs/API.md) — the day you fly — which is why it is labelled as one here and
+ * why nothing on this screen derives it from `history[].date`, the day we
+ * looked. Null before the first poll, and then no line is printed at all.
+ */
+const departure = computed(() => departureLabel(detail.value?.cheapest?.date ?? null))
+
+/**
  * The line under the price.
  *
  * `pctBelow` IS SIGNED: −14 means fourteen percent ABOVE the usual price
@@ -66,6 +78,24 @@ const caption = computed(() => {
 
   if (price.usual === null) {
     return 'No usual price for this route yet.'
+  }
+
+  /*
+   * NOT CONFIDENT, SO NO PERCENTAGE — and this is the same honesty rule the
+   * gauge already follows one element to the right.
+   *
+   * `confident: false` means Orbit is not expressing an opinion (docs/API.md):
+   * either it has no statistics, or it has under a week of this route's own
+   * prices, in which case the statistics are computed from a handful of fares
+   * it collected itself and the current price IS the median. "36% below its
+   * usual €99" stated in bold under a dash-filled gauge is that placeholder
+   * arithmetic read out as a finding — the screen drawing a confident number
+   * while the ring beside it says it has nothing to say. The usual price is
+   * still shown, because it is a fact; what is dropped is the comparison drawn
+   * from it.
+   */
+  if (detail.value?.confident === false) {
+    return `Usual ${euro(price.usual)} · still learning`
   }
 
   if (price.pctBelow === null) {
@@ -190,6 +220,10 @@ function goBack() {
       <div class="price">
         <div>
           <p class="price__value tabular">{{ detail.price.current === null ? '—' : euro(detail.price.current) }}</p>
+          <!-- "Cheapest departure", spelled out, because this screen's other
+               dates are the days we LOOKED and the two must never be read for
+               each other. -->
+          <p v-if="departure" class="price__when">Cheapest departure · {{ departure }}</p>
           <p class="price__caption">{{ caption }}</p>
         </div>
 
@@ -205,7 +239,14 @@ function goBack() {
 
       <AdviceCallout :title="detail.advice.title" :body="detail.advice.body" :tone="detail.advice.tone" />
 
-      <BookingCta :url="detail.bookingUrl" />
+      <!-- A CALLOUT THAT SAYS "WAIT" ABOVE A BUTTON THAT SHOUTS "BOOK" is the
+           app arguing with itself, and the button wins because it is the
+           loudest thing on the screen. When the advice is a warning the
+           hand-off goes quiet — still there, still one tap, no longer the
+           conclusion of the page. Read off `advice.tone`, which is
+           `verdict.tone` (docs/API.md), so the button cannot disagree with the
+           sentence above it. -->
+      <BookingCta :url="detail.bookingUrl" :variant="detail.advice.tone === 'warn' ? 'secondary' : 'primary'" />
     </template>
   </section>
 </template>
@@ -264,10 +305,25 @@ function goBack() {
   color: var(--ink);
 }
 
+/* Between the fare and the comparison, and quieter than both: it is the fare's
+   own label rather than a second fact about it. */
+.price__when {
+  margin-top: 7px;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+
 .price__caption {
   margin-top: 6px;
   font-size: var(--text-lg);
   color: var(--ink2);
+}
+
+/* The gap above the comparison is already carried by the departure line when
+   there is one. */
+.price__when + .price__caption {
+  margin-top: 3px;
 }
 
 /* The gauge is pushed to the far edge rather than the price block being

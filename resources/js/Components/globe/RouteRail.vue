@@ -42,7 +42,17 @@ defineEmits(['select'])
         @click="$emit('select', route.code)"
       >
         <span class="rail__dot" :data-tone="route.verdict.tone"></span>
-        <span>{{ route.origin.iata }}→{{ route.destination.iata }}</span>
+
+        <!-- THE CITY, under the codes. A rail of AMS→OPO, AMS→FAO, EIN→LIS is
+             a row of anagrams to anybody who does not already know them, and
+             "fly to a route" is exactly the moment somebody is choosing a
+             PLACE rather than a code. The pair is one column so the chip stays
+             one tap and the codes keep the line they had. -->
+        <span class="rail__where">
+          <span>{{ route.origin.iata }}→{{ route.destination.iata }}</span>
+          <span class="rail__city">{{ route.destination.city }}</span>
+        </span>
+
         <span class="rail__price tabular">{{ euro(route.price.current) ?? '—' }}</span>
       </button>
     </div>
@@ -116,6 +126,27 @@ defineEmits(['select'])
      --on-solid is, and the tab bar's centre button reads the same token. */
   color: var(--on-solid);
   box-shadow: 0 6px 16px var(--accent-glow);
+}
+
+.rail__where {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+/*
+ * QUIETENED WITH OPACITY RATHER THAN WITH --muted, which is the same choice
+ * `.rail__price` makes one rule below and for the same reason: the active chip
+ * is a saturated accent fill, and a fixed grey on it is either invisible or a
+ * second colour nobody chose. Inheriting the chip's own ink and stepping it
+ * back works on the card and on the accent, in both themes.
+ */
+.rail__city {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  opacity: 0.66;
 }
 
 .rail__price {
