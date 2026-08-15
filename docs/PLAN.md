@@ -32,6 +32,7 @@
 13. Deploy runbook + go-live at flights.ghiecode.io
 
 ## Pending owner actions
-- Sign up: Travelpayouts (affiliate) + Amadeus Self-Service; add keys to `.env`.
+- **Travelpayouts: adapter built, switch not thrown.** `ORBIT_PRICE_PROVIDER=travelpayouts` + `TRAVELPAYOUTS_TOKEN` in `.env` turns on real one-way fares (`/v2/prices/month-matrix`). Run `php artisan orbit:reset-history --confirm` in the same breath — the recorded history is all simulated, and mixing the two makes every trend and deal score a comparison between two different universes. Expect 41–87% day coverage and honest "tracking N days" charts afterwards.
+- Sign up: Amadeus Self-Service; add keys to `.env`. (No stats adapter is written yet — `ORBIT_STATS_PROVIDER=fake` is the only value that resolves.)
 - Dedicated Anthropic API key for the rule parser.
 - Verify `ghiecode.io` as a sending domain in Resend; then switch `MAIL_MAILER` from `log`.

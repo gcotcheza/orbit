@@ -63,24 +63,122 @@ return [
     | Fare providers
     |--------------------------------------------------------------------------
     |
-    | Two ports (App\Application\Ports\PriceProvider, PriceStatsProvider), one
-    | adapter each, chosen by name here and bound in AppServiceProvider.
+    | Two ports (App\Application\Ports\PriceProvider, PriceStatsProvider),
+    | chosen by name here and bound in AppServiceProvider. Prices have two
+    | adapters — `fake` and `travelpayouts` — and statistics still have one,
+    | because the Amadeus adapter is not written.
     |
-    | `fake` is the DEFAULT and is not a test double: docs/PLAN.md ships the
-    | app before the Travelpayouts and Amadeus keys exist, so the fake is the
-    | adapter production actually runs until they arrive. It is deterministic
-    | per route, so the same route shows the same prices on every deploy and a
-    | feature test can assert real numbers.
+    | `fake` IS STILL THE DEFAULT, AND THAT IS A SEPARATE DECISION FROM THE
+    | ADAPTER EXISTING. It is not a test double: docs/PLAN.md ships the app
+    | before the provider keys exist, so the fake is what production actually
+    | runs until somebody flips this. It is deterministic per route, so the same
+    | route shows the same prices on every deploy and a feature test can assert
+    | real numbers.
     |
-    | Adding the real ones later is a class plus a line in the match() in
-    | AppServiceProvider plus ORBIT_PRICE_PROVIDER=travelpayouts in .env. No
-    | call site changes, because no call site names an adapter.
+    | FLIPPING IT IS NOT ONLY THIS LINE. Every fare in the database was written
+    | by whichever adapter was in force at the time and no row records which —
+    | so a real price landing in a table full of simulated ones makes the 30-day
+    | trend, the "usually €120" and the next alert quietly wrong. `php artisan
+    | orbit:reset-history --confirm` is the other half of the switch. See the
+    | `travelpayouts` section below and .env.example.
     |
     */
 
     'providers' => [
         'price' => env('ORBIT_PRICE_PROVIDER', 'fake'),
         'stats' => env('ORBIT_STATS_PROVIDER', 'fake'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Travelpayouts — the real fares
+    |--------------------------------------------------------------------------
+    |
+    | Read by App\Providers\AppServiceProvider when `providers.price` is
+    | `travelpayouts`, and by nothing else. The default stays `fake`, so none of
+    | this is consulted until somebody sets that variable on a box that has a
+    | token.
+    |
+    | THE ENDPOINT IS `/v2/prices/month-matrix`, one call per calendar month the
+    | poll window touches — four for the standard 90 days. It is the only one of
+    | the three candidates that answers the port's actual question. Measured
+    | against the live API on 2026-08-15:
+    |
+    |   - `/v2/prices/month-matrix` — ONE-WAY (every one of 433 recorded entries
+    |     came back with an empty `return_date`), one entry per departure date,
+    |     scoped to the month asked for. This one.
+    |   - `/v1/prices/calendar` — round-TRIP despite `return_date` being omitted
+    |     (AMS-LIS: €252-391 against month-matrix's €80-159 for the same days),
+    |     and it ignores the month it is given, answering with scattered dates up
+    |     to ten months out. Wrong shape and wrong number.
+    |   - `/v2/prices/latest` — the last 48 hours of finds across a period, not a
+    |     price per departure date. It is what validated the token, not what
+    |     fills a calendar.
+    |
+    | ONE-WAY IS THE RIGHT NUMBER because docs/PLAN.md's calendar cell is "what
+    | it costs to fly out on this day", and a round-trip fare pinned to a
+    | departure date is really a fare for a PAIR of dates with the second one
+    | hidden. The deal score, the alert threshold and the €80 in a rule are all
+    | one-way prices, and always have been — the fake provider's were too.
+    |
+    | THE TOKEN GOES IN A HEADER, not in the query string (both work; verified).
+    | A URL is the one part of an HTTP request that gets written to an access
+    | log, a proxy trace and an exception report by default.
+    |
+    | TIMEOUTS ARE SHORT AND THE RETRY IS SINGLE. Nobody is waiting on this — it
+    | is a queued job at 06:10 — but the poll is 24 calls in a stagger and a
+    | provider that has stopped answering should fail the morning rather than
+    | occupy a worker until Horizon's timeout kills it mid-upsert.
+    |
+    | NO CURRENCY KEY. Every price in this app is euro cents, from the migration
+    | to the alert mail, so the request asks for EUR in the adapter and REFUSES a
+    | response whose envelope says anything else. A configurable currency would
+    | be a promise the rest of the app does not keep.
+    |
+    */
+
+    'travelpayouts' => [
+        'base_url' => env('TRAVELPAYOUTS_BASE_URL', 'https://api.travelpayouts.com'),
+
+        'token' => env('TRAVELPAYOUTS_TOKEN'),
+
+        /*
+         * THE AFFILIATE MARKER, WHICH THE ADAPTER DELIBERATELY DOES NOT SEND.
+         * It identifies whose link a booking came from, and the data API has no
+         * use for it — Orbit's "book this" is a Skyscanner deep link
+         * (`booking.skyscanner_base` above), so today nothing Orbit sends
+         * anybody is monetised. It is read here, and only here, so that the day
+         * those links move to Aviasales there is one obvious place the number
+         * already lives rather than a fresh hunt through the dashboard.
+         */
+        'marker' => env('TRAVELPAYOUTS_MARKER'),
+
+        /*
+         * Seconds. The read timeout is generous because the answer is served
+         * from Travelpayouts' cache and is occasionally slow; the connect
+         * timeout is not, because a host that will not complete a handshake in
+         * five seconds is down.
+         */
+        'connect_timeout' => 5,
+        'timeout' => 15,
+
+        /*
+         * ONE RETRY, half a second apart. The data is a cache read, so a second
+         * attempt costs almost nothing and covers the single dropped connection
+         * that would otherwise leave a month of the calendar empty for a day.
+         * A third would just be a slower way to find out the API is down.
+         */
+        'retries' => 1,
+        'retry_delay_ms' => 500,
+
+        /*
+         * HOW OFTEN A FAILING PROVIDER IS ALLOWED TO SAY SO. One morning's poll
+         * is 24 calls; an outage is therefore 24 identical log lines, times the
+         * rule sweep, and a log that repeats itself is a log nobody greps. One
+         * warning per quarter of an hour is enough to notice and few enough to
+         * read — the line says how many minutes of silence follow it.
+         */
+        'warn_every_minutes' => 15,
     ],
 
     /*

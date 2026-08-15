@@ -414,12 +414,25 @@ A route with nothing at all returns `score: 0, tier: "none", confident: false`.
 
 ## Where the numbers come from
 
-Until the Travelpayouts and Amadeus keys exist (`docs/PLAN.md`), both providers
-are **deterministic fakes** — `ORBIT_PRICE_PROVIDER=fake`. That is a production
-adapter, not a test double: the same route shows the same prices on every
-deploy, so a screen can be developed against a stable €44 and a test can assert
-one. Swapping in the real providers changes two `.env` variables and no response
-shape.
+By default both providers are **deterministic fakes** —
+`ORBIT_PRICE_PROVIDER=fake`. That is a production adapter, not a test double:
+the same route shows the same prices on every deploy, so a screen can be
+developed against a stable €44 and a test can assert one.
+
+`ORBIT_PRICE_PROVIDER=travelpayouts` swaps in real one-way fares from
+Travelpayouts' `/v2/prices/month-matrix` (`App\Infrastructure\Pricing\
+TravelpayoutsPriceProvider`). **No response shape changes**, but two things a
+screen already handles stop being theoretical:
+
+- **The calendar has real holes in it.** Travelpayouts serves cached fares from
+  other people's searches, and on the six seeded routes 41–87% of the next 90
+  days had a price. A day with no fare is **absent**, exactly as documented
+  above — never `0`.
+- **`price.current` can be `null` for a route with no cached fares at all**,
+  which the fake provider could never produce.
+
+Statistics have no real adapter yet: `ORBIT_STATS_PROVIDER=fake` is the only
+value that resolves.
 
 Fares are refreshed by `orbit:poll-fares` at 06:10 Europe/Amsterdam and the
 statistics by `orbit:refresh-stats` on Monday at 05:40 (`routes/console.php`).
