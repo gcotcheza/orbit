@@ -430,9 +430,41 @@ screen already handles stop being theoretical:
   above — never `0`.
 - **`price.current` can be `null` for a route with no cached fares at all**,
   which the fake provider could never produce.
+- **A calendar day can lose its price again.** A departure date that drops out
+  of the provider's cache is kept for a grace period (`poll.stale_after_days`,
+  three days) in case it comes back, and is then deleted by the next successful
+  poll rather than left standing as a fare nobody can book. Two reads of the
+  same month a week apart can therefore differ by more than a price — which the
+  contract above already allows, since a day with no fare is simply absent.
 
-Statistics have no real adapter yet: `ORBIT_STATS_PROVIDER=fake` is the only
-value that resolves.
+`ORBIT_STATS_PROVIDER=self` computes the statistics — `price.usual`,
+`price.pctBelow` and 75 of the deal score's 100 points — **from Orbit's own
+fares** (`App\Infrastructure\Pricing\SelfStatsProvider`). There is no
+third-party alternative: Amadeus' price-analysis endpoint was the plan and their
+Self-Service API was decommissioned on 2026-07-17.
+
+Two horizons go into it, and which one dominates depends on how long the route
+has been watched:
+
+- **Cross-sectional** — the ~91 `calendar_fares` of the current poll window.
+  Available from the **first** poll, which is what lets a route added this
+  morning carry a score at all. Its median is *what a typical departure date on
+  this route costs right now*.
+- **Longitudinal** — the accruing daily history, one row per morning, each of
+  them that morning's cheapest fare. It is the better comparison once it exists,
+  because `price.current` **is** one of those rows.
+
+They are blended linearly by how much history there is —
+`w = min(1, observations / 30)`, then `round((1-w)·cross + w·long)` on each of
+the five numbers — so a route is scored cross-sectionally on day 1, half and
+half around day 15, and purely against its own past mornings from day 30.
+`usual` therefore means *the going rate across the next three months* on a new
+route and *what this route's cheapest fare has actually been* on a mature one.
+
+**A route with no fares and no history has no statistics at all.** The provider
+answers null rather than inventing a distribution, `price.usual` and
+`price.pctBelow` come back `null`, and the score is renormalised over the
+components that remain (`confident` says so).
 
 Fares are refreshed by `orbit:poll-fares` at 06:10 Europe/Amsterdam and the
 statistics by `orbit:refresh-stats` on Monday at 05:40 (`routes/console.php`).
@@ -786,8 +818,8 @@ whole ledger, so a client can tell whether it is looking at everything.
 
 ## How an alert is decided
 
-Three scheduled commands, all **Europe/Amsterdam**, in an order that is
-load-bearing:
+Four scheduled commands, all **Europe/Amsterdam**, the three daily ones in an
+order that is load-bearing:
 
 | when | command | what |
 | --- | --- | --- |
