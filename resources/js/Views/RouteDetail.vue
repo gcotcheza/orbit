@@ -22,7 +22,7 @@ import AdviceCallout from '@/Components/route/AdviceCallout.vue'
 import BookingCta from '@/Components/route/BookingCta.vue'
 import DealScoreGauge from '@/Components/route/DealScoreGauge.vue'
 import PriceHistoryChart from '@/Components/route/PriceHistoryChart.vue'
-import { euro } from '@/Components/route/format'
+import { euro } from '@/lib/format'
 
 /*
  * The API constrains `{code}` to `[A-Z]{3}-[A-Z]{3}` at the router and answers

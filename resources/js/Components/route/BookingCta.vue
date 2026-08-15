@@ -25,9 +25,10 @@ defineProps({
   <div class="booking">
     <a class="booking__cta" :href="url" target="_blank" rel="noopener">
       Book on Skyscanner
-      <!-- #fff on the accent fill — see the note in AdviceCallout.vue. -->
+      <!-- Stroked from the style block, on the accent fill — see the note in
+           AdviceCallout.vue. -->
       <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
-        <path d="M5 12L12 5M12 5H6M12 5v6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M5 12L12 5M12 5H6M12 5v6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
     </a>
 
@@ -53,12 +54,12 @@ defineProps({
   text-decoration: none;
 
   background: var(--accent);
-
-  /* The one literal in this file's styles, and the same one TabBar.vue writes:
-     white on the accent, in both themes, because the accent is saturated in
-     both. See the comment in AdviceCallout.vue. */
-  color: #fff;
+  color: var(--on-solid);
   box-shadow: 0 8px 20px var(--accent-glow);
+}
+
+.booking__cta path {
+  stroke: var(--on-solid);
 }
 
 .booking__disclaimer {

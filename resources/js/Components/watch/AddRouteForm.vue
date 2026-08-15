@@ -169,7 +169,7 @@ defineExpose({ reset })
 }
 
 .origin--on {
-  color: #fff;
+  color: var(--on-solid);
   background: var(--accent);
   border-color: var(--accent);
 }

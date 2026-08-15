@@ -6,7 +6,7 @@
  * The bar is built from HEAT_STOPS rather than from a gradient written out
  * here, so the key and the cells it explains cannot drift apart.
  */
-import { euro } from './format'
+import { euro } from '@/lib/format'
 import { heatGradient } from './heat'
 
 defineProps({

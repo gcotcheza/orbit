@@ -18,7 +18,7 @@
  * word in a different colour.
  */
 import { computed, ref } from 'vue'
-import ToggleSwitch from '@/Components/settings/ToggleSwitch.vue'
+import ToggleSwitch from '@/Components/ToggleSwitch.vue'
 
 const props = defineProps({
   /** One element of `GET /api/rules`'s `data`. */
@@ -263,7 +263,7 @@ function toggleOpen() {
 
   font-size: var(--text-sm);
   font-weight: 700;
-  color: #fff;
+  color: var(--on-solid);
   background: var(--accent);
 }
 

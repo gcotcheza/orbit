@@ -61,6 +61,17 @@
     --neu-bg: rgba(255, 255, 255, 0.05);
     --neu-ink: #919db9;
 
+    /* Text, glyphs and knobs that sit ON a saturated fill: the accent buttons,
+       the tab bar's centre +, the active route chip, the warn-filled Remove,
+       the switch knob. WHITE IN BOTH THEMES, and that is the whole reason this
+       token exists rather than a rule per component — the accent, the good and
+       the warn are saturated in the light theme too, so --ink would be
+       near-black on a blue button there. Both themes therefore define it, and
+       define it identically: the value is a fact about the fills, not about the
+       theme, and a component reading `#fff` was a component nobody could grep
+       for the day one of these surfaces stops being saturated. */
+    --on-solid: #fff;
+
     /* --- Accent --------------------------------------------------------- */
     --accent: #5e84ff;
     --accent-ink: #9fb6ff;
@@ -145,6 +156,10 @@
     --bad: #e71d36;
     --neu-bg: #e9e9f6;
     --neu-ink: #615b85;
+
+    /* Restated rather than inherited, so the pair reads as a decision about
+       both themes rather than as a dark-theme value the light theme forgot. */
+    --on-solid: #fff;
 
     --accent: #3454d1;
     --accent-ink: #2440a8;

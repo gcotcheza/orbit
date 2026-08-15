@@ -10,13 +10,17 @@
  * the colour of the cell the user just tapped. This maps it to a tone and a
  * sentence and nothing more.
  *
- * The tone → token mapping is four CSS lines rather than a shared helper: the
- * pill this project will eventually share (`Components/VerdictPill.vue`) is
- * being written in a parallel worktree, and duplicating four lines beats two
- * branches creating the same file. Flagged for the DRY pass.
+ * THIS PILL IS NOT `Components/VerdictPill.vue`, and the DRY pass left it that
+ * way deliberately. The shared one is a dotted, tone-coloured chip that labels
+ * something else on the screen — a card's verdict, a row's status — and it is
+ * built to sit inline beside that thing. This is the sheet's own headline: no
+ * dot, a size of its own, and the only thing in its half of the sheet. Making
+ * one component serve both would mean a boolean for the dot and a third size
+ * for one caller, which is more machinery than the four token pairs below.
+ * What they DO share is the tone vocabulary, and that lives in tokens.css.
  */
 import { computed, onMounted, onUnmounted } from 'vue'
-import { euro } from './format'
+import { euro } from '@/lib/format'
 import { heatColour } from './heat'
 import { dayLabel } from './month'
 
