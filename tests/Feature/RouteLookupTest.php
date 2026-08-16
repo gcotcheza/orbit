@@ -94,17 +94,21 @@ final class RouteLookupTest extends TestCase
     // -- The pair ------------------------------------------------------------
 
     /**
-     * The same five sentences `POST /api/watchlist` answers with, because both
+     * The same four sentences `POST /api/watchlist` answers with, because both
      * requests take their pair from App\Http\Requests\RoutePairRequest. A
      * refusal here is shown on the screen that asked, so the wording is part of
      * the contract (docs/API.md).
+     *
+     * THERE WERE FIVE, and the fifth was "Orbit only tracks departures from
+     * AMS, EIN or DUS." It went with the search screen on 2026-08-16 — see the
+     * test below, which is the same pair the old one refused.
      */
     #[Test]
     public function it_refuses_a_pair_it_cannot_price_and_says_which_half_is_wrong(): void
     {
-        $this->lookup(['origin' => 'LIS', 'destination' => 'MAD'])
+        $this->lookup(['origin' => 'ZZZ', 'destination' => 'MAD'])
             ->assertStatus(422)
-            ->assertJsonPath('errors.origin.0', 'Orbit only tracks departures from AMS, EIN or DUS.');
+            ->assertJsonPath('errors.origin.0', 'Orbit does not know that airport yet.');
 
         $this->lookup(['origin' => 'AMS', 'destination' => 'ZZZ'])
             ->assertStatus(422)
@@ -129,6 +133,50 @@ final class RouteLookupTest extends TestCase
     public function it_takes_what_the_form_sends_and_upper_cases_it(): void
     {
         $this->lookup(['origin' => ' ams ', 'destination' => 'mad'])
+            ->assertCreated()
+            ->assertJsonPath('data.code', 'AMS-MAD');
+    }
+
+    /**
+     * =========================================================================
+     * THE SEARCH SCREEN, IN ONE REQUEST — any airport to any airport
+     * =========================================================================
+     * `LIS` has no `is_origin` flag and is not in `config('orbit.origins')`, and
+     * until 2026-08-16 that made this exact pair a 422: "Orbit only tracks
+     * departures from AMS, EIN or DUS." The rule it fell to was the one thing
+     * standing between the owner and "what does Lisbon to Madrid cost while I
+     * am already in Lisbon".
+     *
+     * IT IS THE FULL PATH, deliberately, and not just a 200: the route is
+     * created, the provider is asked, and the watchlist is untouched. A widened
+     * validation rule that reached a code path expecting a home origin would
+     * pass a status assertion and fail here.
+     */
+    #[Test]
+    public function it_prices_a_pair_that_starts_nowhere_near_home(): void
+    {
+        $this->lookup(['origin' => 'LIS', 'destination' => 'MAD'])
+            ->assertCreated()
+            ->assertJsonPath('data.code', 'LIS-MAD')
+            ->assertJsonPath('data.origin.iata', 'LIS')
+            ->assertJsonPath('meta.watched', false);
+
+        $this->assertSame(1, Route::query()->where('code', 'LIS-MAD')->count());
+        $this->assertSame(1, $this->provider->calls);
+        $this->assertSame(0, WatchlistItem::query()->count());
+    }
+
+    /**
+     * AND THE PAIR THE OLD RULE WAS ACTUALLY WRITTEN FOR still behaves: the
+     * origins are the RULE ENGINE's now (config/orbit.php), and nothing about
+     * this endpoint reads them.
+     */
+    #[Test]
+    public function the_origin_config_is_no_longer_consulted_by_this_endpoint(): void
+    {
+        config()->set('orbit.origins', []);
+
+        $this->lookup(['origin' => 'AMS', 'destination' => 'MAD'])
             ->assertCreated()
             ->assertJsonPath('data.code', 'AMS-MAD');
     }

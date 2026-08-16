@@ -27,11 +27,50 @@
 // the suggestions are an assistance. The box still takes a three-letter code,
 // the server still validates it, and the curated list is still there and still
 // instant.
+//
 // =============================================================================
-import { defineStore } from 'pinia'
-import { ref } from 'vue'
+// A COMPOSABLE, NOT A PINIA STORE — which it was, for exactly as long as there
+// was one box
+// =============================================================================
+// stores/destinations.js next door IS a store and should be: 184 rows fetched
+// once and read by everything, which is the definition of shared state. This
+// file held the same shape by analogy and it was wrong the moment the search
+// screen grew a SECOND field. `results` and `status` are the answer to the
+// query in ONE box — a singleton would have the From field repainting itself
+// with what somebody typed into To, and the debounce, the abort and the
+// sequence guard below are all per-box timers pretending to be global ones.
+//
+// SO EACH FIELD CALLS THIS AND KEEPS WHAT IT GETS. Two callers, two independent
+// searches, and nothing to reset between screens because the state dies with
+// the component that asked for it (`onScopeDispose`).
+//
+// THE FILE STAYS IN stores/ because it is still where "everywhere Orbit can
+// price" is fetched from, and because App\Http\Controllers\AirportController
+// and docs/API.md both name this path.
+// =============================================================================
+import { onScopeDispose, ref } from 'vue'
 import { http } from '@/lib/http'
 import { markRow, MAX_SUGGESTIONS } from '@/stores/destinations'
+
+/**
+ * What a finished airport code looks like, and how a box's contents become one.
+ *
+ * THE UPPER-CASING IS A BOUNDARY AND NOT A KEYSTROKE. A field that shouts
+ * "LISBON" back at somebody typing "Lisbon" reads as a complaint about what was
+ * just typed — see AirportField.vue — so the capitals are applied here, once,
+ * where the value stops being what is on screen and starts being what goes in a
+ * request. Route codes are `AMS-LIS` (App\Models\Route::codeFor) and always
+ * have been.
+ */
+export const IATA = /^[A-Z]{3}$/
+
+/**
+ * @param {string} value what a box holds
+ * @returns {string}
+ */
+export function toCode(value) {
+    return value.trim().toUpperCase()
+}
 
 /**
  * Below this, don't ask.
@@ -50,7 +89,12 @@ export const MIN_QUERY = 2
  */
 export const DEBOUNCE_MS = 250
 
-export const useAirportsStore = defineStore('airports', () => {
+/**
+ * One box's search of the airport table.
+ *
+ * @returns {{results: import('vue').Ref<Array<object>>, status: import('vue').Ref<string>, search: (term: string) => void, clear: () => void}}
+ */
+export function useAirportSearch() {
     /** `GET /api/airports`'s `data` for the CURRENT query: { iata, city, country, countryCode }. */
     const results = ref([])
 
@@ -131,9 +175,9 @@ export const useAirportsStore = defineStore('airports', () => {
     /**
      * Forget the query and whatever it found.
      *
-     * Called when a suggestion is taken and when the form is reset — at that
-     * point the box holds a three-letter code, the panel is closed, and a
-     * request for "BIO" would be one nobody is going to look at.
+     * Called when a suggestion is taken — at that point the box holds a
+     * three-letter code, the panel is closed, and a request for "BIO" would be
+     * one nobody is going to look at.
      */
     function clear() {
         cancel()
@@ -157,8 +201,20 @@ export const useAirportsStore = defineStore('airports', () => {
         }
     }
 
+    /*
+     * A BOX THAT HAS GONE AWAY IS NOT WAITING FOR AN ANSWER. Leaving the search
+     * screen mid-debounce would otherwise fire the request 250 ms later and
+     * resolve it into refs nothing renders — harmless, and still a request made
+     * on behalf of a screen that no longer exists.
+     *
+     * `failSilently` because this is legitimately called outside a component in
+     * its own unit test, where there is no scope to dispose and nothing to warn
+     * about.
+     */
+    onScopeDispose(cancel, true)
+
     return { results, status, search, clear }
-})
+}
 
 // -----------------------------------------------------------------------------
 // The join
@@ -185,18 +241,26 @@ export const useAirportsStore = defineStore('airports', () => {
  * quiet divider rather than a badge per row. What it means is "Orbit will
  * price this and has no opinion about it" — see docs/BUSINESS-LOGIC.md §1.
  *
+ * `exclude` IS THE OTHER END OF THE PAIR, and it is filtered here rather than in
+ * the component because it has to happen BEFORE the cut to `limit`. Dropping a
+ * row from eight afterwards leaves seven suggestions on a panel that had room
+ * for eight — the excluded airport silently costs somebody a result. What it
+ * means is the precise version of "never suggest a route from a place to
+ * itself": the From box will not offer what To holds, and vice versa.
+ *
  * @param {Array<object>} curated already ranked and marked by searchDestinations
  * @param {Array<object>} world `GET /api/airports`'s rows, in the server's order
  * @param {string} query what is in the box, for the highlight
  * @param {number} limit
+ * @param {string} exclude one IATA code never to suggest, or ''
  * @returns {Array<object>}
  */
-export function mergeSuggestions(curated, world, query, limit = MAX_SUGGESTIONS) {
+export function mergeSuggestions(curated, world, query, limit = MAX_SUGGESTIONS, exclude = '') {
     const seen = new Set(curated.map((row) => row.iata))
 
     const rest = world
         .filter((row) => !seen.has(row.iata))
         .map((row) => ({ ...markRow(row, query), world: true }))
 
-    return [...curated, ...rest].slice(0, limit)
+    return [...curated, ...rest].filter((row) => row.iata !== exclude).slice(0, limit)
 }

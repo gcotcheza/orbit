@@ -295,8 +295,9 @@ standard `{"message": …, "errors": {"month": […]}}`.
 ## `POST /api/routes/lookup`
 
 **Look before you watch.** Prices a city pair the owner has not committed to —
-the watch screen's "Look up" button (`design/README.md` §5's expander, whose
-only action used to be a commitment).
+the search screen's "Look up" button, and the endpoint that screen exists for.
+It began life on the watch screen's add expander (`design/README.md` §5), whose
+only action used to be a commitment.
 
 ```json
 { "origin": "AMS", "destination": "MAD" }
@@ -366,8 +367,9 @@ the read above it.
 
 ## `POST /api/watchlist`
 
-Start watching a city pair (`design/README.md` §5, the "Add route" expander) —
-the second of the expander's two buttons, and the one that commits.
+Start watching a city pair — the search screen's "Add to watch", and the
+"Watch this route" button on a route detail. The second of the two things to do
+with a pair, and the one that commits.
 
 ```json
 { "origin": "AMS", "destination": "LIS" }
@@ -408,22 +410,28 @@ comes back with its existing history immediately.
 
 | when | field | message |
 | --- | --- | --- |
-| not one of the three NL origins | `origin` | Orbit only tracks departures from AMS, EIN or DUS. |
 | no such airport | `origin` / `destination` | Orbit does not know that airport yet. / …an airport with that code. |
 | not three letters | either | An airport code is three letters, like LIS. |
 | both ends the same | `destination` | A route needs two different airports. |
 | already on the watchlist | `destination` | You are already watching AMS-LIS. |
 
-The origins are `config('orbit.origins')` — `AMS`, `EIN`, `DUS`, the three
-airports within a drive, and world flights did not widen them: a fare from
-Bangkok is not a flight this person can take.
-
-**The destination may be any code in the `airports` table, which since world
-flights is every scheduled airport on Earth** — 3,270 of them, from the
-OurAirports snapshot in `database/seeders/data/world_airports.csv`. The rule
-itself (`exists:airports,iata`) is unchanged; the table under it grew. That is
-broader than what the form's curated list OFFERS — see `GET /api/destinations`
+**Both ends may be any code in the `airports` table, which since world flights
+is every scheduled airport on Earth** — 3,270 of them, from the OurAirports
+snapshot in `database/seeders/data/world_airports.csv`. That is broader than
+what the search screen's curated list *offers* — see `GET /api/destinations`
 and `GET /api/airports` below.
+
+⚠ **The origin used to be closed and is not any more** (2026-08-16, the search
+screen). There was a fifth message here — `Orbit only tracks departures from
+AMS, EIN or DUS.` — and a `Rule::in(config('orbit.origins'))` behind it. A
+client that special-cases that sentence can drop the branch; nothing else about
+either endpoint changed, and there is no migration.
+
+**`config('orbit.origins')` still exists and still means something**, just not
+this: it is the three origins a deal *rule* may fire from, and therefore the
+size of the nightly sweep (`docs/BUSINESS-LOGIC.md` §1 and §11). A pair typed
+into a box is one question; a rule is a standing one Orbit answers on its own
+every night, and only the second has a budget.
 
 ---
 
@@ -511,8 +519,8 @@ route to itself.
 code in `airports` — see its `destination.exists` rule — and deliberately: what
 a form offers and what the API accepts are two decisions, and narrowing the
 second to match a dropdown would break a code somebody typed from memory. Since
-world flights that gap is the whole feature rather than a nicety: the form's
-curated list is 184 places, and the API accepts 3,270.
+world flights that gap is the whole feature rather than a nicety: the curated
+list is 184 places, and the API accepts 3,270 at either end.
 
 ---
 
@@ -571,8 +579,14 @@ the client asks at most once per 250 ms of typing.
 difference is deliberate. That endpoint answers "where can I fly to" and must
 never offer Amsterdam; this one answers "which airport is that", and `DUS-AMS`
 is a pair `POST /api/routes/lookup` accepts — an airport search that hid it
-would disagree with the API it exists to help somebody use. The form drops the
-*currently selected* origin, which is the precise version of the rule.
+would disagree with the API it exists to help somebody use. Since the search
+screen it is also the **From** box's only source: the three home airports are
+quick chips, and everything else somebody might be departing from is here.
+
+**Each box drops whatever the other one holds**, which is the precise version
+of "never suggest a route from a place to itself" — client-side, in
+`resources/js/Components/search/AirportField.vue`, because it is a fact about
+the form's two fields and not about the airport table.
 
 **Accents are not folded.** The browser folds `Málaga` to `malaga` before
 searching the curated list; Postgres would need the `unaccent` extension, which

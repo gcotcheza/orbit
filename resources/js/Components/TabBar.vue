@@ -1,13 +1,33 @@
 <script setup>
 /*
  * The five-item bottom bar, per design/README.md §Interactions: Orbit,
- * Calendar, a centre + button, Watch, Alerts.
+ * Calendar, a centre accent button, Watch, Alerts.
+ *
+ * =============================================================================
+ * THE CENTRE BUTTON IS A MAGNIFYING GLASS, AND USED TO BE A + THAT WROTE A RULE
+ * =============================================================================
+ * Changed on 2026-08-16, on the evidence of the first day of real use: thirty-
+ * two look-ups, zero rules. The most-used thing in the app was folded away
+ * behind a small + in the watch screen's header and the least-used one had the
+ * biggest button on the screen, which is the tab bar arguing with the person
+ * using it.
+ *
+ * So the centre goes to /search (Views/Search.vue) and rule creation keeps its
+ * screen but loses this seat: /create is reached from the "+ New rule" button
+ * in the rules section of the watch screen, which is where the rules already
+ * are. Nothing was deleted — a shortcut was given to the feature that earned it.
+ *
+ * THE LABEL SAYS "SEARCH", and the label itself is a fix from the day before:
+ * this was the only unlabelled item in the app, and there were two accent
+ * squares within forty pixels of each other doing entirely different writes.
+ * That argument outlived the + it was about — a labelled icon is simply what
+ * the other four are.
  *
  * WHY THE ICONS ARE WRITTEN OUT RATHER THAN LOOPED. Four of the five items are
- * the same shape and the fifth — the accent + button — is not: it has no label,
- * a different box, a shadow and a negative top margin. A v-for would need the
- * odd one special-cased anyway, and the price of the loop would be five 22 px
- * icon paths moved out of the file that draws them. They are drawn here, once.
+ * the same shape and the fifth — the accent button — is not: it has a different
+ * box, a shadow and a negative top margin. A v-for would need the odd one
+ * special-cased anyway, and the price of the loop would be five 22 px icon paths
+ * moved out of the file that draws them. They are drawn here, once.
  *
  * ACTIVE STATE IS CSS, NOT JAVASCRIPT. RouterLink puts
  * `router-link-exact-active` on the current item; every icon strokes with
@@ -37,28 +57,29 @@
       <span class="tab__label">Calendar</span>
     </RouterLink>
 
-    <RouterLink class="tab tab--create" :to="{ name: 'create' }" aria-label="Create an alert rule">
+    <RouterLink class="tab tab--search" :to="{ name: 'search' }" aria-label="Search for a flight">
       <span class="tab__button">
+        <!--
+          Stroked from the style block: --on-solid on the accent fill, and a
+          var() in a presentation attribute is not portable.
+
+          The handle is a separate `path` rather than a longer `d` so it can
+          carry `stroke-linecap` without rounding the circle it grows out of.
+        -->
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-          <!-- Stroked from the style block: --on-solid on the accent fill,
-               and a var() in a presentation attribute is not portable. -->
-          <path d="M11 5v12M5 11h12" stroke-width="2.2" stroke-linecap="round" />
+          <circle cx="9.5" cy="9.5" r="5.5" stroke-width="2" />
+          <path d="m13.7 13.7 3.8 3.8" stroke-width="2.2" stroke-linecap="round" />
         </svg>
       </span>
       <!--
         LABELLED, LIKE THE FOUR EITHER SIDE OF IT. This button was the only
-        unlabelled thing in the app, and there is a second blue + on the watch
-        screen — in its header, forty pixels from this one — that adds a ROUTE.
-        Two identical accent squares, two entirely different writes, and
-        nothing on either saying which. The four neighbours already prove a
-        10 px word fits under an icon; this one was the only item that thought
-        it did not need one.
+        unlabelled thing in the app; the four neighbours already prove a 10 px
+        word fits under an icon.
 
-        The word is "Rule" and not "Create" or "New": what is on the other side
-        of this tap is a rule, and naming the noun is what distinguishes it
-        from the + that takes a route.
+        The word is "Search" and not "Find" or "Look up": it is the noun for the
+        screen, and the screen is a flight search.
       -->
-      <span class="tab__label">Rule</span>
+      <span class="tab__label">Search</span>
     </RouterLink>
 
     <RouterLink class="tab" :to="{ name: 'watch' }">
@@ -132,11 +153,11 @@
    less the 11px top padding); this item is 42px of button, a 4px gap and a
    13px line of text, which is 59px starting 6px high — so the word clears the
    bottom edge without the bar growing. */
-.tab--create {
+.tab--search {
   margin-top: -6px;
 }
 
-.tab--create.router-link-exact-active {
+.tab--search.router-link-exact-active {
   color: var(--muted);
 }
 
@@ -153,6 +174,7 @@
   box-shadow: 0 6px 16px var(--accent-glow);
 }
 
+.tab__button circle,
 .tab__button path {
   stroke: var(--on-solid);
 }

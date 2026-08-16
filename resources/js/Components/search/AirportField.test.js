@@ -1,24 +1,29 @@
 // @vitest-environment jsdom
 // =============================================================================
-// The add-route form, and the typeahead it grew
+// The airport box, and the typeahead it is
 // =============================================================================
-// The box used to take three letters and nothing else, which quietly required
-// the person using it to know that Bilbao is BIO. It now suggests as you type,
-// and the two halves of that are tested differently:
+// This file and the component it tests were Components/watch/AddRouteForm — one
+// box on the watch screen — until the search screen needed the same box twice.
+// The tests came with the code; what left them is everything about a PAIR (two
+// codes, the two buttons, the origin chips), which is now Views/Search.test.js.
+//
+// Three kinds of thing are checked here:
 //
 //   - THE RANKING IS A PURE FUNCTION and is tested as one. "por" meaning Porto
 //     rather than Portugal is an opinion, and an opinion is worth a test that
 //     does not mount anything to state it.
-//   - THE FORM IS TESTED FOR ITS BEHAVIOUR — what a click does, what Enter
-//     does, and the two things that must NOT have changed: a raw three-letter
-//     code still goes straight through, and the list is fetched once rather
-//     than per keystroke.
+//   - THE TYPO FALLBACK, likewise: one wrong letter fails all six ranks at
+//     once, and edit distance is what stands between that and a dead end.
+//   - THE BOX IS TESTED FOR ITS BEHAVIOUR — what a click does, what Enter does,
+//     and the two things that must NOT have changed in the move: a raw
+//     three-letter code still goes straight through, and the curated list is
+//     fetched once rather than per keystroke.
 //
 // WHAT jsdom CANNOT HOLD, and so is left to the browser gate: whether a tap on
-// a suggestion beats the blur that would close the list (the classic focus
+// a suggestion beats the focusout that would close the list (the classic focus
 // race — `@mousedown.prevent` is the fix and jsdom dispatches neither in
-// anger), and whether the panel is actually on top of the button it covers.
-// Both are in e2e/specs/watchlist.spec.js.
+// anger), and whether the panel is actually on top of the buttons it covers.
+// Both are in e2e/specs/search.spec.js.
 // =============================================================================
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia } from 'pinia'
@@ -28,7 +33,7 @@ const get = vi.fn()
 
 vi.mock('@/lib/http', () => ({ http: { get: (...args) => get(...args) } }))
 
-import AddRouteForm from './AddRouteForm.vue'
+import AirportField from './AirportField.vue'
 import { editDistance, fold, nearestDestination, searchDestinations } from '@/stores/destinations'
 import { DEBOUNCE_MS } from '@/stores/airports'
 
@@ -58,7 +63,7 @@ describe('searchDestinations', () => {
 
     it('puts the city ahead of the country that contains it', () => {
         // "por" is the start of Porto and the start of Portugal, and somebody
-        // typing it in a destination box means the city.
+        // typing it in an airport box means the city.
         expect(codes(searchDestinations(ALL, 'por'))).toEqual(['OPO', 'LIS'])
     })
 
@@ -112,7 +117,7 @@ describe('searchDestinations', () => {
 // The typo fallback
 // -----------------------------------------------------------------------------
 // Every rank above is a prefix or substring test, so ONE WRONG LETTER fails all
-// six at once and the panel says "No matching destination." about a place three
+// six at once and the panel says "No matching airport." about a place three
 // rows down the list it is refusing to show. These are the tests for the way
 // out of that.
 
@@ -176,30 +181,55 @@ describe('nearestDestination', () => {
 })
 
 // -----------------------------------------------------------------------------
-// The form
+// The box
 // -----------------------------------------------------------------------------
 
+const ID = 'search-to'
+
 /**
- * The form, mounted, with both halves of the typeahead answered.
+ * The field, mounted, with both halves of the typeahead answered.
+ *
+ * IT PLAYS THE PARENT AS WELL AS THE TEST, because two of this component's
+ * props are ones a form owns: `modelValue` and `open`. Wiring them back through
+ * `setProps` is what makes the box behave in a test the way it behaves inside
+ * Views/Search.vue — in particular, a panel that opens on typing and shuts when
+ * a suggestion is taken.
  *
  * `world` is what `GET /api/airports?q=` comes back with. It is EMPTY BY
  * DEFAULT and, more to the point, never arrives at all unless a test advances
- * the clock — see `settle()` — which is what keeps every test written before
- * world flights asserting exactly what it always asserted.
+ * the clock — see `settle()` — which is what keeps every assertion about the
+ * instant, curated half free of the slow one.
  *
  * @param {Array<object>} destinations `GET /api/destinations`
- * @param {{world?: Array<object>}} options mount options plus the world answer
+ * @param {{world?: Array<object>, exclude?: string}} options
  */
-async function form(destinations = ALL, { world = [], ...options } = {}) {
+async function field(destinations = ALL, { world = [], exclude = '', ...options } = {}) {
     get.mockImplementation((url) => Promise.resolve(url === '/api/destinations'
         ? { data: { data: destinations, meta: { count: destinations.length } } }
         : { data: { data: world, meta: { count: world.length } } }))
 
-    const wrapper = mount(AddRouteForm, { ...options, global: { plugins: [createPinia()] } })
+    /* A holder, so the handlers below can name the wrapper they are mounted in. */
+    const held = {}
+
+    held.wrapper = mount(AirportField, {
+        ...options,
+        props: {
+            id: ID,
+            label: 'To',
+            listLabel: 'Destination suggestions',
+            modelValue: '',
+            open: false,
+            exclude,
+            'onUpdate:modelValue': (next) => held.wrapper.setProps({ modelValue: next }),
+            onOpen: () => held.wrapper.setProps({ open: true }),
+            onClose: () => held.wrapper.setProps({ open: false }),
+        },
+        global: { plugins: [createPinia()] },
+    })
 
     await flushPromises()
 
-    return wrapper
+    return held.wrapper
 }
 
 /**
@@ -216,7 +246,7 @@ async function settle() {
     await flushPromises()
 }
 
-const box = (wrapper) => wrapper.get('#add-destination')
+const box = (wrapper) => wrapper.get(`#${ID}`)
 const options = (wrapper) => wrapper.findAll('[role="option"]')
 
 /** The suggestion rows, as the codes they print — the guess row is not one. */
@@ -242,9 +272,9 @@ afterEach(() => {
     vi.useRealTimers()
 })
 
-describe('the destination typeahead', () => {
+describe('the airport typeahead', () => {
     it('asks for the list once, however much is typed', async () => {
-        const wrapper = await form()
+        const wrapper = await field()
 
         await box(wrapper).setValue('b')
         await box(wrapper).setValue('bi')
@@ -255,14 +285,13 @@ describe('the destination typeahead', () => {
     })
 
     it('suggests nothing until something is typed', async () => {
-        const wrapper = await form()
+        const wrapper = await field()
 
-        expect(wrapper.get('.options').isVisible()).toBe(false)
         expect(box(wrapper).attributes('aria-expanded')).toBe('false')
     })
 
     it('offers the match, spelled out', async () => {
-        const wrapper = await form()
+        const wrapper = await field()
 
         await box(wrapper).setValue('bilb')
 
@@ -274,24 +303,24 @@ describe('the destination typeahead', () => {
     })
 
     it('fills the box with the code when a suggestion is taken', async () => {
-        const wrapper = await form()
+        const wrapper = await field()
 
         await box(wrapper).setValue('bilb')
         await options(wrapper)[0].trigger('click')
 
         expect(box(wrapper).element.value).toBe('BIO')
-        expect(wrapper.get('.options').isVisible()).toBe(false)
+        expect(box(wrapper).attributes('aria-expanded')).toBe('false')
     })
 
     it('says so when there is nothing to suggest', async () => {
-        const wrapper = await form()
+        const wrapper = await field()
 
         await box(wrapper).setValue('zzz')
 
         /*
          * "SEARCHING…" FIRST, AND IT IS NOT A SPINNER. The curated list has
          * been searched and found nothing; the other 3,086 airports are being
-         * asked about, and a panel that said "No matching destination." in the
+         * asked about, and a panel that said "No matching airport." in the
          * meantime would be a verdict delivered before the evidence.
          */
         expect(wrapper.get('.option--empty').text()).toBe('Searching…')
@@ -299,17 +328,17 @@ describe('the destination typeahead', () => {
         await settle()
 
         expect(options(wrapper)).toHaveLength(0)
-        expect(wrapper.get('.option--empty').text()).toBe('No matching destination.')
+        expect(wrapper.get('.option--empty').text()).toBe('No matching airport.')
     })
 
     /*
      * THE DEAD END, and the way out of it. "barcelna" is one letter away from a
      * place this app knows, and every rank in the search is a prefix or
      * substring test — so one slip fails all six and the panel answers "No
-     * matching destination." about a city it holds.
+     * matching airport." about a city it holds.
      */
     it('offers what was probably meant when one letter is wrong', async () => {
-        const wrapper = await form(WIDER)
+        const wrapper = await field(WIDER)
 
         await box(wrapper).setValue('barcelna')
         // The guess waits for the world search too: a suggestion that appeared
@@ -327,11 +356,11 @@ describe('the destination typeahead', () => {
         await guess.trigger('click')
 
         expect(box(wrapper).element.value).toBe('BCN')
-        expect(wrapper.get('.options').isVisible()).toBe(false)
+        expect(box(wrapper).attributes('aria-expanded')).toBe('false')
     })
 
     it('takes the guess on Enter, which is the only key that reaches it', async () => {
-        const wrapper = await form(WIDER)
+        const wrapper = await field(WIDER)
 
         await box(wrapper).setValue('barcelna')
         await settle()
@@ -343,7 +372,7 @@ describe('the destination typeahead', () => {
     })
 
     it('does not guess beside real results', async () => {
-        const wrapper = await form(WIDER)
+        const wrapper = await field(WIDER)
 
         await box(wrapper).setValue('bilb')
 
@@ -351,49 +380,13 @@ describe('the destination typeahead', () => {
         expect(wrapper.find('.option--guess').exists()).toBe(false)
     })
 
-    /*
-     * A DEFECT THE BROWSER GATE FOUND, written down here as well because the
-     * shape of it is testable even though the symptom was not.
-     *
-     * The list used to close on the input's `@blur`. Blur fires on MOUSEDOWN,
-     * the panel is in the flow, and removing it moves the Add button ~50 px up
-     * — so the mouseup landed on empty space and the press never became a
-     * click. The button was unpressable whenever there were suggestions.
-     *
-     * What is asserted is the rule that replaced it: focus moving INSIDE the
-     * form leaves the list alone, focus leaving the form closes it. jsdom
-     * cannot show the missed click; it can hold the rule that prevents it.
-     */
-    it('stays open while focus moves to the button that sends it', async () => {
-        // `attachTo`, uniquely in this file: focus events on a tree that is not
-        // in a document are not the events this is about.
-        const wrapper = await form(ALL, { attachTo: document.body })
-
-        await box(wrapper).setValue('bilb')
-
-        const leave = (relatedTarget) => {
-            box(wrapper).element.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget }))
-
-            return flushPromises()
-        }
-
-        await leave(wrapper.get('.add__submit').element)
-        expect(wrapper.get('.options').isVisible()).toBe(true)
-
-        // And closes when focus leaves the form for good.
-        await leave(null)
-        expect(wrapper.get('.options').isVisible()).toBe(false)
-
-        wrapper.unmount()
-    })
-
     it('closes on Escape and leaves what was typed alone', async () => {
-        const wrapper = await form()
+        const wrapper = await field()
 
         await box(wrapper).setValue('bilb')
         await press(wrapper, 'Escape')
 
-        expect(wrapper.get('.options').isVisible()).toBe(false)
+        expect(box(wrapper).attributes('aria-expanded')).toBe('false')
         // "What was typed", exactly: the box stopped upper-casing when it
         // stopped being three letters wide. See the note on `code` in the
         // component for why there is no middle setting.
@@ -401,7 +394,7 @@ describe('the destination typeahead', () => {
     })
 
     it('walks the list with the arrow keys and takes one with Enter', async () => {
-        const wrapper = await form()
+        const wrapper = await field()
 
         await box(wrapper).setValue('por')
         expect(options(wrapper)).toHaveLength(2)
@@ -412,7 +405,7 @@ describe('the destination typeahead', () => {
         await press(wrapper, 'ArrowDown')
         await press(wrapper, 'ArrowDown')
 
-        expect(box(wrapper).attributes('aria-activedescendant')).toBe('add-destination-option-1')
+        expect(box(wrapper).attributes('aria-activedescendant')).toBe(`${ID}-option-1`)
         expect(options(wrapper)[1].attributes('aria-selected')).toBe('true')
 
         const enter = await press(wrapper, 'Enter')
@@ -423,7 +416,7 @@ describe('the destination typeahead', () => {
     })
 
     it('takes the first suggestion when Enter comes before any arrow key', async () => {
-        const wrapper = await form()
+        const wrapper = await field()
 
         await box(wrapper).setValue('bilb')
         const enter = await press(wrapper, 'Enter')
@@ -434,11 +427,12 @@ describe('the destination typeahead', () => {
 
     /*
      * THE PATH THAT EXISTED BEFORE ANY OF THIS. Somebody who knows the code
-     * types it and presses Enter, and the form submits rather than making them
-     * accept a suggestion that says the same thing back to them.
+     * types it and presses Enter, and the keypress is LEFT ALONE so the form
+     * around this box submits — rather than making them accept a suggestion
+     * that says the same thing back to them.
      */
     it('leaves Enter alone when the box already holds a code', async () => {
-        const wrapper = await form()
+        const wrapper = await field()
 
         await box(wrapper).setValue('lis')
         const enter = await press(wrapper, 'Enter')
@@ -452,60 +446,13 @@ describe('the destination typeahead', () => {
     })
 
     /*
-     * THE FORM'S OWN SUBMIT IS NOW THE LOOK-UP — the primary button and the
-     * Enter key both — because the owner asked to see a price before committing
-     * to watching a route. The pair it sends is unchanged; what changed is what
-     * the screen does with it (see the component, and Watchlist.vue).
-     */
-    it('still sends a typed code, upper-cased, with the chosen origin', async () => {
-        const wrapper = await form()
-
-        await wrapper.findAll('[role="radio"]')[1].trigger('click')
-        await box(wrapper).setValue('lis')
-        await wrapper.get('form').trigger('submit')
-
-        expect(wrapper.emitted('lookup')).toEqual([[{ origin: 'EIN', destination: 'LIS' }]])
-        // And it did not quietly do both.
-        expect(wrapper.emitted('watch')).toBeUndefined()
-    })
-
-    /*
-     * AND THE COMMITMENT IS STILL ONE TAP, on its own button, emitting its own
-     * event. The two actions take the same pair and are refused by the same two
-     * checks; the difference is entirely which one the screen was asked for.
-     */
-    it('sends the same pair as a watch when the second button is used', async () => {
-        const wrapper = await form()
-
-        await box(wrapper).setValue('lis')
-        await wrapper.get('.add__watch').trigger('click')
-
-        expect(wrapper.emitted('watch')).toEqual([[{ origin: 'AMS', destination: 'LIS' }]])
-        expect(wrapper.emitted('lookup')).toBeUndefined()
-    })
-
-    it('refuses to send a half-typed place name, whichever button asks', async () => {
-        const wrapper = await form()
-
-        await box(wrapper).setValue('bilb')
-        await wrapper.get('form').trigger('submit')
-
-        expect(wrapper.emitted('lookup')).toBeUndefined()
-        expect(wrapper.get('.add__error').text()).toContain('Pick a destination from the list')
-
-        await wrapper.get('.add__watch').trigger('click')
-
-        expect(wrapper.emitted('watch')).toBeUndefined()
-    })
-
-    /*
      * The strip that keeps a code field a code field had to widen when the box
      * started taking place names — and the half that mattered, digits, has a
      * defect behind it (see the component, and the browser test that reads the
      * ELEMENT back rather than the model).
      */
     it('keeps letters, spaces and accents, and still drops digits', async () => {
-        const wrapper = await form()
+        const wrapper = await field()
 
         // AND KEEPS THE CASE THEY WERE TYPED IN. The strip is the only thing
         // this watcher does now: a box that answered "Lisbon" with "LISBON"
@@ -521,30 +468,6 @@ describe('the destination typeahead', () => {
     })
 
     /*
-     * =========================================================================
-     * THE BOX DOES NOT SHOUT, AND THE FORM STILL SENDS A CODE
-     * =========================================================================
-     * Both halves in one test, because either one alone is a bug. Upper-casing
-     * as you type made "Lisbon" into "LISBON" — a search field answering a
-     * place name with capitals, which reads as an error message about what was
-     * just typed and is what the UX pass caught. Moving the capitals to the
-     * boundary is only correct if the boundary actually applies them: a route is
-     * `AMS-LIS` and always has been (App\Models\Route::codeFor).
-     */
-    it('does not shout a city name back, and still sends an upper-case code', async () => {
-        const wrapper = await form()
-
-        await box(wrapper).setValue('Lisbon')
-        expect(box(wrapper).element.value).toBe('Lisbon')
-
-        await box(wrapper).setValue('lis')
-        await wrapper.get('form').trigger('submit')
-
-        expect(box(wrapper).element.value).toBe('lis')
-        expect(wrapper.emitted('lookup')).toEqual([[{ origin: 'AMS', destination: 'LIS' }]])
-    })
-
-    /*
      * A list that never arrives is not an outage: the box is exactly the box it
      * was before the typeahead existed, and it says so rather than claiming
      * there is no such place.
@@ -553,30 +476,66 @@ describe('the destination typeahead', () => {
         vi.spyOn(console, 'error').mockImplementation(() => {})
         get.mockRejectedValue(new Error('offline'))
 
-        const wrapper = mount(AddRouteForm, { global: { plugins: [createPinia()] } })
-        await flushPromises()
+        const wrapper = mount(AirportField, {
+            props: {
+                id: ID,
+                label: 'To',
+                listLabel: 'Destination suggestions',
+                modelValue: '',
+                open: true,
+            },
+            global: { plugins: [createPinia()] },
+        })
 
+        await flushPromises()
         await box(wrapper).setValue('lis')
         await settle()
 
         expect(wrapper.get('.option--empty').text()).toContain('a three-letter code still works')
+    })
 
-        await wrapper.get('form').trigger('submit')
-        expect(wrapper.emitted('lookup')).toEqual([[{ origin: 'AMS', destination: 'LIS' }]])
+    /*
+     * =========================================================================
+     * THE OTHER END OF THE PAIR IS NOT A SUGGESTION
+     * =========================================================================
+     * New with the search screen, because it is only answerable with two boxes:
+     * a route from a place to itself is not a route, and offering AMS in the To
+     * box while the From box holds AMS is offering somebody a refusal.
+     */
+    it('never suggests what the other box already holds', async () => {
+        const wrapper = await field(WIDER, { exclude: 'OPO' })
+
+        await box(wrapper).setValue('por')
+
+        // Porto is dropped; Portugal's other airport is not.
+        expect(codes(suggestionRows(wrapper))).toEqual(['LIS'])
+    })
+
+    it('does not guess the other end either', async () => {
+        // "barcelna" is one letter from Barcelona and Barcelona is where the
+        // other box already is, so the answer is no answer rather than a
+        // suggestion this form is about to refuse.
+        const wrapper = await field(WIDER, { exclude: 'BCN' })
+
+        await box(wrapper).setValue('barcelna')
+        await settle()
+
+        expect(wrapper.find('.option--guess').exists()).toBe(false)
+        expect(wrapper.get('.option--empty').text()).toBe('No matching airport.')
     })
 })
 
 // -----------------------------------------------------------------------------
 // The world half
 // -----------------------------------------------------------------------------
-// The curated list is 184 places with opinions attached; the box now also finds
-// the other 3,086 airports Orbit can price, from `GET /api/airports?q=`. What is
+// The curated list is 184 places with opinions attached; the box also finds the
+// other 3,086 airports Orbit can price, from `GET /api/airports?q=`. What is
 // tested here is the JOIN — that the instant half still paints first, that the
 // slow half lands under it, and that the panel never shows the same airport
 // twice or a divider with nothing above it.
 //
-// The debounce, the abort and the sequence guard belong to the store and are
-// tested in stores/airports.test.js.
+// The debounce, the abort and the sequence guard belong to the search itself and
+// are tested in stores/airports.test.js.
 
 const PDX = { iata: 'PDX', city: 'Portland', country: 'United States', countryCode: 'US' }
 const JFK = { iata: 'JFK', city: 'New York', country: 'United States', countryCode: 'US' }
@@ -585,7 +544,7 @@ const split = (wrapper) => wrapper.find('.options__split')
 
 describe('everywhere else', () => {
     it('paints the curated matches before the request is even made', async () => {
-        const wrapper = await form(ALL, { world: [PDX] })
+        const wrapper = await field(ALL, { world: [PDX] })
 
         await box(wrapper).setValue('por')
 
@@ -596,7 +555,7 @@ describe('everywhere else', () => {
     })
 
     it('adds the world matches underneath, behind one divider', async () => {
-        const wrapper = await form(ALL, { world: [PDX] })
+        const wrapper = await field(ALL, { world: [PDX] })
 
         await box(wrapper).setValue('por')
         await settle()
@@ -613,7 +572,7 @@ describe('everywhere else', () => {
     })
 
     it('draws no divider when the panel is only one list', async () => {
-        const wrapper = await form(ALL, { world: [PDX] })
+        const wrapper = await field(ALL, { world: [PDX] })
 
         // "portland" is nowhere in the curated list, so there is nothing above
         // the world rows for a divider to divide them from.
@@ -627,7 +586,7 @@ describe('everywhere else', () => {
     it('never offers the same airport twice', async () => {
         // The world endpoint searches the WHOLE airports table, curated rows
         // included, so LIS comes back from both halves.
-        const wrapper = await form(ALL, { world: [{ ...LIS }, PDX] })
+        const wrapper = await field(ALL, { world: [{ ...LIS }, PDX] })
 
         await box(wrapper).setValue('lis')
         await settle()
@@ -636,7 +595,7 @@ describe('everywhere else', () => {
     })
 
     it('highlights a world row the way the curated ones are highlighted', async () => {
-        const wrapper = await form(ALL, { world: [PDX] })
+        const wrapper = await field(ALL, { world: [PDX] })
 
         await box(wrapper).setValue('portl')
         await settle()
@@ -658,7 +617,7 @@ describe('everywhere else', () => {
      * and needed a second press to send.
      */
     it('sends a world code on the first Enter', async () => {
-        const wrapper = await form(ALL, { world: [JFK] })
+        const wrapper = await field(ALL, { world: [JFK] })
 
         await box(wrapper).setValue('jfk')
         await settle()
@@ -670,7 +629,7 @@ describe('everywhere else', () => {
     })
 
     it('stops searching once a suggestion has been taken', async () => {
-        const wrapper = await form(ALL, { world: [PDX] })
+        const wrapper = await field(ALL, { world: [PDX] })
 
         await box(wrapper).setValue('portl')
         await settle()
@@ -686,8 +645,27 @@ describe('everywhere else', () => {
         expect(get).toHaveBeenCalledTimes(asked)
     })
 
+    /*
+     * THE SAME CANCELLATION, REACHED FROM OUTSIDE. The search screen's home
+     * chips write a code into this box, and `take()` exists so that they go
+     * through `choose()` rather than assigning to the model — an assignment
+     * would queue a request for "AMS" that nothing is going to read.
+     */
+    it('takes a code from the form without asking anybody about it', async () => {
+        const wrapper = await field(ALL, { world: [PDX] })
+
+        const asked = get.mock.calls.length
+
+        wrapper.vm.take('AMS')
+        await flushPromises()
+        await settle()
+
+        expect(box(wrapper).element.value).toBe('AMS')
+        expect(get).toHaveBeenCalledTimes(asked)
+    })
+
     it('asks nothing about a single letter', async () => {
-        const wrapper = await form(ALL, { world: [PDX] })
+        const wrapper = await field(ALL, { world: [PDX] })
 
         await box(wrapper).setValue('p')
         await settle()

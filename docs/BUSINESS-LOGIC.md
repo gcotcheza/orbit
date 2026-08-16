@@ -70,12 +70,23 @@ the route detail refreshes a *stale and unwatched* route and never a watched
 one: a watched route with old fares is a broken poll, not a call to make from
 somebody's phone.
 
-**Origins are closed, destinations are not.** `config('orbit.origins')` is
-`['AMS', 'EIN', 'DUS']` and `AddWatchedRouteRequest` accepts nothing else as an
-origin: a fare from Málaga is not a flight this person can take. The
-destination may be any row in `airports`, and that is deliberately not the same
-thing as what the form offers — a code somebody types from memory should still
-work.
+**Both ends are open; the rule engine's origins are not.** Since the search
+screen (2026-08-16) `RoutePairRequest` validates the origin exactly as it
+validates the destination — `exists:airports,iata`, any row in the table — so
+`POST /api/routes/lookup` and `POST /api/watchlist` take `BCN-PMI` from
+somebody who is already in Barcelona. Asking what a pair costs is a question,
+and the old `Rule::in(config('orbit.origins'))` was the only thing making it
+unaskable.
+
+`config('orbit.origins')` is unchanged and still `['AMS', 'EIN', 'DUS']`. What
+it means now is narrower and load-bearing: **the origins a deal *rule* may fire
+from**, read directly by `RuleMatches`, `SweepRuleFares` and `RuleVocabulary`,
+and therefore the width of the nightly sweep (§11, "The cap is the point"). The
+distinction is between a pair somebody typed once and a standing question Orbit
+answers on its own every night — only the second has a budget, and none of
+those three ever went through a FormRequest, so widening the request widened no
+sweep. What a form *offers* is a third decision again: the search screen writes
+the three home airports out as quick chips and its boxes take any of the 3,270.
 
 ### The two tiers of "somewhere Orbit knows"
 
@@ -84,7 +95,7 @@ a feature reads is a decision rather than an accident.
 
 | | rows | table | seeded by | what it is for |
 | --- | --- | --- | --- | --- |
-| **Tier 1 — the world** | 3,270 | `airports` | `WorldAirportSeeder`, from `database/seeders/data/world_airports.csv` | **look-up and watch.** `exists:airports,iata`, `GET /api/airports?q=` |
+| **Tier 1 — the world** | 3,270 | `airports` | `WorldAirportSeeder`, from `database/seeders/data/world_airports.csv` | **look-up and watch, at both ends.** `exists:airports,iata`, `GET /api/airports?q=` |
 | **Tier 2 — the curated set** | 184 | `destinations` (+ their `airports` rows) | `DestinationSeeder`, from `european_destinations.php` and `world_destinations.php` | **rules.** vibes, month-by-month warmth, `GET /api/destinations` |
 
 **Tier 1 is a third-party snapshot and carries no opinion.** It is every
@@ -108,11 +119,11 @@ Airport" and files Sydney's city as "Sydney (Mascot)", and one of the
 disagreements is a correction — Dakar is `DSS`, not the `DKR` the snapshot still
 marks as served. `tests/Feature/SeedersTest` asserts the two sets stay disjoint.
 
-**What the owner sees.** The add-route box paints the curated matches
-instantly from memory and adds the world matches under a divider 250 ms later
-(`resources/js/stores/airports.js`). Both halves are watchable and both land on
-the same route-detail screen; only the curated half can ever be *suggested by a
-rule*.
+**What the owner sees.** Each of the search screen's two boxes paints the
+curated matches instantly from memory and adds the world matches under a
+divider 250 ms later (`resources/js/stores/airports.js`). Both halves are
+watchable and both land on the same route-detail screen; only the curated half
+can ever be *suggested by a rule*.
 
 ---
 
@@ -1056,7 +1067,7 @@ reaches its own tail. This is also why the sweep runs *after* the poll.
 
 **The routes a sweep creates are the ones a lookup lands on for free.** A rule
 that swept `AMS-CTG` this morning left a route row and four months of calendar
-behind it; opening that pair from the add-route box costs nothing, because
+behind it; opening that pair from the search screen costs nothing, because
 `FareFreshness` finds fares younger than `orbit.lookup.fresh_for_hours` and
 fetches nothing. The two features pay into the same table — see §1 for why the
 lookup is synchronous and the watchlist add is not.

@@ -13,10 +13,18 @@ use Illuminate\Database\Eloquent\Builder;
  * `POST /api/watchlist` — start watching a city pair.
  *
  * THE PAIR ITSELF IS RoutePairRequest, which this shares with the lookup
- * endpoint: the two codes, what they may be, and the five sentences that come
+ * endpoint: the two codes, what they may be, and the four sentences that come
  * back when they are not. What is added here is the one rule that is about the
  * WATCHLIST rather than about the route — a pair already on it — which is
  * exactly the rule a lookup must not have.
+ *
+ * A WATCHED ROUTE MAY NOW START ANYWHERE, and that is a poll every morning for
+ * a pair the owner cannot necessarily fly. It is deliberate and it is the
+ * owner's to decide: watching is an explicit act on a route somebody has just
+ * been shown the price of, the watchlist is six rows long, and a list that
+ * refused BCN-PMI would refuse the one route somebody actually wanted to
+ * follow. What is NOT widened is the rule engine, which watches on its own —
+ * see the note on `origins` in config/orbit.php.
  */
 final class AddWatchedRouteRequest extends RoutePairRequest
 {
