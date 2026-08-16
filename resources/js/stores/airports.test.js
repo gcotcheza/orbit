@@ -3,8 +3,8 @@
 // The world half of the typeahead
 // =============================================================================
 // stores/destinations.js is a list in memory and a pure ranking function, and
-// its tests live beside the form. This one is a NETWORK store, and everything
-// worth testing about it is a race:
+// its tests live beside the box that uses it. This one is a NETWORK search, and
+// everything worth testing about it is a race:
 //
 //   - the debounce, so a word is one request rather than five;
 //   - the abort, so the request it replaces is not left running;
@@ -15,15 +15,21 @@
 //
 // FAKE TIMERS THROUGHOUT, because the debounce is 250 ms and a suite that waits
 // for it is a suite that takes a second per test and is flaky on a loaded box.
+//
+// IT IS A COMPOSABLE AND USED TO BE A PINIA STORE, which is why every test below
+// calls `useAirportSearch()` for itself rather than reaching for a singleton:
+// with two boxes on the search screen the results belong to the box that asked,
+// and each of these tests is one box. Called outside a component, so
+// `onScopeDispose` has nothing to attach to — hence `failSilently` in the source.
 // =============================================================================
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createPinia, setActivePinia } from 'pinia'
 
 const get = vi.fn()
 
 vi.mock('@/lib/http', () => ({ http: { get: (...args) => get(...args) } }))
 
-import { DEBOUNCE_MS, mergeSuggestions, MIN_QUERY, useAirportsStore } from './airports'
+import { DEBOUNCE_MS, IATA, mergeSuggestions, MIN_QUERY, toCode, useAirportSearch } from './airports'
+import { MAX_SUGGESTIONS } from './destinations'
 
 const JFK = { iata: 'JFK', city: 'New York', country: 'United States', countryCode: 'US' }
 const LGA = { iata: 'LGA', city: 'New York', country: 'United States', countryCode: 'US' }
@@ -44,7 +50,6 @@ function deferred() {
 
 beforeEach(() => {
     vi.useFakeTimers()
-    setActivePinia(createPinia())
     get.mockReset()
 })
 
@@ -52,32 +57,32 @@ afterEach(() => {
     vi.useRealTimers()
 })
 
-describe('the airport search store', () => {
+describe('the airport search', () => {
     it('asks for nothing until the debounce has passed', async () => {
         get.mockResolvedValue(answer([JFK]))
 
-        const store = useAirportsStore()
+        const box = useAirportSearch()
 
-        store.search('new')
+        box.search('new')
 
         expect(get).not.toHaveBeenCalled()
-        expect(store.status).toBe('searching')
+        expect(box.status.value).toBe('searching')
 
         await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
         expect(get).toHaveBeenCalledTimes(1)
         expect(get).toHaveBeenCalledWith('/api/airports', expect.objectContaining({ params: { q: 'new' } }))
-        expect(store.results).toEqual([JFK])
-        expect(store.status).toBe('ready')
+        expect(box.results.value).toEqual([JFK])
+        expect(box.status.value).toBe('ready')
     })
 
     it('turns a typed word into one request', async () => {
         get.mockResolvedValue(answer([JFK]))
 
-        const store = useAirportsStore()
+        const box = useAirportSearch()
 
         for (const typed of ['ne', 'new', 'new ', 'new y', 'new yo']) {
-            store.search(typed)
+            box.search(typed)
             await vi.advanceTimersByTimeAsync(DEBOUNCE_MS / 5)
         }
 
@@ -90,28 +95,28 @@ describe('the airport search store', () => {
     it('does not ask about one character, and forgets what it found', async () => {
         get.mockResolvedValue(answer([JFK]))
 
-        const store = useAirportsStore()
+        const box = useAirportSearch()
 
-        store.search('new')
+        box.search('new')
         await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
-        expect(store.results).toEqual([JFK])
+        expect(box.results.value).toEqual([JFK])
 
         /* Backspaced down to a single letter: no request, and no stale panel. */
-        store.search('n')
+        box.search('n')
         await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
         expect(get).toHaveBeenCalledTimes(1)
-        expect(store.results).toEqual([])
-        expect(store.status).toBe('idle')
+        expect(box.results.value).toEqual([])
+        expect(box.status.value).toBe('idle')
         expect(MIN_QUERY).toBe(2)
     })
 
     it('sends what was typed with the whitespace taken off', async () => {
         get.mockResolvedValue(answer([]))
 
-        const store = useAirportsStore()
+        const box = useAirportSearch()
 
-        store.search('  new york  ')
+        box.search('  new york  ')
         await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
         expect(get).toHaveBeenCalledWith('/api/airports', expect.objectContaining({ params: { q: 'new york' } }))
@@ -122,20 +127,20 @@ describe('the airport search store', () => {
 
         get.mockReturnValueOnce(first.promise).mockResolvedValue(answer([EWR]))
 
-        const store = useAirportsStore()
+        const box = useAirportSearch()
 
-        store.search('new')
+        box.search('new')
         await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
         const { signal } = get.mock.calls[0][1]
 
         expect(signal.aborted).toBe(false)
 
-        store.search('newark')
+        box.search('newark')
         await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
         expect(signal.aborted).toBe(true)
-        expect(store.results).toEqual([EWR])
+        expect(box.results.value).toEqual([EWR])
     })
 
     /**
@@ -150,79 +155,103 @@ describe('the airport search store', () => {
 
         get.mockReturnValueOnce(slow.promise).mockResolvedValue(answer([EWR]))
 
-        const store = useAirportsStore()
+        const box = useAirportSearch()
 
-        store.search('new')
+        box.search('new')
         await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
-        store.search('newark')
+        box.search('newark')
         await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
-        expect(store.results).toEqual([EWR])
+        expect(box.results.value).toEqual([EWR])
 
         /* The overtaken request lands now, and has nothing to say. */
         slow.settle(answer([JFK, LGA]))
         await vi.advanceTimersByTimeAsync(0)
 
-        expect(store.results).toEqual([EWR])
-        expect(store.status).toBe('ready')
+        expect(box.results.value).toEqual([EWR])
+        expect(box.status.value).toBe('ready')
     })
 
     it('treats a failure as no suggestions rather than as a broken form', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {})
         get.mockRejectedValue(new Error('gateway'))
 
-        const store = useAirportsStore()
+        const box = useAirportSearch()
 
-        store.search('new')
+        box.search('new')
         await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
-        expect(store.results).toEqual([])
-        expect(store.status).toBe('failed')
+        expect(box.results.value).toEqual([])
+        expect(box.status.value).toBe('failed')
     })
 
     /**
      * An abort rejects exactly like a 500 does. Told apart by the sequence
      * guard rather than by what axios calls a cancellation this year — so the
-     * store must not go to `failed` when it is the one that did the cancelling.
+     * box must not go to `failed` when it is the one that did the cancelling.
      */
     it('does not report its own cancellation as a failure', async () => {
         const cancelled = deferred()
 
         get.mockReturnValueOnce(cancelled.promise).mockResolvedValue(answer([EWR]))
 
-        const store = useAirportsStore()
+        const box = useAirportSearch()
 
-        store.search('new')
+        box.search('new')
         await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
-        store.clear()
+        box.clear()
 
         cancelled.settle(Promise.reject(new Error('canceled')))
         await vi.advanceTimersByTimeAsync(0)
 
-        expect(store.status).toBe('idle')
-        expect(store.results).toEqual([])
+        expect(box.status.value).toBe('idle')
+        expect(box.results.value).toEqual([])
     })
 
     it('drops a pending search when it is cleared', async () => {
         get.mockResolvedValue(answer([JFK]))
 
-        const store = useAirportsStore()
+        const box = useAirportSearch()
 
-        store.search('new')
-        store.clear()
+        box.search('new')
+        box.clear()
 
         await vi.advanceTimersByTimeAsync(DEBOUNCE_MS * 4)
 
         expect(get).not.toHaveBeenCalled()
-        expect(store.status).toBe('idle')
+        expect(box.status.value).toBe('idle')
     })
 })
 
 // -----------------------------------------------------------------------------
 // The join
 // -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// The boundary
+// -----------------------------------------------------------------------------
+
+describe('toCode', () => {
+    it('is what a box holds, turned into what a request takes', () => {
+        expect(toCode('  lis ')).toBe('LIS')
+        expect(toCode('Lisbon')).toBe('LISBON')
+        expect(toCode('')).toBe('')
+    })
+
+    /*
+     * THREE LETTERS AND NOTHING ELSE. "por" is somebody halfway through typing
+     * Porto and "LISBON" is a city; only the middle case is a code, and both
+     * boxes and both buttons ask this question the same way.
+     */
+    it('recognises a finished code and nothing that merely looks like one', () => {
+        expect(IATA.test(toCode('lis'))).toBe(true)
+        expect(IATA.test(toCode('Lisbon'))).toBe(false)
+        expect(IATA.test(toCode('li'))).toBe(false)
+        expect(IATA.test('lis')).toBe(false)
+    })
+})
 
 /** What searchDestinations produces: a row with a `marks` field. */
 const curatedRow = (row) => ({ ...row, marks: { city: {}, iata: {}, country: {} } })
@@ -263,5 +292,30 @@ describe('mergeSuggestions', () => {
 
     it('is the curated list on its own when nothing has come back yet', () => {
         expect(mergeSuggestions([curatedRow(JFK)], [], 'new').map((row) => row.iata)).toEqual(['JFK'])
+    })
+
+    /*
+     * THE OTHER END OF THE PAIR, dropped from either half. A route from a place
+     * to itself is not a route, and the search screen's two boxes each exclude
+     * what the other one holds.
+     */
+    it('never offers the airport the other box is holding', () => {
+        const merged = mergeSuggestions([curatedRow(JFK)], [EWR, LGA], 'new', MAX_SUGGESTIONS, 'EWR')
+
+        expect(merged.map((row) => row.iata)).toEqual(['JFK', 'LGA'])
+        expect(mergeSuggestions([curatedRow(JFK)], [], 'new', MAX_SUGGESTIONS, 'JFK')).toEqual([])
+    })
+
+    /*
+     * AND IT IS DROPPED BEFORE THE CUT, not after. Filtering the sliced result
+     * would leave three suggestions on a panel with room for four — the excluded
+     * airport silently costing somebody a row it was never in.
+     */
+    it('still fills the panel when a row has been excluded', () => {
+        const world = Array.from({ length: 10 }, (_, index) => ({ ...EWR, iata: `X${index}0` }))
+
+        expect(mergeSuggestions([curatedRow(JFK)], world, 'new', 4, 'X00')).toHaveLength(4)
+        expect(mergeSuggestions([curatedRow(JFK)], world, 'new', 4, 'X00').map((row) => row.iata))
+            .toEqual(['JFK', 'X10', 'X20', 'X30'])
     })
 })

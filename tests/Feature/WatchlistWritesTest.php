@@ -322,16 +322,49 @@ final class WatchlistWritesTest extends TestCase
             ->assertJsonValidationErrors(['origin', 'destination']);
     }
 
+    /**
+     * THE ORIGIN USED TO BE ONE OF THREE, and this test used to assert the
+     * refusal. It was inverted on 2026-08-16, with the search screen: a fare
+     * from Barcelona is not a flight the owner can take FROM HOME, and that was
+     * never the question — "what does BCN-LIS cost while I am already in
+     * Barcelona" is, and `Rule::in(config('orbit.origins'))` was the only thing
+     * making it unaskable. See App\Http\Requests\RoutePairRequest.
+     *
+     * WHAT STAYS HOME-ONLY IS THE RULE ENGINE, which never came through this
+     * request at all — tests/Feature/RulesApiTest and the sweep's own tests are
+     * where that is pinned, and none of them moved.
+     */
     #[Test]
-    public function the_origin_has_to_be_one_of_the_three_the_owner_flies_from(): void
+    public function a_route_may_start_anywhere_orbit_knows_an_airport(): void
     {
         $this->airport('BCN');
         $this->airport('LIS');
 
         $this->actingAs($this->owner)
             ->postJson('/api/watchlist', ['origin' => 'BCN', 'destination' => 'LIS'])
+            ->assertCreated()
+            ->assertJsonPath('data.code', 'BCN-LIS');
+
+        $this->assertSame(1, Route::query()->where('code', 'BCN-LIS')->count());
+
+        /* And it is watched like any other route, polled every morning. */
+        Queue::assertPushed(PollRoutePrices::class);
+    }
+
+    /**
+     * The airport table is still the floor at both ends. `is_origin` is a flag
+     * the seeder sets and the rule engine reads; it has never been what this
+     * endpoint validates against, and it is not one now.
+     */
+    #[Test]
+    public function an_origin_that_is_not_an_airport_at_all_is_still_refused(): void
+    {
+        $this->airport('LIS');
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/watchlist', ['origin' => 'ZZZ', 'destination' => 'LIS'])
             ->assertStatus(422)
-            ->assertJsonPath('errors.origin.0', 'Orbit only tracks departures from AMS, EIN or DUS.');
+            ->assertJsonPath('errors.origin.0', 'Orbit does not know that airport yet.');
 
         $this->assertSame(0, Route::query()->count());
     }

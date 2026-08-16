@@ -10,6 +10,7 @@ use App\Models\CalendarFare;
 use App\Models\PriceObservation;
 use App\Models\Route;
 use App\Models\User;
+use App\Models\WatchlistItem;
 use Database\Seeders\DestinationSeeder;
 use Database\Seeders\WorldAirportSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -182,8 +183,14 @@ final class WorldFaresTest extends TestCase
      *
      * `exists:airports,iata` in App\Http\Requests\RoutePairRequest is the rule
      * that used to refuse it and is UNCHANGED — what changed is the table under
-     * it. The origins are not widened by any of this and are still the three in
-     * config('orbit.origins'), which the second half asserts.
+     * it.
+     *
+     * THE SECOND HALF USED TO ASSERT THAT EWR-JFK WAS REFUSED, because the
+     * origins were closed to AMS, EIN and DUS. The search screen opened them on
+     * 2026-08-16 (see RoutePairRequest), so the world import now reaches BOTH
+     * ends of a pair: two American airports, neither of them anywhere near the
+     * owner, priced on request. That is the same feature this test was written
+     * for, finished.
      */
     #[Test]
     public function the_lookup_endpoint_prices_a_pair_it_only_knows_because_of_the_world_import(): void
@@ -205,13 +212,29 @@ final class WorldFaresTest extends TestCase
         $this->assertSame(69, CalendarFare::query()->where('route_id', $route->id)->count());
         $this->assertSame(0, $route->watchlistItems()->count(), 'A lookup still watches nothing.');
 
-        /* EWR is in the table and is not somewhere the owner can leave from. */
+        /*
+         * AND NOW THE OTHER END. EWR is in the table because of the same
+         * import, is not in `config('orbit.origins')`, and is not an airport
+         * anybody drives to from Eindhoven — which is exactly the pair the
+         * origin rule used to refuse and the search screen exists to allow.
+         *
+         * A PROVIDER WITH NOTHING TO SAY, on purpose: `data: []` is a real
+         * answer (docs/API.md — `price.current: null` is not a failure), and
+         * what is being asserted here is that the request reaches the provider
+         * at all rather than dying in validation. The month fixtures above are
+         * a four-response sequence spent on AMS-BKK.
+         */
         $this->assertNotNull(Airport::query()->where('iata', 'EWR')->first());
+
+        Http::fake([self::ENDPOINT => Http::response(['currency' => 'eur', 'data' => []])]);
 
         $this->actingAs($owner)
             ->postJson('/api/routes/lookup', ['origin' => 'EWR', 'destination' => 'JFK'])
-            ->assertStatus(422)
-            ->assertJsonPath('errors.origin.0', 'Orbit only tracks departures from AMS, EIN or DUS.');
+            ->assertSuccessful()
+            ->assertJsonPath('data.code', 'EWR-JFK')
+            ->assertJsonPath('data.price.current', null);
+
+        $this->assertSame(0, WatchlistItem::query()->count(), 'A lookup still watches nothing.');
     }
 
     // -- Helpers -------------------------------------------------------------

@@ -375,5 +375,5 @@ test('an unknown route code says so instead of throwing', async ({ page, browser
     await expect(page.locator('.empty__title')).toHaveText('No such route')
     await expect(page.locator('.empty__code')).toHaveText('ZZZ-YYY')
     // Which half, in the server's own words (App\Http\Requests\RoutePairRequest).
-    await expect(page.locator('.empty__why')).toHaveText(/Orbit only tracks departures from/)
+    await expect(page.locator('.empty__why')).toHaveText(/Orbit does not know that airport yet/)
 })

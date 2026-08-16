@@ -305,17 +305,41 @@ return [
     | Where the owner flies from
     |--------------------------------------------------------------------------
     |
-    | The three airports within a sensible drive, and therefore the only
-    | origins the "add a route" form (design/README.md §5) offers and the only
-    | ones App\Http\Requests\AddWatchedRouteRequest accepts. A destination can
-    | be anywhere Orbit knows; an origin cannot, because a fare from Malaga is
-    | not a flight this person can take.
+    | The three airports within a sensible drive.
+    |
+    | =========================================================================
+    | WHAT THIS IS, SINCE THE SEARCH SCREEN — read this before widening it
+    | =========================================================================
+    | It used to be two things at once: the only origins a person could TYPE,
+    | and the only origins a RULE could fire from. On 2026-08-16 the first half
+    | went away and the second did not, and the asymmetry is the decision.
+    |
+    | IT IS NO LONGER A VALIDATION LIST. App\Http\Requests\RoutePairRequest
+    | accepts any row in `airports` at BOTH ends now, so `POST /api/watchlist`
+    | and `POST /api/routes/lookup` will price BCN-PMI for somebody who is
+    | already in Barcelona. Asking what a pair costs is a question, and this
+    | list was the only thing making it unaskable.
+    |
+    | IT IS STILL THE RULE ENGINE'S ORIGINS, AND THAT IS A BUDGET. A deal rule
+    | is a standing question Orbit answers on its own every night:
+    | App\Application\Rules\RuleMatches and App\Jobs\SweepRuleFares walk
+    | `origins × destinations` and each cell is a metered provider call
+    | (docs/BUSINESS-LOGIC.md §11, "The cap is the point"). Three origins is
+    | 3 × 184; a fourth is another 184 polls a night that nobody asked for by
+    | name. App\Domain\Rules\RuleVocabulary is what a sentence may name, and it
+    | reads this too. All three read the config directly and none of them goes
+    | through a FormRequest, which is why widening the request widened nothing
+    | here.
+    |
+    | THEY ARE ALSO THE SEARCH SCREEN'S QUICK CHIPS, which is presentation
+    | rather than a rule: resources/js/Views/Search.vue writes AMS, EIN and DUS
+    | out so the ordinary case is one tap, and the box beside them takes any of
+    | the 3,270.
     |
     | THE SAME THREE ARE FLAGGED `is_origin` BY DestinationSeeder, from
     | database/seeders/data/european_destinations.php. Two lists of one fact is
     | a drift waiting to happen, so tests/Feature/SeedersTest asserts they
-    | agree — the seeder's list is the one that carries the coordinates, and
-    | this one is what a request is validated against without a query.
+    | agree — the seeder's list is the one that carries the coordinates.
     |
     */
 

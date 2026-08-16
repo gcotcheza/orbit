@@ -39,6 +39,20 @@ export const router = createRouter({
             meta: { layout: 'tabs' },
         },
         {
+            // The centre tab. It has a bottom bar like the other four: a search
+            // is something you come back from with a route, and the way back is
+            // the bar you arrived by.
+            path: '/search',
+            name: 'search',
+            component: () => import('@/Views/Search.vue'),
+            meta: { layout: 'tabs' },
+        },
+        {
+            // STILL A TABBED SCREEN, and no longer a tab. Rule creation lost
+            // the centre seat to search on 2026-08-16 and kept everything else:
+            // the URL, the screen, and the bar under it. It is reached from the
+            // "+ New rule" button in the watch screen's rules section, which is
+            // where the rules it writes are listed.
             path: '/create',
             name: 'create',
             component: () => import('@/Views/Create.vue'),
