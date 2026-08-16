@@ -604,6 +604,93 @@ test.describe('deals from your airports', () => {
     })
 
     /*
+     * ========================================================================
+     * THE SECOND LANE — "rare price for this route"
+     * ========================================================================
+     * WHAT MAKES THIS HONEST RATHER THAN A PROP. The relative lane reads
+     * REMEMBERED baselines, so `DiscoverySeeder` measures a sample of routes'
+     * real windows through the ordinary PriceProvider before running the real
+     * job — the fortnight of exploration a live box would have done three routes
+     * at a time. Nothing is written by hand: the baseline is a real median of
+     * the fake's own window and the discount is the fake's own swept sale price
+     * against it. A hand-written "€110 usual" next to a €60 fare would make this
+     * a photograph of a shape rather than of a feature, which is the trap the
+     * seeder's docblock is mostly about.
+     *
+     * WHY THE BROWSER. jsdom already asserts the sentence (DiscoveryCard.test
+     * .js); what it cannot see is whether "rare price for this route" reads as a
+     * quiet aside or as a second badge competing with the verdict pill — and
+     * whether the `--info` tint survives BOTH themes, which is the one thing
+     * tokens.css can get wrong in a way no unit test notices.
+     */
+    test('a relative find explains itself, in both themes', async ({ page }) => {
+        await page.goto('/search')
+
+        await expect(page.locator('.finds')).toBeVisible()
+
+        const relative = page.locator('.finds .find').filter({ has: page.locator('.find__lane') })
+
+        /*
+         * THE LANE HAS TO HAVE FOUND SOMETHING. If this is zero the flywheel is
+         * not turning in the sandbox — which is a real failure and not a flaky
+         * one, because the seeder's baselines and the fake's fares are both
+         * deterministic.
+         */
+        expect(await relative.count()).toBeGreaterThan(0)
+
+        const card = relative.first()
+
+        await expect(card.locator('.find__lane')).toHaveText('Rare price for this route')
+
+        /*
+         * AND THE ROUTE PAIR IS STILL THERE, IN ITS OWN ELEMENT. The lane line is
+         * a sibling rather than text folded into the eyebrow, which is what keeps
+         * the navigation test below working on every card type.
+         */
+        await expect(card.locator('.find__from')).toHaveText(/^[A-Z]{3} → [A-Z]{3}$/)
+        await expect(card.locator('.find__price')).toHaveText(/^€\d+$/)
+
+        /*
+         * THE TINT IS THE `--info` PAIR AND NOT THE VERDICT'S `--good`. A
+         * relative find is not a BETTER find, it is a different kind of one, and
+         * a green tag here would rank it against the absolute cards above it.
+         */
+        const [lane, badge] = await Promise.all([
+            card.locator('.find__lane').evaluate((el) => getComputedStyle(el).backgroundColor),
+            card.locator('.find__badge').evaluate((el) => getComputedStyle(el).backgroundColor),
+        ])
+
+        expect(lane).not.toBe(badge)
+        /* Not transparent — a token that failed to resolve would render as none. */
+        expect(lane).not.toBe('rgba(0, 0, 0, 0)')
+
+        await shot(page, 'search-discoveries-lanes-dark')
+
+        // --- The same strip, light -------------------------------------------
+        await page.goto('/alerts')
+        await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Light' }).click()
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+
+        await page.goto('/search')
+
+        const lightLane = page.locator('.finds .find .find__lane').first()
+        await expect(lightLane).toBeVisible()
+
+        /* BOTH THEMES DEFINE THE TOKEN. The light theme's --info-bg is a solid
+           and the dark theme's is an alpha, so these must differ — a tag that
+           looked identical in both would mean one theme never got a value. */
+        const lightTint = await lightLane.evaluate((el) => getComputedStyle(el).backgroundColor)
+        expect(lightTint).not.toBe(lane)
+        expect(lightTint).not.toBe('rgba(0, 0, 0, 0)')
+
+        await shot(page, 'search-discoveries-lanes-light')
+
+        await page.goto('/alerts')
+        await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Dark' }).click()
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    })
+
+    /*
      * TAPPING A DISCOVERY IS THE REUSE, AND IT IS THE WHOLE INTEGRATION STORY.
      * A card links into `/route/AMS-AGP` — the existing lookup flow, which
      * prices the pair, creates the route row and offers the watch button. This

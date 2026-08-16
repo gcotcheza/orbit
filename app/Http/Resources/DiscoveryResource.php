@@ -51,6 +51,23 @@ final class DiscoveryResource extends JsonResource
              */
             'code' => $discovery->code,
 
+            /*
+             * WHICH ARGUMENT THIS CARD IS MAKING — `absolute` or `relative`.
+             *
+             * IT IS PUBLISHED BECAUSE THE CLIENT DRAWS A DIFFERENT SENTENCE FOR
+             * EACH, and that sentence is a claim about evidence rather than a
+             * style. An absolute card says nothing extra: "€18 to Vilnius" is
+             * remarkable against every fare in the sweep and the price speaks.
+             * A relative card has to say "rare price for THIS ROUTE", because
+             * its fare is ordinary per kilometre and the reader would otherwise
+             * be right to wonder what it is doing on the strip.
+             *
+             * A STRING AND NOT A BOOLEAN, matching the column and the enum
+             * behind it (App\Domain\Discovery\Lane) — see the migration for why
+             * `is_relative` was the wrong shape.
+             */
+            'lane' => $discovery->lane->value,
+
             'origin' => AirportResource::make($discovery->origin),
             'destination' => AirportResource::make($discovery->destination),
 

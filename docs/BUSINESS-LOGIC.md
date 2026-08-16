@@ -1459,9 +1459,9 @@ whole design.
 
 | stage | cost | what it does |
 | --- | --- | --- |
-| **1. sweep + score** | 3 requests | ~1,177 fares from the three home airports, ranked to a shortlist of 5. Arithmetic only. |
-| **2a. own window** | 5 × ≤7 requests | Each finalist's own near window, through the existing `PriceProvider`. Is this remarkable *on its own route*? |
-| **2b. Google** | ≤5 searches | Does a company that is not Travelpayouts agree? Skipped entirely without a key or quota. |
+| **1. sweep + score** | 3 requests | ~1,177 fares from the three home airports, ranked to a shortlist of 5 (absolute) plus 3 (relative). Arithmetic only. |
+| **2a. own window** | 8 × ≤7 requests | Each finalist's own near window, through the existing `PriceProvider`. Is this remarkable *on its own route*? Every window fetched is also **remembered** as a baseline. |
+| **2b. Google** | ≤5 searches | Does a company that is not Travelpayouts agree? **Shared across both lanes, absolute first.** Skipped entirely without a key or quota. |
 
 **Nothing reaches the screen on the sweep's word alone**, and that is the
 lesson §2 was written to record. Orbit has shipped €36 for a date whose live
@@ -1487,6 +1487,84 @@ haversine on 518 of 520 destinations and put **Brussels 5,951 km from Amsterdam*
 45 of the 1,177 rows named metropolitan codes (LON, MOW, MIL, BUE) with no
 airport row. They are dropped: no coordinates means no honest €/km, and no route
 code means a card that goes nowhere.
+
+### Two lanes, because there are two kinds of steal
+
+| lane | the claim | how it is judged |
+| --- | --- | --- |
+| **absolute** | "€18 to Vilnius is a steal, *period*." | €/km against every fare in the sweep. |
+| **relative** | "€60 to Dublin is a steal *for Dublin*." | Against what that route itself usually costs. |
+
+The second lane exists because the first one **structurally cannot see short
+hops**. AMS-DUB at €30 over 750 km scores 40.0 m€/km against a 30 m€/km floor —
+at that floor Dublin would have to be €22. No fare a person would call cheap
+clears a ratio rule on a short route, and "somewhere you would not have thought
+to look" was never supposed to mean "somewhere far away".
+
+**⚠ The free version of this does not work, and the measurements are why.** The
+obvious design is a distance-band baseline: bucket the day's candidates by
+distance, take each band's median, call a fare 40% under its band a relative
+find. It costs nothing, and on the recorded 2026-08-16 sweep it fails three ways:
+
+1. **A sweep is a floor, not a price list.** `/v2/prices/latest` returns *one*
+   cheapest cached entry per destination — the maximum rows for any
+   origin-destination pair in the recorded fixtures is **1**. A sweep therefore
+   holds no distribution for any single route and can express no notion of what
+   Dublin usually costs. The 500–1000 km band median is **€29**, where the retail
+   intuition says €120: different populations, not different estimates.
+2. **AMS-DUB scores −3.4% against it.** Dublin at €30 is the *median* fare for
+   its distance. The example the lane was asked for fails the rule written to
+   catch it. It "passes" only at 750 km buckets, where its band holds six rows
+   and five are sub-400 km train hops (Maastricht €186/170 km, Eindhoven
+   €138/104 km) — a band-boundary artifact, not a signal.
+3. **Within a band, distance is ~constant**, so ranking by `1 − price/median` is
+   ranking by price is ranking by €/km. The band lane's top qualifiers were
+   Tangier, Marrakesh, Pescara, Vilnius and Tirana — the absolute lane's
+   shortlist, exactly. Not a second kind of deal: the first kind, respelled, for
+   three extra fetches a night.
+
+### The flywheel: lane B gets smarter every day it runs
+
+The honest baseline for "usual on this route" is the route's **own window
+median** — the number `savings_cents` is already measured against, and the one
+DUS-AGP's €78 came from. It costs a request. So the lane spends its budget
+*learning* baselines and then reads them for free:
+
+| | what it does | what it costs |
+| --- | --- | --- |
+| **known routes first** | a remembered median says this fare is ≥40% under its own usual → spend a fetch confirming it | this is the product |
+| **exploration fills up** | leftover slots go to routes Orbit knows nothing about, in a deterministic daily rotation | the fetch answers "what does this usually cost", and **the answer is kept** |
+
+Every window the job fetches becomes a `discovery_baselines` row — **including
+the absolute lane's five**, which are just as unwatched and unpriced, so a run
+learns up to **eight** routes rather than three. A route that surfaces nothing
+still leaves behind what it costs; a lane that only learned from its successes
+would learn almost nothing.
+
+An explored route surfaces **only if it passes the same verification** an
+absolute finalist does. Most will not, and that is correct rather than
+disappointing — the fetch already bought the more valuable of the two answers.
+
+**On day one this lane is all exploration and surfaces almost nothing.** That is
+the honest shape of it, and it is written down so nobody tunes it away: the first
+run has no baselines, and the first relative card cannot appear until a route
+Orbit measured turns up cheap on a later morning.
+
+Two guards keep a remembered number honest. A baseline over fewer than **10
+priced days** is not a usual price (provider coverage on obscure pairs really
+does come back that thin), and one measured more than **30 days** ago is a
+yardstick from another season. Either failure means the route is treated as
+**unknown** — so it goes back into exploration and gets re-measured, rather than
+being disqualified forever.
+
+**The baselines are discovery's own table, deliberately not `calendar_fares`.**
+That one is keyed to `routes`, and minting route rows nightly would break three
+things at once: §1's notion of "pairs this app knows about", the 201 from
+`POST /api/routes/lookup` that "look before you watch" rests on, and — the
+serious one — `RuleMatches` reads `calendar_fares` for any route a rule names,
+and a rule match feeds §10, **which sends mail**. Discovery never interrupts
+anybody, and a table it writes into silently becoming an alert input is exactly
+the coupling that sentence forbids.
 
 ### Why €/km, and why it is not enough
 
@@ -1556,11 +1634,19 @@ shows interest**, which is what that endpoint has always meant.
 
 ### The budget
 
-3 sweep + 5 × ≤7 verification = **38 Travelpayouts requests**, plus **≤5 SerpAPI
-searches** out of 250 a month. Scheduled into the empty **05:00** hour: in the
-06:00 hour it would be 221 of ~200 and over the limit. The worst hour of the
-week is unchanged by this feature. Full table in `config/orbit.php`'s `poll`
-section; the SerpAPI guardrails are in its `serpapi` section.
+3 sweep + (5 + 3) × ≤7 verification = **59 Travelpayouts requests**, plus **≤5
+SerpAPI searches** out of 250 a month. Scheduled into the empty **05:00** hour:
+in the 06:00 hour it would be 242 of ~200 and well over the limit. The worst hour
+of the week is unchanged by this feature, second lane included.
+
+**The second lane added 21 requests and zero SerpAPI spend.** The Google
+allowance is the same ≤5 a night it was before — the two lanes *share* it rather
+than each having one, absolute taking priority, so a run that exhausts quota
+degrades the new feature rather than the shipped one. And the 21 requests buy two
+things: the fares the lane surfaces, and the baselines it remembers.
+
+Full table in `config/orbit.php`'s `poll` section; the SerpAPI guardrails are in
+its `serpapi` section and the lane's own numbers are in `discovery.lanes`.
 
 ---
 

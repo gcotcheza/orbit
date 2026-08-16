@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Domain\Discovery\Lane;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -35,6 +36,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $origin_airport_id
  * @property int $destination_airport_id
  * @property string $code "AMS-AGP"
+ * @property Lane $lane which claim this row is making — see the enum
  * @property CarbonImmutable $departure_date
  * @property int $price_cents
  * @property float $cents_per_km
@@ -48,7 +50,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property-read Airport $destination
  */
 #[Fillable([
-    'origin_airport_id', 'destination_airport_id', 'code', 'departure_date', 'price_cents',
+    'origin_airport_id', 'destination_airport_id', 'code', 'lane', 'departure_date', 'price_cents',
     'cents_per_km', 'percentile', 'savings_cents', 'google_verdict', 'found_at',
     'discovered_at', 'expires_at',
 ])]
@@ -132,6 +134,14 @@ final class Discovery extends Model
     protected function casts(): array
     {
         return [
+            /*
+             * THE ENUM IS THE CAST, so nothing downstream compares a lane to a
+             * string literal. `App\Domain\Discovery\Lane` is where the two cases
+             * are defined and where the argument for there being two is written
+             * down; a `=== 'relative'` in a resource would be a third place that
+             * has to agree about the spelling.
+             */
+            'lane' => Lane::class,
             'departure_date' => 'immutable_date',
             'found_at' => 'immutable_datetime',
             'discovered_at' => 'immutable_datetime',
