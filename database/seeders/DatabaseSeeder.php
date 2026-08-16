@@ -43,6 +43,15 @@ final class DatabaseSeeder extends Seeder
             WorldAirportSeeder::class,
             WatchlistSeeder::class,
             FakeHistorySeeder::class,
+            /*
+             * LAST, AND IT NEEDS BOTH OF THE TWO ABOVE. A discovery run scores
+             * candidates against the airports table and then verifies its
+             * shortlist through the price provider, so it wants the world
+             * imported and the fares reachable. It is a no-op unless a FAKE
+             * sweep provider is configured — see DiscoverySeeder, where the
+             * guard is the whole file.
+             */
+            DiscoverySeeder::class,
         ]);
     }
 }

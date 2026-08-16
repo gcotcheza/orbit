@@ -6,15 +6,19 @@ namespace App\Providers;
 
 use Anthropic\Client as AnthropicClient;
 use App\Application\Ports\DealNotifier;
+use App\Application\Ports\OriginSweepProvider;
 use App\Application\Ports\PriceProvider;
 use App\Application\Ports\PriceStatsProvider;
 use App\Application\Ports\ReturnTripProvider;
 use App\Application\Ports\RuleTextParser;
 use App\Domain\Alerts\AlertPolicy;
+use App\Domain\Discovery\DiscoveryPolicy;
 use App\Domain\Pricing\DealScorer;
 use App\Domain\Pricing\ScoringPolicy;
 use App\Domain\Rules\RuleMatcher;
 use App\Domain\Rules\RuleVocabulary;
+use App\Infrastructure\Discovery\FakeSweepProvider;
+use App\Infrastructure\Discovery\TravelpayoutsSweepProvider;
 use App\Infrastructure\Nlp\AnthropicRuleTextParser;
 use App\Infrastructure\Nlp\RegexRuleTextParser;
 use App\Infrastructure\Notify\MailDealNotifier;
@@ -25,6 +29,7 @@ use App\Infrastructure\Pricing\FakeStatsProvider;
 use App\Infrastructure\Pricing\SelfStatsProvider;
 use App\Infrastructure\Pricing\TravelpayoutsPriceProvider;
 use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
+use App\Infrastructure\Verify\GoogleFlightsCheck;
 use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -80,6 +85,98 @@ final class AppServiceProvider extends ServiceProvider
             'fake' => new FakeReturnProvider,
             'travelpayouts' => $this->travelpayoutsReturns(),
             default => throw new InvalidArgumentException(sprintf('Unknown return-trip provider [%s].', is_string($name) ? $name : gettype($name))),
+        });
+
+        /*
+         * THE ORIGIN SWEEP — the fourth fare port, and the only one whose
+         * question has no destination in it ("what is cheap from here, to
+         * anywhere").
+         *
+         * ITS OWN SWITCH, even though the real adapter reads the SAME endpoint
+         * as the return-trip one. `/v2/prices/latest` answers three different
+         * questions depending on whether `destination` is present and what
+         * `one_way` says, and the two adapters take opposite answers to both —
+         * so they can fail, and be turned off, independently. See
+         * config/orbit.php.
+         */
+        $this->app->bind(OriginSweepProvider::class, fn (): OriginSweepProvider => match ($name = config('orbit.providers.sweep')) {
+            'fake' => new FakeSweepProvider,
+            'travelpayouts' => $this->travelpayoutsSweep(),
+            default => throw new InvalidArgumentException(sprintf('Unknown origin sweep provider [%s].', is_string($name) ? $name : gettype($name))),
+        });
+
+        /*
+         * THE SECOND OPINION, and the only thing in this app that talks to
+         * anyone but Travelpayouts and Anthropic.
+         *
+         * BOUND DIRECTLY RATHER THAN BY NAME, unlike the four fare ports above,
+         * because there is nothing to choose between: SerpAPI is not one of two
+         * ways to ask Google, it is the one that exists. The switch that would
+         * otherwise live in config/orbit.php's `providers` is the KEY — absent,
+         * and App\Infrastructure\Verify\GoogleFlightsCheck answers "no budget"
+         * to everything and no verification happens. That is a supported state
+         * and the default one, which is exactly why it is not an adapter name a
+         * deploy could typo.
+         *
+         * NOT A SINGLETON. It holds no state between calls — the run's budget
+         * is the caller's to count (see App\Jobs\DiscoverDeals) — and binding
+         * it fresh keeps a config change during a test visible without a
+         * container flush.
+         */
+        $this->app->bind(GoogleFlightsCheck::class, function (): GoogleFlightsCheck {
+            /** @var array<string, mixed> $serpapi */
+            $serpapi = config('orbit.serpapi');
+
+            /** @var mixed $key */
+            $key = $serpapi['key'] ?? null;
+
+            return new GoogleFlightsCheck(
+                http: $this->app->make(HttpFactory::class),
+                logger: $this->app->make('log'),
+                baseUrl: (string) $serpapi['base_url'],
+                /*
+                 * AN EMPTY STRING IS NULL. `SERPAPI_KEY=` in an .env file is
+                 * somebody not setting it rather than somebody setting it to
+                 * nothing — the same reading `seed.password` takes of the same
+                 * shape — and the difference decides whether a run tries to
+                 * authenticate with the empty string against a metered API.
+                 */
+                key: is_string($key) && trim($key) !== '' ? $key : null,
+                reserve: (int) $serpapi['reserve'],
+                maxPerRun: (int) $serpapi['max_per_run'],
+                connectTimeout: (float) $serpapi['connect_timeout'],
+                timeout: (float) $serpapi['timeout'],
+            );
+        });
+
+        /*
+         * THE DISCOVERY FUNNEL'S NUMBERS, read once and handed to a pure value
+         * — the arrangement DealScorer, ScoringPolicy and AlertPolicy have, and
+         * for the same reason: App\Domain\Discovery\CandidateScorer is
+         * arithmetic and calls no config().
+         *
+         * THE TWO EURO FIGURES BECOME CENTS HERE, at the boundary, because
+         * everything below HTTP in this app is integer cents and config is
+         * where a person reads "€120". The `max_eur_per_km` conversion is the
+         * one to look at twice: euros per kilometre × 100 is CENTS per
+         * kilometre, so 0.030 €/km is 3.0 cents/km, which is what
+         * DealCandidate::centsPerKilometre() answers in.
+         */
+        $this->app->singleton(DiscoveryPolicy::class, function (): DiscoveryPolicy {
+            /** @var array<string, mixed> $discovery */
+            $discovery = config('orbit.discovery');
+
+            return new DiscoveryPolicy(
+                minKilometres: (float) $discovery['min_kilometres'],
+                maxPriceCents: (int) round(((float) $discovery['max_price_eur']) * 100),
+                maxCentsPerKilometre: ((float) $discovery['max_eur_per_km']) * 100,
+                maxFoundAgeDays: (int) $discovery['max_found_age_days'],
+                shortlist: (int) $discovery['shortlist'],
+                maxPercentile: (float) $discovery['max_percentile'],
+                minSavingsCents: (int) round(((float) $discovery['min_absolute_savings_eur']) * 100),
+                expiresAfterHours: (int) $discovery['expires_after_hours'],
+                maxRows: (int) $discovery['max_rows'],
+            );
         });
 
         /*
@@ -262,6 +359,48 @@ final class AppServiceProvider extends ServiceProvider
             retryDelayMs: (int) $travelpayouts['retry_delay_ms'],
             warnEveryMinutes: (int) $travelpayouts['warn_every_minutes'],
             maxNights: (int) $returns['max_nights'],
+            limit: (int) $returns['limit'],
+        );
+    }
+
+    /**
+     * The real origin-sweep adapter.
+     *
+     * IT SHARES THE `travelpayouts` CONNECTION SETTINGS, exactly as the
+     * return-trip adapter does and for the same reason: base URL, token,
+     * timeouts, retries and the warning interval are facts about talking to
+     * that vendor and must move together, while `limit` is a fact about what
+     * THIS endpoint does with a missing parameter.
+     *
+     * `limit` COMES FROM `orbit.returns` AND THAT IS NOT A MISTAKE. It is the
+     * same parameter on the same endpoint — the one whose default of 30 silently
+     * discarded 91% of AMS-BKK — and duplicating it into a `discovery.limit`
+     * would be two keys for one fact about one API, with the copy that drifts
+     * being the one nobody is looking at. The sweep is the more sensitive of
+     * the two callers: 30 of 562 destinations is a "sweep the world" feature
+     * quietly looking at 5% of it.
+     *
+     * A MISSING TOKEN THROWS FROM THE CONSTRUCTOR, here, at resolution — the
+     * rule both sibling adapters follow.
+     */
+    private function travelpayoutsSweep(): OriginSweepProvider
+    {
+        /** @var array<string, mixed> $travelpayouts */
+        $travelpayouts = config('orbit.travelpayouts');
+        /** @var array<string, mixed> $returns */
+        $returns = config('orbit.returns');
+
+        return new TravelpayoutsSweepProvider(
+            http: $this->app->make(HttpFactory::class),
+            logger: $this->app->make('log'),
+            cache: $this->app->make('cache.store'),
+            baseUrl: (string) $travelpayouts['base_url'],
+            token: (string) $travelpayouts['token'],
+            connectTimeout: (float) $travelpayouts['connect_timeout'],
+            timeout: (float) $travelpayouts['timeout'],
+            retries: (int) $travelpayouts['retries'],
+            retryDelayMs: (int) $travelpayouts['retry_delay_ms'],
+            warnEveryMinutes: (int) $travelpayouts['warn_every_minutes'],
             limit: (int) $returns['limit'],
         );
     }

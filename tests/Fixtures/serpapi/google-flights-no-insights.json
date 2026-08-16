@@ -1,0 +1,50 @@
+{
+    "search_metadata": {
+        "status": "Success",
+        "created_at": "2026-08-16T07:56:00.000000Z"
+    },
+    "search_parameters": {
+        "engine": "google_flights",
+        "hl": "en",
+        "gl": "nl",
+        "type": "2",
+        "departure_id": "EIN",
+        "arrival_id": "VNO",
+        "outbound_date": "2027-01-06",
+        "currency": "EUR"
+    },
+    "other_flights": [
+        {
+            "flights": [
+                {
+                    "departure_airport": {
+                        "name": "Eindhoven Airport",
+                        "id": "EIN",
+                        "time": "2027-01-06 15:30"
+                    },
+                    "arrival_airport": {
+                        "name": "Vilnius International Airport",
+                        "id": "VNO",
+                        "time": "2027-01-06 18:45"
+                    },
+                    "duration": 135,
+                    "airplane": "Airbus A321neo",
+                    "airline": "Wizz Air",
+                    "travel_class": "Economy",
+                    "flight_number": "W6 1922",
+                    "extensions": [
+                        "Carbon emissions estimate: 94 kg"
+                    ]
+                }
+            ],
+            "total_duration": 135,
+            "carbon_emissions": {
+                "this_flight": 94000,
+                "typical_for_this_route": 182000,
+                "difference_percent": -48
+            },
+            "price": 30,
+            "type": "One way"
+        }
+    ]
+}

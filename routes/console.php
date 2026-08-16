@@ -82,6 +82,52 @@ Schedule::command('orbit:poll-fares --far')
     ->withoutOverlapping();
 
 /*
+ * 05:20 — THE SURPRISE, and the only entry in this file that goes looking for
+ * routes nobody has named.
+ *
+ * `orbit:discover` sweeps the three home airports for everywhere they currently
+ * have a cheap cached fare to, ranks about a thousand of them by what a
+ * kilometre costs, and then VERIFIES the best five against their own calendars
+ * and — if there is SerpAPI quota — against Google. What survives lands in
+ * `discoveries` for the search screen's "Deals from your airports" strip.
+ *
+ * THE 05:00 HOUR, AND IT IS ENTIRELY ABOUT THE REQUEST BUDGET — the same
+ * argument the far poll's 04:10 makes. A run is 3 sweep requests plus 5 × ≤7
+ * verification requests = 38, against Travelpayouts' ~200 an hour per IP. In
+ * the 06:00 hour, next to the poll's 63 and the rule sweep's 120, it would be
+ * 221 and over the limit; in the otherwise empty 05:00 hour it is 38, and the
+ * ordinary morning below is left exactly as it was. On the far morning the
+ * three runs sit in three separate clock hours — 04:10, 05:20, 06:10 — so the
+ * worst hour of the week is unchanged by this feature. config/orbit.php's
+ * `poll` section carries the whole table.
+ *
+ * 05:20 AND NOT 05:40, because Monday's `orbit:refresh-stats` is at 05:40 and
+ * sharing a clock hour is only comfortable if the two do not overlap. The
+ * stats refresh costs no provider requests at all (`ORBIT_STATS_PROVIDER=self`
+ * reads Orbit's own tables), so the concern is worker contention rather than
+ * rate limit — and twenty minutes is comfortable room for a sequential run of
+ * forty requests.
+ *
+ * IT IS SCHEDULED IN THE PR THAT ADDS IT, WHICH `orbit:poll-returns` WAS NOT.
+ * That was deliberate there and this is deliberate here: returns filled a table
+ * with no readers, and this ships with `GET /api/discoveries` and the screen
+ * that draws it, so the requests buy something the owner sees tomorrow morning.
+ *
+ * AND IT CANNOT WAKE ANYBODY UP. Discovery surfaces, it never interrupts — no
+ * mail, no notification, nothing in `alerts` (docs/BUSINESS-LOGIC.md §16). The
+ * worst a bad run can do is put a disappointing card on a screen somebody chose
+ * to open, which is what makes scheduling the least-verified data in the app
+ * a safe thing to do at all.
+ *
+ * withoutOverlapping() because a run that took longer than a day would
+ * otherwise have a second one spending the SerpAPI budget on top of it.
+ */
+Schedule::command('orbit:discover')
+    ->dailyAt('05:20')
+    ->timezone($timezone)
+    ->withoutOverlapping();
+
+/*
  * Monday 05:40, ahead of that morning's poll so the week's scores are read
  * against the week's statistics.
  *

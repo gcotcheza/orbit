@@ -59,11 +59,30 @@
  * on focusout would move the buttons out from under the pointer between
  * mousedown and mouseup and no click would ever be produced. Asking "did focus
  * leave the FORM" is the fix, and it can only be asked here.
+ *
+ * =============================================================================
+ * AND BELOW THE FORM: THE QUESTION NOBODY TYPED
+ * =============================================================================
+ * "Deals from your airports" is the discovery strip — routes nobody is watching
+ * that Orbit swept up at 05:20 and then went and verified (docs/BUSINESS-LOGIC
+ * .md §16). It is on THIS screen and not the home globe for a reason that is
+ * about what each screen is for: the globe tours the watchlist, which is what
+ * the owner already thought of, and crowding a €27 Marrakesh into it would be
+ * two answers to two different questions on one canvas. A person on the search
+ * screen is already asking "where could I go" — this is the same question,
+ * answered before they finished typing it.
+ *
+ * IT IS BELOW THE FORM AND NOT ABOVE IT. The form is what the tab is for and
+ * what the muscle memory reaches for; the strip is a reward for scrolling. A
+ * discovery section that pushed the boxes down the screen would be the app
+ * deciding it knows better than the person who tapped Search.
  */
-import { computed, ref, useTemplateRef } from 'vue'
+import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import DiscoveryCard from '@/Components/discover/DiscoveryCard.vue'
 import AirportField from '@/Components/search/AirportField.vue'
 import { IATA, toCode } from '@/stores/airports'
+import { useDiscoveriesStore } from '@/stores/discoveries'
 import { useWatchlistStore } from '@/stores/watchlist'
 
 /**
@@ -76,6 +95,20 @@ const HOME = ['AMS', 'EIN', 'DUS']
 
 const router = useRouter()
 const watchlist = useWatchlistStore()
+const discoveries = useDiscoveriesStore()
+
+/*
+ * ASKED FOR ON MOUNT, AND NOTHING WAITS ON IT. The form above renders and works
+ * whether or not this ever answers — the store logs a failure and stays quiet
+ * rather than putting a sentence about a feature nobody asked for over the
+ * boxes somebody is trying to type into (see stores/discoveries.js).
+ *
+ * EVERY VISIT, NOT ONCE. The set turns over daily at 05:20 and the tab is
+ * tapped several times a day; a cached-forever strip would be showing
+ * yesterday's deals by the evening. It is one GET of about ten rows against a
+ * precomputed table — the cheapest read in the API.
+ */
+onMounted(() => discoveries.refresh())
 
 const from = ref(HOME[0])
 const to = ref('')
@@ -94,6 +127,59 @@ const fromField = useTemplateRef('fromField')
 /* The boundary: what the boxes show is a place, what the API takes is a code. */
 const origin = computed(() => toCode(from.value))
 const destination = computed(() => toCode(to.value))
+
+/**
+ * The discoveries this screen shows, which is not necessarily all of them.
+ *
+ * SIX, AND THE SERVER'S ORDER IS KEPT. `orbit.discovery.max_rows` bounds the
+ * table at twelve so that a failed run leaves yesterday's set standing beside
+ * today's — a storage rule, not a display one. Twelve cards under a form is a
+ * page somebody scrolls past rather than reads, and the list is already sorted
+ * by what a kilometre costs, so the first six ARE the six best. It is the same
+ * call `alerts.mail_deals` makes about a mail: everything is kept, a handful is
+ * shown.
+ */
+const finds = computed(() => discoveries.discoveries.slice(0, 6))
+
+/**
+ * "this morning", "yesterday" — when the set was found, or null.
+ *
+ * IT MATTERS MORE HERE THAN THE PHRASING SUGGESTS. Without it the heading reads
+ * as "here are some deals, checked just now", and they were checked at 05:20
+ * against a cache that was itself up to three days old. The per-card "seen 2
+ * days ago" line says how old each PRICE is; this says how old the SEARCH is,
+ * and they are two different questions.
+ *
+ * DATE-ONLY COMPARISON, in the viewer's own zone, because "this morning" is a
+ * claim about which calendar day it is rather than about elapsed hours — a run
+ * at 05:20 is still "this morning" at 23:00 and is "yesterday" at 00:05, which
+ * an hours-based rule would get backwards on both counts.
+ */
+const foundLabel = computed(() => {
+  const iso = discoveries.discoveredAt
+
+  if (!iso) {
+    return null
+  }
+
+  const found = new Date(iso)
+
+  if (Number.isNaN(found.getTime())) {
+    return null
+  }
+
+  const days = Math.round((startOfDay(new Date()) - startOfDay(found)) / 86_400_000)
+
+  if (days <= 0) {
+    return 'this morning'
+  }
+
+  return days === 1 ? 'yesterday' : `${days} days ago`
+})
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+}
 
 const canSubmit = computed(() => IATA.test(origin.value) && IATA.test(destination.value) && !adding.value)
 
@@ -319,6 +405,36 @@ function messageFor(failure) {
         {{ adding ? 'Adding…' : 'Add to watch' }}
       </button>
     </form>
+
+    <!--
+      THE STRIP RENDERS ONLY WHEN THERE IS SOMETHING ON IT. No skeleton, no
+      "loading deals…", and no empty state — three deliberate omissions.
+
+      A skeleton would reserve space on every visit for a section that is
+      frequently, legitimately empty (a box with no sweep provider, a week where
+      nothing cleared the thresholds), and reserving space is a promise. The
+      form must not move under somebody's thumb while a background fetch lands,
+      which is the same reflow argument the suggestion panels are built around.
+
+      AND AN EMPTY STATE WOULD BE THE WRONG APOLOGY. "No deals today" implies a
+      thing that failed; nothing did. Every threshold in `orbit.discovery` is a
+      floor rather than a quota precisely so that "nothing was remarkable this
+      week" is a possible answer, and the honest rendering of it is silence.
+    -->
+    <section v-if="finds.length" class="finds" aria-labelledby="finds-heading">
+      <header class="finds__head">
+        <h2 id="finds-heading" class="finds__title">Deals from your airports</h2>
+        <p class="finds__note">
+          Routes you are not watching. Orbit found these on its own<span v-if="foundLabel">, {{ foundLabel }}</span>.
+        </p>
+      </header>
+
+      <ul class="finds__list">
+        <li v-for="find in finds" :key="`${find.code}-${find.departureDate}`">
+          <DiscoveryCard :discovery="find" />
+        </li>
+      </ul>
+    </section>
   </div>
 </template>
 
@@ -458,5 +574,44 @@ function messageFor(failure) {
 .search__watch:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* =============================================================================
+   Deals from your airports
+   ============================================================================= */
+
+.finds {
+  /* Roomier than the gap between two cards inside the strip: this is a change
+     of subject, not the next item. */
+  margin-top: 26px;
+  /* The tab bar floats over the bottom of every screen. */
+  padding-bottom: 12px;
+}
+
+.finds__head {
+  margin: 0 2px 10px;
+}
+
+.finds__title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.finds__note {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+/* A real list, because it is one: a screen reader should hear "6 items" before
+   deciding whether to walk them. */
+.finds__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
 }
 </style>
