@@ -1136,6 +1136,103 @@ whole ledger, so a client can tell whether it is looking at everything.
 
 ---
 
+## `GET /api/discoveries`
+
+The routes **nobody is watching** that turned out to be absurdly cheap — the
+search screen's "Deals from your airports" strip. Cheapest per kilometre first,
+which is the ranking rather than a convenience.
+
+```json
+{
+  "data": [
+    {
+      "code": "DUS-RAK",
+      "origin": { "iata": "DUS", "city": "Düsseldorf", "country": "Germany" },
+      "destination": { "iata": "RAK", "city": "Marrakesh", "country": "Morocco" },
+      "price": 27,
+      "departureDate": "2026-08-21",
+      "milliEurosPerKm": 10.8,
+      "percentile": 0,
+      "savings": 51,
+      "foundAt": "2026-08-15T08:14:00+02:00",
+      "verdict": {
+        "verified": false,
+        "label": "Unverified",
+        "level": "typical",
+        "googleLowest": 168,
+        "typicalLow": 100,
+        "typicalHigh": 200
+      }
+    },
+    {
+      "code": "DUS-AGP",
+      "origin": { "iata": "DUS", "city": "Düsseldorf", "country": "Germany" },
+      "destination": { "iata": "AGP", "city": "Málaga", "country": "Spain" },
+      "price": 29,
+      "departureDate": "2026-10-24",
+      "milliEurosPerKm": 15.6,
+      "percentile": 0,
+      "savings": 49,
+      "foundAt": "2026-08-15T20:56:00+02:00",
+      "verdict": {
+        "verified": false,
+        "label": "Unverified",
+        "level": null,
+        "googleLowest": null,
+        "typicalLow": null,
+        "typicalHigh": null
+      }
+    }
+  ],
+  "meta": { "count": 2, "discoveredAt": "2026-08-16T05:20:00+02:00" }
+}
+```
+
+| field | notes |
+| --- | --- |
+| `code` | The route code, and **the whole navigation contract** — tapping a discovery opens `/route/DUS-RAK`, which prices the pair through `POST /api/routes/lookup` and offers the watch button. This endpoint publishes no booking link and no watch action of its own. |
+| `origin`, `destination` | The shared airport shape. Both ends, because the card says which of the three home airports it leaves from. |
+| `price` | Euros, one-way, as everywhere else in this API. |
+| `departureDate` | A bare `YYYY-MM-DD` — the day you would **fly**. |
+| `milliEurosPerKm` | What a kilometre costs, ×1000 so it reads as `10.8` rather than `0.0108`. **This is the sort key**, and it is published so a client can explain the order rather than asking the reader to take it on faith. |
+| `percentile` | Where this fare sat among every other departure date on the same route, 0–100, **`null` when the window could not be fetched**. 0 means it was the cheapest date on the route. |
+| `savings` | Euros under the **median** of that same window. `null` alongside a null percentile. |
+| `foundAt` | When the **provider** found the price — the third date (§3), an ISO timestamp with an offset. `null` renders as nothing at all and never as "fresh". |
+| `verdict.verified` | Whether Google was asked **and agreed**. This is the badge. |
+| `verdict.label` | The sentence to print. Server-owned, because it is a claim about a third party. |
+| `verdict.googleLowest` | The cheapest seat **Google itself** could find. Published whether or not the verdict is confirmed — when it disagrees with `price`, that disagreement is the most useful thing on the card. |
+
+**`verified` is rarer than it looks, and that is the feature.** It requires
+Google's *own market* to be cheap — `price_level: "low"`, or Google's
+`lowest_price` at or under its typical-range low — and **not** merely that
+Orbit's number is below Google's typical range. Measured on 2026-08-16, three
+candidates at €29, €27 and €18 were all under their typical-range low while
+Google's own cheapest for the same flights was €70, €168 and €30. The obvious
+rule would have stamped all three "verified"; this one stamps none. See
+`config/orbit.php`'s `serpapi` section.
+
+**A missing verdict is the ordinary case, not an error.** No `SERPAPI_KEY` (the
+default), quota under the reserve, a run past its per-run cap, or a route Google
+has no `price_insights` for all produce `verified: false` with null evidence.
+Nothing is wrong; Orbit simply did not get a second opinion and says so.
+
+**No parameters, and nothing to page.** The table's steady state is about ten
+rows (`orbit.discovery.max_rows`), the order *is* the ranking, and a discovery
+the reader does not want is one they scroll past.
+
+**`data: []` is a real and common answer** — a box with no sweep provider, or a
+week where nothing cleared the thresholds. Every threshold in
+`orbit.discovery` is a floor rather than a quota, precisely so that "nothing was
+remarkable" can happen; the client draws no section at all rather than an
+apology.
+
+| `meta` | notes |
+| --- | --- |
+| `count` | Rows in `data`. |
+| `discoveredAt` | When this set was **found** (the 05:20 run), not when it was requested. `null` on an empty set. It is the only other timestamp in this API besides the route detail's `meta.fares.fetchedAt`. |
+
+---
+
 ## How an alert is decided
 
 Four scheduled commands, all **Europe/Amsterdam**, the three daily ones in an

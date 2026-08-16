@@ -1418,6 +1418,152 @@ draws them than an empty table and a fake.
 
 ---
 
+## 16. Discovery — the routes you never thought to watch
+
+**The question this answers is not "find cheap fares", it is "surprise me".**
+The watchlist answers what the owner already thought of (§1); a rule answers a
+sentence they wrote down (§11). This answers neither. It is the €29 Santorini
+nobody would have known to ask about, and every decision below falls out of that.
+
+`orbit:discover`, daily at **05:20**. `app/Jobs/DiscoverDeals.php` is the work,
+`app/Domain/Discovery/` is the rulebook, `discoveries` is the table,
+`GET /api/discoveries` is the read, and the search screen's "Deals from your
+airports" strip is the only thing that draws it.
+
+### ⚠ v1 surfaces. It never interrupts.
+
+**Discovery sends nothing.** No mail, no notification, nothing written to
+`alerts`, no interaction with §10 at all. It writes rows to a table that an
+endpoint reads when somebody opens a screen.
+
+That is a deliberate restriction and not an unfinished edge. A discovery is, by
+construction, the three things that most disqualify a fare from being allowed to
+wake somebody up:
+
+- **nobody asked about it** — no watchlist row, no rule, no expressed interest;
+- **it is the least verified data in the app** — a swept cache entry up to three
+  days old, on a route Orbit has usually never polled;
+- **it has no history at all**, so none of §7's score, §8's `confident` or §10's
+  `min_tracking_days` can be computed for it. The entire day-1 honesty apparatus
+  is inapplicable.
+
+Alerting on a discovery is a **future decision**, and it would need its own
+argument — most likely a much higher bar than the screen uses, and probably the
+Google check being mandatory rather than best-effort. Nothing in this PR
+prejudges it.
+
+### The two-stage funnel
+
+Sweeping is nearly free and verifying is not, and the split between them is the
+whole design.
+
+| stage | cost | what it does |
+| --- | --- | --- |
+| **1. sweep + score** | 3 requests | ~1,177 fares from the three home airports, ranked to a shortlist of 5. Arithmetic only. |
+| **2a. own window** | 5 × ≤7 requests | Each finalist's own near window, through the existing `PriceProvider`. Is this remarkable *on its own route*? |
+| **2b. Google** | ≤5 searches | Does a company that is not Travelpayouts agree? Skipped entirely without a key or quota. |
+
+**Nothing reaches the screen on the sweep's word alone**, and that is the
+lesson §2 was written to record. Orbit has shipped €36 for a date whose live
+cheapest was €56, and DUS-AGP at €29 against a Skyscanner cheapest of €68. The
+top five of a thousand cached rows under the words "insanely cheap" would be
+that mistake automated and given a schedule.
+
+### The sweep
+
+One request per origin, with the **destination parameter simply absent** —
+`/v2/prices/latest` answers for everywhere when you do not say where. Measured
+2026-08-16: **AMS 562, DUS 419, EIN 196** distinct destinations, one entry each,
+1,177 rows for three requests.
+
+Two traps are load-bearing. `found_at` on this endpoint has **no trailing `Z`**
+where the month-matrix endpoint has one — and since an unknown age is treated as
+too old, a single wrong format string would make the feature permanently, silently
+*empty* rather than wrong. And the provider's own `distance` field agreed with
+haversine on 518 of 520 destinations and put **Brussels 5,951 km from Amsterdam**
+(it is 158), which would have led the list every day; distance is computed from
+`airports.lat`/`lng` instead (`app/Domain/Geo/Haversine.php`).
+
+45 of the 1,177 rows named metropolitan codes (LON, MOW, MIL, BUE) with no
+airport row. They are dropped: no coordinates means no honest €/km, and no route
+code means a card that goes nowhere.
+
+### Why €/km, and why it is not enough
+
+Ranked by **price**, this screen is the nearest airports forever — Brussels,
+Cologne, Maastricht. Ranked by **what a euro buys**, Marrakesh and Tangier come
+top, which is the point.
+
+But €/km alone puts Singapore (€287, 27.3 m€/km), Manila (€293) and Bangkok
+(€271) in the same band as Málaga (€36, 19.1). Those are real bargains and none
+of them is this feature: the promise is a fare you see on a Tuesday and book on
+the Tuesday. So there is an **absolute ceiling** (€120) alongside the ratio, a
+**distance floor** (400 km — under it you are describing a train), and a
+**freshness rule** (3 days). All four are floors, never quotas: a week with
+nothing in it produces an empty screen.
+
+The top of the 2026-08-16 answer: Marrakesh €27 (10.8), Tangier €23 (11.5),
+Vilnius €18 (13.1), Tirana €21 (13.5), Pescara €16 (14.1), Málaga €29 (15.6).
+
+### What "verified" means, and why almost nothing is
+
+A finalist must clear its **own window** first — bottom tenth by percentile
+*and* at least €15 under that window's median. Both, because each is blind to
+what the other catches: the percentile misses a route so flat that its bottom
+tenth saves nobody anything, and the savings floor misses a route that is simply
+cheap everywhere. DUS-AGP's €29 was cheaper than all 23 fares in its October
+window, against a €78 median.
+
+Then, if there is quota, Google. **The verdict reads Google's market, not our
+price** — `price_level: "low"`, or Google's own `lowest_price` at or under its
+typical-range low. The obvious rule ("our fare is under Google's typical range")
+confirms everything:
+
+| route | Travelpayouts | Google's own cheapest | level | typical |
+| --- | --- | --- | --- | --- |
+| DUS-AGP | €29 | €70 | typical | 55–175 |
+| DUS-RAK | €27 | €168 | typical | 100–200 |
+| EIN-VNO | €18 | €30 | typical | 20–245 |
+
+All three are under their typical-range low. All three would have been stamped
+"✓ verified low by Google" — while Google could not find a seat at anything like
+the price. **The candidate's price is the number under suspicion**, and testing
+it against Google's range asks the suspect to vouch for itself. Under the rule
+Orbit actually uses, none of the three verify, and all three are shown honestly
+as "great find" with the age printed beside them.
+
+**A skipped check is not an error.** No key (the default), quota under the
+50-search reserve, a run past its cap of 5, a timeout, or a route with no
+`price_insights` all leave the candidate unverified and shown. What must never
+happen is a badge without a check behind it.
+
+### A discovery is ephemeral
+
+It is the one table in this app that is deliberately **not history** (§5 is the
+opposite). Nothing computes a statistic from these rows and a discovery from
+last March would offer a flight that has left. They expire after 36 hours — one
+run, plus half a day of slack so a failed run leaves yesterday's set standing
+rather than blanking the screen — and every run prunes expired rows, departed
+dates, superseded rows and anything past `max_rows`. Steady state is about ten
+rows.
+
+**No `route_id`.** A discovery is a route nobody watches and Orbit has usually
+never priced; creating `routes` rows nightly would fill the table that §1 treats
+as "pairs this app knows about" with five speculative rows a night. The airports
+are foreign keys, the route is the `code` string, and tapping a card runs the
+ordinary lookup flow — which creates the route row **at the moment somebody
+shows interest**, which is what that endpoint has always meant.
+
+### The budget
+
+3 sweep + 5 × ≤7 verification = **38 Travelpayouts requests**, plus **≤5 SerpAPI
+searches** out of 250 a month. Scheduled into the empty **05:00** hour: in the
+06:00 hour it would be 221 of ~200 and over the limit. The worst hour of the
+week is unchanged by this feature. Full table in `config/orbit.php`'s `poll`
+section; the SerpAPI guardrails are in its `serpapi` section.
+
+---
+
 ## Where the rules live
 
 | concern | code |
@@ -1426,6 +1572,8 @@ draws them than an empty table and a fake.
 | statistics arithmetic | `app/Domain/Pricing/PriceStats.php`, `app/Infrastructure/Pricing/SelfStatsProvider.php` |
 | alert decisions, quiet hours | `app/Domain/Alerts/` |
 | rule matching, month windows, chips | `app/Domain/Rules/` |
+| discovery thresholds, ranking, Google verdict | `app/Domain/Discovery/` |
+| great-circle distance, server side | `app/Domain/Geo/Haversine.php` |
 | assembling what the screens read | `app/Application/Routes/`, `app/Application/Rules/` |
 | the alert pipeline | `app/Application/Alerts/` |
 | the ports | `app/Application/Ports/` |

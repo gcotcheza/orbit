@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\CurrentUserController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\DestinationController;
+use App\Http\Controllers\DiscoveryController;
 use App\Http\Controllers\RouteCalendarController;
 use App\Http\Controllers\RouteController;
 use App\Http\Controllers\RuleController;
@@ -22,7 +23,7 @@ use Illuminate\Support\Facades\Route;
 | Web routes
 |--------------------------------------------------------------------------
 |
-| Five routes are the entire authentication surface, six more are the read
+| Five routes are the entire authentication surface, seven more are the read
 | API the screens are built on, ten more are the writes those screens make,
 | and the last one is the single-page app.
 |
@@ -134,10 +135,11 @@ Route::middleware('auth:sanctum')->get('/api/me', CurrentUserController::class)-
 | The read API
 |--------------------------------------------------------------------------
 |
-| Six endpoints, and between them they are the entire data supply for the
+| Seven endpoints, and between them they are the entire data supply for the
 | globe home, the route detail, the price calendar, the watchlist, the rules
-| the watch screen lists and the places its add form offers — plus the alert
-| ledger, which no screen reads yet and which docs/API.md publishes anyway.
+| the watch screen lists, the places its add form offers and the deals nobody
+| asked for — plus the alert ledger, which no screen reads yet and which
+| docs/API.md publishes anyway.
 | Their exact shapes are docs/API.md — that file is the contract those screens
 | are built against, and it is written before they are.
 |
@@ -149,7 +151,7 @@ Route::middleware('auth:sanctum')->get('/api/me', CurrentUserController::class)-
 | is what bootstrap/app.php renders exceptions as JSON under, and what the SPA
 | catch-all at the bottom of this file refuses to swallow.
 |
-| ALL SIX ARE READS. The writes are the group below.
+| ALL SEVEN ARE READS. The writes are the group below.
 |
 */
 Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
@@ -223,6 +225,24 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
      * at 06:55 needs somewhere to answer "did it fire, and did it go out".
      */
     Route::get('/alerts', AlertController::class)->name('alerts');
+
+    /*
+     * The routes nobody is watching that turned out to be absurdly cheap —
+     * "Deals from your airports" on the search screen.
+     *
+     * A READ, IN THE READ GROUP, AND NOT THROTTLED, which is worth saying
+     * because everything about this feature upstream is metered. The sweep, the
+     * five window fetches and the Google checks all happen at 05:20 in
+     * App\Jobs\DiscoverDeals; by the time anybody GETs this it is one indexed
+     * query over about ten rows. That is exactly why it is precomputed — the
+     * on-demand version of this endpoint would put forty provider requests
+     * behind a tab tap, and would need a limiter tighter than `route-lookup`'s.
+     *
+     * NO `{code}` AND NO PARAMETERS. The whole set is the answer; see
+     * App\Http\Controllers\DiscoveryController for why there is nothing to page,
+     * filter or sort.
+     */
+    Route::get('/discoveries', DiscoveryController::class)->name('discoveries');
 });
 
 /*

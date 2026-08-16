@@ -103,6 +103,43 @@ return [
         'price' => env('ORBIT_PRICE_PROVIDER', 'fake'),
         'stats' => env('ORBIT_STATS_PROVIDER', 'fake'),
         'returns' => env('ORBIT_RETURNS_PROVIDER', 'fake'),
+
+        /*
+         * THE ORIGIN SWEEP — "what is cheap from here, to ANYWHERE".
+         *
+         * A FOURTH SWITCH RATHER THAN A FLAG ON `price`, even though the real
+         * adapter is the same vendor and even the same ENDPOINT as `returns`
+         * (`/v2/prices/latest`, with the destination left off and `one_way`
+         * flipped). It is its own switch for the reason returns got one: the
+         * discovery funnel is the newest and least proven thing in the app, it
+         * is the only one that can spend a SerpAPI quota, and a box must be
+         * able to turn it off without touching the fares every score and alert
+         * depend on.
+         *
+         * ⚠ BUT IT DEFAULTS TO WHATEVER `price` IS, AND THAT IS THE IMPORTANT
+         *   HALF. The other three keys default to `fake` independently, and
+         *   that is safe because each one fills its OWN table — a fake return
+         *   fare sits in `return_fares` next to nothing it can contradict.
+         *
+         *   A sweep is different: its candidates are scored against the fares
+         *   the PRICE provider fetched, and its cards sit on a screen next to
+         *   routes the price provider priced. A box running real fares with a
+         *   fake sweep would put five invented routes, at invented prices, on
+         *   a strip headed "Orbit found these on its own", each one verified
+         *   against a REAL calendar it has nothing to do with. That is the
+         *   exact failure this whole feature was built to prevent, arrived at
+         *   by leaving one variable unset.
+         *
+         *   So the sweep follows the fares by default and can still be pinned
+         *   either way — `ORBIT_SWEEP_PROVIDER=fake` on a box with real prices
+         *   is then a deliberate act rather than an omission. It is the same
+         *   shape `nlp.parser` below uses to derive its own default.
+         *
+         *   WHAT FOLLOWING COSTS, stated: flipping ORBIT_PRICE_PROVIDER also
+         *   turns on ~38 provider requests a night at 05:20. That is already in
+         *   the budget table in the `poll` section, in its own clock hour.
+         */
+        'sweep' => env('ORBIT_SWEEP_PROVIDER') ?: env('ORBIT_PRICE_PROVIDER', 'fake'),
     ],
 
     /*
@@ -645,10 +682,34 @@ return [
     |
     |     04:10  the far poll 9 watched × ≤12 months  = 108
     |
+    |   DISCOVERY, DAILY, IN THE 05:00 HOUR — WHICH IS OTHERWISE EMPTY:
+    |
+    |     05:20  the origin sweep  3 origins × 1        =   3
+    |     05:20  the verification  5 finalists × ≤7     =  35   (`discovery` below)
+    |                                                     ---
+    |                                                      38   of ~200
+    |
+    |   (Monday's 05:40 `orbit:refresh-stats` shares that hour and costs NOTHING
+    |   here: `ORBIT_STATS_PROVIDER=self` reads Orbit's own two tables and makes
+    |   no provider request at all. It is also why 05:20 rather than 05:40 —
+    |   discovery finishing before the stats refresh starts keeps the one hour
+    |   with two entries in it sequential rather than overlapping.)
+    |
     |   That day's 06:00 hour is the same 183 as every other day. THE ELEVEN
     |   MONTHS COST NOTHING IN THE WORST HOUR, which is the reason the far run
     |   is a separate schedule entry at a separate time rather than a deeper
     |   Wednesday poll — 9 × 12 + 120 = 228 would have been over the limit.
+    |
+    |   AND NEITHER DOES DISCOVERY, for exactly the same reason. 38 requests in
+    |   the 06:00 hour would be 221 and over the limit; in the empty 05:00 hour
+    |   they are 38. On the far morning the three runs are 04:10 (108), 05:20
+    |   (38) and 06:10+06:40 (183) — three separate clock hours, none of them
+    |   above 183, and the worst hour of the week is unchanged by this feature.
+    |
+    |   DISCOVERY ALSO SPENDS A SECOND, SMALLER BUDGET THAT IS NOT TRAVELPAYOUTS'
+    |   AT ALL: up to five SerpAPI searches out of 250 A MONTH. That allowance
+    |   cannot be reasoned about per hour and has its own guardrails — see the
+    |   `serpapi` section below.
     |
     |   WHERE IT BREAKS, so nobody has to rediscover it: at W watched routes the
     |   06:00 hour costs 7W + 120 and the far hour costs 12W. The ORDINARY
@@ -925,6 +986,306 @@ return [
 
     'lookup' => [
         'fresh_for_hours' => 24,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Discovery — the insanely cheap routes nobody is watching
+    |--------------------------------------------------------------------------
+    |
+    | Read once by App\Providers\AppServiceProvider into App\Domain\Discovery\
+    | DiscoveryPolicy and handed to the scorer and the job — the arrangement
+    | ScoringPolicy and AlertPolicy already have, because App\Domain calls no
+    | config(). `orbit:discover` is the command, App\Jobs\DiscoverDeals is the
+    | work, `discoveries` is the table, and docs/BUSINESS-LOGIC.md §16 is the
+    | rulebook.
+    |
+    | THE PROBLEM THIS SOLVES IS NOT "FIND CHEAP FARES", IT IS "SURPRISE ME".
+    | The watchlist answers what the owner already thought of; a rule answers a
+    | sentence they wrote down. This answers neither — it is the €29 Santorini
+    | nobody would have known to ask about — and that shapes every number below.
+    |
+    | =========================================================================
+    | ⚠ EVERY DEFAULT HERE WAS READ OFF ONE REAL MEASUREMENT
+    | =========================================================================
+    | An origin sweep of all three home airports against the live API on
+    | 2026-08-16. One request each:
+    |
+    |     AMS   562 entries   562 distinct destinations   €30 – €7,230
+    |     DUS   419 entries   419 distinct destinations   €16 – €1,545
+    |     EIN   196 entries   196 distinct destinations   €16 – €1,495
+    |
+    | 1,177 rows, of which 1,086 named a destination Orbit holds coordinates for
+    | (the other 45 are metropolitan codes — LON, MOW, MIL, BUE — and are
+    | dropped; see App\Application\Ports\OriginSweepProvider, point 7).
+    |
+    | WHAT THE RANKING DOES TO THAT LIST. Ordered by €/km with the four cheap
+    | rules applied, the top of the 2026-08-16 answer was:
+    |
+    |     DUS-RAK  Marrakesh   €27   2,502 km   10.8 m€/km
+    |     DUS-TNG  Tangier     €23   2,003 km   11.5
+    |     EIN-VNO  Vilnius     €18   1,372 km   13.1
+    |     EIN-TIA  Tirana      €21   1,561 km   13.5
+    |     DUS-PSR  Pescara     €16   1,134 km   14.1
+    |     DUS-AGP  Málaga      €29   1,853 km   15.6
+    |
+    | — which is the feature working. Ordered by PRICE alone it would have been
+    | Brussels, Cologne and Maastricht every day; ordered by €/km with no price
+    | ceiling it would have been Singapore (€287), Manila (€293) and Bangkok
+    | (€271), which are genuinely remarkable fares and are not what this screen
+    | promises. Both halves are needed and both are below.
+    |
+    | =========================================================================
+    | THE BUDGET, WHICH IS THE REASON THE FUNNEL HAS TWO STAGES
+    | =========================================================================
+    |     the sweep      3 origins × 1 request        =  3
+    |     verification   5 finalists × ≤7 months      = 35
+    |                                                   --
+    |                                                   38  Travelpayouts
+    |                                                  ≤ 5  SerpAPI (see below)
+    |
+    | Scheduled at 05:20, in a clock hour nothing else uses. The whole table,
+    | including where the ordinary morning breaks, is in the `poll` section.
+    |
+    | THE SWEEP IS ABSURDLY CHEAP AND THE VERIFICATION IS NOT, which is the
+    | entire shape of this feature: 1,177 candidate fares for three requests,
+    | and then 35 requests to check five of them. Anything that moved work from
+    | the second stage into the first would be making claims on the sweep's word
+    | — see App\Jobs\DiscoverDeals for why that is the one thing this must not
+    | do, and for the two occasions this app has already done it.
+    |
+    | VERIFY_WINDOW_DAYS IS 181, WHICH IS `poll.window_days`' NUMBER AND NOT A
+    | REFERENCE TO IT — the same arrangement `selfstats.cross_section_days` and
+    | `returns.window_days` have, and tests/Feature/DiscoveryRunTest asserts the
+    | three still agree. They are different decisions that happen to coincide:
+    | that one is a budget for what to fetch daily, and this is a claim about
+    | which departures a discovery is comparable against. It is the near window
+    | and deliberately not the eleven-month horizon, for both of the reasons
+    | `lookup` gives — it is what `selfstats` summarises, so the comparison is
+    | like against like, and 7 requests a finalist rather than 12 is what keeps
+    | the sum above at 38 instead of 63.
+    |
+    */
+
+    'discovery' => [
+        /*
+         * HOW FAR IS FAR ENOUGH TO BE A TRIP, in kilometres. 59 of the 1,086
+         * scored candidates were under 500 km and 31 under 300 — Brussels,
+         * Cologne, Maastricht, Eindhoven. Those are trains. This is not a guard
+         * on the ratio (a short hop already ranks badly per kilometre); it is
+         * what a DISCOVERY is, and the far side of a two-hour drive is not one.
+         */
+        'min_kilometres' => 400,
+
+        /*
+         * THE CEILING, IN EUROS, AND THE REASON €/km IS NOT THE WHOLE RULE.
+         * €287 to Singapore scores 27.3 m€/km and is a real bargain and is not
+         * this feature — the promise is a fare you see on a Tuesday and book on
+         * the Tuesday. 206 of the 524 fresh, far-enough candidates were under
+         * €120 on 2026-08-16. It did not bite on that day's top 25, because
+         * short-haul beat long-haul on the ratio outright that week — which is
+         * exactly why it is written down rather than left to luck.
+         */
+        'max_price_eur' => 120,
+
+        /*
+         * THE RANKING FLOOR, IN EUROS PER KILOMETRE. 0.030 reads as 30
+         * millieuros per kilometre, which is the unit everything else in this
+         * feature is quoted in. On the measured sweep, 53 of 1,086 candidates
+         * were under it while also being under €120, far enough and fresh
+         * enough; the best were Marrakesh at 10.8 and Tangier at 11.5.
+         *
+         * IT IS A FLOOR AND NOT THE SORT. The list is ORDERED by this number
+         * and cut at `shortlist`; the threshold's job is to stop a week with no
+         * deals in it from promoting the least mediocre thing available. An
+         * empty discovery screen is an honest answer and this is what makes it
+         * reachable.
+         */
+        'max_eur_per_km' => 0.030,
+
+        /*
+         * HOW OLD A SWEPT PRICE MAY BE, IN DAYS. A sweep is not a price list —
+         * it is seven days of other people's searches piled up. The recorded
+         * `found_at` spread: 394 of the 1,086 rows under two days old, 542
+         * under three, 1,082 under seven.
+         *
+         * ONE DAY MORE GENEROUS THAN `alerts.max_fare_age_days`, and the
+         * difference is the difference between the features. That number
+         * governs waking somebody up; this one governs a card that PRINTS THE
+         * AGE beside the price. Orbit may show a reader something slightly
+         * stale as long as it says so — it may not mail them about it, which is
+         * why v1 of this does not alert at all (docs/BUSINESS-LOGIC.md §16).
+         *
+         * A FARE THAT WILL NOT SAY HOW OLD IT IS COUNTS AS TOO OLD, which is
+         * the OPPOSITE of what AlertPolicy does with the identical fact. See
+         * App\Domain\Discovery\DealCandidate::ageInDays() for why the asymmetry
+         * is deliberate.
+         */
+        'max_found_age_days' => 3,
+
+        /*
+         * HOW MANY CANDIDATES ARE VERIFIED — THE ONLY NUMBER IN THIS SECTION
+         * THAT COSTS ANYTHING. Each finalist is 6 or 7 Travelpayouts requests
+         * plus at most one SerpAPI search. Five is ~35 + ≤5; six would be ~42
+         * and would start to matter.
+         */
+        'shortlist' => 5,
+
+        /*
+         * HOW DEEP IN ITS OWN WINDOW A FINALIST MUST SIT, as a percentile of
+         * the fares on the same route. DUS-AGP's €29 was cheaper than all 23
+         * fares its October window held — the 0th percentile, against a month
+         * median of €78 — which is what "insanely cheap" is supposed to mean
+         * and is a claim nothing before this stage could support.
+         *
+         * TEN, because the point is to catch the candidate that looked good
+         * against the WORLD and is ordinary on its OWN route: a cheap route
+         * rather than a cheap fare, which the owner can find by looking.
+         */
+        'max_percentile' => 10,
+
+        /*
+         * THE SMALLEST GAP WORTH THE WORD "FIND", IN EUROS, measured against
+         * the MEDIAN of the finalist's own window. DUS-AGP: €29 against €78 is
+         * €49 of daylight.
+         *
+         * IT GUARDS THE THIN ROUTE. A window that runs €38 to €44 can put a
+         * fare in its own bottom tenth while saving nobody anything, and the
+         * percentile alone would call that a discovery. Both rules pass or the
+         * candidate is dropped — each is blind to what the other catches.
+         */
+        'min_absolute_savings_eur' => 15,
+
+        /*
+         * HOW LONG A DISCOVERY STAYS ON THE SCREEN, IN HOURS. A discovery is
+         * the one thing in this app that is deliberately not history — see the
+         * `discoveries` migration. The run is daily, so 36 hours is "until
+         * tomorrow's run replaces it, plus half a day of slack": a failed run
+         * leaves yesterday's set standing until the afternoon rather than
+         * blanking the screen at 05:20, and a set two runs old is gone whatever
+         * happens.
+         */
+        'expires_after_hours' => 36,
+
+        /*
+         * THE CEILING ON THE WHOLE TABLE. At five rows a run and a 36-hour
+         * life, at most ten are ever alive at once; twelve is headroom rather
+         * than a target. App\Jobs\DiscoverDeals prunes to it on every run, in
+         * the screen's own order, so what survives is what would have been
+         * shown.
+         */
+        'max_rows' => 12,
+
+        /* The near window, written out. See the section note for the drift guard. */
+        'verify_window_days' => 181,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | SerpAPI — asking Google whether we are telling the truth
+    |--------------------------------------------------------------------------
+    |
+    | Read by App\Providers\AppServiceProvider into App\Infrastructure\Verify\
+    | GoogleFlightsCheck, and by nothing else. `key` defaults to NULL and the
+    | whole feature degrades to "skip the check" without one.
+    |
+    | WHY A SECOND VENDOR AT ALL. Every other number in the discovery funnel
+    | descends from Travelpayouts — the sweep, the window it is scored against,
+    | the calendar behind that. A cache that is wrong is therefore a funnel that
+    | is confidently wrong all the way to a badge saying "verified". Google is
+    | the only thing in this app that can disagree, which is exactly what makes
+    | five searches a night worth spending.
+    |
+    | =========================================================================
+    | ⚠ WHAT THE CHECK ACTUALLY ASKS, AND WHY IT IS NOT THE OBVIOUS QUESTION
+    | =========================================================================
+    | The obvious rule is "our candidate is below Google's typical price range,
+    | so Google agrees it is cheap". It is one comparison and IT CONFIRMS
+    | EVERYTHING. Three real finalists, put to Google on 2026-08-16:
+    |
+    |   route     Travelpayouts   Google's OWN cheapest   level     typical
+    |   DUS-AGP        €29                €70            typical    55 – 175
+    |   DUS-RAK        €27               €168            typical   100 – 200
+    |   EIN-VNO        €18                €30            typical    20 – 245
+    |
+    | All three are under their typical-range low. All three would have been
+    | stamped "✓ verified low by Google". And Google — same airports, same date
+    | — could not find a seat at anything like the price: Marrakesh at €27
+    | against a real market of €168 is a six-fold discrepancy, and the badge
+    | would have been Orbit putting Google's name on its own stale cache entry.
+    |
+    | So the verdict reads GOOGLE'S MARKET rather than our number: `price_level`
+    | is "low", OR Google's own `lowest_price` is at or under its typical-range
+    | low. On those three finalists that confirms NOTHING, which is the correct
+    | answer — they are shown as "great find", unverified, with the age printed
+    | next to them. App\Domain\Discovery\GoogleVerdict carries the full argument.
+    |
+    | =========================================================================
+    | THE GUARDRAILS, AND THEY ARE NOT NEGOTIABLE
+    | =========================================================================
+    | The key is a FREE plan: 250 searches a MONTH (measured 2026-08-16 — 249
+    | left, 250/hour rate limit). That is a budget that cannot be reasoned about
+    | per clock hour the way Travelpayouts' can, so:
+    |
+    |   1. NO KEY, NO CALLS, and no key is the DEFAULT.
+    |   2. THE QUOTA IS READ BEFORE ANY SEARCH, from `account.json`, which
+    |      SerpAPI does not bill for.
+    |   3. BELOW `reserve` REMAINING, NOTHING IS SPENT AT ALL.
+    |   4. AT MOST `max_per_run` SEARCHES IN ONE RUN, whatever the quota says.
+    |
+    | A SKIPPED CHECK IS NOT AN ERROR. Every one of those paths, plus a timeout,
+    | a 429 and a route Google has no opinion about, leaves the candidate with
+    | no verdict — shown honestly as an unverified "great find". What must never
+    | happen is a badge without a check behind it, and there is no setting here
+    | that produces one.
+    |
+    */
+
+    'serpapi' => [
+        'base_url' => env('SERPAPI_BASE_URL', 'https://serpapi.com'),
+
+        /*
+         * NULL BY DEFAULT, AND THE FEATURE IS BUILT FOR ITS ABSENCE. Unlike
+         * TRAVELPAYOUTS_TOKEN — whose adapter refuses to RESOLVE without it,
+         * because a box configured for real fares and given none is a deploy
+         * mistake — a missing key here is an ordinary, supported state. The
+         * discovery screen works; it just cannot say "verified".
+         */
+        'key' => env('SERPAPI_KEY'),
+
+        /*
+         * SEARCHES THAT DISCOVERY WILL NOT TOUCH.
+         *
+         * FIFTY, OUT OF 250 A MONTH, AND IT IS RESERVED FOR SOMETHING THAT DOES
+         * NOT EXIST YET. Discovery is a screen the owner chooses to open. The
+         * obvious next use for a second opinion is verifying an ALERT before it
+         * is sent — a feature that can wake somebody at 06:55 — and a nightly
+         * job that had eaten the month's last search would silently take that
+         * option away. The less important feature yields.
+         */
+        'reserve' => 50,
+
+        /*
+         * THE PER-RUN CAP, and it is deliberately the same number as
+         * `discovery.shortlist` rather than derived from it. They are two
+         * decisions: that one is how many candidates are worth verifying, this
+         * one is how much of a monthly allowance one night may spend. A bug
+         * that turned the verification loop into a sweep would clear the month
+         * in one night, and this is the thing standing in front of it.
+         *
+         * At five a night against 250 a month the arithmetic is comfortable:
+         * a 30-day month is 150 searches, leaving 100 above the 50 reserve.
+         */
+        'max_per_run' => 5,
+
+        /*
+         * Seconds. Shorter than the Travelpayouts read timeout because nothing
+         * depends on this answer: a check that times out is a check that was
+         * skipped, and the run carries on with one fewer badge. Waiting is the
+         * one thing it should not do.
+         */
+        'connect_timeout' => 5,
+        'timeout' => 20,
     ],
 
     /*

@@ -1,0 +1,148 @@
+{
+    "search_metadata": {
+        "status": "Success",
+        "created_at": "2026-08-16T07:56:00.000000Z"
+    },
+    "search_parameters": {
+        "engine": "google_flights",
+        "hl": "en",
+        "gl": "nl",
+        "type": "2",
+        "departure_id": "DUS",
+        "arrival_id": "AGP",
+        "outbound_date": "2026-10-24",
+        "currency": "EUR"
+    },
+    "best_flights": [
+        {
+            "flights": [
+                {
+                    "departure_airport": {
+                        "name": "Duesseldorf Airport",
+                        "id": "DUS",
+                        "time": "2026-10-24 15:00"
+                    },
+                    "arrival_airport": {
+                        "name": "M\u00e1laga-Costa del Sol Airport",
+                        "id": "AGP",
+                        "time": "2026-10-24 18:00"
+                    },
+                    "duration": 180,
+                    "airplane": "Airbus A321",
+                    "airline": "Eurowings",
+                    "travel_class": "Economy",
+                    "flight_number": "EW 9536",
+                    "legroom": "28 in",
+                    "extensions": [
+                        "Below average legroom (28 in)",
+                        "Wi-Fi for a fee",
+                        "Stream media to your device",
+                        "Carbon emissions estimate: 158 kg"
+                    ]
+                }
+            ],
+            "total_duration": 180,
+            "carbon_emissions": {
+                "this_flight": 158000,
+                "typical_for_this_route": 149000,
+                "difference_percent": 6
+            },
+            "price": 70,
+            "type": "One way"
+        }
+    ],
+    "other_flights": [
+        {
+            "flights": [
+                {
+                    "departure_airport": {
+                        "name": "Duesseldorf Airport",
+                        "id": "DUS",
+                        "time": "2026-10-24 21:00"
+                    },
+                    "arrival_airport": {
+                        "name": "Josep Tarradellas Barcelona-El Prat Airport",
+                        "id": "BCN",
+                        "time": "2026-10-24 23:20"
+                    },
+                    "duration": 140,
+                    "airplane": "Airbus A321",
+                    "airline": "Vueling",
+                    "travel_class": "Economy",
+                    "flight_number": "VY 1899",
+                    "legroom": "29 in",
+                    "extensions": [
+                        "Below average legroom (29 in)",
+                        "Wi-Fi for a fee",
+                        "In-seat USB outlet",
+                        "Stream media to your device",
+                        "Carbon emissions estimate: 118 kg"
+                    ],
+                    "often_delayed_by_over_30_min": true
+                },
+                {
+                    "departure_airport": {
+                        "name": "Josep Tarradellas Barcelona-El Prat Airport",
+                        "id": "BCN",
+                        "time": "2026-10-25 06:40"
+                    },
+                    "arrival_airport": {
+                        "name": "M\u00e1laga-Costa del Sol Airport",
+                        "id": "AGP",
+                        "time": "2026-10-25 08:20"
+                    },
+                    "duration": 100,
+                    "airplane": "Airbus A320",
+                    "airline": "Vueling",
+                    "travel_class": "Economy",
+                    "flight_number": "VY 1542",
+                    "legroom": "29 in",
+                    "extensions": [
+                        "Below average legroom (29 in)",
+                        "Wi-Fi for a fee",
+                        "In-seat USB outlet",
+                        "Stream media to your device",
+                        "Carbon emissions estimate: 76 kg"
+                    ]
+                }
+            ],
+            "layovers": [
+                {
+                    "duration": 500,
+                    "name": "Josep Tarradellas Barcelona-El Prat Airport",
+                    "id": "BCN"
+                }
+            ],
+            "total_duration": 740,
+            "carbon_emissions": {
+                "this_flight": 194000,
+                "typical_for_this_route": 149000,
+                "difference_percent": 30
+            },
+            "price": 99,
+            "type": "One way"
+        }
+    ],
+    "price_insights": {
+        "lowest_price": 48,
+        "price_level": "low",
+        "typical_price_range": [
+            55,
+            175
+        ],
+        "price_history": [
+            [
+                1781560800,
+                125
+            ],
+            [
+                1781647200,
+                125
+            ],
+            [
+                1781733600,
+                117
+            ]
+        ]
+    }
+}

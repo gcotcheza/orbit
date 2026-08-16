@@ -417,3 +417,226 @@ test('typing a city name does not shout it back, at either end', async ({ page }
     await expect(page.locator(FROM)).toHaveValue('ams')
     await expect(page.getByRole('button', { name: 'Look up' })).toBeEnabled()
 })
+
+/*
+ * ============================================================================
+ * DEALS FROM YOUR AIRPORTS — the strip below the form
+ * ============================================================================
+ * Routes nobody is watching, swept and verified by `orbit:discover` at 05:20
+ * and seeded here by Database\Seeders\DiscoverySeeder — which runs the REAL
+ * App\Jobs\DiscoverDeals against the fake sweep provider rather than writing
+ * fixture rows. So what is photographed below came out of the actual funnel:
+ * the same four thresholds, the same cross-sectional check against the same
+ * PriceProvider the calendar uses. A hand-seeded row would have made this spec
+ * a photograph of a shape rather than of a feature.
+ *
+ * WHY THE BROWSER, given DiscoveryCard.test.js already asserts every field:
+ *
+ *   - THE SECTION IS CONDITIONAL AND HAS NO EMPTY STATE. `v-if="finds.length"`
+ *     with no skeleton is a deliberate choice (Views/Search.vue) and its
+ *     failure mode is a screen that silently never grows a section. jsdom
+ *     cannot tell "the fetch resolved and rendered nothing" from "the fetch
+ *     never happened".
+ *   - THE FORM MUST NOT MOVE. The strip arrives after the first paint, below
+ *     two suggestion panels that are themselves in the flow. A section that
+ *     reflowed the boxes upward while somebody was typing into them is the
+ *     same class of defect the Add button had.
+ *   - THE BADGE IS A COLOUR. `data-verified` is asserted in vitest; whether
+ *     "unverified" reads as quiet rather than as a warning can only be seen.
+ */
+test.describe('deals from your airports', () => {
+    test('the strip renders what the funnel actually found, in both themes', async ({ page }) => {
+        await page.goto('/search')
+
+        const strip = page.locator('.finds')
+        await expect(strip).toBeVisible()
+
+        await expect(strip.getByRole('heading', { name: 'Deals from your airports' })).toBeVisible()
+
+        /*
+         * THE HEADING SAYS WHEN, and that is not decoration: without it the
+         * section implies the fares were checked when the screen opened, and
+         * they were checked at 05:20 against a cache already up to three days
+         * old.
+         */
+        await expect(strip.locator('.finds__note')).toContainText('Orbit found these on its own')
+
+        const cards = strip.locator('.find')
+        expect(await cards.count()).toBeGreaterThan(0)
+
+        const first = cards.first()
+
+        // A destination, a real euro price and a real departure day.
+        await expect(first.locator('.find__city')).not.toBeEmpty()
+        await expect(first.locator('.find__price')).toHaveText(/^€\d+$/)
+        await expect(first.locator('.find__when')).toHaveText(/^\w{3}, \w{3} \d+$/)
+
+        /*
+         * THE SANDBOX HAS NO SERPAPI_KEY, so nothing here can be verified and
+         * every badge must say so. This is the assertion that a missing key
+         * produces an honest card rather than an absent one — or, worse, a
+         * badge nobody earned.
+         */
+        await expect(first.locator('.find__badge')).toHaveAttribute('data-verified', 'false')
+        await expect(first.locator('.find__badge')).toHaveText('Unverified')
+
+        // And how old the price is, which a discovery always states.
+        await expect(first.locator('.find__seen')).toHaveText(/^seen /)
+
+        await shot(page, 'search-discoveries-dark')
+
+        // --- The same strip, light ------------------------------------------
+        await page.goto('/alerts')
+        await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Light' }).click()
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+
+        await page.goto('/search')
+        await expect(page.locator('.finds .find').first()).toBeVisible()
+
+        await shot(page, 'search-discoveries-light')
+
+        // Back to dark for whatever runs next.
+        await page.goto('/alerts')
+        await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Dark' }).click()
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    })
+
+    /*
+     * THE EARNED BADGE, WHICH THE SANDBOX CANNOT REACH ON ITS OWN.
+     *
+     * A verified card requires Google to agree, which requires a SERPAPI_KEY
+     * and a real metered search out of a 250-a-MONTH allowance. Neither belongs
+     * in a suite that runs twenty times an afternoon, and the owner's guardrails
+     * (config/orbit.php, `serpapi`) exist precisely to stop a job from spending
+     * that budget casually — a test harness has no business being the exception.
+     *
+     * So the ENDPOINT is stubbed rather than the verdict fabricated in the
+     * database. The distinction matters: nothing here writes a claim Orbit could
+     * later serve to a person. This is a photograph of how the client draws an
+     * answer it may one day receive, and the answer's shape is docs/API.md's.
+     */
+    test('an earned badge looks earned, and an unearned one stays quiet', async ({ page }) => {
+        await page.route('**/api/discoveries', async (route) => {
+            const response = await route.fetch()
+            const body = await response.json()
+
+            const first = body.data[0]
+
+            await route.fulfill({
+                json: {
+                    data: [
+                        {
+                            ...first,
+                            verdict: {
+                                verified: true,
+                                label: 'Verified low by Google',
+                                level: 'low',
+                                googleLowest: 48,
+                                typicalLow: 55,
+                                typicalHigh: 175,
+                            },
+                        },
+                        {
+                            ...first,
+                            code: 'AMS-AGP',
+                            destination: { iata: 'AGP', city: 'Málaga', country: 'Spain' },
+                            price: 36,
+                            verdict: {
+                                verified: false,
+                                label: 'Unverified',
+                                level: 'typical',
+                                googleLowest: 70,
+                                typicalLow: 55,
+                                typicalHigh: 175,
+                            },
+                        },
+                    ],
+                    meta: { count: 2, discoveredAt: body.meta.discoveredAt },
+                },
+            })
+        })
+
+        await page.goto('/search')
+
+        const badges = page.locator('.finds .find__badge')
+        await expect(badges).toHaveCount(2)
+
+        const earned = badges.first()
+        await expect(earned).toHaveAttribute('data-verified', 'true')
+        await expect(earned).toContainText('Verified low by Google')
+        // The tick is what an earned verdict looks like; the other has none.
+        await expect(earned.locator('svg')).toBeVisible()
+
+        const quiet = badges.nth(1)
+        await expect(quiet).toHaveAttribute('data-verified', 'false')
+        await expect(quiet).toHaveText('Unverified')
+        await expect(quiet.locator('svg')).toHaveCount(0)
+
+        /*
+         * THE COLOURS ARE THE POINT OF PHOTOGRAPHING THIS. The earned badge
+         * carries the app's `--good` pair; the unverified one must NOT carry
+         * `--warn`, because unverified is the ordinary state and a screen of
+         * yellow labels would train the owner to distrust the whole strip.
+         */
+        const tints = await page.evaluate(() => {
+            const all = [...document.querySelectorAll('.finds .find__badge')]
+
+            return all.map((badge) => getComputedStyle(badge).backgroundColor)
+        })
+
+        expect(tints[0]).not.toBe(tints[1])
+
+        await shot(page, 'search-discoveries-badges-dark')
+
+        // --- Both badge states, light ---------------------------------------
+        await page.goto('/alerts')
+        await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Light' }).click()
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+
+        await page.goto('/search')
+        await expect(page.locator('.finds .find__badge')).toHaveCount(2)
+
+        await shot(page, 'search-discoveries-badges-light')
+
+        await page.goto('/alerts')
+        await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Dark' }).click()
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    })
+
+    /*
+     * TAPPING A DISCOVERY IS THE REUSE, AND IT IS THE WHOLE INTEGRATION STORY.
+     * A card links into `/route/AMS-AGP` — the existing lookup flow, which
+     * prices the pair, creates the route row and offers the watch button. This
+     * feature added no booking link, no watch action and no second detail
+     * screen, and this is the test that says so.
+     */
+    test('tapping a discovery opens the ordinary route screen, priced', async ({ page, browserConsole }) => {
+        /*
+         * Orbit has never priced this pair — a discovery is by definition a
+         * route nobody watches — so the detail screen's read is a 404 and the
+         * lookup it makes next is the answer (docs/API.md). Chromium logs the
+         * failed request; that one line is what this waives.
+         */
+        browserConsole.allow(/Failed to load resource.*404/)
+
+        await page.goto('/search')
+
+        const card = page.locator('.finds .find').first()
+        const code = await card.locator('.find__from').textContent()
+        const [origin, destination] = code.split('→').map((part) => part.trim())
+
+        await card.click()
+
+        await expect(page).toHaveURL(new RegExp(`/route/${origin}-${destination}$`))
+        await expect(page.locator('.detail__code')).toHaveText(`${origin} → ${destination}`)
+
+        // The lookup really priced it, which is what makes the card worth tapping.
+        await expect(page.locator('.price__value')).toHaveText(/^€\d+$/)
+
+        await shot(page, 'search-discovery-opened')
+
+        // And the watchlist is untouched: looking is not committing.
+        await page.goto('/watch')
+        await expect(page.locator('.pass')).toHaveCount(6)
+    })
+})
