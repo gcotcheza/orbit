@@ -8,6 +8,7 @@ use Anthropic\Client as AnthropicClient;
 use App\Application\Ports\DealNotifier;
 use App\Application\Ports\PriceProvider;
 use App\Application\Ports\PriceStatsProvider;
+use App\Application\Ports\ReturnTripProvider;
 use App\Application\Ports\RuleTextParser;
 use App\Domain\Alerts\AlertPolicy;
 use App\Domain\Pricing\DealScorer;
@@ -19,9 +20,11 @@ use App\Infrastructure\Nlp\RegexRuleTextParser;
 use App\Infrastructure\Notify\MailDealNotifier;
 use App\Infrastructure\Notify\MarkAlertsDelivered;
 use App\Infrastructure\Pricing\FakePriceProvider;
+use App\Infrastructure\Pricing\FakeReturnProvider;
 use App\Infrastructure\Pricing\FakeStatsProvider;
 use App\Infrastructure\Pricing\SelfStatsProvider;
 use App\Infrastructure\Pricing\TravelpayoutsPriceProvider;
+use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
 use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -38,7 +41,7 @@ final class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         /*
-         * THE TWO FARE PORTS, chosen by name in config/orbit.php.
+         * THE THREE FARE PORTS, chosen by name in config/orbit.php.
          *
          * This is the whole of the hexagon's wiring: nothing in App\Domain or
          * App\Application knows an adapter exists, so swapping a fake for the
@@ -63,6 +66,20 @@ final class AppServiceProvider extends ServiceProvider
             'fake' => new FakeStatsProvider,
             'self' => $this->selfStats(),
             default => throw new InvalidArgumentException(sprintf('Unknown price statistics provider [%s].', is_string($name) ? $name : gettype($name))),
+        });
+
+        /*
+         * ROUND TRIPS ARE THEIR OWN SWITCH, deliberately, even though the real
+         * adapter talks to the same vendor as the one-way one. The two read
+         * different endpoints with different coverage, and the return-trip half
+         * is the newer and much thinner of them — so a box must be able to run
+         * real one-way fares (which every score and alert depends on) while
+         * returns are still coming from the fake. See config/orbit.php.
+         */
+        $this->app->bind(ReturnTripProvider::class, fn (): ReturnTripProvider => match ($name = config('orbit.providers.returns')) {
+            'fake' => new FakeReturnProvider,
+            'travelpayouts' => $this->travelpayoutsReturns(),
+            default => throw new InvalidArgumentException(sprintf('Unknown return-trip provider [%s].', is_string($name) ? $name : gettype($name))),
         });
 
         /*
@@ -209,6 +226,43 @@ final class AppServiceProvider extends ServiceProvider
             retries: (int) $travelpayouts['retries'],
             retryDelayMs: (int) $travelpayouts['retry_delay_ms'],
             warnEveryMinutes: (int) $travelpayouts['warn_every_minutes'],
+        );
+    }
+
+    /**
+     * The real round-trip adapter.
+     *
+     * IT SHARES THE `travelpayouts` CONNECTION SETTINGS AND HAS ITS OWN
+     * BEHAVIOUR SETTINGS, which is the split the two config sections describe:
+     * the base URL, token, timeouts, retries and warning interval are facts
+     * about talking to that vendor and are the same for both adapters, while
+     * `max_nights` and `limit` are facts about this endpoint's answer and live
+     * in `orbit.returns`. Duplicating the connection half would mean a token
+     * rotation that half-worked.
+     *
+     * A MISSING TOKEN THROWS FROM THE CONSTRUCTOR, here, at resolution — the
+     * same rule `travelpayoutsPrices()` follows and for the same reason.
+     */
+    private function travelpayoutsReturns(): ReturnTripProvider
+    {
+        /** @var array<string, mixed> $travelpayouts */
+        $travelpayouts = config('orbit.travelpayouts');
+        /** @var array<string, mixed> $returns */
+        $returns = config('orbit.returns');
+
+        return new TravelpayoutsReturnProvider(
+            http: $this->app->make(HttpFactory::class),
+            logger: $this->app->make('log'),
+            cache: $this->app->make('cache.store'),
+            baseUrl: (string) $travelpayouts['base_url'],
+            token: (string) $travelpayouts['token'],
+            connectTimeout: (float) $travelpayouts['connect_timeout'],
+            timeout: (float) $travelpayouts['timeout'],
+            retries: (int) $travelpayouts['retries'],
+            retryDelayMs: (int) $travelpayouts['retry_delay_ms'],
+            warnEveryMinutes: (int) $travelpayouts['warn_every_minutes'],
+            maxNights: (int) $returns['max_nights'],
+            limit: (int) $returns['limit'],
         );
     }
 

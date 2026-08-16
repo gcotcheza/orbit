@@ -35,8 +35,29 @@
 12. PWA (manifest/SW/offline, build retention)
 13. Deploy runbook + go-live at flights.ghiecode.io
 
+### Return trips — a milestone after go-live
+
+Orbit prices **one-way** legs, which is correct for the EU budget carriers it
+was built around and wrong for anything long-haul: measured 2026-08-16, the
+cheapest one-way is 58–69% of the cheapest return (AMS–JFK: €334 against €484).
+So "from €334" was never wrong about the arithmetic and always wrong about the
+trip. Split into PRs so the table starts filling with real fares before anything
+has to draw them.
+
+- **returns-1 — the data foundation.** `ReturnTripProvider` port, real
+  (`/v2/prices/latest`, `one_way=false`) and fake adapters, the `return_fares`
+  table, `PollReturnFares` + `orbit:poll-returns`. No UI, no endpoints, **not
+  scheduled**. The measured data reality — sparse coverage, no duration grid,
+  and the parameters that are load-bearing — is `docs/BUSINESS-LOGIC.md` §15.
+- **returns-2 onwards** — statistics and a score for round trips (a "current
+  price" for a return has to be *defined* before it can be computed); the
+  screens, built for 8–34% coverage rather than against it; `tripLengthNights`
+  finally *matching* rather than only being parsed and shown; and alerts, which
+  have to reckon with a cache that is seven days deep.
+
 ## Pending owner actions
 - **Travelpayouts: adapter built, switch not thrown.** `ORBIT_PRICE_PROVIDER=travelpayouts` + `TRAVELPAYOUTS_TOKEN` in `.env` turns on real one-way fares (`/v2/prices/month-matrix`). Run `php artisan orbit:reset-history --confirm` in the same breath — the recorded history is all simulated, and mixing the two makes every trend and deal score a comparison between two different universes. Expect 41–87% day coverage and honest "tracking N days" charts afterwards.
 - **Statistics: nothing to sign up for any more.** Amadeus Self-Service was decommissioned 2026-07-17; `ORBIT_STATS_PROVIDER=self` computes a route's usual price from Orbit's own fares and needs no key. Flip it in the same breath as `ORBIT_PRICE_PROVIDER`, restart, then `php artisan orbit:refresh-stats --now` — a summary of fake fares is a real statistic about a simulation.
+- **Round trips: adapter built, switch not thrown, poll not scheduled.** `ORBIT_RETURNS_PROVIDER=travelpayouts` (same `TRAVELPAYOUTS_TOKEN`) turns on real round-trip fares; `php artisan orbit:poll-returns` fills `return_fares` by hand, one request per watched route. There is deliberately **no schedule entry** until a screen reads the table — `docs/BUSINESS-LOGIC.md` §15 has the budget and says the entry belongs in the 04:00 hour. Nothing to reset: the table is new, so no simulated rows are mixed in.
 - Dedicated Anthropic API key for the rule parser.
 - Verify `ghiecode.io` as a sending domain in Resend; then switch `MAIL_MAILER` from `log`.

@@ -63,10 +63,18 @@ return [
     | Fare providers
     |--------------------------------------------------------------------------
     |
-    | Two ports (App\Application\Ports\PriceProvider, PriceStatsProvider),
-    | chosen by name here and bound in AppServiceProvider. Both have two
-    | adapters now: prices are `fake` or `travelpayouts`, statistics are `fake`
-    | or `self`.
+    | Three ports (App\Application\Ports\PriceProvider, PriceStatsProvider,
+    | ReturnTripProvider), chosen by name here and bound in AppServiceProvider.
+    | Each has two adapters: one-way prices are `fake` or `travelpayouts`,
+    | statistics are `fake` or `self`, round trips are `fake` or `travelpayouts`.
+    |
+    | ONE-WAY AND ROUND-TRIP ARE TWO SWITCHES, NOT ONE, EVEN THOUGH BOTH REAL
+    | ADAPTERS TALK TO TRAVELPAYOUTS. They read different endpoints with
+    | different coverage and different failure modes, and the round-trip half is
+    | the newer and thinner of the two — so a box must be able to run real
+    | one-way fares (which every score and alert in the app depends on) while the
+    | return-trip table is still being filled by the fake, and vice versa. One
+    | key would have made turning returns on a change to the deal score.
     |
     | THERE IS NO THIRD-PARTY STATISTICS ADAPTER AND THERE WILL NOT BE ONE.
     | The plan was Amadeus' price-analysis endpoint; their Self-Service API was
@@ -94,6 +102,7 @@ return [
     'providers' => [
         'price' => env('ORBIT_PRICE_PROVIDER', 'fake'),
         'stats' => env('ORBIT_STATS_PROVIDER', 'fake'),
+        'returns' => env('ORBIT_RETURNS_PROVIDER', 'fake'),
     ],
 
     /*
@@ -625,6 +634,15 @@ return [
     |   hour, or moving the sweep — and the far horizon is not what puts it
     |   there.
     |
+    |   ROUND TRIPS ARE NOT IN EITHER SUM AND CANNOT MOVE EITHER NUMBER MUCH.
+    |   `orbit:poll-returns` is ONE request per watched route (9 today, W in
+    |   general) because `/v2/prices/latest` answers for the whole horizon at
+    |   once — and it is NOT SCHEDULED, so today it costs nothing at all. The
+    |   `returns` section below carries the arithmetic and says which clock hour
+    |   the schedule entry should go in when a later PR adds one: the 04:00 one,
+    |   because the 06:00 hour is already at 183 of ~200 and 9 more would leave
+    |   it with 8 requests of headroom.
+    |
     | STAGGER_MINUTES spaces the per-route jobs so nine routes' worth of provider
     | calls do not arrive as a burst — the real APIs are rate-limited per minute
     | as well as per hour. Nine routes at three minutes is a 24-minute fan-out,
@@ -670,6 +688,156 @@ return [
         'stagger_minutes' => 3,
         'stale_after_days' => 3,
         'far_stale_after_days' => 17,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Round trips — going and coming back
+    |--------------------------------------------------------------------------
+    |
+    | Read by App\Jobs\PollReturnFares, App\Infrastructure\Pricing\
+    | TravelpayoutsReturnProvider and FakeReturnProvider. `return_fares` is the
+    | table; App\Application\Ports\ReturnTripProvider is the port.
+    |
+    | WHY THIS EXISTS AT ALL. Every price in this app is a ONE-WAY fare, which is
+    | the right number for the EU budget carriers Orbit was built around and is
+    | the wrong number for anything long-haul: nobody flies to New York one way.
+    | Measured on 2026-08-16, cheapest one-way against cheapest round-trip on the
+    | same route —
+    |
+    |     AMS-LIS   €80  vs  €134     the one-way is 60% of the return
+    |     AMS-JFK   €334 vs  €484     the one-way is 69% of the return
+    |     AMS-BKK   €272 vs  €472     the one-way is 58% of the return
+    |
+    | — so a long-haul one-way is roughly two thirds of a return, not half of
+    | one, and "AMS-JFK from €334" was never a lie about the arithmetic and
+    | always a lie about the trip.
+    |
+    | ⚠ NOTHING READS THIS TABLE YET AND NOTHING POLLS IT ON A SCHEDULE. This is
+    | the foundation PR of the return-trip milestone: a port, two adapters, a
+    | table and `orbit:poll-returns` to fill it by hand. routes/console.php is
+    | deliberately untouched — see App\Console\Commands\PollReturns for why, and
+    | for the fact that a fortnight of accumulated real fares is worth more to
+    | the PR that draws them than an empty table is.
+    |
+    | =========================================================================
+    | THE BUDGET, AND IT IS THE CHEAPEST THING IN THIS FILE
+    | =========================================================================
+    | `/v2/prices/latest` with `period_type=year` answers for the WHOLE horizon
+    | in ONE request — the recorded AMS-LIS answer ran from the day of the call
+    | to 2027-06-18 — where the one-way calendar is billed per calendar MONTH and
+    | costs seven a morning or twelve on the far run. So:
+    |
+    |     ONE request per watched route per run.  9 watched today  =  9
+    |
+    | AT W WATCHED ROUTES IT IS W REQUESTS, flat. Against Travelpayouts' ~200 an
+    | hour per IP, returns polling never becomes the binding constraint — the
+    | ordinary morning already breaches at W = 12 on the one-way poll and the
+    | rule sweep alone (see `poll` above), long before this could matter.
+    |
+    | WHERE THE SCHEDULE ENTRY SHOULD GO WHEN A LATER PR ADDS ONE, worked out
+    | here so nobody has to rediscover it:
+    |
+    |     06:00 hour   poll 63 + sweep 120 = 183, + 9 = 192 of ~200   ⚠ too tight
+    |     04:00 hour   far poll 108        = 108, + 9 = 117 of ~200   ← this one
+    |
+    | The 06:00 hour is already at 92% of the allowance and is the hour that
+    | breaks first as the watchlist grows; the far-poll hour has room to spare
+    | and is idle six mornings a week. A returns poll at 04:40 costs nothing
+    | anybody else is using. THAT IS A RECOMMENDATION AND NOT A SETTING — there
+    | is no key for it here, because a schedule belongs in routes/console.php
+    | where "the returns poll runs at 04:40" is one readable line.
+    |
+    | WINDOW_DAYS IS 334, WHICH IS `poll.horizon_days`' NUMBER AND NOT A
+    | REFERENCE TO IT. Round trips are maintained exactly as deep as the one-way
+    | calendar, because a person paging an eleven-month heatmap and a person
+    | asking "a week away some time before next summer" are the same person on
+    | the same screen. It is written out rather than read from the other key for
+    | the reason `selfstats.cross_section_days` is: they are different decisions
+    | that happen to agree, and tests/Feature/ReturnFaresPollTest asserts they
+    | still do, which is the drift guard.
+    |
+    | IT IS A RETENTION BOUND AND NOT A REQUEST PARAMETER, which is unique in
+    | this file. The provider answers for a year whatever it is asked, so this
+    | number decides what is KEPT rather than what is fetched — the adapter drops
+    | the spill past it and PollReturnFares deletes anything that gets past that.
+    |
+    | STALE_AFTER_DAYS IS ONE NUMBER WHERE THE ONE-WAY CALENDAR NEEDS TWO. That
+    | table is polled at two speeds and so needs two clocks (`stale_after_days`
+    | and `far_stale_after_days`, and a two-pass prune). This one is fetched
+    | whole, in a single request, so every row is always exactly as fresh as
+    | every other and one clock is the honest description. THREE DAYS is the same
+    | sentence as its one-way twin — two missed runs plus a day — and it only
+    | starts meaning anything once there IS a schedule.
+    |
+    | MAX_NIGHTS IS A SANITY CEILING, NOT A PRODUCT DECISION. The longest real
+    | stay recorded was 56 nights (AMS-BKK, which serves stays from 3 to 56); 60
+    | leaves headroom without letting a corrupt row claim somebody is going away
+    | for nine months. Anything longer is dropped by the adapter with the reason
+    | written down once, rather than by the column type with no reason at all.
+    |
+    | =========================================================================
+    | DURATIONS — THE BANDS, AND WHY THESE FOUR
+    | =========================================================================
+    | `[min, max]` nights, both ends INCLUSIVE, which is how a person reads "6 to
+    | 8 nights" and how App\Domain\Rules\RuleCriteria::$tripLengthNights has been
+    | documented since the rules engine shipped ("weekend" is [2, 3] — that
+    | field is parsed, stored and shown today but MATCHED ON NOTHING, because
+    | until this table existed Orbit did not hold the fact it would filter).
+    |
+    | THEY ARE FITTED TO THE MEASURED STAY LENGTHS rather than chosen for
+    | tidiness. The histograms from 2026-08-16, entries per stay length:
+    |
+    |     AMS-LIS  mass at 2-7 nights, peak 4, tail to 14
+    |     EIN-BCN  mass at 0-5 nights, nothing above 13
+    |     AMS-JFK  mass at 6-8 and again at 14
+    |     AMS-BKK  mass at 14-28, peak 14, tail to 56
+    |
+    |     [2, 3]    A LONG WEEKEND. The short-haul mode, and the only band that
+    |               already has a name in the app — the regex parser turns the
+    |               word "weekend" into exactly this pair.
+    |     [6, 8]    A WEEK. The one band with real mass on every route measured,
+    |               short-haul and long-haul alike. Seven with a day either side,
+    |               because a fare is not a calendar and Saturday-to-Sunday is
+    |               eight nights.
+    |     [13, 15]  A FORTNIGHT. Where AMS-JFK's second peak sits and where
+    |               AMS-BKK's mass begins.
+    |     [21, 28]  THREE TO FOUR WEEKS. Added for long-haul and for no other
+    |               reason: AMS-BKK carries more entries between 21 and 28 nights
+    |               (72) than AMS-LIS carries in total. A band set that stopped at
+    |               a fortnight would have had nothing to say about the routes
+    |               this whole milestone exists for.
+    |
+    | ADDING A BAND IS CHEAP AND COSTS NO REQUESTS. `trip_duration` on the API is
+    | silently ignored (verified: byte-identical responses with and without it),
+    | so the adapter fetches everything and filters locally — a narrow band and a
+    | wide one are the same call. What a band DOES cost is fake data:
+    | FakeReturnProvider prices only the lengths the bands cover, so a box that
+    | empties this list has a fake with no fares at all.
+    |
+    */
+
+    'returns' => [
+        'window_days' => 334,
+        'stale_after_days' => 3,
+        'max_nights' => 60,
+
+        /*
+         * SENT ON EVERY REQUEST, AND ITS ABSENCE IS A SILENT 91% DATA LOSS. The
+         * API's default is 30 records: AMS-BKK returned 338 entries with
+         * `limit=1000` and exactly 30 without it, with no error and no marker to
+         * say the answer had been truncated. 1000 is the documented maximum and
+         * no route measured came close to it, which is also why the adapter does
+         * not paginate.
+         */
+        'limit' => 1000,
+
+        'durations' => [
+            [2, 3],
+            [6, 8],
+            [13, 15],
+            [21, 28],
+        ],
     ],
 
     /*
