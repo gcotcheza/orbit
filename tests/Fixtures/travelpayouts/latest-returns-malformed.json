@@ -1,0 +1,175 @@
+{
+    "_comment": [
+        "THE ONLY RETURN-TRIP FIXTURE IN THIS DIRECTORY THAT WAS NOT RECORDED FROM THE",
+        "LIVE API, and it exists for the same reason month-matrix-malformed.json does:",
+        "in 198 real entries across three routes on 2026-08-16, every single one was",
+        "well-formed, carried actual=true, carried a found_at and carried a return_date",
+        "at or after its depart_date. Defences nothing exercises are decoration.",
+        "",
+        "FOUR GOOD ROWS AND THIRTEEN BAD ONES. App\\Infrastructure\\Pricing\\",
+        "TravelpayoutsReturnProvider must return precisely the four.",
+        "",
+        "THE TWO found_at SHAPES ARE BOTH GOOD ROWS, AND THAT IS THE POINT OF g2.",
+        "/v2/prices/latest stamps `2026-08-14T10:00:00` with NO trailing Z, while",
+        "/v2/prices/month-matrix and /v2/prices/week-matrix stamp `...Z`. Measured, on",
+        "the same afternoon, from the same account. An adapter that pinned one format",
+        "would silently drop the age off every round-trip fare it ever saw.",
+        "",
+        "ZERO NIGHTS IS A GOOD ROW, NOT A BAD ONE (g2). A same-day return is a real",
+        "shape the live cache serves — one AMS-LIS entry and two EIN-BCN entries had",
+        "it — and rejecting it would be the adapter inventing a rule the airline does",
+        "not have.",
+        "",
+        "Travelpayouts ignores unknown keys, so this leading _comment is inert."
+    ],
+    "currency": "eur",
+    "data": [
+        {
+            "_row": "g1 — ordinary: three nights, found_at in the /v2/prices/latest shape",
+            "actual": true,
+            "depart_date": "2026-09-04",
+            "return_date": "2026-09-07",
+            "destination": "LIS",
+            "origin": "AMS",
+            "found_at": "2026-08-14T10:00:00",
+            "value": 120
+        },
+        {
+            "_row": "g2 — ZERO nights (same-day return) and the ...Z found_at shape",
+            "actual": true,
+            "depart_date": "2026-09-05",
+            "return_date": "2026-09-05",
+            "destination": "LIS",
+            "origin": "AMS",
+            "found_at": "2026-08-14T11:00:00Z",
+            "value": 99
+        },
+        {
+            "_row": "g3 — unreadable found_at: the FARE survives, its age does not",
+            "actual": true,
+            "depart_date": "2026-09-06",
+            "return_date": "2026-09-13",
+            "destination": "LIS",
+            "origin": "AMS",
+            "found_at": "the day before yesterday",
+            "value": 150
+        },
+        {
+            "_row": "g4 — no found_at key at all: same rule as g3",
+            "actual": true,
+            "depart_date": "2026-09-07",
+            "return_date": "2026-09-10",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": 130
+        },
+        {
+            "_row": "b1 — a ONE-WAY leaking into a round-trip response; empty return_date",
+            "actual": true,
+            "depart_date": "2026-09-08",
+            "return_date": "",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": 88
+        },
+        {
+            "_row": "b2 — no return_date key at all",
+            "actual": true,
+            "depart_date": "2026-09-09",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": 89
+        },
+        {
+            "_row": "b3 — comes back BEFORE it leaves: negative nights",
+            "actual": true,
+            "depart_date": "2026-09-10",
+            "return_date": "2026-09-01",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": 90
+        },
+        {
+            "_row": "b4 — unreadable return_date",
+            "actual": true,
+            "depart_date": "2026-09-11",
+            "return_date": "whenever we feel like it",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": 91
+        },
+        {
+            "_row": "b5 — 31 February: createFromFormat would roll it into March",
+            "actual": true,
+            "depart_date": "2026-09-12",
+            "return_date": "2026-02-31",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": 92
+        },
+        {
+            "_row": "b6 — value is not a number",
+            "actual": true,
+            "depart_date": "2026-09-13",
+            "return_date": "2026-09-16",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": "not a number"
+        },
+        {
+            "_row": "b7 — a free flight is a bug, not a deal",
+            "actual": true,
+            "depart_date": "2026-09-14",
+            "return_date": "2026-09-17",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": 0
+        },
+        {
+            "_row": "b8 — negative price",
+            "actual": true,
+            "depart_date": "2026-09-15",
+            "return_date": "2026-09-18",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": -40
+        },
+        {
+            "_row": "b9 — the provider itself says this one has gone stale",
+            "actual": false,
+            "depart_date": "2026-09-16",
+            "return_date": "2026-09-19",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": 61
+        },
+        {
+            "_row": "b10 — no depart_date key",
+            "actual": true,
+            "return_date": "2026-09-20",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": 93
+        },
+        {
+            "_row": "b11 — unreadable depart_date",
+            "actual": true,
+            "depart_date": "the seventh of never",
+            "return_date": "2026-09-21",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": 94
+        },
+        {
+            "_row": "b12 — 259 nights: a sabbatical, not a trip. Past returns.max_nights",
+            "actual": true,
+            "depart_date": "2026-09-18",
+            "return_date": "2027-06-04",
+            "destination": "LIS",
+            "origin": "AMS",
+            "value": 95
+        },
+        "b13 — a bare string where an object belongs"
+    ],
+    "success": true
+}

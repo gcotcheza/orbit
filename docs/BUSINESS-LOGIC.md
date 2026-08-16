@@ -131,6 +131,12 @@ always have been — the fake provider's were too. A round-trip fare pinned to a
 departure date is really a fare for a *pair* of dates with the second one
 hidden, which is not what a calendar cell means.
 
+**Round trips are a second table and a second port, not a change to this one.**
+A long-haul one-way reads 58–69% of the return fare on the same route, so the
+two numbers can never be derived from each other and must never share a column.
+Everything about them — the endpoint, the coverage, the model and why it is not
+polled on a schedule yet — is §15.
+
 **The calendar-endpoint trap.** Travelpayouts' sibling `/v1/prices/calendar`
 looks like the right endpoint and is not: measured against the live API on
 2026-08-15 it answers **round-trip** prices even with `return_date` omitted
@@ -1182,17 +1188,24 @@ wrong alert — nothing here invents a fare it cannot see.
 
 ## 14. Providers and switches
 
-Two ports chosen by name in config and bound in `AppServiceProvider`. An
-**unknown name throws at resolution** rather than falling back, because a box
-quietly serving invented prices would send real alerts about fares that do not
-exist.
+Ports chosen by name in config and bound in `AppServiceProvider`. An **unknown
+name throws at resolution** rather than falling back, because a box quietly
+serving invented prices would send real alerts about fares that do not exist.
 
 | port | env | values | adapter |
 | --- | --- | --- | --- |
 | `PriceProvider` | `ORBIT_PRICE_PROVIDER` | `fake` (default) \| `travelpayouts` | `FakePriceProvider` \| `TravelpayoutsPriceProvider` |
 | `PriceStatsProvider` | `ORBIT_STATS_PROVIDER` | `fake` (default) \| `self` | `FakeStatsProvider` \| `SelfStatsProvider` |
+| `ReturnTripProvider` | `ORBIT_RETURNS_PROVIDER` | `fake` (default) \| `travelpayouts` | `FakeReturnProvider` \| `TravelpayoutsReturnProvider` |
 | `RuleTextParser` | `ORBIT_NLP_PARSER` / `ANTHROPIC_API_KEY` | `regex` (default) \| `anthropic` | `RegexRuleTextParser` \| `AnthropicRuleTextParser` |
 | `DealNotifier` | — | mail | `MailDealNotifier` |
+
+**One-way and round-trip are two switches even though both real adapters talk to
+Travelpayouts.** They read different endpoints with different coverage and
+different failure modes, and the round-trip half is much the thinner of the two
+— so a box can run real one-way fares, which every deal score and alert depends
+on, while `return_fares` is still being filled by the fake. One key would have
+made turning returns on a change to the deal score. See §15.
 
 **The fakes are production adapters, not test doubles.** The app ships before
 the provider keys exist, so a fake is what production actually runs until
@@ -1239,6 +1252,158 @@ percentile against them. Without `--confirm` it only reports.
 The watchlist, rules, settings and alert ledger are untouched. Charts then
 honestly say "tracking 1 day" — and, per §7, say nothing about the deal for a
 week.
+
+---
+
+## 15. Return trips (foundation)
+
+> **Status: groundwork.** A port, two adapters, the `return_fares` table and a
+> command to fill it. **Nothing reads the table yet and nothing polls it on a
+> schedule.** The screens, the statistics and the rule matching are later PRs in
+> this milestone.
+
+### Why one-way was never the whole truth
+
+Every price in this app is a **one-way** fare (§2), which is the right number
+for the EU budget carriers Orbit was built around and the wrong number for
+anything long-haul: nobody flies to New York one way. Measured against the live
+API on **2026-08-16**, cheapest one-way against cheapest round-trip on the same
+route:
+
+| route | cheapest one-way | cheapest return | one-way as a share of the return |
+| --- | --- | --- | --- |
+| AMS–LIS | €80 | €134 | 60% |
+| AMS–JFK | €334 | €484 | **69%** |
+| AMS–BKK | €272 | €472 | 58% |
+
+A long-haul one-way is roughly **two thirds** of a return, not half of one. So
+"AMS–JFK from €334" was never wrong about the arithmetic and was always wrong
+about the trip.
+
+### What the data actually is
+
+**One endpoint answers, and the tempting one does not.** Measured the same day:
+
+| endpoint | verdict |
+| --- | --- |
+| `/v2/prices/latest`, `one_way=false`, `period_type=year` | **This one.** One entry per `(depart_date, return_date)`, every one carrying `return_date` and `found_at`. One request covers the whole horizon. |
+| `/v1/prices/calendar` with `length=7` | Round-trip and duration-aware, but returned **2 dates for the whole of November** and carries **no `found_at`**. |
+| `/v2/prices/week-matrix` | Returned **one** entry, for a departure two days from the one asked for. |
+| `/v2/prices/month-matrix` | One-way only — every recorded entry has an empty `return_date` (§2). |
+
+**There is no duration grid, and the model does not pretend there is.** The
+obvious shape — cheapest fare for every (departure date × stay length) — is not
+something any endpoint answers. What exists is *the round-trip fares somebody
+searched for in the last week*:
+
+| route | entries | near-window departure dates covered | of the 182 |
+| --- | --- | --- | --- |
+| AMS–BKK | 338 | 61 | 33.5% |
+| AMS–LIS | 119 | 50 | 27.5% |
+| AMS–JFK | 56 | 27 | 14.8% |
+| EIN–BCN | 23 | 14 | **7.7%** |
+
+Against 41–87% coverage for one-way month-matrix. And of the dates that *do*
+carry a fare, most carry exactly **one** stay length — 34 of 52 for AMS–LIS, 34
+of 38 for AMS–JFK. **"The cheapest 7-night trip leaving on 3 November" usually
+has no answer**, and every screen built on this table has to say so rather than
+show a blank.
+
+**Three parameters are load-bearing and one is a decoration:**
+
+- `one_way=false` — the two settings return **disjoint caches**. AMS–LIS gave
+  128 entries with an *empty* `return_date` at `true`, and 119 with a populated
+  one at `false`.
+- `limit=1000` — the default is **30**. AMS–BKK returned 338 with it and exactly
+  30 without, no error and no marker to say the answer was truncated.
+- `period_type=year` — the whole horizon in one request. `month` works, but
+  November alone returned 5 of the 119 entries the year call already held.
+- `trip_duration` — **silently ignored.** `trip_duration=7` produced a
+  *byte-identical* body. Duration bands are therefore filtered in the adapter,
+  and a narrow band costs exactly what a wide one does.
+
+**Two gotchas worth the ink.** `found_at` on this endpoint has **no trailing
+`Z`** (`2026-08-10T20:11:25`) where the matrix endpoints have one — both UTC,
+only the notation differs, and an adapter that pinned one format would drop the
+age off every round-trip fare in the app. And the API **normalises airports to
+city codes**: ask for `JFK`, get `NYC` back in the echoed fields.
+
+**Round-trip fares are structurally older than one-way ones.** This endpoint
+serves the last **seven days** of finds — the recorded `found_at` range was
+2026-08-09 to 2026-08-16 on all three routes, with only 45% of AMS–LIS entries
+found on the day of the call. Anything that later alerts on these fares has to
+reckon with `orbit.alerts.max_fare_age_days` being **2** (§10).
+
+### The model
+
+| | value | where |
+| --- | --- | --- |
+| grain | one row per (route, **departure date**, **nights**) | `return_fares` |
+| direction | round trip, always | `TravelpayoutsReturnProvider` |
+| stay length | `nights`, 0–60, **stored**; the return date is *derived* | `ReturnTrip::returnDate()` |
+| currency | EUR, cents internally | as everywhere |
+| age | `found_at` nullable, `fetched_at` stamped by the poll | `PollReturnFares` |
+| horizon | 334 days, the same depth as the one-way calendar | `orbit.returns.window_days` |
+| staleness | one clock, 3 days | `orbit.returns.stale_after_days` |
+
+**`nights` is stored and `return_date` is not.** They are the same fact twice,
+so exactly one may be a column. Nights wins because it is the axis every
+question is asked along ("a week away", and `tripLengthNights` has held
+`[min, max]` since the rules engine shipped), because it indexes as an ordinary
+integer where a date subtraction is an expression index spelled differently on
+Postgres and SQLite, and because deriving the date back is exact.
+
+**Zero nights is legal**; a negative stay is corrupt and is refused by the
+domain type, the adapter and the column alike.
+
+**Retention is one rule where the one-way calendar needs two.** `calendar_fares`
+is polled at two speeds and so carries two staleness clocks and a two-pass
+prune. `return_fares` is fetched **whole, in one request**, so every row is
+always exactly as fresh as every other and one clock is the honest description.
+`PollReturnFares` deletes departures that have gone by, departures past the
+maintained horizon, and rows the provider has stopped quoting — three deletes,
+one clock, and all three only after a *successful* poll.
+
+### Duration bands
+
+`orbit.returns.durations`, `[min, max]` nights, **inclusive at both ends** —
+fitted to the measured stay-length histograms rather than chosen for tidiness:
+
+| band | reading | why |
+| --- | --- | --- |
+| `[2, 3]` | a long weekend | the short-haul mode; the regex parser already turns "weekend" into exactly this pair |
+| `[6, 8]` | a week | the one band with real mass on **every** route measured |
+| `[13, 15]` | a fortnight | AMS–JFK's second peak, and where AMS–BKK's mass begins |
+| `[21, 28]` | three to four weeks | long-haul only: AMS–BKK carries more entries in this band (72) than AMS–LIS carries in total |
+
+Adding a band costs **no requests** (the API ignores `trip_duration`). What it
+does cost is fake data — `FakeReturnProvider` prices only the lengths the bands
+cover, so emptying the list leaves the fake with no fares at all.
+
+### The budget, and why it is not scheduled
+
+**One request per watched route per run** — 9 today — because one call covers
+the whole horizon, against 7 or 12 for the one-way calendar. At W routes it is W
+requests, flat, so returns polling never becomes the binding constraint.
+
+It is nonetheless **not in `routes/console.php`**, because a schedule that spent
+calls every morning filling a table with no readers is a standing cost for no
+benefit. The PR that adds the first reader adds the entry, and the arithmetic is
+already done: the 06:00 hour is at 183 of ~200 and 9 more would leave 8 requests
+of headroom, so it belongs in the **04:00** hour next to the far poll (108 + 9 =
+117). Until then `php artisan orbit:poll-returns` fills the table by hand — and
+a fortnight of accumulated real fares is worth considerably more to the PR that
+draws them than an empty table and a fake.
+
+### What later PRs add
+
+- statistics and a deal score for return trips (the analogue of §6 and §7 — note
+  that a "current price" for returns has to be *defined* before it can be
+  computed, and this PR deliberately writes no observation row)
+- the screens that read the table, which must be built for the sparsity above
+- `tripLengthNights` finally **matching** rather than only being parsed and shown
+  (§11 and `docs/API.md`) — the fact it filters on now exists
+- alerts on round-trip fares, which have to reckon with the seven-day-deep cache
 
 ---
 
