@@ -37,6 +37,31 @@
  * than validation, so there is nothing left for them to disagree with.
  *
  * =============================================================================
+ * THE PILLS ARE THE ORIGIN; THE BOX IS THE EXCEPTION
+ * =============================================================================
+ * The two were ONE VALUE until now — tapping DUS wrote "DUS" into the From box,
+ * typing over it unlit every pill — and the box paid for it. A field arriving
+ * prefilled with three capital letters and no placeholder is a READ-OUT: it
+ * shows an answer rather than inviting a question, and it has to be selected
+ * and deleted before it looks typeable at all. The To box beside it, empty and
+ * prompting, proved the point by contrast — the same component, and only one of
+ * the two read as a place to type.
+ *
+ * SO THEY ARE TWO VALUES. `home` is the lit pill and is the origin whenever the
+ * box is empty; `from` is "somewhere else" and starts empty and stays empty
+ * until somebody types. The box NEVER mirrors the pill — that mirroring is the
+ * whole defect — which means the two can be in a state no single value could
+ * express, and one rule settles it: TEXT WINS WHILE THERE IS TEXT, PILLS WIN ON
+ * TAP. Typing unlights the pills, tapping a pill empties the box, and `origin`
+ * below is the only place either fact is read.
+ *
+ * ONE COMPUTED FOR EVERY CONSUMER, and that is the part worth guarding. "Look
+ * up", "Add to watch", the To box's exclusion and both refusals all read
+ * `origin` — so a screen showing an unlit pill beside typed text cannot send
+ * the pill, and there is no second rule anywhere to fall out of step with this
+ * one.
+ *
+ * =============================================================================
  * TWO ACTIONS, AND THE PRIMARY ONE IS THE QUESTION
  * =============================================================================
  * "Look up" opens the route's own screen without writing anything: the detail
@@ -110,7 +135,12 @@ const discoveries = useDiscoveriesStore()
  */
 onMounted(() => discoveries.refresh())
 
-const from = ref(HOME[0])
+/** The lit pill — the origin whenever the box below it is empty. */
+const home = ref(HOME[0])
+
+/** "Somewhere else", as typed, or ''. Never the lit pill's code. */
+const from = ref('')
+
 const to = ref('')
 
 /** '' | 'from' | 'to' — at most one suggestion panel is ever showing. */
@@ -124,9 +154,32 @@ const added = ref(null)
 
 const fromField = useTemplateRef('fromField')
 
-/* The boundary: what the boxes show is a place, what the API takes is a code. */
-const origin = computed(() => toCode(from.value))
+/** Somebody has named somewhere else, so the pills are not the answer. */
+const elsewhere = computed(() => from.value.trim() !== '')
+
+/*
+ * The boundary: what the boxes show is a place, what the API takes is a code.
+ *
+ * AND, AT THIS END, WHICH OF TWO CONTROLS IS SPEAKING — see the note at the top.
+ * There is exactly one of these because there is exactly one rule.
+ */
+const origin = computed(() => (elsewhere.value ? toCode(from.value) : home.value))
 const destination = computed(() => toCode(to.value))
+
+/**
+ * Whether a pill is the one the screen is going to use.
+ *
+ * A LIT PILL BESIDE TYPED TEXT WOULD BE TWO ANSWERS TO ONE QUESTION, which is
+ * why this is not simply `code === home`: the pills go dark the moment the box
+ * has anything in it, and light again the moment it is emptied. Nothing is
+ * forgotten while they are dark — `home` still holds the last pill tapped, so
+ * clearing the box hands the origin back to it rather than to AMS.
+ *
+ * @param {string} code
+ */
+function lit(code) {
+  return !elsewhere.value && code === home.value
+}
 
 /**
  * The discoveries this screen shows, which is not necessarily all of them.
@@ -184,19 +237,24 @@ function startOfDay(date) {
 const canSubmit = computed(() => IATA.test(origin.value) && IATA.test(destination.value) && !adding.value)
 
 /**
- * Put a home airport in the From box.
+ * Light a home airport, and take the box out of the argument.
  *
- * THROUGH THE FIELD RATHER THAN AT THE MODEL, which is a one-word difference
- * with a request behind it. Writing `from.value = 'AMS'` fires the field's own
- * watcher, which asks `GET /api/airports?q=AMS` on a 250 ms debounce for a
- * panel that is shut — the same waste `choose()` exists to cancel when a
- * suggestion is taken. `take()` IS `choose()`, so a chip and a suggestion are
- * the same act.
+ * A TAP ON A PILL BEATS WHATEVER IS TYPED, and emptying the box is what makes
+ * it mean that. Somebody who taps DUS over a half-typed "barcel" has changed
+ * their mind; a screen that lit DUS and went on showing "barcel" would be
+ * wrong in one of the two places, and which one it was wrong in would depend
+ * on a rule nobody can see.
+ *
+ * THROUGH THE FIELD RATHER THAN AT THE MODEL, which is the same one-word
+ * difference it was when this wrote a code instead: the box owns what a write
+ * to it costs. See `clear()` in AirportField.vue — and note that it no longer
+ * costs anything, because emptying is the cancellation.
  */
 function takeHome(code) {
   error.value = ''
   added.value = null
-  fromField.value?.take(code)
+  home.value = code
+  fromField.value?.clear()
 }
 
 /**
@@ -334,20 +392,28 @@ function messageFor(failure) {
          LOOK-UP, which is what "look before you watch" means at the keyboard as
          well as under the thumb. -->
     <form class="search rise-in" novalidate @submit.prevent="attempt('lookup')" @focusout="onFocusOut">
+      <!--
+        THE PLACEHOLDER IS THE WHOLE AFFORDANCE. The box used to arrive holding
+        "AMS" and prompting nothing, which is a read-out; "Somewhere else?" says
+        both of the things this field is for — that the pills above are the
+        ordinary answer, and that this is where the other 3,267 airports go.
+      -->
       <AirportField
         id="search-from"
         ref="fromField"
         v-model="from"
         label="From"
+        aria-label="Origin — any airport"
         list-label="Origin suggestions"
-        placeholder="City or code — e.g. Amsterdam"
+        placeholder="Somewhere else? City or code…"
+        clear-label="Clear the origin"
         :open="openField === 'from'"
         :exclude="destination"
         @open="openField = 'from'"
         @close="openField = ''"
       >
         <!--
-          IN THE FIELD RATHER THAN ABOVE IT, so the shortcut and the box it fills
+          IN THE FIELD RATHER THAN ABOVE IT, so the pills and the box under them
           read as one control. They are buttons and not radios: a radiogroup says
           "these are the options", and since the search screen they are three of
           three thousand.
@@ -359,8 +425,8 @@ function messageFor(failure) {
               :key="code"
               type="button"
               class="quick__chip"
-              :class="{ 'quick__chip--on': code === origin }"
-              :aria-pressed="code === origin"
+              :class="{ 'quick__chip--on': lit(code) }"
+              :aria-pressed="lit(code)"
               @click="takeHome(code)"
             >
               {{ code }}

@@ -200,10 +200,14 @@ const ID = 'search-to'
  * the clock — see `settle()` — which is what keeps every assertion about the
  * instant, curated half free of the slow one.
  *
+ * EVERYTHING ELSE IN THE OPTIONS IS A PROP, so a test that wants the box the
+ * FROM end mounts (`clearLabel`, `ariaLabel`) says so in one word rather than
+ * through a second mechanism.
+ *
  * @param {Array<object>} destinations `GET /api/destinations`
- * @param {{world?: Array<object>, exclude?: string}} options
+ * @param {{world?: Array<object>}} props `world` aside, the component's own
  */
-async function field(destinations = ALL, { world = [], exclude = '', ...options } = {}) {
+async function field(destinations = ALL, { world = [], ...props } = {}) {
     get.mockImplementation((url) => Promise.resolve(url === '/api/destinations'
         ? { data: { data: destinations, meta: { count: destinations.length } } }
         : { data: { data: world, meta: { count: world.length } } }))
@@ -212,14 +216,13 @@ async function field(destinations = ALL, { world = [], exclude = '', ...options 
     const held = {}
 
     held.wrapper = mount(AirportField, {
-        ...options,
         props: {
             id: ID,
             label: 'To',
             listLabel: 'Destination suggestions',
             modelValue: '',
             open: false,
-            exclude,
+            ...props,
             'onUpdate:modelValue': (next) => held.wrapper.setProps({ modelValue: next }),
             onOpen: () => held.wrapper.setProps({ open: true }),
             onClose: () => held.wrapper.setProps({ open: false }),
@@ -496,6 +499,70 @@ describe('the airport typeahead', () => {
 
     /*
      * =========================================================================
+     * THE ✕, WHICH ONLY ONE OF THE TWO BOXES HAS
+     * =========================================================================
+     * `clearLabel` is the whole switch: it names the button AND is what turns it
+     * on, because a clear nobody can name is one a screen reader announces as
+     * "button". The To box does not pass it — an empty To box means "nothing
+     * chosen yet" and clearing it buys nobody anything — and the From box does,
+     * because there emptying is a real answer: it hands the origin back to the
+     * home pills above (Views/Search.vue).
+     */
+    it('has no ✕ at all unless it was given a name for one', async () => {
+        const wrapper = await field()
+
+        await box(wrapper).setValue('bilb')
+
+        expect(wrapper.find('.field__clear').exists()).toBe(false)
+    })
+
+    it('shows the ✕ only while there is something to clear', async () => {
+        const wrapper = await field(ALL, { clearLabel: 'Clear the origin' })
+
+        expect(wrapper.find('.field__clear').exists()).toBe(false)
+
+        // A space is not "something", which is the same question the panel asks
+        // — one box must not be able to hold a space that the ✕ counts and the
+        // suggestions do not.
+        await box(wrapper).setValue(' ')
+        expect(wrapper.find('.field__clear').exists()).toBe(false)
+
+        await box(wrapper).setValue('bilb')
+
+        const clear = wrapper.get('.field__clear')
+
+        expect(clear.attributes('aria-label')).toBe('Clear the origin')
+        expect(clear.attributes('type')).toBe('button')
+    })
+
+    it('empties the box and shuts the panel when the ✕ is pressed', async () => {
+        const wrapper = await field(ALL, { clearLabel: 'Clear the origin' })
+
+        await box(wrapper).setValue('bilb')
+        expect(box(wrapper).attributes('aria-expanded')).toBe('true')
+
+        await wrapper.get('.field__clear').trigger('click')
+
+        expect(box(wrapper).element.value).toBe('')
+        expect(box(wrapper).attributes('aria-expanded')).toBe('false')
+    })
+
+    /*
+     * AND IT IS THE SCREEN READER'S NAME FOR THE BOX, when the word above it is
+     * not the whole story. The From box's label is "From" and the thing above
+     * THAT is three home-airport pills, so a person arriving at the input hears
+     * the name of a control they have already passed.
+     */
+    it('answers to a name of its own when it was given one', async () => {
+        const plain = await field()
+        expect(plain.get(`#${ID}`).attributes('aria-label')).toBeUndefined()
+
+        const named = await field(ALL, { ariaLabel: 'Origin — any airport' })
+        expect(named.get(`#${ID}`).attributes('aria-label')).toBe('Origin — any airport')
+    })
+
+    /*
+     * =========================================================================
      * THE OTHER END OF THE PAIR IS NOT A SUGGESTION
      * =========================================================================
      * New with the search screen, because it is only answerable with two boxes:
@@ -647,20 +714,26 @@ describe('everywhere else', () => {
 
     /*
      * THE SAME CANCELLATION, REACHED FROM OUTSIDE. The search screen's home
-     * chips write a code into this box, and `take()` exists so that they go
-     * through `choose()` rather than assigning to the model — an assignment
-     * would queue a request for "AMS" that nothing is going to read.
+     * pills empty this box when they are tapped, and `clear()` is exposed so
+     * that they go through the component rather than assigning to the model.
+     *
+     * IT NEEDS NO `world.clear()` OF ITS OWN, which `take()` did: the watcher
+     * this write fires searches for '', and a query under `MIN_QUERY` cancels
+     * the debounce instead of asking anybody anything (stores/airports.js). The
+     * request queued for "portl" below is the one that must not be made.
      */
-    it('takes a code from the form without asking anybody about it', async () => {
+    it('is emptied from the form without asking anybody anything', async () => {
         const wrapper = await field(ALL, { world: [PDX] })
+
+        await box(wrapper).setValue('portl')
 
         const asked = get.mock.calls.length
 
-        wrapper.vm.take('AMS')
+        wrapper.vm.clear()
         await flushPromises()
         await settle()
 
-        expect(box(wrapper).element.value).toBe('AMS')
+        expect(box(wrapper).element.value).toBe('')
         expect(get).toHaveBeenCalledTimes(asked)
     })
 

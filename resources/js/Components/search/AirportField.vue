@@ -90,6 +90,28 @@ const props = defineProps({
 
   placeholder: { type: String, default: 'City or code' },
 
+  /**
+   * What a screen reader calls the BOX, when the word above it is not the whole
+   * story. Empty by default, and the visible label is the name then.
+   *
+   * The From box needs it because the word above it is "From" and the thing
+   * directly above THAT is three home-airport pills — so a screen reader
+   * arriving at the input hears the label of a control it has already passed
+   * and no hint that this one takes anywhere at all.
+   */
+  ariaLabel: { type: String, default: '' },
+
+  /**
+   * What the ✕ that empties the box is called, or '' for a box that has none.
+   *
+   * ONE PROP RATHER THAN TWO — a boolean AND a name — because a clear nobody
+   * can name is a clear a screen reader announces as "button", and the two
+   * would never be set apart anyway. It is off for the To box on purpose: an
+   * empty To box means "nothing chosen yet" and clearing it buys nothing,
+   * whereas an empty From box means "use the pills", which is a real answer.
+   */
+  clearLabel: { type: String, default: '' },
+
   /** What a screen reader calls the suggestion list. */
   listLabel: { type: String, required: true },
 
@@ -169,12 +191,22 @@ const didYouMean = computed(() => {
   return guess === null || guess.iata === props.exclude ? null : guess
 })
 
+/**
+ * Somebody has put something in the box.
+ *
+ * TRIMMED, so a stray space is not "something". It is the same question the
+ * panel and the ✕ both ask — one is "is there anything to suggest against",
+ * the other "is there anything to clear" — and they must not be able to
+ * disagree about a box holding one space.
+ */
+const filled = computed(() => value.value.trim() !== '')
+
 /*
  * The dropdown is not merely `open`: an empty box has nothing to suggest, and a
  * list that appeared the moment the field was focused would cover the buttons
  * before anybody had asked it anything.
  */
-const showing = computed(() => props.open && value.value.trim() !== '')
+const showing = computed(() => props.open && filled.value)
 
 /**
  * What the panel says when it has nothing to offer, in the order the three
@@ -454,15 +486,30 @@ function scrollActiveIntoView() {
 }
 
 /**
- * Put a code in the box from outside — the search screen's home-airport chips.
+ * Empty the box — the ✕ inside it, and the search screen's home pills.
  *
- * IT IS `choose()` AND NOT AN ASSIGNMENT, which is the whole reason it is
- * exposed at all. A parent writing `from.value = 'AMS'` fires the watcher above
- * exactly as typing does, so a shut panel would still queue a request for
- * "AMS". Going through `choose()` cancels it on the next tick, for the same
- * reason and by the same route as taking a suggestion.
+ * IT USED TO BE `take(iata)`, which put a CODE in the box for those same pills,
+ * and it went through `choose()` for a documented reason: a parent writing
+ * `from.value = 'AMS'` fires the watcher above exactly as typing does, so a
+ * shut panel would still queue a request for "AMS". Nothing writes a code in
+ * from outside any more — the pills are the origin now rather than a shortcut
+ * to typing one (see Views/Search.vue) — so what is left to do from outside is
+ * empty it.
+ *
+ * AND EMPTYING IT NEEDS NO CANCELLATION, which is the one thing that is
+ * genuinely different rather than renamed. The watcher this write fires calls
+ * `world.search('')`, and a query under `MIN_QUERY` cancels the debounce and
+ * drops the rows instead of asking anybody anything (stores/airports.js). The
+ * write IS the cancellation; a `nextTick(world.clear())` here would be the same
+ * call a second time.
  */
-defineExpose({ take: (iata) => choose({ iata }) })
+function clear() {
+  value.value = ''
+  active.value = -1
+  emit('close')
+}
+
+defineExpose({ clear })
 </script>
 
 <template>
@@ -471,27 +518,62 @@ defineExpose({ take: (iata) => choose({ iata }) })
 
     <slot name="quick" />
 
-    <input
-      :id="id"
-      v-model="value"
-      class="field__input"
-      type="text"
-      role="combobox"
-      inputmode="text"
-      autocapitalize="none"
-      autocomplete="off"
-      spellcheck="false"
-      aria-autocomplete="list"
-      :aria-controls="`${id}-list`"
-      :aria-expanded="showing"
-      :aria-activedescendant="active === -1 ? undefined : `${id}-option-${active}`"
-      :placeholder="placeholder"
-      @input="onType"
-      @keydown.down.prevent="move(1)"
-      @keydown.up.prevent="move(-1)"
-      @keydown.esc.prevent="emit('close')"
-      @keydown.enter="onEnter"
-    >
+    <!--
+      A LINE OF ITS OWN FOR THE INPUT AND THE ✕, because the ✕ is positioned
+      against it. The suggestion panel below stays a SIBLING of this rather than
+      going inside it: the panel is in the flow (see the note under the styles)
+      and anything positioned against a box the panel is inside would be
+      positioned against the panel's height too.
+    -->
+    <div class="field__box">
+      <input
+        :id="id"
+        v-model="value"
+        class="field__input"
+        :class="{ 'field__input--clearable': clearLabel }"
+        type="text"
+        role="combobox"
+        inputmode="text"
+        autocapitalize="none"
+        autocomplete="off"
+        spellcheck="false"
+        aria-autocomplete="list"
+        :aria-label="ariaLabel || undefined"
+        :aria-controls="`${id}-list`"
+        :aria-expanded="showing"
+        :aria-activedescendant="active === -1 ? undefined : `${id}-option-${active}`"
+        :placeholder="placeholder"
+        @input="onType"
+        @keydown.down.prevent="move(1)"
+        @keydown.up.prevent="move(-1)"
+        @keydown.esc.prevent="emit('close')"
+        @keydown.enter="onEnter"
+      >
+
+      <!--
+        ONLY WHEN THERE IS SOMETHING TO CLEAR. A ✕ sitting on an empty box is a
+        control that does nothing, and on this screen it would be doing nothing
+        directly above a placeholder inviting somebody to type.
+
+        `@mousedown.prevent` FOR THE SAME REASON THE SUGGESTIONS HAVE IT: the
+        browser must not move focus, so the caret stays in the box and the next
+        keystroke goes where somebody who just emptied a field expects it to.
+      -->
+      <button
+        v-if="clearLabel && filled"
+        type="button"
+        class="field__clear"
+        :aria-label="clearLabel"
+        @mousedown.prevent
+        @click="clear"
+      >
+        <!-- Stroked from the style block, like every other glyph in this app: a
+             var() in a presentation attribute is not portable. -->
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke-width="1.6" stroke-linecap="round" />
+        </svg>
+      </button>
+    </div>
 
     <!--
       `v-show` RATHER THAN `v-if`, so the listbox `aria-controls` names is in the
@@ -600,10 +682,17 @@ defineExpose({ take: (iata) => choose({ iata }) })
   color: var(--muted);
 }
 
+/* What the ✕ is positioned against, and nothing else — the margin moves here
+   from the input so that "the top of the box" and "the top of the input" are
+   the same 44 px the ✕ has to centre itself in. */
+.field__box {
+  position: relative;
+  margin-top: 9px;
+}
+
 .field__input {
   width: 100%;
   height: 44px;
-  margin-top: 9px;
   padding: 0 14px;
 
   border: 1.5px solid var(--line);
@@ -620,6 +709,43 @@ defineExpose({ take: (iata) => choose({ iata }) })
 .field__input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* Room at the end of the line for the ✕, so a long city name runs under the
+   caret's own scroll rather than under the button. Reserved whether or not the
+   ✕ is on screen: a field whose text width changed the moment it grew a clear
+   would reflow what somebody is in the middle of typing. */
+.field__input--clearable {
+  padding-right: 42px;
+}
+
+/* ON the field rather than beside it, so the box is still one control — and
+   quiet, because it is the smallest thing anybody does on this screen. 30 px
+   square is the same target the update toast's dismiss uses; it stops short of
+   the field's full 44 px height deliberately, so a tap aimed at the end of what
+   was typed still lands in the text. */
+.field__clear {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-50%);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+
+  color: var(--muted);
+}
+
+.field__clear:hover {
+  color: var(--ink);
+}
+
+.field__clear path {
+  stroke: currentColor;
 }
 
 /* --- The suggestions ------------------------------------------------------

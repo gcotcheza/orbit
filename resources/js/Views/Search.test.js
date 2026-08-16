@@ -9,8 +9,8 @@
 //
 //   - what each button sends, and that it never quietly does both;
 //   - the three refusals that are about a PAIR rather than about a code;
-//   - the home chips, which fill the From box without asking the network about
-//     a code they just wrote into it;
+//   - the home pills and the box under them, which are TWO controls answering
+//     one question — so most of what is below them is about which one wins;
 //   - the exclusion, which is the one thing each box knows about the other.
 //
 // WHAT IS LEFT TO THE BROWSER GATE, and why. The panel is in the flow, so
@@ -84,6 +84,11 @@ async function pair(wrapper, origin, destination) {
 
 const lookUp = (wrapper) => wrapper.get('.search__submit')
 const watch = (wrapper) => wrapper.get('.search__watch')
+
+const chips = (wrapper) => wrapper.findAll('.quick__chip')
+
+/** Which of AMS / EIN / DUS is lit, or null while the box is speaking. */
+const litChip = (wrapper) => chips(wrapper).find((chip) => chip.attributes('aria-pressed') === 'true')?.text() ?? null
 
 beforeEach(() => {
     vi.useFakeTimers()
@@ -221,65 +226,170 @@ describe('the search screen', () => {
     it('keeps both buttons shut until there are two codes', async () => {
         const wrapper = await screen()
 
+        // The origin half is already answered, by the LIT PILL rather than by
+        // the box — which is empty. What is missing is a destination.
         expect(lookUp(wrapper).attributes('disabled')).toBeDefined()
-
-        await from(wrapper).setValue('AMS')
         expect(watch(wrapper).attributes('disabled')).toBeDefined()
 
         await to(wrapper).setValue('LIS')
         expect(lookUp(wrapper).attributes('disabled')).toBeUndefined()
         expect(watch(wrapper).attributes('disabled')).toBeUndefined()
+
+        // And a half-typed somewhere-else shuts them again: text wins while it
+        // is there, even over a pill that would have been perfectly good.
+        await from(wrapper).setValue('barcel')
+        expect(lookUp(wrapper).attributes('disabled')).toBeDefined()
+        expect(watch(wrapper).attributes('disabled')).toBeDefined()
     })
 
-    // -- The home chips -------------------------------------------------------
+    // -- The pills and the box: two controls, one origin ----------------------
+    //
+    // They used to be ONE VALUE — the lit pill's code sat in the box — and the
+    // box paid for it: a field arriving prefilled with three capitals and no
+    // placeholder is a read-out, not somewhere to type. So the box is empty now
+    // and never mirrors a pill, which makes "which of the two is the origin" a
+    // real question. It has one answer, in `origin`: text while there is text,
+    // the lit pill otherwise. Everything below is that sentence, tested.
 
     /*
      * NINE FLIGHTS IN TEN LEAVE FROM ONE OF THREE AIRPORTS, and a screen that
      * made the common case cost eight keystrokes in order to buy the rare one
-     * would be a worse screen than the form it replaced.
+     * would be a worse screen than the form it replaced. One tap is still
+     * taken: AMS is lit before anybody has touched anything.
      */
-    it('starts at Amsterdam, and moves with one tap', async () => {
+    it('starts at Amsterdam with an empty box that says it takes anywhere', async () => {
         const wrapper = await screen()
 
-        expect(from(wrapper).element.value).toBe('AMS')
+        expect(chips(wrapper).map((chip) => chip.text())).toEqual(['AMS', 'EIN', 'DUS'])
+        expect(litChip(wrapper)).toBe('AMS')
 
-        const chips = wrapper.findAll('.quick__chip')
-        expect(chips.map((chip) => chip.text())).toEqual(['AMS', 'EIN', 'DUS'])
-        expect(chips[0].attributes('aria-pressed')).toBe('true')
+        // THE BOX IS EMPTY AND PROMPTING. Both halves matter: the value is what
+        // stopped being a read-out, the placeholder is what says so.
+        expect(from(wrapper).element.value).toBe('')
+        expect(from(wrapper).attributes('placeholder')).toBe('Somewhere else? City or code…')
+        expect(from(wrapper).attributes('aria-label')).toBe('Origin — any airport')
 
-        await chips[2].trigger('click')
+        // And the lit pill IS the origin, without anything being typed.
+        await to(wrapper).setValue('LIS')
+        await wrapper.get('form').trigger('submit')
 
-        expect(from(wrapper).element.value).toBe('DUS')
-        expect(chips[2].attributes('aria-pressed')).toBe('true')
-        expect(chips[0].attributes('aria-pressed')).toBe('false')
+        expect(push).toHaveBeenCalledWith({ name: 'route-detail', params: { id: 'AMS-LIS' } })
+    })
+
+    it('moves the origin with one tap, and still writes nothing into the box', async () => {
+        post.mockResolvedValue(added('DUS-LIS'))
+
+        const wrapper = await screen()
+
+        await chips(wrapper)[2].trigger('click')
+
+        expect(litChip(wrapper)).toBe('DUS')
+        expect(from(wrapper).element.value).toBe('')
+
+        await to(wrapper).setValue('LIS')
+        await watch(wrapper).trigger('click')
+        await flushPromises()
+
+        // The tap is what the WRITE sends, not just what the pill looks like.
+        expect(post).toHaveBeenCalledWith('/api/watchlist', { origin: 'DUS', destination: 'LIS' })
     })
 
     /*
-     * AND A CHIP IS NOT A CLOSED LIST. The three are presentation now — the
-     * server takes any airport at either end — so typing over them has to leave
-     * the box holding what was typed and all three chips unpressed.
+     * AND A PILL IS NOT A CLOSED LIST. The three are presentation — the server
+     * takes any airport at either end — so typing has to leave the box holding
+     * what was typed, every pill dark, and the typed place in the request.
      */
-    it('lets the box hold an airport no chip offers', async () => {
+    it('lets the box name an airport no pill offers, and sends that', async () => {
         const wrapper = await screen()
 
         await from(wrapper).setValue('BCN')
 
-        expect(wrapper.findAll('.quick__chip').every((chip) => chip.attributes('aria-pressed') === 'false')).toBe(true)
+        expect(litChip(wrapper)).toBeNull()
         expect(from(wrapper).element.value).toBe('BCN')
+
+        await to(wrapper).setValue('AGP')
+        await wrapper.get('form').trigger('submit')
+
+        expect(push).toHaveBeenCalledWith({ name: 'route-detail', params: { id: 'BCN-AGP' } })
     })
 
-    it('asks nobody about a code a chip just wrote', async () => {
+    /*
+     * THE ✕, WHICH IS THE WAY BACK. Without it the only way out of "somewhere
+     * else" is to select and delete what is in the box — the same chore the
+     * prefilled origin used to impose, moved one step later.
+     */
+    it('offers a clear only once there is something to clear, and only on the origin', async () => {
         const wrapper = await screen()
+
+        expect(wrapper.find('.field__clear').exists()).toBe(false)
+
+        await from(wrapper).setValue('BCN')
+        expect(wrapper.findAll('.field__clear')).toHaveLength(1)
+
+        // The To box is untouched by any of this: an empty To box means
+        // "nothing chosen yet", and clearing it buys nobody anything.
+        await to(wrapper).setValue('LIS')
+        expect(wrapper.findAll('.field__clear')).toHaveLength(1)
+    })
+
+    it('hands the origin back to the pills when the box is cleared', async () => {
+        const wrapper = await screen()
+
+        await from(wrapper).setValue('BCN')
+        await wrapper.get('.field__clear').trigger('click')
+
+        expect(from(wrapper).element.value).toBe('')
+        expect(litChip(wrapper)).toBe('AMS')
+    })
+
+    /*
+     * AND BACK TO THE PILL THAT WAS TAPPED, not to Amsterdam. Nothing is
+     * forgotten while the pills are dark, so somebody who chose EIN, tried
+     * somewhere else and changed their mind gets EIN — an explicit choice
+     * survives a cleared box.
+     */
+    it('remembers which pill was tapped while the box is speaking over it', async () => {
+        const wrapper = await screen()
+
+        await chips(wrapper)[1].trigger('click')
+        await from(wrapper).setValue('BCN')
+
+        expect(litChip(wrapper)).toBeNull()
+
+        await wrapper.get('.field__clear').trigger('click')
+
+        expect(litChip(wrapper)).toBe('EIN')
+    })
+
+    /*
+     * PILLS WIN ON TAP. Somebody who taps DUS over a half-typed "barcel" has
+     * changed their mind, and a screen that lit DUS while still showing
+     * "barcel" would be wrong in one of the two places.
+     */
+    it('empties the box when a pill is tapped over typed text', async () => {
+        const wrapper = await screen()
+
+        await from(wrapper).setValue('barcel')
+        await chips(wrapper)[2].trigger('click')
+
+        expect(from(wrapper).element.value).toBe('')
+        expect(litChip(wrapper)).toBe('DUS')
+    })
+
+    it('asks nobody about a query a pill has just cancelled', async () => {
+        const wrapper = await screen()
+
+        await from(wrapper).setValue('barcel')
 
         const asked = get.mock.calls.length
 
-        await wrapper.findAll('.quick__chip')[1].trigger('click')
+        await chips(wrapper)[1].trigger('click')
         await vi.advanceTimersByTimeAsync(1000)
         await flushPromises()
 
-        // The panel is shut and the box holds EIN. A `GET /api/airports?q=EIN`
-        // here would be a request for an answer nothing is going to render —
-        // see `takeHome`, and `take()` in AirportField.vue.
+        // The box is empty, the panel is shut, and the debounced
+        // `GET /api/airports?q=barcel` was for a panel nobody is going to look
+        // at — see `takeHome`, and `clear()` in AirportField.vue.
         expect(get).toHaveBeenCalledTimes(asked)
     })
 
