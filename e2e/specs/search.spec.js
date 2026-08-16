@@ -72,8 +72,15 @@ test('an airport nobody flies from is searched, priced, and then watched', async
     await expect(page).toHaveURL(/\/search$/)
     await expect(page.locator('.screen__title')).toHaveText('Search')
 
-    // The common case is one tap and it is already taken: AMS is in the box.
-    await expect(page.locator(FROM)).toHaveValue('AMS')
+    /*
+     * THE COMMON CASE IS ONE TAP AND IT IS ALREADY TAKEN — by the PILL. The box
+     * under it is empty and prompting, which is what stops it reading as a
+     * read-out of a decision somebody has to undo before they can type.
+     */
+    await expect(page.locator(FROM)).toHaveValue('')
+    await expect(page.locator('.quick__chip[aria-pressed="true"]')).toHaveText('AMS')
+
+    await shot(page, 'search-origin-default')
 
     // --- From: an airport only the world half knows --------------------------
     await page.locator(FROM).fill('wee')
@@ -150,6 +157,129 @@ test('an airport nobody flies from is searched, priced, and then watched', async
     await added.getByRole('button', { name: 'Remove' }).click()
 
     await expect(page.locator('.pass')).toHaveCount(6)
+})
+
+/*
+ * ============================================================================
+ * THE ORIGIN BLOCK — three pills, and a box that is not one of them
+ * ============================================================================
+ * The box used to arrive holding the lit pill's code. One value, two controls,
+ * and a field that read as a READ-OUT: three capitals, no placeholder, and a
+ * selection-and-delete before it looked typeable at all — while the To box
+ * beside it, same component, empty and prompting, read as a field immediately.
+ *
+ * So the pills hold the origin and the box holds "somewhere else". Views/Search
+ * .test.js already asserts every branch of which one wins. WHY THIS IS ALSO
+ * HERE is three things jsdom is structurally unable to answer:
+ *
+ *   - THE ✕ IS ON THE FIELD, not under it. It is absolutely positioned inside
+ *     the box, and the only way to know it is not sitting over the text or
+ *     hanging off the end is to measure two rectangles a layout engine drew.
+ *   - IT IS PRESSED WITH A PANEL OPEN, which is this screen's oldest defect
+ *     class: the suggestions are in the flow, focusout fires on mousedown, and
+ *     anything that closes the panel between press and release takes the button
+ *     with it. The ✕ and the pills are both above the panel, so both must
+ *     survive it — and `@mousedown.prevent` is the reason they do.
+ *   - THE PLACEHOLDER IS THE WHOLE AFFORDANCE and a placeholder is a thing you
+ *     look at.
+ */
+test('the origin is three pills and a box for anywhere else', async ({ page }) => {
+    await page.goto('/search')
+
+    const lit = page.locator('.quick__chip[aria-pressed="true"]')
+    const clear = page.locator('.field__clear')
+    const origins = listbox(page, 'Origin suggestions')
+
+    // --- Empty, prompting, and already answered ------------------------------
+    await expect(page.locator(FROM)).toHaveValue('')
+    await expect(page.locator(FROM)).toHaveAttribute('placeholder', 'Somewhere else? City or code…')
+    await expect(page.locator(FROM)).toHaveAttribute('aria-label', 'Origin — any airport')
+    await expect(lit).toHaveText('AMS')
+
+    // Nothing to clear, so there is no ✕ to press.
+    await expect(clear).toHaveCount(0)
+
+    /*
+     * AND THE PILL IS THE ORIGIN WITH THE BOX EMPTY, which the buttons say:
+     * a destination is the only half that was missing.
+     *
+     * Asserted rather than pressed — a look-up navigates to a screen that
+     * PRICES the pair and would create a route this test has no business
+     * creating. Search.test.js holds the navigation itself.
+     */
+    await expect(page.getByRole('button', { name: 'Look up' })).toBeDisabled()
+    await page.locator(TO).fill('AGP')
+    await expect(page.getByRole('button', { name: 'Look up' })).toBeEnabled()
+
+    // --- Somewhere else, and the ✕ that comes with it ------------------------
+    await page.locator(FROM).fill('barcel')
+
+    await expect(lit).toHaveCount(0)
+    await expect(clear).toBeVisible()
+    await expect(origins).toBeVisible()
+
+    /*
+     * ON THE FIELD, INSIDE IT, AT THE END OF THE LINE. A ✕ that overflowed the
+     * box or sat below it would look like a control belonging to the panel.
+     */
+    const box = await page.locator(FROM).boundingBox()
+    const cross = await clear.boundingBox()
+
+    expect(cross.x).toBeGreaterThan(box.x)
+    expect(cross.x + cross.width).toBeLessThanOrEqual(box.x + box.width)
+    expect(cross.y).toBeGreaterThanOrEqual(box.y)
+    expect(cross.y + cross.height).toBeLessThanOrEqual(box.y + box.height)
+
+    await shot(page, 'search-origin-somewhere-else')
+
+    /*
+     * PRESSED WITH THE PANEL OPEN. Emptying the box closes the panel underneath
+     * it, so everything below the ✕ moves — and if the browser were allowed to
+     * blur the input on mousedown, the form's focusout would close that panel
+     * BEFORE the mouseup and this click would land on nothing.
+     */
+    await clear.click()
+
+    await expect(page.locator(FROM)).toHaveValue('')
+    await expect(origins).toBeHidden()
+    await expect(lit).toHaveText('AMS')
+
+    // --- Pills win on tap ----------------------------------------------------
+    await page.locator(FROM).fill('barcel')
+    await expect(origins).toBeVisible()
+
+    await page.locator('.quick__chip', { hasText: 'DUS' }).click()
+
+    await expect(page.locator(FROM)).toHaveValue('')
+    await expect(lit).toHaveText('DUS')
+
+    /*
+     * AND DUS IS REALLY THE ORIGIN NOW, with nothing in the box to say so. Both
+     * assertions below can only be reading it off the lit pill, and neither
+     * touches the network.
+     *
+     * THE EXCLUSION FIRST. "DUS" matches Düsseldorf, Dushanbe and Lampedusa in
+     * the seeded table, and only Düsseldorf goes — the rows that STAY are what
+     * make the missing one mean something, exactly as in the pair test below.
+     * Matched on the code element rather than the row, because Playwright's
+     * `hasText` is a case-insensitive SUBSTRING and "Dushanbe" contains "dus".
+     */
+    await page.locator(TO).fill('DUS')
+
+    const codes = page.locator('#search-to-list .option__code')
+
+    await expect(codes.filter({ hasText: 'DYU' })).toHaveCount(1)
+    await expect(codes.filter({ hasText: 'DUS' })).toHaveCount(0)
+
+    /*
+     * AND THEN THE REFUSAL, which is the same fact said by the buttons: DUS to
+     * DUS is not a route, and the only place the From end can be reading DUS
+     * from is the pill. Pressed with the panel open, so this is the focus race
+     * one more time.
+     */
+    await page.getByRole('button', { name: 'Add to watch' }).click()
+
+    await expect(page.locator('.search__error')).toHaveText('A route needs two different airports.')
 })
 
 /*
