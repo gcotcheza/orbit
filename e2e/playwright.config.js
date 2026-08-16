@@ -137,6 +137,21 @@ export default defineConfig({
                  */
                 '--use-angle=swiftshader',
                 '--enable-unsafe-swiftshader',
+
+                /*
+                 * OOM PREVENTION, per the fleet E2E standard. Chromium's shared
+                 * memory goes to /tmp instead of /dev/shm, so a renderer that
+                 * outgrows the container's shm allocation spills to disk rather
+                 * than being OOM-killed. Together with the browser container's
+                 * own 2 GB ceiling (scripts/e2e.sh) this bounds what a run can
+                 * take from the box.
+                 *
+                 * It supersedes rather than contradicts `--shm-size=512m` in
+                 * scripts/e2e.sh: that flag sized /dev/shm up because 64 MB is
+                 * too small for a WebGL page; this one stops /dev/shm being the
+                 * constraint at all. The size stays as the belt to this braces.
+                 */
+                '--disable-dev-shm-usage',
             ],
         },
     },

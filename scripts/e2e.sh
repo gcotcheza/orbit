@@ -333,6 +333,13 @@ step 'Seeding (account, routes, 60 days of fake fares)'
 #   getaddrinfo rather than through Chromium's own resolver.
 # --shm-size: Chromium's default 64 MB /dev/shm is not enough for a WebGL page
 #   and the failure is a renderer that dies mid-test with no useful message.
+# --memory: OOM PREVENTION, per the fleet E2E standard. THIS is the container the
+#   browsers actually run in — the compose stack (docker-compose.e2e.yml) holds
+#   app, web, postgres and redis, and no Chromium at all — so the 2 GB ceiling
+#   belongs here rather than on a compose service. Uncapped, a Chromium swarm
+#   rasterising a globe on the CPU is the box's largest single memory consumer
+#   and takes the kernel's OOM killer to whatever else is running, the live site
+#   included. Capped, the kernel kills the run instead of its neighbours.
 # -u 115:119: artifacts land owned by the host `orbit` user, not by root.
 step 'Running Playwright'
 set +e
@@ -340,6 +347,7 @@ docker run --rm \
     --network host \
     --add-host "${E2E_HOST}:127.0.0.1" \
     --shm-size=512m \
+    --memory=2g \
     -u "${APP_UID}:${APP_GID}" \
     -e HOME=/tmp \
     -e npm_config_cache=/tmp/.npm \
