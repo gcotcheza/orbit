@@ -10,12 +10,20 @@ use App\Domain\Discovery\CandidateScorer;
 use App\Domain\Discovery\DealCandidate;
 use App\Domain\Discovery\DiscoveryPolicy;
 use App\Domain\Discovery\GoogleVerdict;
+use App\Domain\Discovery\Lane;
+use App\Domain\Discovery\PickReason;
+use App\Domain\Discovery\RelativeLanePolicy;
+use App\Domain\Discovery\RelativeLaneSelector;
+use App\Domain\Discovery\RelativePick;
+use App\Domain\Discovery\RouteBaseline;
 use App\Domain\Geo\Haversine;
 use App\Domain\Pricing\DatedFare;
 use App\Infrastructure\Verify\GoogleFlightsCheck;
 use App\Models\Airport;
 use App\Models\Discovery;
+use App\Models\DiscoveryBaseline;
 use Carbon\CarbonInterface;
+use DateTimeImmutable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Date;
@@ -115,6 +123,7 @@ final class DiscoverDeals implements ShouldQueue
         PriceProvider $prices,
         GoogleFlightsCheck $google,
         DiscoveryPolicy $policy,
+        RelativeLanePolicy $relativePolicy,
         LoggerInterface $logger,
     ): void {
         /*
@@ -141,11 +150,34 @@ final class DiscoverDeals implements ShouldQueue
             return;
         }
 
-        $shortlist = $scorer->shortlist($scorer->admit($candidates, $now->toDateTimeImmutable()));
+        $at = $now->toDateTimeImmutable();
+
+        $shortlist = $scorer->shortlist($scorer->admit($candidates, $at));
+
+        /*
+         * THE SECOND LANE, CHOSEN BEFORE ANYTHING IS FETCHED AND AFTER THE FIRST
+         * — the order is the dedupe. Lane B is told which destinations lane A
+         * took so one city can never occupy a slot in both, which would be two
+         * fetches and two cards to say one thing.
+         */
+        $relative = $this->relativeLane($candidates, $shortlist, $policy, $relativePolicy, $at);
 
         $logger->info('Discovery swept and scored.', [
             'candidates' => count($candidates),
             'shortlisted' => count($shortlist),
+            'relative_picks' => count($relative),
+            /*
+             * HOW MANY OF THE SECOND LANE'S SLOTS WENT ON A CLAIM VERSUS ON A
+             * QUESTION, and the run cannot be read without it. Most exploration
+             * picks fail verification, which is CORRECT and would otherwise look
+             * like a lane with a terrible hit rate — this is what distinguishes
+             * "we surfaced nothing and learned three routes" from "we surfaced
+             * nothing and wasted three fetches".
+             */
+            'relative_from_baseline' => count(array_filter(
+                $relative,
+                static fn (RelativePick $pick): bool => $pick->reason === PickReason::Baseline,
+            )),
         ]);
 
         /*
@@ -159,9 +191,53 @@ final class DiscoverDeals implements ShouldQueue
         $spent = 0;
 
         $verified = [];
+        $learned = 0;
+
+        /*
+         * BOTH LANES IN ONE LOOP, ABSOLUTE FIRST, AND THE ORDER IS THE GOOGLE
+         * BUDGET.
+         *
+         * The SerpAPI allowance did not grow when the second lane arrived — it
+         * is the same ≤5 searches out of 250 a month — so the two lanes now
+         * share it, and sharing needs a priority. Absolute wins: it is the
+         * stronger claim (remarkable against every fare in the sweep, not just
+         * against its own route) and it is the older one, so a run in which
+         * quota runs out degrades the NEW feature rather than the shipped one.
+         * A relative finalist that gets no search is shown unverified, which is
+         * the ordinary state of every card on this strip anyway.
+         */
+        $queue = [];
 
         foreach ($shortlist as $candidate) {
+            $queue[] = [$candidate, Lane::Absolute];
+        }
+
+        foreach ($relative as $pick) {
+            $queue[] = [$pick->candidate, Lane::Relative];
+        }
+
+        foreach ($queue as [$candidate, $lane]) {
             $window = $this->windowFor($prices, $candidate, $now);
+
+            /*
+             * ⚠ THE FLYWHEEL, AND IT TURNS FOR BOTH LANES.
+             *
+             * Every window this job fetches is a measurement of what that route
+             * usually costs, and it is remembered whether or not a card comes of
+             * it — including on the absolute lane, whose five finalists are
+             * every bit as unwatched and unpriced as the relative lane's three.
+             * Eight baselines a night rather than three, for no extra request.
+             *
+             * IT IS WRITTEN BEFORE THE VERIFICATION GATE BELOW, which is the
+             * whole point: a candidate that fails `isRemarkable()` has still
+             * told Orbit what its route costs, and that is the more valuable of
+             * the two answers over a week. A lane that only learned from its
+             * successes would learn almost nothing.
+             */
+            if ($window !== []) {
+                $this->rememberBaseline($candidate, $window, $now);
+                $learned++;
+            }
 
             $percentile = null;
             $savings = null;
@@ -177,15 +253,43 @@ final class DiscoverDeals implements ShouldQueue
                  * ordinary on its own route is a cheap ROUTE, not a cheap fare —
                  * and the owner can find a cheap route by looking. Both halves
                  * must pass; see DiscoveryPolicy::isRemarkable().
+                 *
+                 * BOTH LANES FACE IT UNCHANGED. The relative lane's own
+                 * threshold was a filter on a REMEMBERED number, spent to decide
+                 * where a request went; this is the freshly fetched window, and
+                 * a lane that got to skip it would be making the exact claim
+                 * this whole funnel exists to prevent.
                  */
                 if (! $policy->isRemarkable($percentile, $savings ?? 0)) {
                     continue;
                 }
+            } elseif ($lane === Lane::Relative) {
+                /*
+                 * ⚠ AND THIS IS WHERE THE TWO LANES PART.
+                 *
+                 * An empty window is NOT a failed verification for an absolute
+                 * discovery — see the note below — and it IS a disqualification
+                 * for a relative one, because the two cards make different
+                 * claims and only one of them survives without a window.
+                 *
+                 * "€18 to Vilnius is a steal, period" rests on €/km, which the
+                 * sweep alone supports. "Rare price for this route" rests on
+                 * what the route usually costs, and with no window there is NO
+                 * EVIDENCE FOR IT AT ALL — the remembered baseline is why a
+                 * request was spent, not proof the fare is rare today. Showing
+                 * it anyway would put the feature's least supported sentence on
+                 * its least supported card.
+                 *
+                 * The fetch is not wasted: the route simply had nothing to
+                 * measure, so no baseline was written either, and the rotation
+                 * will reach it again.
+                 */
+                continue;
             }
 
             /*
-             * AN EMPTY WINDOW IS NOT A FAILED VERIFICATION, AND THE CANDIDATE IS
-             * KEPT WITH NOTHING RECORDED.
+             * AN EMPTY WINDOW IS NOT A FAILED VERIFICATION, AND AN ABSOLUTE
+             * CANDIDATE IS KEPT WITH NOTHING RECORDED.
              *
              * Travelpayouts' month-matrix coverage runs 41% to 87% even on the
              * routes Orbit watches daily, and a discovery is by definition an
@@ -216,11 +320,21 @@ final class DiscoverDeals implements ShouldQueue
                 $spent++;
             }
 
-            $verified[] = [$candidate, $percentile, $savings, $verdict];
+            $verified[] = [$candidate, $lane, $percentile, $savings, $verdict];
         }
 
         $logger->info('Discovery verified its shortlist.', [
             'kept' => count($verified),
+            'kept_relative' => count(array_filter(
+                $verified,
+                static fn (array $row): bool => $row[1] === Lane::Relative,
+            )),
+            /*
+             * HOW MANY ROUTES THIS RUN NOW KNOWS THE USUAL PRICE OF. On a night
+             * that surfaces nothing this is the only number that moved, and it
+             * is the one that makes tomorrow's run better than today's.
+             */
+            'baselines_learned' => $learned,
             'google_budget' => $budget,
             'google_spent' => $spent,
         ]);
@@ -311,6 +425,136 @@ final class DiscoverDeals implements ShouldQueue
     }
 
     /**
+     * The relative lane's picks — the candidates worth a window fetch because
+     * of what they cost ON THEIR OWN ROUTE rather than per kilometre.
+     *
+     * THE POOL IS THE SWEEP MINUS THE ABSOLUTE LANE, PLUS SANITY. Everything
+     * here is arithmetic over rows already in memory and one indexed query for
+     * the remembered baselines; the expensive part is downstream and is bounded
+     * by `lanes.relative.shortlist`.
+     *
+     * NOTE THAT A CANDIDATE THE ABSOLUTE LANE *ADMITTED* BUT DID NOT SHORTLIST
+     * IS STILL ELIGIBLE HERE. The exclusion is by DESTINATION and against the
+     * five that actually took a slot, not against the thirty-odd that cleared
+     * the €/km floor — a route that was the absolute lane's sixth-best is a
+     * perfectly good relative candidate, and refusing it would throw away the
+     * part of the sweep most likely to be interesting.
+     *
+     * @param  list<DealCandidate>  $candidates  everything swept
+     * @param  list<DealCandidate>  $shortlist  the absolute lane's finalists
+     * @return list<RelativePick>
+     */
+    private function relativeLane(
+        array $candidates,
+        array $shortlist,
+        DiscoveryPolicy $policy,
+        RelativeLanePolicy $relativePolicy,
+        DateTimeImmutable $now,
+    ): array {
+        /*
+         * THE SANITY FLOORS, AND THEY ARE THE ABSOLUTE LANE'S MINUS THE ONE
+         * RULE THAT DEFINES THE OTHER PRODUCT.
+         *
+         * Distance and freshness are read off the SAME policy object the other
+         * lane uses rather than re-declared here — under 400 km you are
+         * describing a train and a three-day-old price is stale, and both of
+         * those are true whichever argument the card is making. The price
+         * ceiling is this lane's own and higher. And `maxCentsPerKilometre` is
+         * absent entirely, which is the whole reason this lane exists.
+         */
+        $pool = array_values(array_filter(
+            $candidates,
+            static fn (DealCandidate $candidate): bool => $candidate->kilometres >= $policy->minKilometres
+                && $candidate->cents <= $relativePolicy->maxPriceCents
+                && $policy->isFresh($candidate, $now),
+        ));
+
+        if ($pool === []) {
+            return [];
+        }
+
+        /*
+         * ONE QUERY FOR EVERY BASELINE THIS RUN COULD POSSIBLY READ, keyed by
+         * code — the same "ask once for the set" call `sweepAll` makes about
+         * airports, and for the same reason: the pool is a few dozen routes and
+         * asking per candidate would be a few dozen queries a night for a table
+         * of a few hundred rows.
+         */
+        $codes = array_values(array_unique(array_map(
+            static fn (DealCandidate $candidate): string => $candidate->routeCode(),
+            $pool,
+        )));
+
+        /** @var array<string, RouteBaseline> $baselines */
+        $baselines = DiscoveryBaseline::query()
+            ->whereIn('code', $codes)
+            ->get()
+            ->mapWithKeys(static fn (DiscoveryBaseline $row): array => [$row->code => $row->toDomain()])
+            ->all();
+
+        return (new RelativeLaneSelector($relativePolicy))->select(
+            $pool,
+            $baselines,
+            array_map(
+                static fn (DealCandidate $candidate): string => $candidate->destinationIata,
+                $shortlist,
+            ),
+            $now,
+        );
+    }
+
+    /**
+     * Write down what this route usually costs.
+     *
+     * THE ONLY THING IN DISCOVERY THAT OUTLIVES A RUN, and the reason the
+     * relative lane is worth building at all: a window fetched tonight is a
+     * baseline read for free on any morning in the next month. See the
+     * `discovery_baselines` migration for why this is discovery's own table and
+     * emphatically not `calendar_fares`.
+     *
+     * THE MEDIAN AND THE COUNT TOGETHER, NEVER THE MEDIAN ALONE. A median over
+     * four priced days is four numbers, and the policy needs the count to refuse
+     * it — see RelativeLanePolicy::$minBaselineDays.
+     *
+     * AN UPSERT ON `code`, SO A ROUTE HAS ONE CURRENT BELIEF. A baseline is not
+     * history; nothing plots how Dublin's usual price moved, and keeping that
+     * would be a second `route_price_history` for routes nobody watches.
+     *
+     * @param  list<int>  $window
+     */
+    private function rememberBaseline(DealCandidate $candidate, array $window, CarbonInterface $now): void
+    {
+        $median = CandidateScorer::median($window);
+
+        if ($median === null) {
+            return;
+        }
+
+        /*
+         * ⚠ UTC BEFORE IT IS WRITTEN, for exactly the reason `store()` converts
+         * its three timestamps: `upsert()` goes straight to the query builder
+         * and skips the model's casts, so a Carbon in the owner's zone is
+         * formatted by that zone and read back as UTC. Two hours of drift, in
+         * the direction that makes every baseline look FRESHER than it is —
+         * which is the direction that quietly keeps stale yardsticks in service.
+         */
+        $measuredAt = $now->copy()->utc();
+
+        DiscoveryBaseline::query()->upsert(
+            [[
+                'code' => $candidate->routeCode(),
+                'median_cents' => $median,
+                'sample_days' => count($window),
+                'measured_at' => $measuredAt,
+                'created_at' => $measuredAt,
+                'updated_at' => $measuredAt,
+            ]],
+            ['code'],
+            ['median_cents', 'sample_days', 'measured_at', 'updated_at'],
+        );
+    }
+
+    /**
      * Every fare in a finalist's own near window, in cents.
      *
      * THROUGH THE EXISTING PriceProvider PORT, which is the point: the window a
@@ -354,7 +598,7 @@ final class DiscoverDeals implements ShouldQueue
      * is what "still being found" means: a fare that keeps turning up keeps its
      * place, and one that stops turning up ages out on its own.
      *
-     * @param  list<array{0: DealCandidate, 1: float|null, 2: int|null, 3: GoogleVerdict|null}>  $verified
+     * @param  list<array{0: DealCandidate, 1: Lane, 2: float|null, 3: int|null, 4: GoogleVerdict|null}>  $verified
      */
     private function store(array $verified, CarbonInterface $now, DiscoveryPolicy $policy): void
     {
@@ -386,11 +630,18 @@ final class DiscoverDeals implements ShouldQueue
 
         $rows = [];
 
-        foreach ($verified as [$candidate, $percentile, $savings, $verdict]) {
+        foreach ($verified as [$candidate, $lane, $percentile, $savings, $verdict]) {
             $rows[] = [
                 'origin_airport_id' => $ids[$candidate->originIata],
                 'destination_airport_id' => $ids[$candidate->destinationIata],
                 'code' => $candidate->routeCode(),
+                /*
+                 * `->value` AND NOT THE ENUM, because `upsert()` goes straight
+                 * to the query builder and skips the model's casts — the same
+                 * trap `google_verdict` hits three lines down, and the same one
+                 * the timestamps above are converted for.
+                 */
+                'lane' => $lane->value,
                 'departure_date' => $candidate->departureDate->format('Y-m-d'),
                 'price_cents' => $candidate->cents,
                 'cents_per_km' => $candidate->centsPerKilometre(),
@@ -416,6 +667,14 @@ final class DiscoverDeals implements ShouldQueue
             $rows,
             ['code', 'departure_date'],
             [
+                /*
+                 * `lane` IS IN THE UPDATE LIST. A route that was a relative find
+                 * yesterday and clears the €/km floor today must be able to
+                 * become an absolute one — the eyebrow it draws is a claim about
+                 * WHY it is on the screen, and a claim that outlived its reason
+                 * is the thing this funnel exists to prevent.
+                 */
+                'lane',
                 'price_cents', 'cents_per_km', 'percentile', 'savings_cents',
                 /*
                  * `google_verdict` IS IN THE UPDATE LIST AND HAS TO BE — in both

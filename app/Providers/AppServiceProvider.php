@@ -13,6 +13,7 @@ use App\Application\Ports\ReturnTripProvider;
 use App\Application\Ports\RuleTextParser;
 use App\Domain\Alerts\AlertPolicy;
 use App\Domain\Discovery\DiscoveryPolicy;
+use App\Domain\Discovery\RelativeLanePolicy;
 use App\Domain\Pricing\DealScorer;
 use App\Domain\Pricing\ScoringPolicy;
 use App\Domain\Rules\RuleMatcher;
@@ -176,6 +177,42 @@ final class AppServiceProvider extends ServiceProvider
                 minSavingsCents: (int) round(((float) $discovery['min_absolute_savings_eur']) * 100),
                 expiresAfterHours: (int) $discovery['expires_after_hours'],
                 maxRows: (int) $discovery['max_rows'],
+            );
+        });
+
+        /*
+         * THE SECOND LANE'S NUMBERS, resolved the same way and kept in their own
+         * value for the reason the class docblock gives: the two lanes are two
+         * products, and every threshold here would read as an exception if it
+         * sat beside `maxCentsPerKilometre`.
+         *
+         * `min_discount` IS THE ONE THAT NEEDS NO CONVERSION and is therefore
+         * the one to look at twice — it is a FRACTION (0.40 is 40% off), not a
+         * percentage and not a euro figure, and it is the only number in this
+         * feature quoted that way. The two euro fields beside it are × 100 into
+         * cents exactly as the absolute lane's are.
+         */
+        $this->app->singleton(RelativeLanePolicy::class, function (): RelativeLanePolicy {
+            /** @var array<string, mixed> $relative */
+            $relative = config('orbit.discovery.lanes.relative');
+
+            /** @var array<string, mixed> $discovery */
+            $discovery = config('orbit.discovery');
+
+            return new RelativeLanePolicy(
+                maxPriceCents: (int) round(((float) $relative['max_price_eur']) * 100),
+                minDiscount: (float) $relative['min_discount'],
+                /*
+                 * THE SAME €15 THE OTHER GATE USES, read from the same key. It
+                 * is passed in rather than reached for so the two can be retuned
+                 * apart the day the relative lane turns out to need its own —
+                 * but they are one decision today and one decision should have
+                 * one setting.
+                 */
+                minSavingsCents: (int) round(((float) $discovery['min_absolute_savings_eur']) * 100),
+                minBaselineDays: (int) $relative['min_baseline_days'],
+                maxBaselineAgeDays: (int) $relative['max_baseline_age_days'],
+                shortlist: (int) $relative['shortlist'],
             );
         });
 

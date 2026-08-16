@@ -1147,6 +1147,7 @@ which is the ranking rather than a convenience.
   "data": [
     {
       "code": "DUS-RAK",
+      "lane": "absolute",
       "origin": { "iata": "DUS", "city": "Düsseldorf", "country": "Germany" },
       "destination": { "iata": "RAK", "city": "Marrakesh", "country": "Morocco" },
       "price": 27,
@@ -1165,14 +1166,15 @@ which is the ranking rather than a convenience.
       }
     },
     {
-      "code": "DUS-AGP",
-      "origin": { "iata": "DUS", "city": "Düsseldorf", "country": "Germany" },
-      "destination": { "iata": "AGP", "city": "Málaga", "country": "Spain" },
-      "price": 29,
+      "code": "AMS-DUB",
+      "lane": "relative",
+      "origin": { "iata": "AMS", "city": "Amsterdam", "country": "Netherlands" },
+      "destination": { "iata": "DUB", "city": "Dublin", "country": "Ireland" },
+      "price": 60,
       "departureDate": "2026-10-24",
-      "milliEurosPerKm": 15.6,
+      "milliEurosPerKm": 80.0,
       "percentile": 0,
-      "savings": 49,
+      "savings": 39,
       "foundAt": "2026-08-15T20:56:00+02:00",
       "verdict": {
         "verified": false,
@@ -1191,10 +1193,11 @@ which is the ranking rather than a convenience.
 | field | notes |
 | --- | --- |
 | `code` | The route code, and **the whole navigation contract** — tapping a discovery opens `/route/DUS-RAK`, which prices the pair through `POST /api/routes/lookup` and offers the watch button. This endpoint publishes no booking link and no watch action of its own. |
+| `lane` | `"absolute"` or `"relative"` — **which claim this card is making.** `absolute` is "cheap, period", ranked on €/km against the whole sweep; `relative` is "cheap *for this route*", measured against what that route itself usually costs. The client draws an extra line ("Rare price for this route") on the relative ones and nothing extra on the absolute ones, because a relative find is by construction ordinary per kilometre and the reader would otherwise be right to wonder what it is doing on the strip. §16 has the argument, including why the free distance-band version of this lane does not work. **Treat an unrecognised value as `absolute`** — say less, never more. |
 | `origin`, `destination` | The shared airport shape. Both ends, because the card says which of the three home airports it leaves from. |
 | `price` | Euros, one-way, as everywhere else in this API. |
 | `departureDate` | A bare `YYYY-MM-DD` — the day you would **fly**. |
-| `milliEurosPerKm` | What a kilometre costs, ×1000 so it reads as `10.8` rather than `0.0108`. **This is the sort key**, and it is published so a client can explain the order rather than asking the reader to take it on faith. |
+| `milliEurosPerKm` | What a kilometre costs, ×1000 so it reads as `10.8` rather than `0.0108`. **This is the sort key**, and it is published so a client can explain the order rather than asking the reader to take it on faith. On a `relative` row it will look *bad* — 80.0 for the Dublin example above — and that is the point: it is exactly the number that disqualified the fare from the absolute lane. |
 | `percentile` | Where this fare sat among every other departure date on the same route, 0–100, **`null` when the window could not be fetched**. 0 means it was the cheapest date on the route. |
 | `savings` | Euros under the **median** of that same window. `null` alongside a null percentile. |
 | `foundAt` | When the **provider** found the price — the third date (§3), an ISO timestamp with an offset. `null` renders as nothing at all and never as "fresh". |

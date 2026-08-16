@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Domain\Discovery\Lane;
 use App\Models\Airport;
 use App\Models\Discovery;
 use App\Models\User;
@@ -32,6 +33,11 @@ final class DiscoveryApiTest extends TestCase
         Airport::factory()->create(['iata' => 'DUS', 'city' => 'Düsseldorf', 'country' => 'Germany', 'lat' => 51.2895, 'lng' => 6.76678]);
         Airport::factory()->create(['iata' => 'AGP', 'city' => 'Málaga', 'country' => 'Spain', 'lat' => 36.6749, 'lng' => -4.49911]);
         Airport::factory()->create(['iata' => 'RAK', 'city' => 'Marrakesh', 'country' => 'Morocco', 'lat' => 31.6069, 'lng' => -8.0363]);
+
+        /* The relative lane's end of the strip — see DiscoveryRunTest for why
+           Dublin is the case that lane exists for. */
+        Airport::factory()->create(['iata' => 'AMS', 'city' => 'Amsterdam', 'country' => 'Netherlands', 'lat' => 52.3086, 'lng' => 4.76389]);
+        Airport::factory()->create(['iata' => 'DUB', 'city' => 'Dublin', 'country' => 'Ireland', 'lat' => 53.4213, 'lng' => -6.27007]);
     }
 
     /**
@@ -79,6 +85,7 @@ final class DiscoveryApiTest extends TestCase
         $response->assertOk()->assertJson([
             'data' => [[
                 'code' => 'DUS-AGP',
+                'lane' => 'absolute',
                 'origin' => ['iata' => 'DUS'],
                 'destination' => ['iata' => 'AGP', 'city' => 'Málaga', 'country' => 'Spain'],
                 'price' => 29,
@@ -97,6 +104,24 @@ final class DiscoveryApiTest extends TestCase
         /* `found_at` is a MOMENT and travels with an offset, unlike the day. */
         $this->assertStringContainsString('2026-08-15T', (string) $response->json('data.0.foundAt'));
         $this->assertNotNull($response->json('meta.discoveredAt'));
+    }
+
+    /**
+     * THE LANE IS PUBLISHED AS THE ENUM'S STRING, because the client draws a
+     * different sentence for each and that sentence is a claim about EVIDENCE:
+     * an absolute card's price speaks for itself, a relative card has to say
+     * "rare price for this route" or the reader is right to wonder what an
+     * ordinary-looking €60 is doing on a strip of insane fares.
+     */
+    #[Test]
+    public function a_relative_find_publishes_its_lane(): void
+    {
+        $this->discovery(['code' => 'AMS-DUB', 'lane' => Lane::Relative]);
+
+        $this->actingAs($this->user)
+            ->getJson('/api/discoveries')
+            ->assertOk()
+            ->assertJsonPath('data.0.lane', 'relative');
     }
 
     #[Test]

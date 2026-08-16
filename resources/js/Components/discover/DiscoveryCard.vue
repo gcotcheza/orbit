@@ -76,6 +76,27 @@ const departure = computed(() => departureLabel(props.discovery.departureDate))
  */
 const seen = computed(() => seenLabel(props.discovery.foundAt))
 
+/*
+ * WHICH ARGUMENT THIS CARD IS MAKING, AND WHY ONLY ONE OF THEM SAYS SO.
+ *
+ * An ABSOLUTE find needs no eyebrow beyond the route: "€18 to Vilnius" is
+ * remarkable against every fare in the sweep, and the price is the whole
+ * sentence. A RELATIVE find is by construction ORDINARY per kilometre — that is
+ * what disqualified it from the other lane — so a reader looking at "€60,
+ * Dublin" is entitled to wonder what it is doing on a strip of insane fares.
+ * The line answers exactly that and claims nothing more.
+ *
+ * "FOR THIS ROUTE" IS THE LOAD-BEARING HALF. The evidence line underneath
+ * already says how deep in its own window the fare sits; this says which
+ * comparison was made at all. Without it the card would be quietly making the
+ * absolute lane's claim on the relative lane's evidence.
+ *
+ * COMPARED AGAINST THE SERVER'S STRING, not a boolean the client invents. The
+ * lane is a column, an enum and an API field, and a component deciding for
+ * itself what counts as relative would be a fourth opinion.
+ */
+const isRelative = computed(() => props.discovery.lane === 'relative')
+
 /**
  * The one-line case for this card, or null if there is no case to make.
  *
@@ -114,7 +135,14 @@ const evidence = computed(() => {
   >
     <div class="find__head">
       <div class="find__where">
+        <!-- `.find__from` KEEPS THE ROUTE PAIR AND NOTHING ELSE. The lane tag is
+             a SIBLING rather than text appended here, for two reasons: an
+             absolute card stays byte-identical to what shipped, and the e2e
+             journey reads this element's text to derive the route it should
+             navigate to (`e2e/specs/search.spec.js`). Folding a sentence into it
+             would break that split on the one card type that needs it least. -->
         <p class="find__from">{{ discovery.origin.iata }} → {{ discovery.destination.iata }}</p>
+        <p v-if="isRelative" class="find__lane">Rare price for this route</p>
         <h3 class="find__city">{{ discovery.destination.city }}</h3>
         <p class="find__country">{{ discovery.destination.country }}</p>
       </div>
@@ -180,6 +208,36 @@ const evidence = computed(() => {
   font-weight: 700;
   letter-spacing: 0.13em;
   color: var(--accent-ink);
+}
+
+/* THE SECOND LANE'S ONE PIECE OF COLOUR, AND IT IS DELIBERATELY THE QUIETEST
+   TONE IN THE PALETTE.
+
+   `--info` is the app's "here is a fact" pair — the fourth tone, next to good,
+   warn and neutral — and it is the right one precisely because it is NOT the
+   good tone: a relative find is not a better find, it is a DIFFERENT KIND of
+   find, and tinting it green would rank it against the absolute cards sitting
+   above it in the same list. It is also not `--warn`, for the reason the
+   unverified badge is not: nothing here is wrong.
+
+   BOTH THEMES CARRY IT (resources/css/tokens.css defines --info-bg / --info-ink
+   under :root and under [data-theme='light']), so this rule needs no theme
+   branch and hard-codes no colour — the app's one absolute styling rule.
+
+   NO LETTER-SPACING, WHERE THE ROUTE PAIR ABOVE HAS 0.13em. That tracking is
+   what makes three letter-pairs read as a label; applied to a five-word sentence
+   it reads as a headline, and this line must stay small copy. */
+.find__lane {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+
+  background: var(--info-bg);
+  color: var(--info-ink);
+
+  font-size: var(--text-xs);
+  font-weight: 600;
 }
 
 /* An h3, not an h2: the section this sits in has the h2. The visual weight is

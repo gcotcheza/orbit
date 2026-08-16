@@ -685,9 +685,20 @@ return [
     |   DISCOVERY, DAILY, IN THE 05:00 HOUR — WHICH IS OTHERWISE EMPTY:
     |
     |     05:20  the origin sweep  3 origins × 1        =   3
-    |     05:20  the verification  5 finalists × ≤7     =  35   (`discovery` below)
+    |     05:20  lane A verify     5 finalists × ≤7     =  35   (`discovery` below)
+    |     05:20  lane B verify     3 finalists × ≤7     =  21   (`discovery.lanes`)
     |                                                     ---
-    |                                                      38   of ~200
+    |                                                      59   of ~200
+    |
+    |   THE SECOND LANE'S 21 REQUESTS ARE THE WHOLE OF ITS COST, and they buy
+    |   two things rather than one: the fares it surfaces, and the BASELINES it
+    |   remembers. A lane-B fetch that produces no card still writes a
+    |   `discovery_baselines` row, so the requests are never wasted — see the
+    |   `discovery.lanes.relative` notes for the flywheel that argument rests on.
+    |
+    |   IT SPENDS NO SERPAPI AT ALL. The ≤5 searches below are now shared across
+    |   both lanes with absolute taking priority, so the Google bill is exactly
+    |   what it was before this lane existed.
     |
     |   (Monday's 05:40 `orbit:refresh-stats` shares that hour and costs NOTHING
     |   here: `ORBIT_STATS_PROVIDER=self` reads Orbit's own two tables and makes
@@ -700,11 +711,12 @@ return [
     |   is a separate schedule entry at a separate time rather than a deeper
     |   Wednesday poll — 9 × 12 + 120 = 228 would have been over the limit.
     |
-    |   AND NEITHER DOES DISCOVERY, for exactly the same reason. 38 requests in
-    |   the 06:00 hour would be 221 and over the limit; in the empty 05:00 hour
-    |   they are 38. On the far morning the three runs are 04:10 (108), 05:20
-    |   (38) and 06:10+06:40 (183) — three separate clock hours, none of them
-    |   above 183, and the worst hour of the week is unchanged by this feature.
+    |   AND NEITHER DOES DISCOVERY, for exactly the same reason. 59 requests in
+    |   the 06:00 hour would be 242 and well over the limit; in the empty 05:00
+    |   hour they are 59. On the far morning the three runs are 04:10 (108),
+    |   05:20 (59) and 06:10+06:40 (183) — three separate clock hours, none of
+    |   them above 183, and the worst hour of the week is STILL unchanged by this
+    |   feature, second lane included.
     |
     |   DISCOVERY ALSO SPENDS A SECOND, SMALLER BUDGET THAT IS NOT TRAVELPAYOUTS'
     |   AT ALL: up to five SerpAPI searches out of 250 A MONTH. That allowance
@@ -1039,10 +1051,12 @@ return [
     | THE BUDGET, WHICH IS THE REASON THE FUNNEL HAS TWO STAGES
     | =========================================================================
     |     the sweep      3 origins × 1 request        =  3
-    |     verification   5 finalists × ≤7 months      = 35
+    |     lane A verify  5 finalists × ≤7 months      = 35
+    |     lane B verify  3 finalists × ≤7 months      = 21
     |                                                   --
-    |                                                   38  Travelpayouts
-    |                                                  ≤ 5  SerpAPI (see below)
+    |                                                   59  Travelpayouts
+    |                                                  ≤ 5  SerpAPI, SHARED across
+    |                                                       both lanes (see below)
     |
     | Scheduled at 05:20, in a clock hour nothing else uses. The whole table,
     | including where the ordinary morning breaks, is in the `poll` section.
@@ -1178,6 +1192,147 @@ return [
 
         /* The near window, written out. See the section note for the drift guard. */
         'verify_window_days' => 181,
+
+        /*
+        |---------------------------------------------------------------------
+        | THE SECOND LANE — "cheap FOR THIS ROUTE" rather than "cheap, period"
+        |---------------------------------------------------------------------
+        |
+        | Everything above ranks a fare against EVERY OTHER FARE IN THE SWEEP,
+        | by what a kilometre buys. That is one kind of deal and it is not the
+        | only one: AMS-DUB at €30 over 750 km scores 40.0 m€/km and is rejected
+        | by the 30 m€/km floor at any price a person would call cheap — at the
+        | floor, Dublin would have to be €22. A short hop cannot win a ratio
+        | argument, however good the fare is for that route.
+        |
+        | ⚠ THE CHEAP VERSION OF THIS DOES NOT WORK, AND THE MEASUREMENTS ARE
+        |   WHY IT IS BUILT THE EXPENSIVE WAY
+        |
+        | The free design is a distance-band baseline: bucket the day's
+        | candidates by distance, take each band's median, call a fare 40% under
+        | its band a relative find. It costs no requests and it fails three ways
+        | on the recorded 2026-08-16 sweep:
+        |
+        |   1. A SWEEP IS A FLOOR, NOT A PRICE LIST. `/v2/prices/latest` returns
+        |      one cheapest cached entry per destination — the maximum number of
+        |      rows for any origin-destination pair in the recorded fixtures is
+        |      ONE. There is no distribution for any single route in a sweep, so
+        |      nothing in it can express what Dublin usually costs. The 500–1000
+        |      km band median is €29, where the retail intuition says €120: they
+        |      are different populations, not different estimates.
+        |   2. AMS-DUB SCORES −3.4% AGAINST IT — Dublin at €30 is the MEDIAN fare
+        |      for its distance. The example the lane was asked for fails the rule
+        |      written to catch it.
+        |   3. WITHIN A BAND DISTANCE IS ~CONSTANT, so ranking by 1 − price/median
+        |      is ranking by price is ranking by €/km. The band lane's top
+        |      qualifiers were Tangier, Marrakesh, Pescara, Vilnius and Tirana:
+        |      the absolute lane's shortlist, exactly. Not a second kind of deal —
+        |      the first kind, respelled, for three extra fetches a night.
+        |
+        | THE HONEST BASELINE IS THE ROUTE'S OWN WINDOW MEDIAN, which this app
+        | already fetches and already trusts — it is what `savings_cents` is
+        | measured against, and DUS-AGP's €29 against a €78 October median is the
+        | measurement the whole verification stage rests on. It costs a request.
+        | So this lane spends its budget LEARNING baselines and then reads them
+        | for free, which is the flywheel:
+        |
+        |   KNOWN ROUTES FIRST     a remembered median says the fare is rare →
+        |                          spend a fetch confirming it. This is the
+        |                          product.
+        |   EXPLORATION FILLS UP   leftover slots go to routes Orbit knows
+        |                          nothing about, in a deterministic daily
+        |                          rotation. The fetch answers "what does this
+        |                          usually cost", and the answer is KEPT.
+        |
+        | An explored route surfaces only if it passes the same verification an
+        | absolute finalist does; most will not, and the fetch has still paid for
+        | itself by leaving a baseline behind. ON DAY ONE THE LANE IS ALL
+        | EXPLORATION AND SURFACES ALMOST NOTHING — that is the honest shape of
+        | it, written down so nobody tunes it away. It gets smarter every day it
+        | runs, and it starts knowing nothing.
+        |
+        | The baselines live in `discovery_baselines`, which is discovery's own
+        | table and deliberately NOT `calendar_fares` — that one is keyed to
+        | `routes`, and minting route rows nightly would break the watchlist's
+        | notion of a known pair, the 201 from `POST /api/routes/lookup`, and —
+        | the serious one — would feed the rule engine, which sends mail. §16
+        | says discovery never interrupts anybody.
+        |
+        */
+        'lanes' => [
+            'relative' => [
+                /*
+                 * THE CEILING, IN EUROS, AND IT IS ABOVE THE €120 ABOVE ON
+                 * PURPOSE. A relative find is by construction NOT remarkable per
+                 * kilometre — that is what makes it this lane's — so a ceiling
+                 * tuned for €/km outliers would reject the entire population.
+                 * Dublin at €60 is €60.
+                 *
+                 * IT IS STILL A CEILING. "50% off" is scale-free, and a €400
+                 * long-haul at half its €800 usual is a real discount on a
+                 * DIFFERENT PRODUCT — a trip somebody plans, not a fare they see
+                 * on a Tuesday and book on the Tuesday. Both lanes make the same
+                 * promise; they just do not need the same cap to keep it.
+                 */
+                'max_price_eur' => 150,
+
+                /*
+                 * HOW FAR UNDER ITS OWN USUAL A FARE MUST SIT, as a fraction.
+                 *
+                 * BELOW BOTH REAL CASES WITH MARGIN: DUS-AGP measured 62.8%
+                 * (€29 against a €78 median) and the owner's Dublin ask is 50%
+                 * (€60 against €120). 0.40 admits both and stays clear of an
+                 * ordinary good day — a route's window routinely spans 20–30%
+                 * between its cheap Tuesdays and its median, and a lane that
+                 * surfaced those would be announcing that Tuesday is cheaper
+                 * than Friday once a night.
+                 */
+                'min_discount' => 0.40,
+
+                /*
+                 * HOW MANY PRICED DEPARTURE DATES A BASELINE NEEDS BEFORE IT MAY
+                 * BE BELIEVED. A median over four dates is four numbers, and
+                 * Travelpayouts' coverage on obscure pairs really does come back
+                 * that thin. Ten is where a single peak-season fare stops moving
+                 * the answer enough to change a verdict.
+                 *
+                 * A THIN BASELINE IS TREATED AS ABSENT, NOT AS BAD — the route
+                 * drops back into the exploration pool and gets re-measured,
+                 * which is how a bad measurement heals instead of permanently
+                 * disqualifying a route.
+                 */
+                'min_baseline_days' => 10,
+
+                /*
+                 * HOW LONG A BASELINE STAYS ADMISSIBLE, IN DAYS. Routes reprice
+                 * when a carrier arrives or a season turns, and a discount
+                 * measured against a median from the spring is arithmetic
+                 * against a number that stopped being true.
+                 *
+                 * THIRTY, AND THE TENSION IS WITH EXPLORATION RATHER THAN
+                 * ACCURACY: every verified finalist re-measures its own baseline
+                 * on the spot, so an active route never ages out. This only
+                 * governs how long a route the lane has stopped picking keeps
+                 * its memory — and shorter would send the rotation back to
+                 * routes it already knows, so the flywheel would spin without
+                 * ever widening.
+                 */
+                'max_baseline_age_days' => 30,
+
+                /*
+                 * HOW MANY CANDIDATES THIS LANE VERIFIES — the only number here
+                 * that costs anything. Three finalists is ≤21 Travelpayouts
+                 * requests, taking the 05:20 run from 38 to ≤59 in a clock hour
+                 * with ~160 to spare. The table is in the `poll` section above.
+                 *
+                 * IT ADDS NO GOOGLE SEARCHES AT ALL. `serpapi.max_per_run` stays
+                 * at five and is now SHARED across both lanes, absolute first —
+                 * a second lane was not worth re-opening a 250-a-month
+                 * allowance for.
+                 */
+                'shortlist' => 3,
+            ],
+        ],
     ],
 
     /*

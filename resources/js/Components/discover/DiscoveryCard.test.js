@@ -27,6 +27,7 @@ const discovery = (overrides = {}) => ({
     code: 'DUS-AGP',
     origin: { iata: 'DUS', city: 'Düsseldorf', country: 'Germany' },
     destination: { iata: 'AGP', city: 'Málaga', country: 'Spain' },
+    lane: 'absolute',
     price: 29,
     departureDate: '2026-10-24',
     milliEurosPerKm: 15.6,
@@ -147,5 +148,60 @@ describe('how old the price is', () => {
      */
     it('says nothing at all rather than guessing', () => {
         expect(card({ foundAt: null }).find('.find__seen').exists()).toBe(false)
+    })
+})
+
+/*
+ * ============================================================================
+ * WHICH LANE — and why only one of the two says anything
+ * ============================================================================
+ * An ABSOLUTE find needs no explanation: "€29 to Málaga" is remarkable against
+ * every fare in the sweep and the price is the whole sentence. A RELATIVE find
+ * is by construction ORDINARY per kilometre — that is exactly what disqualified
+ * it from the other lane — so without a word of context the reader is right to
+ * wonder what a €60 Dublin is doing on a strip of insane fares.
+ *
+ * THE LINE IS A CLAIM ABOUT WHICH COMPARISON WAS MADE, not decoration, which is
+ * why it is asserted here rather than left to the screenshot: the colour is a
+ * browser-gate question, the SENTENCE is a correctness one.
+ */
+describe('which argument the card is making', () => {
+    it('says nothing extra on an absolute find', () => {
+        expect(card().find('.find__lane').exists()).toBe(false)
+    })
+
+    it('explains a relative find, because its price does not speak for itself', () => {
+        const wrapper = card({
+            code: 'AMS-DUB',
+            lane: 'relative',
+            origin: { iata: 'AMS', city: 'Amsterdam', country: 'Netherlands' },
+            destination: { iata: 'DUB', city: 'Dublin', country: 'Ireland' },
+            price: 60,
+        })
+
+        expect(wrapper.find('.find__lane').text()).toBe('Rare price for this route')
+    })
+
+    /*
+     * THE ROUTE PAIR STAYS IN ITS OWN ELEMENT AND KEEPS ITS OWN TEXT. The lane
+     * line is a SIBLING, not text folded into the eyebrow — the e2e journey
+     * reads `.find__from` to derive which route to navigate to, and a card that
+     * appended a sentence there would break the one card type that needs it
+     * least.
+     */
+    it('leaves the route pair alone', () => {
+        const wrapper = card({ lane: 'relative' })
+
+        expect(wrapper.find('.find__from').text()).toBe('DUS → AGP')
+    })
+
+    /*
+     * AN UNKNOWN LANE IS TREATED AS ABSOLUTE — i.e. the card says LESS rather
+     * than more. A client reading an older or newer API than it expects must
+     * never invent the stronger claim; silence is the safe direction here, and
+     * it is the same call `foundAt: null` makes two blocks up.
+     */
+    it('says nothing when it does not recognise the lane', () => {
+        expect(card({ lane: undefined }).find('.find__lane').exists()).toBe(false)
     })
 })
