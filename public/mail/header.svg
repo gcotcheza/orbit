@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Orbit — the mail banner, and the master public/mail/header.png is
+    rasterised from.
+
+    THE SAME THREE SHAPES AS public/icon.svg, given room to breathe. The app
+    mark is a ~60 px square on a home screen and has to survive being one; this
+    is 600 px wide at the top of a mail and can afford the thing the icon had to
+    throw away — the flight path itself, sweeping out of the mark and off the
+    right edge with the gold dot still on it. Planet on the accent (#5e84ff),
+    path in the globe screen's own gold→cyan (#ffd166 → #3cc0f2, the
+    --globe-arc-from / --globe-arc-to of resources/css/tokens.css), plate in the
+    app's background #0a0f1e so the banner and the app's first frame are the
+    same colour.
+
+    DRAWN AT 2× AND SERVED AT 1×. 1200×240 rasterised, 600×120 in the mail, so
+    it is sharp on every phone made in the last decade. The bottom four pixels
+    are a gradient rule rather than decoration: it is the seam between the navy
+    banner and the light body, and a hard edge there reads as a mistake.
+
+    THE WORDMARK IS SPACE GROTESK 700 — resources/css/fonts.css's display face,
+    the one the app sets its own headings in. It is baked into the PNG, so
+    nothing about the mail depends on a mail client having the font.
+
+    RASTERISED WITH HEADLESS CHROMIUM rather than resvg, and that is the one
+    deviation from how public/icons/ was made: @fontsource ships Space Grotesk
+    as woff2 only, and resvg's font database reads ttf and otf. To regenerate,
+    inline this file and the woff2 (as a data: URI, so file:// font rules do not
+    apply) into a bare HTML page and shoot it at its own size —
+
+      chrome --headless --no-sandbox --hide-scrollbars \
+             --force-device-scale-factor=1 --window-size=1200,240 \
+             --screenshot=header.png file:///…/banner.html
+      pngquant --quality=70-96 --speed 1 --strip -o header.png header.png
+
+    — the quantise is not optional: 24-bit PNG of a 1200×240 gradient is 113 KB
+    and the 8-bit one is 23 KB, and at the 0.5× it is displayed at there is no
+    difference a person can see. Regenerate the PNG whenever this file changes;
+    the mail points at the PNG.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 240" width="1200" height="240"
+     role="img" aria-label="Orbit">
+    <title>Orbit</title>
+
+    <defs>
+        <!-- The flight path: the globe screen's arc, end to end.
+
+             USER SPACE AND NOT THE PATH'S BOUNDING BOX, because the path
+             starts below the bottom edge: on bounding-box units the gold third
+             of the ramp is spent entirely off-canvas and the arc arrives
+             already blue. These coordinates are the VISIBLE segment — where it
+             crosses the bottom edge (≈305) to where it leaves the right one. -->
+        <linearGradient id="path" gradientUnits="userSpaceOnUse"
+                        x1="300" y1="240" x2="1200" y2="48">
+            <stop offset="0" stop-color="#ffd166"/>
+            <stop offset="0.2" stop-color="#5e84ff"/>
+            <stop offset="1" stop-color="#3cc0f2"/>
+        </linearGradient>
+
+        <!-- The same wash the app lays over its own background (--bg-grad),
+             flattened to one stop pair because a mail is not a browser. -->
+        <radialGradient id="wash" cx="0.42" cy="-0.15" r="0.95">
+            <stop offset="0" stop-color="#5e84ff" stop-opacity="0.34"/>
+            <stop offset="1" stop-color="#5e84ff" stop-opacity="0"/>
+        </radialGradient>
+
+        <radialGradient id="wash2" cx="1" cy="1" r="0.7">
+            <stop offset="0" stop-color="#3cc0f2" stop-opacity="0.20"/>
+            <stop offset="1" stop-color="#3cc0f2" stop-opacity="0"/>
+        </radialGradient>
+
+        <!-- The seam. Horizontal, so it reads as a rule and not as a shadow. -->
+        <linearGradient id="seam" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#ffd166"/>
+            <stop offset="0.5" stop-color="#5e84ff"/>
+            <stop offset="1" stop-color="#3cc0f2"/>
+        </linearGradient>
+    </defs>
+
+    <rect width="1200" height="240" fill="#0a0f1e"/>
+    <rect width="1200" height="240" fill="url(#wash)"/>
+    <rect width="1200" height="240" fill="url(#wash2)"/>
+
+    <!-- The path, twice: the faint one is depth, the bright one is the flight.
+         Both clear the wordmark, which ends around x=470, y=160. -->
+    <path d="M 120 344 C 440 236, 790 144, 1264 92" fill="none"
+          stroke="url(#path)" stroke-width="2" opacity="0.22" stroke-linecap="round"/>
+    <path d="M 120 300 C 420 190, 760 96, 1240 44" fill="none"
+          stroke="url(#path)" stroke-width="3.5" opacity="0.9" stroke-linecap="round"/>
+
+    <!-- On the path at t = 0.9, plate-stroked so it cuts its own gap out of the
+         line rather than sitting on top of it — public/icon.svg's dot, still
+         going. -->
+    <circle cx="1100" cy="61" r="9" fill="#ffd166" stroke="#0a0f1e" stroke-width="5"/>
+
+    <!-- public/icon.svg's glyph, 512 → 128. The translate is set so the gold
+         ring's leftmost point lands at x=64 — 32 px at 1×, which is the body
+         cell's own left padding, so the mark and the first word of every mail
+         sit on one line. -->
+    <g transform="translate(48 56) scale(0.25)">
+        <ellipse cx="256" cy="256" rx="196" ry="76" transform="rotate(-25 256 256)"
+                 fill="none" stroke="#ffd166" stroke-width="22"/>
+        <circle cx="256" cy="256" r="108" fill="#5e84ff"/>
+        <circle cx="383" cy="149" r="24" fill="#ffd166" stroke="#0a0f1e" stroke-width="12"/>
+    </g>
+
+    <text x="204" y="144" fill="#eef2fc" font-family="Space Grotesk" font-weight="700"
+          font-size="72" letter-spacing="-2">Orbit</text>
+
+    <rect y="236" width="1200" height="4" fill="url(#seam)"/>
+</svg>

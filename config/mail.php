@@ -115,4 +115,37 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Markdown Mail Components
+    |--------------------------------------------------------------------------
+    |
+    | WITHOUT `paths`, THE PUBLISHED VIEWS ARE DEAD FILES. Illuminate\Mail\
+    | Markdown reads this key and hands it to the view factory as the `mail::`
+    | namespace; the default is an EMPTY array, which resolves the namespace to
+    | the framework's own copy inside vendor/ and quietly ignores every file in
+    | resources/views/vendor/mail. The symptom is not an error — it is Laravel's
+    | grey-box layout arriving in somebody's inbox after an afternoon spent
+    | redesigning one that never rendered.
+    |
+    | `theme` NAMES A FILE, resources/views/vendor/mail/html/themes/orbit.css,
+    | which is not a stylesheet the reader ever receives: it is inlined onto the
+    | markup by TijsVerkoyen\CssToInlineStyles and then discarded. Read the
+    | header of that file before editing it — media queries and nested comments
+    | both fail there, and both fail silently.
+    |
+    | NO env() HERE. Staging and production send the same mail; a theme that
+    | varied by environment would mean the design was only ever reviewed in one
+    | of them.
+    |
+    */
+
+    'markdown' => [
+        'theme' => 'orbit',
+
+        'paths' => [
+            resource_path('views/vendor/mail'),
+        ],
+    ],
+
 ];

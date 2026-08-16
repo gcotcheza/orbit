@@ -1,0 +1,686 @@
+/* ==========================================================================
+   Orbit — the mail theme
+   ==========================================================================
+   Read by Illuminate\Mail\Markdown via config('mail.markdown.theme'), and NOT
+   by a browser: TijsVerkoyen\CssToInlineStyles takes every rule in this file
+   and writes it onto the matching element's `style` attribute. The file itself
+   is never sent. Three consequences, and all three have bitten somebody:
+
+   1. NO MEDIA QUERIES HERE — not even the words. Css\Processor::doCleanup()
+      deletes them with a regex that runs before comments are stripped and
+      reaches from the at-rule to the first closing brace it finds, so the
+      phrase written out in prose above a rule takes that rule with it. (It
+      took the base `body` rule with it once, silently, and every mail lost its
+      font.) Media queries also could not work here even spelled correctly:
+      this file is inlined and then thrown away, so a rule that cannot be
+      written onto an element exists nowhere afterwards. The responsive and
+      dark-mode rules therefore live in the <style> block of
+      html/layout.blade.php, which IS emitted verbatim — and they need
+      `!important` there, because by then everything below has become an inline
+      style and an inline style outranks a stylesheet.
+
+   2. BLOCK COMMENTS ONLY, of the slash-star kind, and never nested — one
+      inside another ends the outer one early and hands the remainder of its
+      prose to a CSS parser. doCleanup() also removes newlines BEFORE it
+      removes comments, so a double-slash line comment swallows the rest of
+      the file rather than the rest of its line.
+
+   3. SIMPLE SELECTORS. Symfony's CssSelector converts these to XPath against
+      the rendered DOM; anything stateful (:hover, ::before) has no element to
+      be written onto and is silently lost.
+
+   THE PALETTE IS resources/css/tokens.css, MAPPED TO A LIGHT BASE. The app is
+   dark-first; mail is not, and cannot be — a dark mail is the one thing every
+   client's own dark mode fights with, and Gmail force-inverts light designs
+   whether or not they ask for it. So the base here is the token file's
+   [data-theme='light'] block and the dark refinements in the layout are its
+   :root block, which means the mail in dark mode IS the app:
+
+     token            light (here)   dark (layout's media query)
+     --bg             #e9ebf7        #070b16
+     --card           #fbfbfe        #161f33
+     --line           #dcdff0        #28324a
+     --ink            #131038        #eef2fc
+     --ink2           #443b6e        #bac6df
+     --muted          #7b74a0        #8b97b3
+     --accent         #3454d1        #5e84ff
+     --accent-ink     #2440a8        #9fb6ff
+     --good-bg/ink    #d6f6ef/#097a66  #12332f/#6ff0d4
+     --warn-bg/ink    #fcdfe2/#b01122  #3a1a22/#ff9fac
+     --neu-bg/ink     #ecedf9/#4f4878  #1f2940/#b0bcd8
+
+   NO PURE #fff OR #000 ANYWHERE except the label on a saturated fill, which is
+   tokens.css's --on-solid and is white in both themes on purpose. Gmail's
+   dark mode inverts by luminance: a #ffffff sheet becomes #000000 and a
+   near-white one becomes a dark grey that still has the design's relationships
+   in it. #fbfbfe reads as white and inverts sanely; #ffffff does not.
+   ========================================================================== */
+
+/* --- Base ---------------------------------------------------------------- */
+
+body,
+body *:not(html):not(style):not(br):not(tr) {
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    -webkit-text-size-adjust: none;
+    background-color: #e9ebf7;
+    color: #443b6e;
+    height: 100%;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+    width: 100% !important;
+}
+
+a {
+    color: #2440a8;
+    text-decoration: underline;
+}
+
+img {
+    border: 0;
+    max-width: 100%;
+    outline: none;
+    text-decoration: none;
+}
+
+/* --- Structure ------------------------------------------------------------
+   Three rows in one 600 px column: the navy banner, the sheet everything is
+   read on, and the footer, which sits on the page ground rather than on the
+   sheet so the mail has an end rather than trailing off. */
+
+.wrapper {
+    background-color: #e9ebf7;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.wrapper-cell {
+    padding: 26px 12px 34px 12px;
+}
+
+.content {
+    margin: 0 auto;
+    width: 600px;
+}
+
+.header {
+    background-color: #0a0f1e;
+    border-radius: 18px 18px 0 0;
+    font-size: 0;
+    line-height: 0;
+    padding: 0;
+}
+
+/* The banner is a link as well as a picture, so a blocked image still leaves
+   somewhere to tap. `display: block` kills the descender gap under it, which is
+   otherwise a navy hairline between the banner and the sheet. */
+.banner {
+    border-radius: 18px 18px 0 0;
+    display: block;
+    height: auto;
+    width: 100%;
+}
+
+/* WHAT A BLOCKED IMAGE LOOKS LIKE. Gmail hides images from unknown senders by
+   default, and for a lot of readers the first Orbit mail is exactly that: the
+   alt text is the banner, so it is set like one. */
+img.banner {
+    color: #eef2fc;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 120px;
+    text-align: center;
+}
+
+.sheet {
+    background-color: #fbfbfe;
+    border-radius: 0 0 18px 18px;
+    padding: 30px 28px 34px 28px;
+}
+
+/* --- Typography ---------------------------------------------------------- */
+
+h1 {
+    color: #131038;
+    font-size: 25px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+    line-height: 1.22;
+    margin: 0 0 10px 0;
+    text-align: left;
+}
+
+/* Section labels, not headlines: "Your watchlist" and "Your rules" divide a
+   digest, they do not announce it. Small, spaced and quiet is what a divider
+   looks like when it is made of words. */
+h2 {
+    border-top: 1px solid #e6e8f5;
+    color: #7b74a0;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    line-height: 1.4;
+    margin: 30px 0 14px 0;
+    padding-top: 20px;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+h3 {
+    color: #131038;
+    font-size: 16px;
+    font-weight: 700;
+    margin: 22px 0 8px 0;
+    text-align: left;
+}
+
+p {
+    color: #443b6e;
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0 0 14px 0;
+    text-align: left;
+}
+
+strong {
+    color: #131038;
+    font-weight: 700;
+}
+
+em {
+    font-style: italic;
+}
+
+ul,
+ol {
+    color: #443b6e;
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0 0 14px 0;
+    padding-left: 20px;
+}
+
+li {
+    margin: 0 0 6px 0;
+}
+
+.lead {
+    color: #443b6e;
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0 0 20px 0;
+}
+
+.quiet {
+    color: #7b74a0;
+    font-size: 14px;
+    margin: 0 0 14px 0;
+}
+
+/* --- The deal card --------------------------------------------------------
+   One trip, stacked. Everything about it is on its own line and reads
+   top-down: what it is, what it costs, how that compares, when it flies. The
+   four-column table this replaced wrapped every cell in Gmail on a phone. */
+
+.card-gap {
+    padding: 0 0 14px 0;
+}
+
+.card {
+    background-color: #fbfbfe;
+    border: 1px solid #dcdff0;
+    border-radius: 16px;
+    width: 100%;
+}
+
+.card-hero {
+    background-color: #f4f6ff;
+    border: 1px solid #c9d3f5;
+}
+
+.card-cell {
+    padding: 18px 20px 20px 20px;
+}
+
+/* The gold of the globe screen's arc, taken down to something legible on a
+   light sheet. #ffd166 on #fbfbfe is 1.4:1 and is not text anywhere. */
+.eyebrow {
+    color: #8f7118;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.3px;
+    line-height: 1.4;
+    margin: 0 0 8px 0;
+    text-transform: uppercase;
+}
+
+.journey {
+    color: #131038;
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    line-height: 1.25;
+    margin: 0;
+}
+
+.pair {
+    color: #7b74a0;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    line-height: 1.4;
+    margin: 3px 0 0 0;
+}
+
+.price {
+    color: #2440a8;
+    font-size: 40px;
+    font-weight: 700;
+    letter-spacing: -1.5px;
+    line-height: 1.1;
+    margin: 16px 0 0 0;
+}
+
+.price-small {
+    font-size: 28px;
+    letter-spacing: -1px;
+    margin: 12px 0 0 0;
+}
+
+.when {
+    color: #443b6e;
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 10px 0 0 0;
+}
+
+.usual {
+    color: #7b74a0;
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 10px 0 0 0;
+}
+
+/* --- Pills ----------------------------------------------------------------
+   A one-cell table rather than a <span>, because Outlook's Word engine drops
+   padding on inline elements and a pill with no padding is a highlighter
+   stripe. A table with no width shrinks to its content and starts a new line,
+   which is exactly the behaviour wanted and needs no float to get it. */
+
+.pill {
+    border-collapse: separate;
+    margin: 0;
+}
+
+.pill-cell {
+    border-radius: 20px;
+    font-size: 12.5px;
+    font-weight: 700;
+    line-height: 1.3;
+    padding: 6px 12px;
+    white-space: nowrap;
+}
+
+.pill-good {
+    background-color: #d6f6ef;
+    color: #097a66;
+}
+
+.pill-warn {
+    background-color: #fcdfe2;
+    color: #b01122;
+}
+
+.pill-quiet {
+    background-color: #ecedf9;
+    color: #4f4878;
+}
+
+.pill-accent {
+    background-color: #e2e8fb;
+    color: #2440a8;
+}
+
+/* Tables ignore margins in Outlook's Word engine and take no padding anywhere,
+   so anything table-shaped that needs air above it gets a <div> to carry the
+   margin — block-level margins are the one spacing primitive every client
+   agrees about. */
+.pill-row {
+    margin: 14px 0 0 0;
+}
+
+.meter-row {
+    margin: 18px 0 0 0;
+}
+
+/* --- The score meter ------------------------------------------------------
+   A percentage-width table inside a fixed one: the only progress bar every
+   mail client draws the same way. The fill's width is the score, so the
+   picture cannot disagree with the number printed beside it. */
+
+.meter {
+    border-collapse: separate;
+    margin: 0;
+    width: 100%;
+}
+
+.meter-track {
+    background-color: #e0e3f3;
+    border-radius: 4px;
+    font-size: 0;
+    line-height: 0;
+    padding: 0;
+}
+
+.meter-fill {
+    background-color: #3454d1;
+    border-radius: 4px;
+    font-size: 0;
+    height: 6px;
+    line-height: 6px;
+    padding: 0;
+}
+
+.meter-label {
+    color: #7b74a0;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    margin: 8px 0 0 0;
+}
+
+/* --- Compact rows ---------------------------------------------------------
+   The digest's watchlist and each rule's matches. Two cells and not five: a
+   name on the left, a price on the right, and everything else demoted to a
+   second line under whichever of the two it belongs to. */
+
+.rows {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.row-cell {
+    border-bottom: 1px solid #e6e8f5;
+    padding: 13px 0;
+    vertical-align: top;
+}
+
+.row-last {
+    border-bottom: 0;
+}
+
+.row-title {
+    color: #131038;
+    font-size: 15.5px;
+    font-weight: 700;
+    line-height: 1.35;
+    margin: 0;
+}
+
+.row-sub {
+    color: #7b74a0;
+    font-size: 13px;
+    line-height: 1.45;
+    margin: 3px 0 0 0;
+}
+
+.row-price {
+    color: #2440a8;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+    line-height: 1.3;
+    margin: 0;
+    white-space: nowrap;
+}
+
+/* The two small lines under a price: what the route usually costs, and its
+   score. Both are one class because both are the same thing typographically —
+   a footnote to the number above them — and a second class would be two places
+   to change one decision. */
+.row-note {
+    color: #7b74a0;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.45;
+    margin: 4px 0 0 0;
+}
+
+/* THE PRICE MAY NOT WRAP AND THE NOTE UNDER IT MAY. "usually €93 · 88/100"
+   sits on one line beside a 600 px sheet and folds onto two beside a phone,
+   which is the whole difference between the desktop and mobile versions of
+   this row and costs no media query — a cell that could not wrap at all would
+   instead take its full width out of the route name on the left. */
+.row-side {
+    padding-left: 14px;
+    text-align: right;
+    vertical-align: top;
+}
+
+/* --- The week's flagged deals --------------------------------------------
+   Frozen headlines out of the ledger, one line each, with the arc's gold as
+   the marker — the only place in the mail that gold is used as ink, and it is
+   used on a shape rather than on a word. */
+
+.flags {
+    border-collapse: collapse;
+    margin: 0 0 6px 0;
+    width: 100%;
+}
+
+.flag-dot {
+    color: #d5a520;
+    font-size: 15px;
+    line-height: 1.5;
+    padding: 6px 0;
+    vertical-align: top;
+    width: 18px;
+}
+
+.flag-text {
+    color: #131038;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.5;
+    padding: 6px 0;
+    vertical-align: top;
+}
+
+/* --- The quoted rule ------------------------------------------------------ */
+
+.quote {
+    border-collapse: separate;
+    margin: 24px 0 14px 0;
+    width: 100%;
+}
+
+.quote-cell {
+    background-color: #f1f3fc;
+    border-left: 3px solid #3454d1;
+    border-radius: 0 12px 12px 0;
+    padding: 14px 16px;
+}
+
+.quote-text {
+    color: #131038;
+    font-size: 15px;
+    font-style: italic;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.quote-chips {
+    color: #7b74a0;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    line-height: 1.5;
+    margin: 7px 0 0 0;
+}
+
+/* --- Buttons --------------------------------------------------------------
+   Padding on the CELL and not on the <a>: Word ignores padding on an inline
+   element, which is how a "bulletproof" button ends up as underlined text in
+   the one client that never updates. The radius is lost there and nowhere
+   else, and a square button is not a broken button. */
+
+.action {
+    margin: 24px 0 4px 0;
+    width: 100%;
+}
+
+.button {
+    border-collapse: separate;
+}
+
+.button-cell {
+    border-radius: 12px;
+    padding: 15px 28px;
+    text-align: center;
+}
+
+.button-link {
+    display: inline-block;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.1px;
+    line-height: 1.2;
+    text-decoration: none;
+}
+
+.button-primary {
+    background-color: #3454d1;
+}
+
+.button-primary-link {
+    color: #ffffff;
+}
+
+/* The footer's "Open Orbit", which must not compete with the deal the mail was
+   sent about: the same accent, drawn as an outline on the page ground. */
+.button-ghost {
+    background-color: #e9ebf7;
+    border: 2px solid #c3cdef;
+    padding: 12px 24px;
+}
+
+.button-ghost-link {
+    color: #2440a8;
+    font-size: 14.5px;
+}
+
+/* --- Subcopy: why this arrived ------------------------------------------- */
+
+.subcopy {
+    border-collapse: collapse;
+    margin: 26px 0 0 0;
+    width: 100%;
+}
+
+.subcopy-cell {
+    border-top: 1px solid #e6e8f5;
+    padding: 20px 0 0 0;
+}
+
+.subcopy-cell p {
+    color: #7b74a0;
+    font-size: 13px;
+    line-height: 1.65;
+    margin: 0;
+}
+
+.subcopy-cell strong {
+    color: #443b6e;
+}
+
+.subcopy-cell a {
+    color: #4f4878;
+}
+
+/* --- Footer ---------------------------------------------------------------
+   Off the sheet and on the ground. Same three things in every Orbit mail: a
+   way in, where to change what arrives, and who sent it. */
+
+.footer {
+    width: 600px;
+}
+
+.footer-cell {
+    padding: 26px 24px 6px 24px;
+    text-align: center;
+}
+
+.footer-note {
+    color: #7b74a0;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 18px 0 0 0;
+    text-align: center;
+}
+
+.footer-note a {
+    color: #4f4878;
+    text-decoration: underline;
+}
+
+.brand {
+    color: #9a94ba;
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    line-height: 1.6;
+    margin: 10px 0 0 0;
+    text-align: center;
+}
+
+/* --- Components kept for completeness -------------------------------------
+   Nothing in resources/views/mail/ uses these two any more — the tables became
+   cards and rows, which is the whole point of this redesign — but they are part
+   of the published set and a mail written next month may reach for one. */
+
+.table table {
+    border-collapse: collapse;
+    margin: 0 0 14px 0;
+    width: 100%;
+}
+
+.table th {
+    border-bottom: 1px solid #dcdff0;
+    color: #7b74a0;
+    font-size: 12px;
+    letter-spacing: 0.6px;
+    padding: 8px 10px 8px 0;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+.table td {
+    border-bottom: 1px solid #e6e8f5;
+    color: #443b6e;
+    font-size: 14px;
+    padding: 10px 10px 10px 0;
+}
+
+.panel {
+    border-collapse: separate;
+    margin: 0 0 14px 0;
+    width: 100%;
+}
+
+.panel-content {
+    background-color: #f1f3fc;
+    border-radius: 12px;
+}
+
+.panel-item {
+    padding: 16px;
+}
+
+.panel-item p {
+    margin: 0;
+}
