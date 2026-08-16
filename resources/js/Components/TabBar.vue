@@ -57,7 +57,16 @@
       <span class="tab__label">Calendar</span>
     </RouterLink>
 
-    <RouterLink class="tab tab--search" :to="{ name: 'search' }" aria-label="Search for a flight">
+    <!--
+      NO `aria-label`, UNLIKE THE + THAT WAS HERE. That one carried "Create an
+      alert rule" because it had no visible text at all, and it kept the
+      attribute after it grew a label — which left the item's accessible name
+      disagreeing with the word printed under it, and made this the one tab that
+      `e2e/fixtures.js`'s `tab()` helper could not find by the name a person
+      reads. The visible label is the name now, exactly as it is for the four
+      either side.
+    -->
+    <RouterLink class="tab tab--search" :to="{ name: 'search' }">
       <span class="tab__button">
         <!--
           Stroked from the style block: --on-solid on the accent fill, and a

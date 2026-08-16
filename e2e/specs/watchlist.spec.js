@@ -508,6 +508,25 @@ test('a count chip finds the rules section that is below the fold', async ({ pag
     await expect(page).toHaveURL(/\/create$/)
     await page.locator('#rule-text').fill('cheap city break under €90')
 
+    /*
+     * WAIT FOR THE RE-READ BEFORE PRESSING ANYTHING, and this is a race rather
+     * than a nicety.
+     *
+     * The screen seeds itself with the design's own sentence and parses it on
+     * mount, so "Create rule" is ENABLED the moment this screen appears — for
+     * the seeded rule, not for the one just typed. Typing schedules a re-parse
+     * 500 ms later, and while that request is out `parsing` is true and
+     * `save()` returns early. Playwright's actionability check and its mouse
+     * event are a few milliseconds apart; land those either side of the
+     * debounce and the button is enabled when it is checked, inert when it is
+     * pressed, and the click silently does nothing.
+     *
+     * The seed says "under €80". Waiting for €90 is waiting for THIS sentence's
+     * parse to have landed, after which nothing further is scheduled and the
+     * button is stably live.
+     */
+    await expect(page.locator('.chips')).toContainText('€90')
+
     await page.getByRole('button', { name: /create rule/i }).click()
     await expect(page.locator('.screen__title')).toHaveText('Rule created')
 

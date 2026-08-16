@@ -7,8 +7,8 @@
 // the attribute against a stylesheet that no longer keys off it is green in
 // vitest and grey in the browser.
 //
-// This spec is also where both themes of Home get photographed, which is the
-// pair a reviewer holds up against design/screenshots/01 and 07.
+// This spec is also where both themes of Home and of Search get photographed,
+// which is the set a reviewer holds up against design/screenshots/01 and 07.
 // =============================================================================
 import { expect, shot, tab, test, waitForGlobe } from '../fixtures.js'
 
@@ -77,23 +77,82 @@ test('the alerts screen switches the whole palette, and remembers', async ({ pag
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 })
 
+/*
+ * =============================================================================
+ * THE SCREEN THE CENTRE TAB OPENS ON, in both palettes
+ * =============================================================================
+ * Search is the app's newest primary screen (2026-08-16) and its two boxes are
+ * the most palette-dependent thing in Orbit: a card on a panel, an accent
+ * border on a focused field, a suggestion panel that is deliberately a
+ * DIFFERENT surface from the card it sits on, and a matched run bolded inside a
+ * row of three colours. Every one of those is a token that has to hold in both
+ * themes, and none of them appears on Home.
+ *
+ * THE FIVE TAB LABELS ARE ASSERTED HERE and no longer on Home, which is a fix
+ * rather than a move. They are a fact about the bar and have nothing to do with
+ * a planet — but they were pinned to the one test that must first rasterise a
+ * 1.4 MB earth on a software renderer, so on a loaded box the assertion that
+ * the centre tab says "Search" was the assertion that never ran.
+ */
+test('Search, both themes, photographed', async ({ page }) => {
+    const labels = page.getByRole('navigation', { name: 'Primary' }).locator('.tab__label')
+
+    /*
+     * FILLED IN, NOT EMPTY. An empty form photographs as a rectangle; what a
+     * reviewer needs to see is the panel open on top of the buttons it pushes
+     * down, with a match bolded inside a row — which is the layout decision this
+     * screen departs from every other flight search on.
+     */
+    const fill = async () => {
+        await page.locator('#search-from').fill('BCN')
+        await page.locator('#search-to').fill('lisb')
+        await expect(page.getByRole('listbox', { name: 'Destination suggestions' })).toBeVisible()
+    }
+
+    await page.goto('/search')
+
+    await expect(page.locator('.screen__title')).toHaveText('Search')
+
+    /*
+     * EVERY ITEM IN THE BAR IS NAMED, INCLUDING THE ACCENT ONE IN THE MIDDLE,
+     * because a label is a colour decision as much as a copy one. It was the
+     * only unlabelled control in the app.
+     *
+     * THE MIDDLE ONE SAYS "SEARCH" AND USED TO SAY "RULE". The centre button
+     * wrote a deal rule until 2026-08-16 and now opens this screen; rule
+     * creation kept its own screen and moved its door to the watch screen's
+     * rules section. The label is asserted rather than the icon because the icon
+     * is a magnifying glass in an accent square and the word is what tells
+     * anybody so.
+     */
+    await expect(labels).toHaveText(['Orbit', 'Calendar', 'Search', 'Watch', 'Alerts'])
+
+    await fill()
+    await shot(page, 'search-dark')
+
+    // --- The same screen, the other palette ----------------------------------
+    await tab(page, 'Alerts').click()
+    await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Light' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+
+    await tab(page, 'Search').click()
+
+    expect(await paletteOf(page)).toEqual(LIGHT)
+    // The same five names, on the light bar.
+    await expect(labels).toHaveText(['Orbit', 'Calendar', 'Search', 'Watch', 'Alerts'])
+
+    await fill()
+    await shot(page, 'search-light')
+
+    // Back to dark, so the next spec starts where the app ships.
+    await tab(page, 'Alerts').click()
+    await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'Dark' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+})
+
 test('Home, both themes, photographed', async ({ page }) => {
     await page.goto('/')
     await waitForGlobe(page)
-
-    /*
-     * EVERY ITEM IN THE BAR IS NAMED, INCLUDING THE ACCENT ONE IN THE MIDDLE —
-     * checked in both themes below, because a label is a colour decision as much
-     * as a copy one. It was the only unlabelled control in the app.
-     *
-     * THE MIDDLE ONE SAYS "SEARCH" AND USED TO SAY "RULE". The centre button
-     * wrote a deal rule until 2026-08-16 and now opens the flight search; rule
-     * creation kept its screen and moved its door to the watch screen's rules
-     * section. The label is asserted rather than the icon because the icon is a
-     * magnifying glass in an accent square and the word is what tells anybody so.
-     */
-    const labels = page.getByRole('navigation', { name: 'Primary' }).locator('.tab__label')
-    await expect(labels).toHaveText(['Orbit', 'Calendar', 'Search', 'Watch', 'Alerts'])
 
     await shot(page, 'home-dark')
 
@@ -112,9 +171,6 @@ test('Home, both themes, photographed', async ({ page }) => {
      */
     await waitForGlobe(page)
     expect(await paletteOf(page)).toEqual(LIGHT)
-
-    // The same five names, on the light bar.
-    await expect(labels).toHaveText(['Orbit', 'Calendar', 'Search', 'Watch', 'Alerts'])
 
     await shot(page, 'home-light')
 

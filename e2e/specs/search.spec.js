@@ -84,8 +84,10 @@ test('an airport nobody flies from is searched, priced, and then watched', async
     /*
      * IT ARRIVES FROM THE NETWORK, which is the point of the assertion. Nothing
      * in the browser has heard of Weeze until `GET /api/airports?q=wee`
-     * answers — the curated 184 do not contain it, and no rule will ever
-     * suggest it, so it sits under the divider that says exactly that.
+     * answers — it is not one of the 184 curated places, so no rule will ever
+     * suggest it and nothing paints it on the keystroke. Waiting for a row that
+     * can only come from the server is waiting for the world half of the
+     * typeahead to work at this end of the pair.
      */
     await expect(weeze).toHaveCount(1)
     await expect(weeze).toContainText('Weeze')
@@ -300,12 +302,20 @@ test('only one suggestion list is open at a time', async ({ page }) => {
     await expect(origins).toBeVisible()
     await expect(destinations).toBeHidden()
 
-    // And neither box offers what the other one is holding: a route from a
-    // place to itself is not a route.
+    /*
+     * AND NEITHER BOX OFFERS WHAT THE OTHER ONE IS HOLDING: a route from a
+     * place to itself is not a route.
+     *
+     * THE SECOND ASSERTION IS WHAT MAKES THE FIRST ONE MEAN ANYTHING. "barcel"
+     * matches two airports in the seeded table — BCN, and BLA, which is
+     * Barcelona in Venezuela — so an empty panel would prove the exclusion had
+     * eaten the search rather than one row of it. One goes, one stays.
+     */
     await page.locator(FROM).fill('BCN')
     await page.locator(TO).fill('barcel')
 
-    await expect(destinations.getByRole('option')).toHaveCount(0)
+    await expect(destinations.getByRole('option').filter({ hasText: 'BLA' })).toHaveCount(1)
+    await expect(destinations.getByRole('option').filter({ hasText: 'BCN' })).toHaveCount(0)
 })
 
 /*
