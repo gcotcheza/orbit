@@ -2,8 +2,8 @@
 
 namespace Tests;
 
-use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 /**
  * What every test in this suite gets before its first line runs.

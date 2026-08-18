@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Tests\TestCase;
 use App\Models\User;
 use App\Models\UserSettings;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * `GET` and `PUT /api/settings` — the alerts screen (design/README.md §6) and
@@ -32,13 +32,13 @@ final class SettingsApiTest extends TestCase
      * @var array<string, bool|string|int>
      */
     private const VALID = [
-        'emailAlerts' => true,
-        'pushAlerts' => true,
+        'emailAlerts'  => true,
+        'pushAlerts'   => true,
         'weeklyDigest' => false,
-        'quietHours' => false,
-        'quietStart' => '23:30',
-        'quietEnd' => '06:45',
-        'sensitivity' => 2,
+        'quietHours'   => false,
+        'quietStart'   => '23:30',
+        'quietEnd'     => '06:45',
+        'sensitivity'  => 2,
     ];
 
     protected function setUp(): void

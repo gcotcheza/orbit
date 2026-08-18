@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Application\Ports\PriceProvider;
-use App\Infrastructure\Pricing\FakePriceProvider;
-use App\Infrastructure\Pricing\TravelpayoutsPriceProvider;
-use App\Jobs\PollRoutePrices;
-use App\Models\CalendarFare;
-use App\Models\PriceObservation;
+use Tests\TestCase;
 use App\Models\Route;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use ReflectionProperty;
+use App\Models\CalendarFare;
+use App\Jobs\PollRoutePrices;
+use InvalidArgumentException;
+use App\Models\PriceObservation;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\Test;
-use ReflectionProperty;
-use Tests\TestCase;
+use App\Application\Ports\PriceProvider;
+use App\Infrastructure\Pricing\FakePriceProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Infrastructure\Pricing\TravelpayoutsPriceProvider;
 
 /**
  * The wiring, and the whole way through.
@@ -98,7 +98,7 @@ final class TravelpayoutsPollTest extends TestCase
     public function naming_travelpayouts_hands_out_the_travelpayouts_adapter(): void
     {
         config([
-            'orbit.providers.price' => 'travelpayouts',
+            'orbit.providers.price'     => 'travelpayouts',
             'orbit.travelpayouts.token' => 'test-token',
         ]);
 
@@ -109,7 +109,7 @@ final class TravelpayoutsPollTest extends TestCase
     public function selecting_it_without_a_token_refuses_to_resolve(): void
     {
         config([
-            'orbit.providers.price' => 'travelpayouts',
+            'orbit.providers.price'     => 'travelpayouts',
             'orbit.travelpayouts.token' => null,
         ]);
 
@@ -129,13 +129,13 @@ final class TravelpayoutsPollTest extends TestCase
     public function the_configured_timeouts_and_retry_reach_the_adapter(): void
     {
         config([
-            'orbit.providers.price' => 'travelpayouts',
-            'orbit.travelpayouts.token' => 'test-token',
-            'orbit.travelpayouts.base_url' => 'https://example.test',
-            'orbit.travelpayouts.connect_timeout' => 3,
-            'orbit.travelpayouts.timeout' => 11,
-            'orbit.travelpayouts.retries' => 2,
-            'orbit.travelpayouts.retry_delay_ms' => 250,
+            'orbit.providers.price'                  => 'travelpayouts',
+            'orbit.travelpayouts.token'              => 'test-token',
+            'orbit.travelpayouts.base_url'           => 'https://example.test',
+            'orbit.travelpayouts.connect_timeout'    => 3,
+            'orbit.travelpayouts.timeout'            => 11,
+            'orbit.travelpayouts.retries'            => 2,
+            'orbit.travelpayouts.retry_delay_ms'     => 250,
             'orbit.travelpayouts.warn_every_minutes' => 7,
         ]);
 
@@ -264,14 +264,14 @@ final class TravelpayoutsPollTest extends TestCase
 
         $answer = static fn (string $foundAt): array => [
             'currency' => 'eur',
-            'data' => [[
-                'actual' => true,
+            'data'     => [[
+                'actual'      => true,
                 'depart_date' => '2026-09-04',
-                'origin' => 'AMS',
+                'origin'      => 'AMS',
                 'destination' => 'LIS',
                 'return_date' => '',
-                'value' => 88,
-                'found_at' => $foundAt,
+                'value'       => 88,
+                'found_at'    => $foundAt,
             ]],
         ];
 
@@ -364,8 +364,8 @@ final class TravelpayoutsPollTest extends TestCase
     private function useTravelpayouts(): void
     {
         config([
-            'orbit.providers.price' => 'travelpayouts',
-            'orbit.travelpayouts.token' => 'test-token',
+            'orbit.providers.price'              => 'travelpayouts',
+            'orbit.travelpayouts.token'          => 'test-token',
             'orbit.travelpayouts.retry_delay_ms' => 0,
         ]);
     }

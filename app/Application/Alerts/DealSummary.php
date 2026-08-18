@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Application\Alerts;
 
+use App\Application\Rules\RuleMatch;
 use App\Application\Routes\BookingLink;
 use App\Application\Routes\RouteSnapshot;
-use App\Application\Rules\RuleMatch;
 
 /**
  * One trip, as an alert states it — and, character for character, the JSON that
@@ -144,17 +144,17 @@ final readonly class DealSummary
     public function toArray(): array
     {
         return [
-            'routeCode' => $this->routeCode,
-            'origin' => $this->origin,
-            'destination' => $this->destination,
-            'priceCents' => $this->priceCents,
-            'usualCents' => $this->usualCents,
+            'routeCode'         => $this->routeCode,
+            'origin'            => $this->origin,
+            'destination'       => $this->destination,
+            'priceCents'        => $this->priceCents,
+            'usualCents'        => $this->usualCents,
             'percentUnderUsual' => $this->percentUnderUsual,
-            'score' => $this->score,
-            'verdict' => $this->verdict,
-            'departureDate' => $this->departureDate,
-            'bookingUrl' => $this->bookingUrl,
-            'headline' => $this->headline(),
+            'score'             => $this->score,
+            'verdict'           => $this->verdict,
+            'departureDate'     => $this->departureDate,
+            'bookingUrl'        => $this->bookingUrl,
+            'headline'          => $this->headline(),
         ];
     }
 

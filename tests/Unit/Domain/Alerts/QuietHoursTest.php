@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Alerts;
 
-use App\Domain\Alerts\QuietHours;
 use InvalidArgumentException;
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use App\Domain\Alerts\QuietHours;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * The window that crosses midnight.
@@ -41,14 +41,14 @@ final class QuietHoursTest extends TestCase
     public static function nightHours(): array
     {
         return [
-            '21:59 — one minute early' => [self::minute(21, 59), false],
-            '22:00 — the start is quiet' => [self::minute(22), true],
-            '23:40' => [self::minute(23, 40), true],
-            'midnight' => [self::minute(0), true],
-            '03:00 — the small hours' => [self::minute(3), true],
-            '07:59' => [self::minute(7, 59), true],
-            '08:00 — the end is not' => [self::minute(8), false],
-            '12:00 — the middle of the day' => [self::minute(12), false],
+            '21:59 — one minute early'           => [self::minute(21, 59), false],
+            '22:00 — the start is quiet'         => [self::minute(22), true],
+            '23:40'                              => [self::minute(23, 40), true],
+            'midnight'                           => [self::minute(0), true],
+            '03:00 — the small hours'            => [self::minute(3), true],
+            '07:59'                              => [self::minute(7, 59), true],
+            '08:00 — the end is not'             => [self::minute(8), false],
+            '12:00 — the middle of the day'      => [self::minute(12), false],
             '06:55 — when the alert run happens' => [self::minute(6, 55), true],
         ];
     }
@@ -83,11 +83,11 @@ final class QuietHoursTest extends TestCase
     public static function daytimeHours(): array
     {
         return [
-            '08:59' => [self::minute(8, 59), false],
-            '09:00' => [self::minute(9), true],
-            '13:00' => [self::minute(13), true],
-            '16:59' => [self::minute(16, 59), true],
-            '17:00' => [self::minute(17), false],
+            '08:59'    => [self::minute(8, 59), false],
+            '09:00'    => [self::minute(9), true],
+            '13:00'    => [self::minute(13), true],
+            '16:59'    => [self::minute(16, 59), true],
+            '17:00'    => [self::minute(17), false],
             'midnight' => [self::minute(0), false],
         ];
     }
@@ -107,11 +107,11 @@ final class QuietHoursTest extends TestCase
     public static function waits(): array
     {
         return [
-            '22:00 waits ten hours' => [self::minute(22), 600],
-            '23:00 waits nine' => [self::minute(23), 540],
-            'midnight waits eight' => [self::minute(0), 480],
-            '03:00 waits five' => [self::minute(3), 300],
-            '07:59 waits a minute' => [self::minute(7, 59), 1],
+            '22:00 waits ten hours'  => [self::minute(22), 600],
+            '23:00 waits nine'       => [self::minute(23), 540],
+            'midnight waits eight'   => [self::minute(0), 480],
+            '03:00 waits five'       => [self::minute(3), 300],
+            '07:59 waits a minute'   => [self::minute(7, 59), 1],
             'noon waits for nothing' => [self::minute(12), null],
         ];
     }
@@ -182,11 +182,11 @@ final class QuietHoursTest extends TestCase
     public static function nonsense(): array
     {
         return [
-            'empty' => [''],
-            'words' => ['tonight'],
-            'no minutes' => ['22'],
+            'empty'               => [''],
+            'words'               => ['tonight'],
+            'no minutes'          => ['22'],
             'a twenty-fifth hour' => ['25:00'],
-            'a sixtieth minute' => ['22:60'],
+            'a sixtieth minute'   => ['22:60'],
         ];
     }
 

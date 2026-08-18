@@ -4,24 +4,24 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Application\Ports\PriceProvider;
-use App\Domain\Pricing\DatedFare;
-use App\Models\Airport;
-use App\Models\CalendarFare;
-use App\Models\PriceObservation;
-use App\Models\Route;
-use App\Models\RouteStats;
+use Tests\TestCase;
 use App\Models\User;
-use App\Models\WatchlistItem;
+use App\Models\Route;
 use DateTimeImmutable;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\Airport;
+use App\Models\RouteStats;
+use App\Models\CalendarFare;
+use App\Models\WatchlistItem;
+use App\Models\PriceObservation;
+use App\Domain\Pricing\DatedFare;
 use Illuminate\Http\JsonResponse;
+use Tests\Concerns\BuildsRouteData;
+use Tests\Support\SpyPriceProvider;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\Concerns\BuildsRouteData;
-use Tests\Support\SpyPriceProvider;
-use Tests\TestCase;
+use App\Application\Ports\PriceProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * `POST /api/routes/lookup` — look before you watch.
@@ -314,9 +314,9 @@ final class RouteLookupTest extends TestCase
         $route = $this->makeRoute('AMS', 'MAD');
 
         CalendarFare::query()->create([
-            'route_id' => $route->id,
+            'route_id'       => $route->id,
             'departure_date' => '2026-09-01',
-            'price_cents' => 6600,
+            'price_cents'    => 6600,
             // A day and an hour ago, i.e. one hour past the window.
             'fetched_at' => Date::now()->subHours((int) config('orbit.lookup.fresh_for_hours') + 1),
         ]);

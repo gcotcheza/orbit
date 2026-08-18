@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Application\Alerts\AlertEvaluation;
 use App\Models\User;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Foundation\Queue\Queueable;
+use App\Application\Alerts\AlertEvaluation;
+use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
  * One account's morning: everything that is worth saying, decided and queued.

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Domain\Rules\RuleCriteria;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
+use App\Domain\Rules\RuleCriteria;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -56,8 +56,8 @@ final class DealRule extends Model
     protected function casts(): array
     {
         return [
-            'criteria' => 'array',
-            'active' => 'boolean',
+            'criteria'   => 'array',
+            'active'     => 'boolean',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];

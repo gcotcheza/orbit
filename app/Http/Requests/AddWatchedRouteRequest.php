@@ -6,8 +6,8 @@ namespace App\Http\Requests;
 
 use App\Models\Route;
 use App\Models\WatchlistItem;
-use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Contracts\Validation\Validator;
 
 /**
  * `POST /api/watchlist` — start watching a city pair.

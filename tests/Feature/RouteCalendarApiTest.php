@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\Route;
+use Tests\TestCase;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\Route;
+use Tests\Concerns\BuildsRouteData;
 use Illuminate\Support\Facades\Date;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\Concerns\BuildsRouteData;
-use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * GET /api/routes/{code}/calendar — the heatmap, a month at a time.

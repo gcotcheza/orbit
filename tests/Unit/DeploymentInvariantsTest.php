@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Yaml\Yaml;
+use PHPUnit\Framework\Attributes\Test;
 
 /**
  * The deployment invariants, asserted rather than remembered.

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Jobs\SweepRuleFares;
 use App\Models\DealRule;
+use App\Jobs\SweepRuleFares;
 use Illuminate\Console\Command;
 
 /**

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Pricing;
 
-use App\Application\Ports\ReturnTripProvider;
+use DateTimeImmutable;
 use App\Domain\Pricing\NightsBand;
 use App\Domain\Pricing\ReturnTrip;
-use DateTimeImmutable;
 use Illuminate\Support\Facades\Date;
+use App\Application\Ports\ReturnTripProvider;
 
 /**
  * Round-trip fares, until there are real ones.

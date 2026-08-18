@@ -4,21 +4,21 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\Airport;
-use App\Models\Destination;
-use App\Models\PriceObservation;
-use App\Models\Route;
-use App\Models\RouteStats;
+use Tests\TestCase;
 use App\Models\User;
+use App\Models\Route;
+use App\Models\Airport;
+use App\Models\RouteStats;
+use App\Models\Destination;
 use App\Models\WatchlistItem;
+use App\Models\PriceObservation;
+use Illuminate\Support\Facades\Date;
+use Database\Seeders\WatchlistSeeder;
+use PHPUnit\Framework\Attributes\Test;
 use Database\Seeders\DestinationSeeder;
 use Database\Seeders\FakeHistorySeeder;
-use Database\Seeders\WatchlistSeeder;
 use Database\Seeders\WorldAirportSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Date;
-use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
 
 /**
  * The seeders run on EVERY DEPLOY, so what is tested here is mostly what

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
-use App\Application\Rules\RuleMatch;
 use Illuminate\Http\Request;
+use App\Application\Rules\RuleMatch;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
@@ -33,8 +33,8 @@ final class RuleMatchResource extends JsonResource
         $route = $match->route;
 
         return [
-            'code' => $route->code,
-            'origin' => AirportResource::make($route->origin)->toArray($request),
+            'code'        => $route->code,
+            'origin'      => AirportResource::make($route->origin)->toArray($request),
             'destination' => AirportResource::make($route->destination)->toArray($request),
 
             /*
@@ -44,7 +44,7 @@ final class RuleMatchResource extends JsonResource
              * to a rule about Fridays would be a price nobody can book.
              */
             'cheapest' => [
-                'date' => $match->cheapest->departureDate->format('Y-m-d'),
+                'date'  => $match->cheapest->departureDate->format('Y-m-d'),
                 'price' => Euros::from($match->cheapest->cents),
             ],
 

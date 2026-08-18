@@ -32,7 +32,7 @@ final class UpdateRuleRequest extends FormRequest
     {
         return [
             'active.required' => 'Say whether the rule should be on or off.',
-            'active.boolean' => 'Say whether the rule should be on or off.',
+            'active.boolean'  => 'Say whether the rule should be on or off.',
         ];
     }
 }

@@ -95,12 +95,12 @@ abstract class RoutePairRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'origin.size' => 'An airport code is three letters.',
+            'origin.size'   => 'An airport code is three letters.',
             'origin.exists' => 'Orbit does not know that airport yet.',
 
-            'destination.size' => 'An airport code is three letters, like LIS.',
+            'destination.size'      => 'An airport code is three letters, like LIS.',
             'destination.different' => 'A route needs two different airports.',
-            'destination.exists' => 'Orbit does not know an airport with that code.',
+            'destination.exists'    => 'Orbit does not know an airport with that code.',
         ];
     }
 
@@ -128,7 +128,7 @@ abstract class RoutePairRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'origin' => $this->normalise('origin'),
+            'origin'      => $this->normalise('origin'),
             'destination' => $this->normalise('destination'),
         ]);
     }

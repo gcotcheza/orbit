@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Application\Routes;
 
-use App\Jobs\PollRoutePrices;
-use App\Jobs\RefreshRouteStats;
-use App\Models\CalendarFare;
 use App\Models\Route;
 use Carbon\CarbonImmutable;
-use Illuminate\Contracts\Cache\Repository as Cache;
+use App\Models\CalendarFare;
+use App\Jobs\PollRoutePrices;
+use App\Jobs\RefreshRouteStats;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Contracts\Cache\Repository as Cache;
 
 /**
  * How old this route's fares are, and fetching new ones when somebody is

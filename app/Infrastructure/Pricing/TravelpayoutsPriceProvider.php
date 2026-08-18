@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Pricing;
 
-use App\Application\Ports\PriceProvider;
-use App\Domain\Pricing\DatedFare;
-use DateTimeImmutable;
-use DateTimeZone;
-use Illuminate\Contracts\Cache\Repository as Cache;
-use Illuminate\Http\Client\Factory as Http;
-use InvalidArgumentException;
-use Psr\Log\LoggerInterface;
 use Throwable;
+use DateTimeZone;
+use DateTimeImmutable;
+use Psr\Log\LoggerInterface;
+use InvalidArgumentException;
+use App\Domain\Pricing\DatedFare;
+use App\Application\Ports\PriceProvider;
+use Illuminate\Http\Client\Factory as Http;
+use Illuminate\Contracts\Cache\Repository as Cache;
 
 /**
  * Real fares, from Travelpayouts' month-matrix.
@@ -225,10 +225,10 @@ final readonly class TravelpayoutsPriceProvider implements PriceProvider
                 ])
                 ->acceptJson()
                 ->get(self::PATH, [
-                    'origin' => $origin,
+                    'origin'      => $origin,
                     'destination' => $destination,
-                    'month' => $month,
-                    'currency' => self::CURRENCY,
+                    'month'       => $month,
+                    'currency'    => self::CURRENCY,
                     /*
                      * THE STRING 'false', WHICH IS THE ONE THIS API ANSWERS TO,
                      * and it means "all prices" rather than only those found
@@ -252,8 +252,8 @@ final readonly class TravelpayoutsPriceProvider implements PriceProvider
 
         if (! $response->successful()) {
             $this->warn('Travelpayouts refused a fare request.', [
-                'route' => $route,
-                'month' => $month,
+                'route'  => $route,
+                'month'  => $month,
                 'status' => $response->status(),
             ]);
 
@@ -286,8 +286,8 @@ final readonly class TravelpayoutsPriceProvider implements PriceProvider
          */
         if (! is_string($currency) || mb_strtolower($currency) !== self::CURRENCY) {
             $this->warn('Travelpayouts answered in the wrong currency.', [
-                'route' => $route,
-                'month' => $month,
+                'route'    => $route,
+                'month'    => $month,
                 'currency' => is_string($currency) ? $currency : gettype($currency),
             ]);
 

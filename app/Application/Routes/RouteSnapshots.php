@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace App\Application\Routes;
 
+use App\Models\Route;
+use App\Models\CalendarFare;
+use App\Models\PriceObservation;
 use App\Domain\Pricing\DatedFare;
 use App\Domain\Pricing\DealScorer;
 use App\Domain\Pricing\PriceHistory;
-use App\Models\CalendarFare;
-use App\Models\PriceObservation;
-use App\Models\Route;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Turns routes into everything the screens read, in a fixed number of queries.

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\UpdateSettingsRequest;
-use App\Http\Resources\UserSettingsResource;
 use App\Models\User;
 use App\Models\UserSettings;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use App\Http\Requests\UpdateSettingsRequest;
+use App\Http\Resources\UserSettingsResource;
 
 /**
  * How and when Orbit reaches the owner (design/README.md §6).
@@ -86,10 +86,10 @@ final class SettingsController extends Controller
             $minimum = UserSettings::minimumScoreFor($level);
 
             $described[] = [
-                'level' => $level,
-                'name' => $meta['name'],
+                'level'        => $level,
+                'name'         => $meta['name'],
                 'minimumScore' => $minimum,
-                'blurb' => sprintf($meta['blurb'], $minimum),
+                'blurb'        => sprintf($meta['blurb'], $minimum),
             ];
         }
 

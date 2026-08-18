@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Application\Ports\RuleTextParser;
-use App\Application\Rules\RuleViews;
-use App\Http\Requests\ParseRuleRequest;
-use App\Http\Resources\RuleReadingResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use App\Application\Rules\RuleViews;
+use App\Http\Requests\ParseRuleRequest;
+use App\Application\Ports\RuleTextParser;
+use App\Http\Resources\RuleReadingResource;
 
 /**
  * "Here's what we understood" (design/README.md §4).

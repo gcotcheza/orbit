@@ -49,8 +49,8 @@ final class ParseRuleRequest extends FormRequest
              * gets "The text field must be a string." for the ordinary act of
              * clearing the box. `present` still requires the key.
              */
-            'text' => ['present', 'nullable', 'string', 'max:500'],
-            'removed' => ['sometimes', 'array', 'max:50'],
+            'text'      => ['present', 'nullable', 'string', 'max:500'],
+            'removed'   => ['sometimes', 'array', 'max:50'],
             'removed.*' => ['string', 'max:64'],
         ];
     }
@@ -62,7 +62,7 @@ final class ParseRuleRequest extends FormRequest
     {
         return [
             'text.present' => 'Send the text to read, even if it is empty.',
-            'text.max' => 'That is longer than a rule needs to be — 500 characters is the limit.',
+            'text.max'     => 'That is longer than a rule needs to be — 500 characters is the limit.',
         ];
     }
 

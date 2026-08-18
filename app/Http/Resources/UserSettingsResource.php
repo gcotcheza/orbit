@@ -34,13 +34,13 @@ final class UserSettingsResource extends JsonResource
         $settings = $this->resource;
 
         return [
-            'emailAlerts' => $settings->email_alerts,
-            'pushAlerts' => $settings->push_alerts,
+            'emailAlerts'  => $settings->email_alerts,
+            'pushAlerts'   => $settings->push_alerts,
             'weeklyDigest' => $settings->weekly_digest,
 
             'quietHours' => $settings->quiet_hours,
             'quietStart' => $settings->quietStartAt(),
-            'quietEnd' => $settings->quietEndAt(),
+            'quietEnd'   => $settings->quietEndAt(),
 
             // 0 Relaxed | 1 Balanced | 2 Eager. What each one means is in
             // `meta.sensitivities`, from config/orbit.php.

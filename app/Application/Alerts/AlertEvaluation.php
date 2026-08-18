@@ -4,22 +4,22 @@ declare(strict_types=1);
 
 namespace App\Application\Alerts;
 
-use App\Application\Ports\DealNotifier;
-use App\Application\Routes\RouteSnapshots;
-use App\Application\Rules\RuleViews;
-use App\Domain\Alerts\AlertCandidate;
-use App\Domain\Alerts\AlertDecision;
-use App\Domain\Alerts\AlertPolicy;
+use App\Models\User;
+use App\Models\Route;
+use DateTimeInterface;
+use App\Models\DealRule;
+use Carbon\CarbonImmutable;
+use App\Models\UserSettings;
+use Psr\Log\LoggerInterface;
+use App\Domain\Rules\RuleChip;
 use App\Domain\Alerts\AlertType;
 use App\Domain\Alerts\LastAlert;
-use App\Domain\Rules\RuleChip;
-use App\Models\DealRule;
-use App\Models\Route;
-use App\Models\User;
-use App\Models\UserSettings;
-use Carbon\CarbonImmutable;
-use DateTimeInterface;
-use Psr\Log\LoggerInterface;
+use App\Domain\Alerts\AlertPolicy;
+use App\Application\Rules\RuleViews;
+use App\Domain\Alerts\AlertDecision;
+use App\Domain\Alerts\AlertCandidate;
+use App\Application\Ports\DealNotifier;
+use App\Application\Routes\RouteSnapshots;
 
 /**
  * The morning's question, asked once per account: is there anything here worth
@@ -86,12 +86,12 @@ final readonly class AlertEvaluation
          * which is exactly when it stops being logged.
          */
         $this->logger->info('Evaluated alerts.', [
-            'user' => $user->getAuthIdentifier(),
-            'route_alerts' => $routes['fired'],
+            'user'           => $user->getAuthIdentifier(),
+            'route_alerts'   => $routes['fired'],
             'routes_too_new' => $routes['immature'],
-            'rule_alerts' => $rules,
-            'minimum_score' => $minimum,
-            'held_until' => $notBefore?->toIso8601String(),
+            'rule_alerts'    => $rules,
+            'minimum_score'  => $minimum,
+            'held_until'     => $notBefore?->toIso8601String(),
         ]);
     }
 

@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Discovery;
 
-use App\Application\Ports\OriginSweepProvider;
-use App\Domain\Discovery\SweptFare;
-use DateTimeImmutable;
-use DateTimeZone;
-use Illuminate\Contracts\Cache\Repository as Cache;
-use Illuminate\Http\Client\Factory as Http;
-use InvalidArgumentException;
-use Psr\Log\LoggerInterface;
 use Throwable;
+use DateTimeZone;
+use DateTimeImmutable;
+use Psr\Log\LoggerInterface;
+use InvalidArgumentException;
+use App\Domain\Discovery\SweptFare;
+use Illuminate\Http\Client\Factory as Http;
+use App\Application\Ports\OriginSweepProvider;
+use Illuminate\Contracts\Cache\Repository as Cache;
 
 /**
  * "What is cheap from Amsterdam, to anywhere" — from `/v2/prices/latest` with
@@ -203,7 +203,7 @@ final readonly class TravelpayoutsSweepProvider implements OriginSweepProvider
             /* Connection refused, DNS, TLS, the read timeout above. */
             $this->warn('Could not reach Travelpayouts for an origin sweep.', [
                 'origin' => $origin,
-                'error' => $e->getMessage(),
+                'error'  => $e->getMessage(),
             ]);
 
             return [];
@@ -241,7 +241,7 @@ final readonly class TravelpayoutsSweepProvider implements OriginSweepProvider
          */
         if (! is_string($currency) || mb_strtolower($currency) !== self::CURRENCY) {
             $this->warn('Travelpayouts answered an origin sweep in the wrong currency.', [
-                'origin' => $origin,
+                'origin'   => $origin,
                 'currency' => is_string($currency) ? $currency : gettype($currency),
             ]);
 

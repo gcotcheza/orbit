@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Domain\Discovery\RouteBaseline;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
+use App\Domain\Discovery\RouteBaseline;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 
 /**
  * What Orbit last measured a route's usual price to be — the relative lane's
@@ -72,8 +72,8 @@ final class DiscoveryBaseline extends Model
     {
         return [
             'median_cents' => 'integer',
-            'sample_days' => 'integer',
-            'measured_at' => 'immutable_datetime',
+            'sample_days'  => 'integer',
+            'measured_at'  => 'immutable_datetime',
         ];
     }
 }

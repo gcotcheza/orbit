@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Models\Route;
 use App\Jobs\PollRoutePrices;
 use App\Jobs\RefreshRouteStats;
-use App\Models\PriceObservation;
-use App\Models\Route;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\PriceObservation;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 /**
  * Sixty mornings of price history, for the routes a fake provider is pricing.

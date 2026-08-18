@@ -4,24 +4,24 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Domain\Alerts\AlertType;
-use App\Jobs\PollRoutePrices;
-use App\Jobs\RefreshRouteStats;
-use App\Models\Alert;
-use App\Models\CalendarFare;
-use App\Models\DealRule;
-use App\Models\PriceObservation;
-use App\Models\Route;
-use App\Models\RouteStats;
+use Tests\TestCase;
 use App\Models\User;
+use App\Models\Alert;
+use App\Models\Route;
+use App\Models\DealRule;
+use App\Models\RouteStats;
+use App\Models\CalendarFare;
+use App\Jobs\PollRoutePrices;
 use App\Models\WatchlistItem;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Jobs\RefreshRouteStats;
+use App\Domain\Alerts\AlertType;
+use App\Models\PriceObservation;
+use Tests\Concerns\RunsCommands;
+use Tests\Concerns\BuildsRouteData;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\Concerns\BuildsRouteData;
-use Tests\Concerns\RunsCommands;
-use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * `orbit:reset-history` — the one-day command.
@@ -112,20 +112,20 @@ final class ResetHistoryTest extends TestCase
         $this->watch($user, $route);
 
         DealRule::query()->create([
-            'user_id' => $user->id,
+            'user_id'  => $user->id,
             'raw_text' => 'somewhere sunny under €80',
             'criteria' => ['vibes' => ['sunny'], 'max_price_cents' => 8000],
-            'active' => true,
+            'active'   => true,
         ]);
 
         Alert::query()->create([
-            'user_id' => $user->id,
-            'route_id' => $route->id,
-            'type' => AlertType::RouteDeal,
-            'score' => 88,
-            'price_cents' => 7400,
-            'payload' => ['routeCode' => $route->code, 'priceCents' => 7400],
-            'channel' => Alert::CHANNEL_MAIL,
+            'user_id'      => $user->id,
+            'route_id'     => $route->id,
+            'type'         => AlertType::RouteDeal,
+            'score'        => 88,
+            'price_cents'  => 7400,
+            'payload'      => ['routeCode' => $route->code, 'priceCents' => 7400],
+            'channel'      => Alert::CHANNEL_MAIL,
             'triggered_at' => Date::now(),
             'delivered_at' => Date::now(),
         ]);

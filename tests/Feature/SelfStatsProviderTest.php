@@ -4,21 +4,21 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Application\Ports\PriceStatsProvider;
-use App\Domain\Pricing\PriceStats;
-use App\Infrastructure\Pricing\FakeStatsProvider;
-use App\Infrastructure\Pricing\SelfStatsProvider;
+use Tests\TestCase;
+use App\Models\Route;
+use ReflectionProperty;
+use App\Models\RouteStats;
+use App\Models\CalendarFare;
 use App\Jobs\PollRoutePrices;
 use App\Jobs\RefreshRouteStats;
-use App\Models\CalendarFare;
 use App\Models\PriceObservation;
-use App\Models\Route;
-use App\Models\RouteStats;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\Pricing\PriceStats;
 use Illuminate\Support\Facades\Date;
 use PHPUnit\Framework\Attributes\Test;
-use ReflectionProperty;
-use Tests\TestCase;
+use App\Application\Ports\PriceStatsProvider;
+use App\Infrastructure\Pricing\FakeStatsProvider;
+use App\Infrastructure\Pricing\SelfStatsProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * What a route usually costs, computed from Orbit's own fares.
@@ -109,10 +109,10 @@ final class SelfStatsProviderTest extends TestCase
 
         /* A peak-season fare nine months out — real, fetched, and not "usual". */
         CalendarFare::query()->create([
-            'route_id' => $route->id,
+            'route_id'       => $route->id,
             'departure_date' => Date::now()->startOfDay()->addDays(270)->toDateString(),
-            'price_cents' => 30000,
-            'fetched_at' => Date::now(),
+            'price_cents'    => 30000,
+            'fetched_at'     => Date::now(),
         ]);
 
         $stats = $this->provider()->statsFor('AMS', 'LIS');
@@ -134,10 +134,10 @@ final class SelfStatsProviderTest extends TestCase
 
         foreach ([$days => 2000, $days + 1 => 8000] as $ahead => $cents) {
             CalendarFare::query()->create([
-                'route_id' => $route->id,
+                'route_id'       => $route->id,
                 'departure_date' => Date::now()->startOfDay()->addDays($ahead)->toDateString(),
-                'price_cents' => $cents,
-                'fetched_at' => Date::now(),
+                'price_cents'    => $cents,
+                'fetched_at'     => Date::now(),
             ]);
         }
 
@@ -238,7 +238,7 @@ final class SelfStatsProviderTest extends TestCase
          * has moved on, and the kind of outlier that would drag a max, and with
          * it the top of every percentile, for a year. */
         PriceObservation::query()->create([
-            'route_id' => $route->id,
+            'route_id'    => $route->id,
             'observed_on' => Date::now()->startOfDay()->subDays(400)->toDateString(),
             'price_cents' => 99900,
         ]);
@@ -333,9 +333,9 @@ final class SelfStatsProviderTest extends TestCase
     public function the_configured_maturity_and_lookback_reach_the_adapter(): void
     {
         config([
-            'orbit.providers.stats' => 'self',
+            'orbit.providers.stats'                 => 'self',
             'orbit.selfstats.maturity_observations' => 17,
-            'orbit.selfstats.history_days' => 111,
+            'orbit.selfstats.history_days'          => 111,
         ]);
 
         $provider = $this->app->make(PriceStatsProvider::class);
@@ -426,10 +426,10 @@ final class SelfStatsProviderTest extends TestCase
 
         foreach ($cents as $index => $value) {
             CalendarFare::query()->create([
-                'route_id' => $route->id,
+                'route_id'       => $route->id,
                 'departure_date' => $first->copy()->addDays($index)->toDateString(),
-                'price_cents' => $value,
-                'fetched_at' => Date::now(),
+                'price_cents'    => $value,
+                'fetched_at'     => Date::now(),
             ]);
         }
     }
@@ -445,7 +445,7 @@ final class SelfStatsProviderTest extends TestCase
 
         foreach ($cents as $index => $value) {
             PriceObservation::query()->create([
-                'route_id' => $route->id,
+                'route_id'    => $route->id,
                 'observed_on' => $today->copy()->subDays(count($cents) - 1 - $index)->toDateString(),
                 'price_cents' => $value,
             ]);

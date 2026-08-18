@@ -35,8 +35,8 @@ final class RuleMatchAlert extends AlertNotification
             ->subject($this->notice->subject())
             ->markdown('mail.rule-match', [
                 'notice' => $this->notice,
-                'deals' => array_slice($this->notice->deals, 0, $cap),
-                'more' => max(0, count($this->notice->deals) - $cap),
+                'deals'  => array_slice($this->notice->deals, 0, $cap),
+                'more'   => max(0, count($this->notice->deals) - $cap),
             ]);
     }
 }

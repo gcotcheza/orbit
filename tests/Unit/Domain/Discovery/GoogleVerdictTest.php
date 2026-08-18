@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Discovery;
 
-use App\Domain\Discovery\GoogleVerdict;
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\Test;
+use App\Domain\Discovery\GoogleVerdict;
 
 /**
  * The rule that decides whether a card may say "verified", and the three real
@@ -108,11 +108,11 @@ final class GoogleVerdictTest extends TestCase
         $verdict = new GoogleVerdict('low', 4800, 5500, 17500);
 
         $this->assertSame([
-            'level' => 'low',
-            'lowest' => 4800,
-            'typical_low' => 5500,
+            'level'        => 'low',
+            'lowest'       => 4800,
+            'typical_low'  => 5500,
             'typical_high' => 17500,
-            'confirmed' => true,
+            'confirmed'    => true,
         ], $verdict->toArray());
     }
 }

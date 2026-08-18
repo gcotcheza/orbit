@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Application\Alerts;
 
-use App\Domain\Alerts\QuietHours;
-use App\Models\UserSettings;
-use Carbon\CarbonImmutable;
 use DateTimeInterface;
+use Carbon\CarbonImmutable;
+use App\Models\UserSettings;
+use App\Domain\Alerts\QuietHours;
 
 /**
  * When this account may be interrupted — the one place quiet hours stop being a

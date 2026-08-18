@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Application\Rules\RuleMatches;
-use App\Models\Airport;
-use App\Models\CalendarFare;
-use App\Models\DealRule;
 use App\Models\Route;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Date;
+use App\Models\Airport;
+use App\Models\DealRule;
+use App\Models\CalendarFare;
 use Psr\Log\LoggerInterface;
+use Illuminate\Support\Facades\Date;
+use App\Application\Rules\RuleMatches;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
  * Go and find out what a rule is worth.
@@ -118,7 +118,7 @@ final class SweepRuleFares implements ShouldQueue
             $route = Route::query()->firstOrCreate(
                 ['code' => $code],
                 [
-                    'origin_airport_id' => $airports[$origin],
+                    'origin_airport_id'      => $airports[$origin],
                     'destination_airport_id' => $airports[$destination],
                 ],
             );
@@ -127,12 +127,12 @@ final class SweepRuleFares implements ShouldQueue
         }
 
         $logger->info('Swept a deal rule.', [
-            'rule' => $rule->id,
+            'rule'       => $rule->id,
             'candidates' => count($codes),
-            'polled' => count($sweeping),
-            'fresh' => count($codes) - count($wanted),
-            'dropped' => $dropped,
-            'cap' => $cap,
+            'polled'     => count($sweeping),
+            'fresh'      => count($codes) - count($wanted),
+            'dropped'    => $dropped,
+            'cap'        => $cap,
             /* The other half of the budget, so one line says what a sweep cost. */
             'horizon_days' => $horizon,
         ]);

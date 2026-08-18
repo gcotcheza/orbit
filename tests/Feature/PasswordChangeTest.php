@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Tests\TestCase;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
+use Illuminate\Support\Facades\Session;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * `PUT /api/profile/password` — the owner rotating their own password.
@@ -45,7 +45,7 @@ final class PasswordChangeTest extends TestCase
         parent::setUp();
 
         $this->owner = User::factory()->create([
-            'email' => 'owner@orbit.test',
+            'email'    => 'owner@orbit.test',
             'password' => self::CURRENT,
         ]);
     }
@@ -58,8 +58,8 @@ final class PasswordChangeTest extends TestCase
     private static function body(string $current = self::CURRENT, string $next = self::NEXT, ?string $confirmation = null): array
     {
         return [
-            'current_password' => $current,
-            'password' => $next,
+            'current_password'      => $current,
+            'password'              => $next,
             'password_confirmation' => $confirmation ?? $next,
         ];
     }
@@ -260,7 +260,7 @@ final class PasswordChangeTest extends TestCase
         $cookie = (string) config('session.cookie');
 
         $login = $this->postJson('/login', [
-            'email' => $this->owner->email,
+            'email'    => $this->owner->email,
             'password' => self::CURRENT,
         ])->assertOk();
 

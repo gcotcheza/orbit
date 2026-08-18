@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Application\Alerts\AlertLedger;
-use App\Application\Alerts\DeliveryWindow;
-use App\Application\Alerts\DigestBuilder;
-use App\Application\Ports\DealNotifier;
-use App\Domain\Alerts\AlertType;
 use App\Models\User;
 use App\Models\UserSettings;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Date;
 use Psr\Log\LoggerInterface;
+use App\Domain\Alerts\AlertType;
+use Illuminate\Support\Facades\Date;
+use App\Application\Alerts\AlertLedger;
+use App\Application\Ports\DealNotifier;
+use App\Application\Alerts\DigestBuilder;
+use App\Application\Alerts\DeliveryWindow;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
  * Sunday, 09:00 Europe/Amsterdam.
@@ -92,10 +92,10 @@ final class SendWeeklyDigest implements ShouldQueue
         );
 
         $logger->info('Sent a weekly digest.', [
-            'user' => $user->getAuthIdentifier(),
+            'user'   => $user->getAuthIdentifier(),
             'routes' => count($digest->routes),
-            'rules' => count($digest->rules),
-            'week' => count($digest->week),
+            'rules'  => count($digest->rules),
+            'week'   => count($digest->week),
         ]);
     }
 }

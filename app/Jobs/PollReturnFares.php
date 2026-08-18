@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Application\Ports\ReturnTripProvider;
-use App\Domain\Pricing\ReturnTrip;
-use App\Models\ReturnFare;
 use App\Models\Route;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
+use App\Models\ReturnFare;
+use App\Domain\Pricing\ReturnTrip;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use App\Application\Ports\ReturnTripProvider;
 
 /**
  * Ask the provider what a round trip on one route costs, and write it down.
@@ -134,14 +134,14 @@ final class PollReturnFares implements ShouldQueue
          */
         ReturnFare::query()->upsert(
             array_map(fn (ReturnTrip $trip): array => [
-                'route_id' => $route->id,
+                'route_id'       => $route->id,
                 'departure_date' => $trip->departureDate->format('Y-m-d'),
-                'nights' => $trip->nights,
-                'price_cents' => $trip->cents,
-                'fetched_at' => $now,
-                'found_at' => $trip->foundAt,
-                'created_at' => $now,
-                'updated_at' => $now,
+                'nights'         => $trip->nights,
+                'price_cents'    => $trip->cents,
+                'fetched_at'     => $now,
+                'found_at'       => $trip->foundAt,
+                'created_at'     => $now,
+                'updated_at'     => $now,
             ], $trips),
             ['route_id', 'departure_date', 'nights'],
             /*

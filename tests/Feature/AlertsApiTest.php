@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Domain\Alerts\AlertType;
-use App\Models\Alert;
+use Tests\TestCase;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Date;
-use PHPUnit\Framework\Attributes\Test;
+use App\Models\Alert;
+use App\Domain\Alerts\AlertType;
+use Tests\Concerns\BuildsRuleData;
 use Tests\Concerns\BuildsAlertData;
 use Tests\Concerns\BuildsRouteData;
-use Tests\Concerns\BuildsRuleData;
-use Tests\TestCase;
+use Illuminate\Support\Facades\Date;
+use PHPUnit\Framework\Attributes\Test;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * `GET /api/alerts` — what Orbit has actually said.
@@ -107,8 +107,8 @@ final class AlertsApiTest extends TestCase
         $this->makeRouteWithFares('AMS', 'FAO', ['2026-09-04' => 3900]);
 
         $rule = $this->makeRule($this->owner, 'a beach somewhere under €80', [
-            'origins' => ['AMS'],
-            'vibes' => ['beach'],
+            'origins'       => ['AMS'],
+            'vibes'         => ['beach'],
             'maxPriceCents' => 8000,
         ]);
 
@@ -142,10 +142,10 @@ final class AlertsApiTest extends TestCase
     public function the_digest_has_no_route_and_no_price(): void
     {
         Alert::query()->create([
-            'user_id' => $this->owner->id,
-            'type' => AlertType::WeeklyDigest,
-            'payload' => ['routes' => 2, 'rules' => 1, 'week' => 3, 'headline' => 'Your week in fares'],
-            'channel' => Alert::CHANNEL_MAIL,
+            'user_id'      => $this->owner->id,
+            'type'         => AlertType::WeeklyDigest,
+            'payload'      => ['routes' => 2, 'rules' => 1, 'week' => 3, 'headline' => 'Your week in fares'],
+            'channel'      => Alert::CHANNEL_MAIL,
             'triggered_at' => Date::now(),
         ]);
 

@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Application\Routes\BookingLink;
-use App\Application\Routes\MonthCalendar;
-use App\Domain\Pricing\DatedFare;
-use App\Http\Resources\RouteCalendarResource;
-use App\Models\CalendarFare;
 use App\Models\Route;
 use Carbon\CarbonImmutable;
-use Illuminate\Http\JsonResponse;
+use App\Models\CalendarFare;
 use Illuminate\Http\Request;
+use App\Domain\Pricing\DatedFare;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Date;
+use App\Application\Routes\BookingLink;
+use App\Application\Routes\MonthCalendar;
+use App\Http\Resources\RouteCalendarResource;
 
 /**
  * "When is it cheap?" — one month of one route (design/README.md §3).
@@ -96,10 +96,10 @@ final class RouteCalendarController extends Controller
          */
         return RouteCalendarResource::make($calendar)
             ->additional(['meta' => [
-                'code' => $route->code,
-                'month' => $month,
+                'code'    => $route->code,
+                'month'   => $month,
                 'booking' => [
-                    'aviasales' => BookingLink::aviasalesTemplate($route),
+                    'aviasales'  => BookingLink::aviasalesTemplate($route),
                     'skyscanner' => BookingLink::skyscannerTemplate($route),
                 ],
             ]])

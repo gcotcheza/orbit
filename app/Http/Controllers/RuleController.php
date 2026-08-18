@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Application\Ports\RuleTextParser;
+use App\Models\User;
+use App\Models\DealRule;
+use App\Jobs\SweepRuleFares;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use App\Application\Rules\RuleView;
 use App\Application\Rules\RuleViews;
+use App\Http\Resources\RuleResource;
 use App\Http\Requests\ParseRuleRequest;
 use App\Http\Requests\UpdateRuleRequest;
-use App\Http\Resources\RuleResource;
-use App\Jobs\SweepRuleFares;
-use App\Models\DealRule;
-use App\Models\User;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use App\Application\Ports\RuleTextParser;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -48,7 +48,7 @@ final class RuleController extends Controller
 
         return RuleResource::collection($rules)
             ->additional(['meta' => [
-                'count' => count($rules),
+                'count'  => count($rules),
                 'active' => count(array_filter($rules, static fn (RuleView $view): bool => $view->rule->active)),
             ]])
             ->response();
@@ -88,7 +88,7 @@ final class RuleController extends Controller
              */
             'raw_text' => $text,
             'criteria' => $criteria->toArray(),
-            'active' => true,
+            'active'   => true,
         ]);
 
         SweepRuleFares::dispatch($rule->id);

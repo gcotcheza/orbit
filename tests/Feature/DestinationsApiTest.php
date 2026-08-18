@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Tests\TestCase;
+use App\Models\User;
 use App\Models\Airport;
 use App\Models\Destination;
-use App\Models\User;
+use PHPUnit\Framework\Attributes\Test;
 use Database\Seeders\DestinationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
 
 /**
  * `GET /api/destinations` — what the add-route form offers.
@@ -60,9 +60,9 @@ final class DestinationsApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0', [
-                'iata' => 'BIO',
-                'city' => 'Bilbao',
-                'country' => 'Spain',
+                'iata'        => 'BIO',
+                'city'        => 'Bilbao',
+                'country'     => 'Spain',
                 'countryCode' => 'ES',
             ])
             ->assertJsonPath('meta.count', 1);
@@ -181,16 +181,16 @@ final class DestinationsApiTest extends TestCase
     private function destination(string $iata, string $city, string $country, string $countryCode): Airport
     {
         $airport = Airport::factory()->create([
-            'iata' => $iata,
-            'city' => $city,
-            'country' => $country,
+            'iata'         => $iata,
+            'city'         => $city,
+            'country'      => $country,
             'country_code' => $countryCode,
         ]);
 
         Destination::query()->create([
             'airport_id' => $airport->id,
-            'vibes' => ['city'],
-            'warmth' => array_fill_keys(range(1, 12), 3),
+            'vibes'      => ['city'],
+            'warmth'     => array_fill_keys(range(1, 12), 3),
         ]);
 
         return $airport;

@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Pricing;
 
-use App\Application\Ports\ReturnTripProvider;
+use Throwable;
+use DateTimeZone;
+use DateTimeImmutable;
+use Psr\Log\LoggerInterface;
+use InvalidArgumentException;
 use App\Domain\Pricing\NightsBand;
 use App\Domain\Pricing\ReturnTrip;
-use DateTimeImmutable;
-use DateTimeZone;
-use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Http\Client\Factory as Http;
-use InvalidArgumentException;
-use Psr\Log\LoggerInterface;
-use Throwable;
+use App\Application\Ports\ReturnTripProvider;
+use Illuminate\Contracts\Cache\Repository as Cache;
 
 /**
  * Real round-trip fares, from Travelpayouts' `/v2/prices/latest`.
@@ -250,14 +250,14 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
                      * part of an HTTP request that gets written to an access
                      * log, a proxy trace and an exception report by default.
                      */
-                    'X-Access-Token' => $this->token,
+                    'X-Access-Token'  => $this->token,
                     'Accept-Encoding' => 'gzip, deflate',
                 ])
                 ->acceptJson()
                 ->get(self::PATH, [
-                    'origin' => $origin,
+                    'origin'      => $origin,
                     'destination' => $destination,
-                    'currency' => self::CURRENCY,
+                    'currency'    => self::CURRENCY,
                     /*
                      * THE STRING 'false', WHICH IS WHAT THIS API ANSWERS TO,
                      * and the parameter that makes this a round-trip request at
@@ -292,7 +292,7 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
 
         if (! $response->successful()) {
             $this->warn('Travelpayouts refused a return-fare request.', [
-                'route' => $route,
+                'route'  => $route,
                 'status' => $response->status(),
             ]);
 
@@ -320,7 +320,7 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
          */
         if (! is_string($currency) || mb_strtolower($currency) !== self::CURRENCY) {
             $this->warn('Travelpayouts answered return fares in the wrong currency.', [
-                'route' => $route,
+                'route'    => $route,
                 'currency' => is_string($currency) ? $currency : gettype($currency),
             ]);
 

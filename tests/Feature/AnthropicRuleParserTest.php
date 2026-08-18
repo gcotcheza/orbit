@@ -4,22 +4,22 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use Anthropic\Client as AnthropicClient;
-use App\Application\Ports\RuleTextParser;
+use Tests\TestCase;
+use RuntimeException;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Handler\MockHandler;
+use Illuminate\Support\Facades\Log;
 use App\Domain\Rules\RuleVocabulary;
-use App\Infrastructure\Nlp\AnthropicRuleTextParser;
-use App\Infrastructure\Nlp\RegexRuleTextParser;
 use App\Infrastructure\Nlp\RulePrompt;
 use GuzzleHttp\Client as GuzzleClient;
-use GuzzleHttp\Handler\MockHandler;
-use GuzzleHttp\HandlerStack;
+use PHPUnit\Framework\Attributes\Test;
+use Anthropic\Client as AnthropicClient;
+use App\Application\Ports\RuleTextParser;
 use GuzzleHttp\Psr7\Request as PsrRequest;
 use GuzzleHttp\Psr7\Response as PsrResponse;
-use Illuminate\Support\Facades\Log;
-use PHPUnit\Framework\Attributes\Test;
 use Psr\Http\Client\NetworkExceptionInterface;
-use RuntimeException;
-use Tests\TestCase;
+use App\Infrastructure\Nlp\RegexRuleTextParser;
+use App\Infrastructure\Nlp\AnthropicRuleTextParser;
 
 /**
  * The parser that will run the day a key exists.
@@ -54,7 +54,7 @@ final class AnthropicRuleParserTest extends TestCase
                 apiKey: 'test-key-not-a-real-one',
                 requestOptions: [
                     'transporter' => new GuzzleClient([
-                        'handler' => HandlerStack::create(new MockHandler($responses)),
+                        'handler'     => HandlerStack::create(new MockHandler($responses)),
                         'http_errors' => false,
                     ]),
                     /* No retries, so one canned response is one call. */
@@ -75,14 +75,14 @@ final class AnthropicRuleParserTest extends TestCase
     private function message(array $overrides = []): PsrResponse
     {
         return new PsrResponse(200, ['Content-Type' => 'application/json'], (string) json_encode([
-            'id' => 'msg_01',
-            'type' => 'message',
-            'role' => 'assistant',
-            'model' => 'claude-haiku-4-5-20251001',
-            'content' => [],
-            'stop_reason' => 'end_turn',
+            'id'            => 'msg_01',
+            'type'          => 'message',
+            'role'          => 'assistant',
+            'model'         => 'claude-haiku-4-5-20251001',
+            'content'       => [],
+            'stop_reason'   => 'end_turn',
             'stop_sequence' => null,
-            'usage' => ['input_tokens' => 120, 'output_tokens' => 40],
+            'usage'         => ['input_tokens' => 120, 'output_tokens' => 40],
             ...$overrides,
         ]));
     }
@@ -103,12 +103,12 @@ final class AnthropicRuleParserTest extends TestCase
     public function it_reads_the_models_json_into_criteria(): void
     {
         $criteria = $this->parser([$this->answering([
-            'origins' => ['AMS', 'EIN'],
-            'max_price_euros' => 80,
+            'origins'            => ['AMS', 'EIN'],
+            'max_price_euros'    => 80,
             'trip_length_nights' => [2, 3],
-            'depart_weekdays' => [5],
-            'date_window' => ['from_month' => 3, 'to_month' => 5],
-            'vibes' => ['sunny'],
+            'depart_weekdays'    => [5],
+            'date_window'        => ['from_month' => 3, 'to_month' => 5],
+            'vibes'              => ['sunny'],
         ])])->parse(self::SENTENCE)->criteria();
 
         $this->assertSame(['AMS', 'EIN'], $criteria->origins);
@@ -126,12 +126,12 @@ final class AnthropicRuleParserTest extends TestCase
     public function the_models_answer_becomes_the_same_chips_any_other_reading_would(): void
     {
         $chips = $this->parser([$this->answering([
-            'origins' => [],
-            'max_price_euros' => 80,
+            'origins'            => [],
+            'max_price_euros'    => 80,
             'trip_length_nights' => null,
-            'depart_weekdays' => [],
-            'date_window' => null,
-            'vibes' => ['sunny'],
+            'depart_weekdays'    => [],
+            'date_window'        => null,
+            'vibes'              => ['sunny'],
         ])])->parse(self::SENTENCE)->chips;
 
         $this->assertSame(['max_price', 'vibe:sunny'], array_column($chips, 'id'));
@@ -157,7 +157,7 @@ final class AnthropicRuleParserTest extends TestCase
     public function a_refusal_falls_back_to_the_regex_parser(): void
     {
         $criteria = $this->parser([$this->message([
-            'stop_reason' => 'refusal',
+            'stop_reason'  => 'refusal',
             'stop_details' => ['type' => 'refusal', 'category' => 'cyber', 'explanation' => 'declined'],
         ])])->parse(self::SENTENCE)->criteria();
 
@@ -176,7 +176,7 @@ final class AnthropicRuleParserTest extends TestCase
     {
         $criteria = $this->parser([$this->message([
             'stop_reason' => 'max_tokens',
-            'content' => [['type' => 'text', 'text' => '{"origins":["AM']],
+            'content'     => [['type' => 'text', 'text' => '{"origins":["AM']],
         ])])->parse(self::SENTENCE)->criteria();
 
         $this->assertSame(8000, $criteria->maxPriceCents);
@@ -206,7 +206,7 @@ final class AnthropicRuleParserTest extends TestCase
     {
         $criteria = $this->parser([
             new PsrResponse(500, ['Content-Type' => 'application/json'], (string) json_encode([
-                'type' => 'error',
+                'type'  => 'error',
                 'error' => ['type' => 'api_error', 'message' => 'Internal server error'],
             ])),
         ])->parse(self::SENTENCE)->criteria();

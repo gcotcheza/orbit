@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Support;
 
-use App\Application\Ports\PriceProvider;
-use App\Domain\Pricing\DatedFare;
 use DateTimeImmutable;
+use App\Domain\Pricing\DatedFare;
+use App\Application\Ports\PriceProvider;
 
 /**
  * A fare provider that answers whatever a test tells it to, and remembers being

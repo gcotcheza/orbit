@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Application\Routes\FareFreshness;
-use App\Application\Routes\RouteSnapshots;
-use App\Http\Requests\LookupRouteRequest;
-use App\Http\Resources\RouteDetailResource;
-use App\Models\Route;
 use App\Models\User;
-use Illuminate\Http\JsonResponse;
+use App\Models\Route;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use App\Application\Routes\FareFreshness;
+use App\Http\Requests\LookupRouteRequest;
+use App\Application\Routes\RouteSnapshots;
+use App\Http\Resources\RouteDetailResource;
 
 /**
  * One route, in full (design/README.md §2), and the way to reach one Orbit has
@@ -97,7 +97,7 @@ final class RouteController extends Controller
         $route = Route::query()->firstOrCreate(
             ['code' => Route::codeFor($origin->iata, $destination->iata)],
             [
-                'origin_airport_id' => $origin->id,
+                'origin_airport_id'      => $origin->id,
                 'destination_airport_id' => $destination->id,
             ],
         );
@@ -139,7 +139,7 @@ final class RouteController extends Controller
         return RouteDetailResource::make($snapshots->of($route))
             ->additional(['meta' => [
                 'watched' => self::isWatched($request, $route),
-                'fares' => [
+                'fares'   => [
                     /*
                      * A TIMESTAMP, in the owner's timezone, and the only one in
                      * this API — every other date here is a bare `YYYY-MM-DD`
@@ -148,7 +148,7 @@ final class RouteController extends Controller
                      * the screen says with it when a refresh could not be made.
                      */
                     'fetchedAt' => $fetchedAt?->setTimezone((string) config('orbit.timezone'))->toIso8601String(),
-                    'fresh' => $freshness->isFresh($fetchedAt),
+                    'fresh'     => $freshness->isFresh($fetchedAt),
                 ],
             ]])
             ->response()

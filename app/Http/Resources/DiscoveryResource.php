@@ -68,7 +68,7 @@ final class DiscoveryResource extends JsonResource
              */
             'lane' => $discovery->lane->value,
 
-            'origin' => AirportResource::make($discovery->origin),
+            'origin'      => AirportResource::make($discovery->origin),
             'destination' => AirportResource::make($discovery->destination),
 
             'price' => Euros::from($discovery->price_cents),
@@ -102,7 +102,7 @@ final class DiscoveryResource extends JsonResource
              * pair — and the client draws no line rather than a zero.
              */
             'percentile' => $discovery->percentile === null ? null : round($discovery->percentile, 1),
-            'savings' => $discovery->savings_cents === null ? null : Euros::from($discovery->savings_cents),
+            'savings'    => $discovery->savings_cents === null ? null : Euros::from($discovery->savings_cents),
 
             /*
              * WHEN THE PRICE WAS FOUND — the third date, and the one this whole
@@ -151,12 +151,12 @@ final class DiscoveryResource extends JsonResource
         $google = $discovery->google_verdict;
 
         return [
-            'verified' => $verified,
-            'label' => $verified ? 'Verified low by Google' : 'Unverified',
-            'level' => is_string($google['level'] ?? null) ? $google['level'] : null,
+            'verified'     => $verified,
+            'label'        => $verified ? 'Verified low by Google' : 'Unverified',
+            'level'        => is_string($google['level'] ?? null) ? $google['level'] : null,
             'googleLowest' => is_int($google['lowest'] ?? null) ? Euros::from($google['lowest']) : null,
-            'typicalLow' => is_int($google['typical_low'] ?? null) ? Euros::from($google['typical_low']) : null,
-            'typicalHigh' => is_int($google['typical_high'] ?? null) ? Euros::from($google['typical_high']) : null,
+            'typicalLow'   => is_int($google['typical_low'] ?? null) ? Euros::from($google['typical_low']) : null,
+            'typicalHigh'  => is_int($google['typical_high'] ?? null) ? Euros::from($google['typical_high']) : null,
         ];
     }
 }

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Domain\Alerts\AlertType;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
+use App\Domain\Alerts\AlertType;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -91,10 +91,10 @@ final class Alert extends Model
     protected function casts(): array
     {
         return [
-            'type' => AlertType::class,
-            'score' => 'integer',
-            'price_cents' => 'integer',
-            'payload' => 'array',
+            'type'         => AlertType::class,
+            'score'        => 'integer',
+            'price_cents'  => 'integer',
+            'payload'      => 'array',
             'triggered_at' => 'immutable_datetime',
             'delivered_at' => 'immutable_datetime',
         ];

@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Tests\TestCase;
+use DateTimeImmutable;
+use InvalidArgumentException;
+use App\Domain\Pricing\DatedFare;
+use Illuminate\Support\Facades\Date;
+use PHPUnit\Framework\Attributes\Test;
 use App\Application\Ports\PriceProvider;
 use App\Application\Ports\PriceStatsProvider;
-use App\Domain\Pricing\DatedFare;
-use DateTimeImmutable;
-use Illuminate\Support\Facades\Date;
-use InvalidArgumentException;
-use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
 
 /**
  * The two adapters, and the wiring that chooses them.

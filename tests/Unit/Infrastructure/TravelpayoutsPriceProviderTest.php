@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Infrastructure;
 
-use App\Domain\Pricing\DatedFare;
-use App\Infrastructure\Pricing\TravelpayoutsPriceProvider;
+use Tests\TestCase;
 use DateTimeImmutable;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\Factory as HttpFactory;
+use InvalidArgumentException;
+use App\Domain\Pricing\DatedFare;
+use Tests\Support\RecordingLogger;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use InvalidArgumentException;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\Support\RecordingLogger;
-use Tests\TestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Factory as HttpFactory;
+use App\Infrastructure\Pricing\TravelpayoutsPriceProvider;
 
 /**
  * The real fare adapter, against recorded answers.
@@ -179,14 +179,14 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     {
         Http::fake([self::ENDPOINT => Http::response([
             'currency' => 'eur',
-            'data' => [[
-                'actual' => true,
+            'data'     => [[
+                'actual'      => true,
                 'depart_date' => '2026-09-04',
-                'origin' => 'AMS',
+                'origin'      => 'AMS',
                 'destination' => 'LIS',
                 'return_date' => '',
-                'value' => 88,
-                'found_at' => $value,
+                'value'       => 88,
+                'found_at'    => $value,
             ]],
         ])]);
 
@@ -209,12 +209,12 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     {
         return [
             'a relative phrase the loose parser would accept' => ['tomorrow'],
-            'an offset the loose parser would accept' => ['+3 days'],
-            'a bare time, which would be dated to today' => ['13:51'],
-            'a date that does not exist' => ['2026-02-31T00:00:00Z'],
-            'a local time with no zone' => ['2026-08-14 13:51:45'],
-            'a number' => [1_786_752_000],
-            'nothing at all' => [null],
+            'an offset the loose parser would accept'         => ['+3 days'],
+            'a bare time, which would be dated to today'      => ['13:51'],
+            'a date that does not exist'                      => ['2026-02-31T00:00:00Z'],
+            'a local time with no zone'                       => ['2026-08-14 13:51:45'],
+            'a number'                                        => [1_786_752_000],
+            'nothing at all'                                  => [null],
         ];
     }
 
@@ -385,8 +385,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     {
         Http::fake([self::ENDPOINT => Http::response([
             'currency' => 'eur',
-            'success' => true,
-            'data' => [
+            'success'  => true,
+            'data'     => [
                 ['depart_date' => '2026-09-04', 'value' => 140, 'return_date' => '', 'actual' => true],
                 ['depart_date' => '2026-09-04', 'value' => 88, 'return_date' => '', 'actual' => true],
                 ['depart_date' => '2026-09-04', 'value' => 96, 'return_date' => '', 'actual' => true],
@@ -423,8 +423,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     {
         Http::fake([self::ENDPOINT => Http::response([
             'currency' => 'eur',
-            'success' => true,
-            'data' => [['depart_date' => '2026-02-31', 'value' => 70, 'actual' => true]],
+            'success'  => true,
+            'data'     => [['depart_date' => '2026-02-31', 'value' => 70, 'actual' => true]],
         ])]);
 
         $fares = $this->provider()->cheapestPerDay('AMS', 'LIS', new DateTimeImmutable('2026-02-01'), new DateTimeImmutable('2026-03-31'));

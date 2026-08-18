@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Application\Ports;
 
-use App\Application\Alerts\AlertNotice;
 use App\Models\User;
 use DateTimeInterface;
+use App\Application\Alerts\AlertNotice;
 
 /**
  * Where alerts go.

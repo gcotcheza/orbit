@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Discovery;
 
-use App\Application\Ports\OriginSweepProvider;
-use App\Domain\Discovery\SweptFare;
-use App\Domain\Geo\Haversine;
-use App\Infrastructure\Pricing\FakeFareModel;
 use App\Models\Airport;
+use App\Domain\Geo\Haversine;
+use App\Domain\Discovery\SweptFare;
 use Illuminate\Support\Facades\Date;
+use App\Infrastructure\Pricing\FakeFareModel;
+use App\Application\Ports\OriginSweepProvider;
 
 /**
  * An origin sweep, until there is a token to make a real one.

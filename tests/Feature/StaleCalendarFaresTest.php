@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Application\Ports\PriceProvider;
-use App\Domain\Pricing\DatedFare;
-use App\Jobs\PollRoutePrices;
-use App\Models\CalendarFare;
-use App\Models\PriceObservation;
+use Tests\TestCase;
 use App\Models\Route;
 use DateTimeImmutable;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\CalendarFare;
+use App\Jobs\PollRoutePrices;
+use App\Models\PriceObservation;
+use App\Domain\Pricing\DatedFare;
 use Illuminate\Support\Facades\Date;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
+use App\Application\Ports\PriceProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * A calendar cell whose fare has gone away.

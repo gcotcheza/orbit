@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Notify;
 
-use App\Application\Alerts\AlertNotice;
-use App\Application\Alerts\DigestNotice;
-use App\Application\Alerts\RouteDealNotice;
-use App\Application\Alerts\RuleMatchNotice;
-use App\Application\Ports\DealNotifier;
-use App\Domain\Alerts\AlertType;
 use App\Models\User;
+use DateTimeInterface;
 use App\Models\UserSettings;
-use App\Notifications\AlertNotification;
+use InvalidArgumentException;
+use App\Domain\Alerts\AlertType;
+use App\Notifications\WeeklyDigest;
 use App\Notifications\RouteDealAlert;
 use App\Notifications\RuleMatchAlert;
-use App\Notifications\WeeklyDigest;
-use DateTimeInterface;
-use InvalidArgumentException;
+use App\Application\Alerts\AlertNotice;
+use App\Application\Ports\DealNotifier;
+use App\Application\Alerts\DigestNotice;
+use App\Notifications\AlertNotification;
+use App\Application\Alerts\RouteDealNotice;
+use App\Application\Alerts\RuleMatchNotice;
 
 /**
  * The mail adapter behind App\Application\Ports\DealNotifier.
@@ -104,8 +104,8 @@ final readonly class MailDealNotifier implements DealNotifier
         return match (true) {
             $notice instanceof RouteDealNotice => new RouteDealAlert($notice, $alertIds),
             $notice instanceof RuleMatchNotice => new RuleMatchAlert($notice, $alertIds),
-            $notice instanceof DigestNotice => new WeeklyDigest($notice, $alertIds),
-            default => throw new InvalidArgumentException(sprintf('No mail for [%s].', $notice::class)),
+            $notice instanceof DigestNotice    => new WeeklyDigest($notice, $alertIds),
+            default                            => throw new InvalidArgumentException(sprintf('No mail for [%s].', $notice::class)),
         };
     }
 }

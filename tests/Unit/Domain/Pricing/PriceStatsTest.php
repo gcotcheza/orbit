@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Pricing;
 
-use App\Domain\Pricing\PriceStats;
 use InvalidArgumentException;
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use App\Domain\Pricing\PriceStats;
+use PHPUnit\Framework\Attributes\Test;
 
 /**
  * The five-number summary, and the assumptions the deal score rests on it

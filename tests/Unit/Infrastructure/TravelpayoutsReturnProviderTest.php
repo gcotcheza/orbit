@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Infrastructure;
 
+use Tests\TestCase;
+use DateTimeImmutable;
+use InvalidArgumentException;
 use App\Domain\Pricing\NightsBand;
 use App\Domain\Pricing\ReturnTrip;
-use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
-use DateTimeImmutable;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\Factory as HttpFactory;
+use Tests\Support\RecordingLogger;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\Support\RecordingLogger;
-use Tests\TestCase;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Factory as HttpFactory;
+use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
 
 /**
  * The real round-trip adapter, against recorded answers.
@@ -434,13 +434,13 @@ final class TravelpayoutsReturnProviderTest extends TestCase
     public function an_answer_in_the_wrong_currency_is_refused_entirely(): void
     {
         Http::fake([self::ENDPOINT => Http::response([
-            'success' => true,
+            'success'  => true,
             'currency' => 'rub',
-            'data' => [[
+            'data'     => [[
                 'depart_date' => '2026-09-04',
                 'return_date' => '2026-09-11',
-                'value' => 472,
-                'actual' => true,
+                'value'       => 472,
+                'actual'      => true,
             ]],
         ])]);
 

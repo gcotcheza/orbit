@@ -45,7 +45,7 @@ final class SearchAirportsRequest extends FormRequest
     {
         return [
             'q.required' => 'Say what to look for.',
-            'q.min' => 'Two letters is the shortest thing worth searching for.',
+            'q.min'      => 'Two letters is the shortest thing worth searching for.',
         ];
     }
 

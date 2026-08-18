@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Application\Routes\RouteSnapshots;
-use App\Application\Routes\WatchedRoute;
-use App\Http\Resources\WatchlistRouteResource;
-use App\Models\Route;
 use App\Models\User;
+use App\Models\Route;
+use Illuminate\Http\Request;
 use App\Models\WatchlistItem;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use App\Application\Routes\WatchedRoute;
+use App\Application\Routes\RouteSnapshots;
+use App\Http\Resources\WatchlistRouteResource;
 
 /**
  * Everything the owner is watching — the app's busiest endpoint.
@@ -49,7 +49,7 @@ final class WatchlistController extends Controller
 
         return WatchlistRouteResource::collection($watched)
             ->additional(['meta' => [
-                'count' => $watched->count(),
+                'count'  => $watched->count(),
                 'active' => $watched->filter(fn (WatchedRoute $route): bool => $route->active)->count(),
             ]])
             ->response();

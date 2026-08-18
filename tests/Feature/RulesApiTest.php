@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Jobs\SweepRuleFares;
-use App\Models\DealRule;
-use App\Models\Route;
+use Tests\TestCase;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\Route;
+use App\Models\DealRule;
+use App\Jobs\SweepRuleFares;
+use Tests\Concerns\BuildsRuleData;
+use Tests\Concerns\BuildsRouteData;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\Concerns\BuildsRouteData;
-use Tests\Concerns\BuildsRuleData;
-use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The five endpoints behind the create screen and the watch screen's rules
@@ -185,9 +185,9 @@ final class RulesApiTest extends TestCase
             ->assertOk()
             ->assertJsonStructure(['data' => ['matches' => ['sample' => [[
                 'code',
-                'origin' => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
+                'origin'      => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
                 'destination' => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
-                'cheapest' => ['date', 'price'],
+                'cheapest'    => ['date', 'price'],
                 'watched',
             ]]]]]);
     }
@@ -291,7 +291,7 @@ final class RulesApiTest extends TestCase
     {
         $this->actingAs($this->owner)
             ->postJson('/api/rules', [
-                'text' => 'somewhere sunny under €80 leaving Friday',
+                'text'    => 'somewhere sunny under €80 leaving Friday',
                 'removed' => ['depart'],
             ])
             ->assertCreated()
@@ -317,7 +317,7 @@ final class RulesApiTest extends TestCase
     {
         $this->actingAs($this->owner)
             ->postJson('/api/rules', [
-                'text' => 'somewhere sunny under €80',
+                'text'    => 'somewhere sunny under €80',
                 'removed' => ['max_price', 'vibe:sunny'],
             ])
             ->assertStatus(422);
@@ -351,7 +351,7 @@ final class RulesApiTest extends TestCase
     public function a_stored_rules_chips_are_rebuilt_from_what_was_saved(): void
     {
         $this->makeRule($this->owner, 'somewhere sunny under €80 leaving Friday', [
-            'vibes' => ['sunny'],
+            'vibes'         => ['sunny'],
             'maxPriceCents' => 8000,
         ]);
 

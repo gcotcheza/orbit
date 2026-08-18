@@ -4,43 +4,43 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use Anthropic\Client as AnthropicClient;
+use Illuminate\Http\Request;
+use Laravel\Sanctum\Sanctum;
+use InvalidArgumentException;
+use App\Domain\Rules\RuleMatcher;
+use App\Domain\Alerts\AlertPolicy;
+use App\Domain\Pricing\DealScorer;
+use App\Domain\Rules\RuleVocabulary;
+use App\Domain\Pricing\ScoringPolicy;
+use Illuminate\Support\Facades\Event;
+use GuzzleHttp\Client as GuzzleClient;
 use App\Application\Ports\DealNotifier;
-use App\Application\Ports\OriginSweepProvider;
+use Illuminate\Support\ServiceProvider;
+use Anthropic\Client as AnthropicClient;
 use App\Application\Ports\PriceProvider;
+use Illuminate\Cache\RateLimiting\Limit;
+use App\Application\Ports\RuleTextParser;
+use App\Domain\Discovery\DiscoveryPolicy;
+use Illuminate\Support\Facades\RateLimiter;
+use App\Domain\Discovery\RelativeLanePolicy;
 use App\Application\Ports\PriceStatsProvider;
 use App\Application\Ports\ReturnTripProvider;
-use App\Application\Ports\RuleTextParser;
-use App\Domain\Alerts\AlertPolicy;
-use App\Domain\Discovery\DiscoveryPolicy;
-use App\Domain\Discovery\RelativeLanePolicy;
-use App\Domain\Pricing\DealScorer;
-use App\Domain\Pricing\ScoringPolicy;
-use App\Domain\Rules\RuleMatcher;
-use App\Domain\Rules\RuleVocabulary;
-use App\Infrastructure\Discovery\FakeSweepProvider;
-use App\Infrastructure\Discovery\TravelpayoutsSweepProvider;
-use App\Infrastructure\Nlp\AnthropicRuleTextParser;
+use App\Application\Ports\OriginSweepProvider;
 use App\Infrastructure\Nlp\RegexRuleTextParser;
 use App\Infrastructure\Notify\MailDealNotifier;
-use App\Infrastructure\Notify\MarkAlertsDelivered;
 use App\Infrastructure\Pricing\FakePriceProvider;
-use App\Infrastructure\Pricing\FakeReturnProvider;
 use App\Infrastructure\Pricing\FakeStatsProvider;
 use App\Infrastructure\Pricing\SelfStatsProvider;
+use App\Infrastructure\Verify\GoogleFlightsCheck;
+use App\Infrastructure\Notify\MarkAlertsDelivered;
+use App\Infrastructure\Pricing\FakeReturnProvider;
+use Illuminate\Http\Client\Factory as HttpFactory;
+use App\Infrastructure\Discovery\FakeSweepProvider;
+use App\Infrastructure\Nlp\AnthropicRuleTextParser;
+use Illuminate\Notifications\Events\NotificationSent;
 use App\Infrastructure\Pricing\TravelpayoutsPriceProvider;
 use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
-use App\Infrastructure\Verify\GoogleFlightsCheck;
-use GuzzleHttp\Client as GuzzleClient;
-use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Http\Client\Factory as HttpFactory;
-use Illuminate\Http\Request;
-use Illuminate\Notifications\Events\NotificationSent;
-use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\ServiceProvider;
-use InvalidArgumentException;
-use Laravel\Sanctum\Sanctum;
+use App\Infrastructure\Discovery\TravelpayoutsSweepProvider;
 
 final class AppServiceProvider extends ServiceProvider
 {
@@ -63,14 +63,14 @@ final class AppServiceProvider extends ServiceProvider
          * does not exist.
          */
         $this->app->bind(PriceProvider::class, fn (): PriceProvider => match ($name = config('orbit.providers.price')) {
-            'fake' => new FakePriceProvider,
+            'fake'          => new FakePriceProvider,
             'travelpayouts' => $this->travelpayoutsPrices(),
-            default => throw new InvalidArgumentException(sprintf('Unknown price provider [%s].', is_string($name) ? $name : gettype($name))),
+            default         => throw new InvalidArgumentException(sprintf('Unknown price provider [%s].', is_string($name) ? $name : gettype($name))),
         });
 
         $this->app->bind(PriceStatsProvider::class, fn (): PriceStatsProvider => match ($name = config('orbit.providers.stats')) {
-            'fake' => new FakeStatsProvider,
-            'self' => $this->selfStats(),
+            'fake'  => new FakeStatsProvider,
+            'self'  => $this->selfStats(),
             default => throw new InvalidArgumentException(sprintf('Unknown price statistics provider [%s].', is_string($name) ? $name : gettype($name))),
         });
 
@@ -83,9 +83,9 @@ final class AppServiceProvider extends ServiceProvider
          * returns are still coming from the fake. See config/orbit.php.
          */
         $this->app->bind(ReturnTripProvider::class, fn (): ReturnTripProvider => match ($name = config('orbit.providers.returns')) {
-            'fake' => new FakeReturnProvider,
+            'fake'          => new FakeReturnProvider,
             'travelpayouts' => $this->travelpayoutsReturns(),
-            default => throw new InvalidArgumentException(sprintf('Unknown return-trip provider [%s].', is_string($name) ? $name : gettype($name))),
+            default         => throw new InvalidArgumentException(sprintf('Unknown return-trip provider [%s].', is_string($name) ? $name : gettype($name))),
         });
 
         /*
@@ -101,9 +101,9 @@ final class AppServiceProvider extends ServiceProvider
          * config/orbit.php.
          */
         $this->app->bind(OriginSweepProvider::class, fn (): OriginSweepProvider => match ($name = config('orbit.providers.sweep')) {
-            'fake' => new FakeSweepProvider,
+            'fake'          => new FakeSweepProvider,
             'travelpayouts' => $this->travelpayoutsSweep(),
-            default => throw new InvalidArgumentException(sprintf('Unknown origin sweep provider [%s].', is_string($name) ? $name : gettype($name))),
+            default         => throw new InvalidArgumentException(sprintf('Unknown origin sweep provider [%s].', is_string($name) ? $name : gettype($name))),
         });
 
         /*
@@ -322,9 +322,9 @@ final class AppServiceProvider extends ServiceProvider
             $regex = new RegexRuleTextParser($this->app->make(RuleVocabulary::class));
 
             return match ($name = config('orbit.nlp.parser')) {
-                'regex' => $regex,
+                'regex'     => $regex,
                 'anthropic' => $this->anthropicParser($regex),
-                default => throw new InvalidArgumentException(sprintf('Unknown rule parser [%s].', is_string($name) ? $name : gettype($name))),
+                default     => throw new InvalidArgumentException(sprintf('Unknown rule parser [%s].', is_string($name) ? $name : gettype($name))),
             };
         });
     }
@@ -487,8 +487,8 @@ final class AppServiceProvider extends ServiceProvider
                 requestOptions: [
                     'transporter' => new GuzzleClient([
                         'connect_timeout' => (float) $nlp['connect_timeout'],
-                        'timeout' => (float) $nlp['timeout'],
-                        'http_errors' => false,
+                        'timeout'         => (float) $nlp['timeout'],
+                        'http_errors'     => false,
                     ]),
                     'maxRetries' => (int) $nlp['max_retries'],
                 ],

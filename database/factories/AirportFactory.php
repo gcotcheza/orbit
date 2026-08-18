@@ -26,14 +26,14 @@ final class AirportFactory extends Factory
          * the same letters twice.
          */
         return [
-            'iata' => mb_strtoupper($this->faker->unique()->lexify('???')),
-            'name' => $this->faker->city().' Airport',
-            'city' => $this->faker->city(),
-            'country' => $this->faker->country(),
+            'iata'         => mb_strtoupper($this->faker->unique()->lexify('???')),
+            'name'         => $this->faker->city().' Airport',
+            'city'         => $this->faker->city(),
+            'country'      => $this->faker->country(),
             'country_code' => mb_strtoupper($this->faker->lexify('??')),
-            'lat' => $this->faker->latitude(35, 65),
-            'lng' => $this->faker->longitude(-10, 30),
-            'is_origin' => false,
+            'lat'          => $this->faker->latitude(35, 65),
+            'lng'          => $this->faker->longitude(-10, 30),
+            'is_origin'    => false,
         ];
     }
 

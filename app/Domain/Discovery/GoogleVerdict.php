@@ -113,11 +113,11 @@ final readonly class GoogleVerdict
     public function toArray(): array
     {
         return [
-            'level' => $this->level,
-            'lowest' => $this->lowestCents,
-            'typical_low' => $this->typicalLowCents,
+            'level'        => $this->level,
+            'lowest'       => $this->lowestCents,
+            'typical_low'  => $this->typicalLowCents,
             'typical_high' => $this->typicalHighCents,
-            'confirmed' => $this->confirmsCheap(),
+            'confirmed'    => $this->confirmsCheap(),
         ];
     }
 }

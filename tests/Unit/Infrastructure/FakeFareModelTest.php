@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Infrastructure;
 
-use App\Infrastructure\Pricing\FakeFareModel;
 use DateTimeImmutable;
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\Test;
+use App\Infrastructure\Pricing\FakeFareModel;
 
 /**
  * The pretend airline.

@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
+use Illuminate\Database\Seeder;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 /**
  * The one account this app will ever have.
@@ -61,7 +61,7 @@ final class SingleUserSeeder extends Seeder
         User::query()->updateOrCreate(
             ['email' => $email],
             [
-                'name' => $name,
+                'name'     => $name,
                 'password' => $password, // hashed by the model's cast
                 // There is no verification flow and never will be — see
                 // routes/web.php — so the one account must not be left waiting

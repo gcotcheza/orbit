@@ -96,12 +96,12 @@ final class UpdatePasswordRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'current_password.required' => 'Enter your current password.',
+            'current_password.required'         => 'Enter your current password.',
             'current_password.current_password' => 'That is not your current password.',
-            'password.required' => 'Choose a new password.',
-            'password.min' => 'Use at least 12 characters.',
-            'password.confirmed' => 'The new password and its confirmation do not match.',
-            'password.different' => 'That is already your password. Choose a different one.',
+            'password.required'                 => 'Choose a new password.',
+            'password.min'                      => 'Use at least 12 characters.',
+            'password.confirmed'                => 'The new password and its confirmation do not match.',
+            'password.different'                => 'That is already your password. Choose a different one.',
         ];
     }
 }

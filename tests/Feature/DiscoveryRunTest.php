@@ -4,25 +4,25 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Application\Ports\OriginSweepProvider;
-use App\Application\Ports\PriceProvider;
-use App\Domain\Discovery\DiscoveryPolicy;
-use App\Domain\Discovery\Lane;
-use App\Domain\Discovery\RelativeLanePolicy;
-use App\Domain\Discovery\SweptFare;
-use App\Jobs\DiscoverDeals;
+use Tests\TestCase;
+use DateTimeImmutable;
 use App\Models\Airport;
 use App\Models\Discovery;
+use App\Jobs\DiscoverDeals;
+use App\Domain\Discovery\Lane;
 use App\Models\DiscoveryBaseline;
-use DateTimeImmutable;
-use Illuminate\Console\Scheduling\Schedule;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\Discovery\SweptFare;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Notification;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
+use App\Application\Ports\PriceProvider;
+use App\Domain\Discovery\DiscoveryPolicy;
+use Illuminate\Console\Scheduling\Schedule;
+use App\Domain\Discovery\RelativeLanePolicy;
+use Illuminate\Support\Facades\Notification;
+use App\Application\Ports\OriginSweepProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The whole funnel, end to end, on a stubbed sweep and the fake price provider.
@@ -244,7 +244,7 @@ final class DiscoveryRunTest extends TestCase
 
         Http::fake([
             self::ACCOUNT => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/account.json')), 200),
-            self::SEARCH => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/google-flights-low.json')), 200),
+            self::SEARCH  => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/google-flights-low.json')), 200),
         ]);
 
         $this->sweeping(['DUS' => [$this->fare('AGP', 29)]]);
@@ -273,7 +273,7 @@ final class DiscoveryRunTest extends TestCase
 
         Http::fake([
             self::ACCOUNT => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/account.json')), 200),
-            self::SEARCH => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/google-flights-typical.json')), 200),
+            self::SEARCH  => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/google-flights-typical.json')), 200),
         ]);
 
         $this->sweeping(['DUS' => [$this->fare('AGP', 29)]]);
@@ -301,7 +301,7 @@ final class DiscoveryRunTest extends TestCase
 
         Http::fake([
             self::ACCOUNT => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/account.json')), 200),
-            self::SEARCH => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/google-flights-low.json')), 200),
+            self::SEARCH  => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/google-flights-low.json')), 200),
         ]);
 
         $this->sweeping(['DUS' => [$this->fare('AGP', 29)]]);
@@ -476,7 +476,7 @@ final class DiscoveryRunTest extends TestCase
 
         Http::fake([
             self::ACCOUNT => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/account.json')), 200),
-            self::SEARCH => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/google-flights-low.json')), 200),
+            self::SEARCH  => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/google-flights-low.json')), 200),
         ]);
 
         Notification::fake();
@@ -504,10 +504,10 @@ final class DiscoveryRunTest extends TestCase
     private function baseline(string $code, int $euros, int $sampleDays = 40, string $measuredAt = '2026-08-14 05:20:00'): DiscoveryBaseline
     {
         return DiscoveryBaseline::query()->create([
-            'code' => $code,
+            'code'         => $code,
             'median_cents' => $euros * 100,
-            'sample_days' => $sampleDays,
-            'measured_at' => $measuredAt,
+            'sample_days'  => $sampleDays,
+            'measured_at'  => $measuredAt,
         ]);
     }
 
@@ -566,16 +566,16 @@ final class DiscoveryRunTest extends TestCase
         $ids = Airport::query()->pluck('id', 'iata');
 
         Discovery::query()->insert([
-            'origin_airport_id' => $ids['DUS'],
+            'origin_airport_id'      => $ids['DUS'],
             'destination_airport_id' => $ids['AGP'],
-            'code' => 'DUS-AGP',
-            'departure_date' => '2026-10-24',
-            'price_cents' => 2900,
-            'cents_per_km' => 1.57,
-            'discovered_at' => '2026-08-16 05:20:00',
-            'expires_at' => '2026-08-17 17:20:00',
-            'created_at' => '2026-08-16 05:20:00',
-            'updated_at' => '2026-08-16 05:20:00',
+            'code'                   => 'DUS-AGP',
+            'departure_date'         => '2026-10-24',
+            'price_cents'            => 2900,
+            'cents_per_km'           => 1.57,
+            'discovered_at'          => '2026-08-16 05:20:00',
+            'expires_at'             => '2026-08-17 17:20:00',
+            'created_at'             => '2026-08-16 05:20:00',
+            'updated_at'             => '2026-08-16 05:20:00',
         ]);
 
         $this->assertSame(Lane::Absolute, Discovery::query()->sole()->lane);
@@ -741,7 +741,7 @@ final class DiscoveryRunTest extends TestCase
 
         Http::fake([
             self::ACCOUNT => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/account.json')), 200),
-            self::SEARCH => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/google-flights-low.json')), 200),
+            self::SEARCH  => Http::response((string) file_get_contents(base_path('tests/Fixtures/serpapi/google-flights-low.json')), 200),
         ]);
 
         $this->baseline('AMS-DUB', 120);

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Tests\TestCase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
 
 /**
  * `build:retain` — the half of `emptyOutDir: false` that stops the disk filling.

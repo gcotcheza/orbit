@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Notify;
 
+use Illuminate\Support\Facades\Date;
 use App\Application\Alerts\AlertLedger;
 use App\Application\Alerts\CarriesAlerts;
 use Illuminate\Notifications\Events\NotificationSent;
-use Illuminate\Support\Facades\Date;
 
 /**
  * Stamps `alerts.delivered_at` when a channel has actually taken the message.

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Airport;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
-use RuntimeException;
 use SplFileObject;
+use RuntimeException;
+use App\Models\Airport;
+use Illuminate\Database\Seeder;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 /**
  * Every airport on Earth that sells a scheduled seat — the other 3,083 rows.
@@ -153,13 +153,13 @@ final class WorldAirportSeeder extends Seeder
         }
 
         return [
-            'iata' => mb_strtoupper($iata),
-            'name' => $name,
-            'city' => $city,
-            'country' => $country,
+            'iata'         => mb_strtoupper($iata),
+            'name'         => $name,
+            'city'         => $city,
+            'country'      => $country,
             'country_code' => mb_strtoupper($countryCode),
-            'lat' => (float) $lat,
-            'lng' => (float) $lng,
+            'lat'          => (float) $lat,
+            'lng'          => (float) $lng,
         ];
     }
 }

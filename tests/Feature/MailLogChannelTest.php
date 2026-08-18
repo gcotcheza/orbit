@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Tests\TestCase;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
+use Illuminate\Notifications\Notification;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\Messages\MailMessage;
 
 /**
  * The staged rollout can be read.
@@ -74,12 +74,12 @@ final class MailLogChannelTest extends TestCase
         config([
             // phpunit.xml pins the array mailer for every other test in the
             // suite. This one is about the log mailer, so it says so.
-            'mail.default' => 'log',
-            'mail.mailers.log.channel' => 'mail',
+            'mail.default'               => 'log',
+            'mail.mailers.log.channel'   => 'mail',
             'logging.channels.mail.path' => $this->mailLog,
             // PRODUCTION'S FLOOR, reproduced. `info` is what .env carries, and
             // it is the whole reason the dedicated channel exists.
-            'logging.channels.single.path' => $this->appLog,
+            'logging.channels.single.path'  => $this->appLog,
             'logging.channels.single.level' => 'info',
         ]);
 

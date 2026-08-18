@@ -4,30 +4,30 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Application\Ports\OriginSweepProvider;
-use App\Application\Ports\PriceProvider;
-use App\Domain\Discovery\CandidateScorer;
-use App\Domain\Discovery\DealCandidate;
-use App\Domain\Discovery\DiscoveryPolicy;
-use App\Domain\Discovery\GoogleVerdict;
-use App\Domain\Discovery\Lane;
-use App\Domain\Discovery\PickReason;
-use App\Domain\Discovery\RelativeLanePolicy;
-use App\Domain\Discovery\RelativeLaneSelector;
-use App\Domain\Discovery\RelativePick;
-use App\Domain\Discovery\RouteBaseline;
-use App\Domain\Geo\Haversine;
-use App\Domain\Pricing\DatedFare;
-use App\Infrastructure\Verify\GoogleFlightsCheck;
+use DateTimeImmutable;
 use App\Models\Airport;
 use App\Models\Discovery;
-use App\Models\DiscoveryBaseline;
 use Carbon\CarbonInterface;
-use DateTimeImmutable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Date;
 use Psr\Log\LoggerInterface;
+use App\Domain\Geo\Haversine;
+use App\Domain\Discovery\Lane;
+use App\Domain\Pricing\DatedFare;
+use App\Models\DiscoveryBaseline;
+use App\Domain\Discovery\PickReason;
+use Illuminate\Support\Facades\Date;
+use App\Domain\Discovery\RelativePick;
+use App\Domain\Discovery\DealCandidate;
+use App\Domain\Discovery\GoogleVerdict;
+use App\Domain\Discovery\RouteBaseline;
+use App\Application\Ports\PriceProvider;
+use App\Domain\Discovery\CandidateScorer;
+use App\Domain\Discovery\DiscoveryPolicy;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use App\Domain\Discovery\RelativeLanePolicy;
+use App\Application\Ports\OriginSweepProvider;
+use App\Domain\Discovery\RelativeLaneSelector;
+use App\Infrastructure\Verify\GoogleFlightsCheck;
 
 /**
  * "Show me the insanely cheap routes I am NOT watching."
@@ -163,8 +163,8 @@ final class DiscoverDeals implements ShouldQueue
         $relative = $this->relativeLane($candidates, $shortlist, $policy, $relativePolicy, $at);
 
         $logger->info('Discovery swept and scored.', [
-            'candidates' => count($candidates),
-            'shortlisted' => count($shortlist),
+            'candidates'     => count($candidates),
+            'shortlisted'    => count($shortlist),
             'relative_picks' => count($relative),
             /*
              * HOW MANY OF THE SECOND LANE'S SLOTS WENT ON A CLAIM VERSUS ON A
@@ -324,7 +324,7 @@ final class DiscoverDeals implements ShouldQueue
         }
 
         $logger->info('Discovery verified its shortlist.', [
-            'kept' => count($verified),
+            'kept'          => count($verified),
             'kept_relative' => count(array_filter(
                 $verified,
                 static fn (array $row): bool => $row[1] === Lane::Relative,
@@ -335,8 +335,8 @@ final class DiscoverDeals implements ShouldQueue
              * is the one that makes tomorrow's run better than today's.
              */
             'baselines_learned' => $learned,
-            'google_budget' => $budget,
-            'google_spent' => $spent,
+            'google_budget'     => $budget,
+            'google_spent'      => $spent,
         ]);
 
         $this->store($verified, $now, $policy);
@@ -542,12 +542,12 @@ final class DiscoverDeals implements ShouldQueue
 
         DiscoveryBaseline::query()->upsert(
             [[
-                'code' => $candidate->routeCode(),
+                'code'         => $candidate->routeCode(),
                 'median_cents' => $median,
-                'sample_days' => count($window),
-                'measured_at' => $measuredAt,
-                'created_at' => $measuredAt,
-                'updated_at' => $measuredAt,
+                'sample_days'  => count($window),
+                'measured_at'  => $measuredAt,
+                'created_at'   => $measuredAt,
+                'updated_at'   => $measuredAt,
             ]],
             ['code'],
             ['median_cents', 'sample_days', 'measured_at', 'updated_at'],
@@ -632,21 +632,21 @@ final class DiscoverDeals implements ShouldQueue
 
         foreach ($verified as [$candidate, $lane, $percentile, $savings, $verdict]) {
             $rows[] = [
-                'origin_airport_id' => $ids[$candidate->originIata],
+                'origin_airport_id'      => $ids[$candidate->originIata],
                 'destination_airport_id' => $ids[$candidate->destinationIata],
-                'code' => $candidate->routeCode(),
+                'code'                   => $candidate->routeCode(),
                 /*
                  * `->value` AND NOT THE ENUM, because `upsert()` goes straight
                  * to the query builder and skips the model's casts — the same
                  * trap `google_verdict` hits three lines down, and the same one
                  * the timestamps above are converted for.
                  */
-                'lane' => $lane->value,
+                'lane'           => $lane->value,
                 'departure_date' => $candidate->departureDate->format('Y-m-d'),
-                'price_cents' => $candidate->cents,
-                'cents_per_km' => $candidate->centsPerKilometre(),
-                'percentile' => $percentile,
-                'savings_cents' => $savings,
+                'price_cents'    => $candidate->cents,
+                'cents_per_km'   => $candidate->centsPerKilometre(),
+                'percentile'     => $percentile,
+                'savings_cents'  => $savings,
                 /*
                  * ENCODED HERE RATHER THAN LEFT TO THE `array` CAST, because
                  * `upsert()` goes straight to the query builder and skips the
@@ -655,11 +655,11 @@ final class DiscoverDeals implements ShouldQueue
                  * silently useless value anywhere it is not.
                  */
                 'google_verdict' => $verdict === null ? null : json_encode($verdict->toArray()),
-                'found_at' => $candidate->foundAt,
-                'discovered_at' => $discoveredAt,
-                'expires_at' => $expiresAt,
-                'created_at' => $discoveredAt,
-                'updated_at' => $discoveredAt,
+                'found_at'       => $candidate->foundAt,
+                'discovered_at'  => $discoveredAt,
+                'expires_at'     => $expiresAt,
+                'created_at'     => $discoveredAt,
+                'updated_at'     => $discoveredAt,
             ];
         }
 

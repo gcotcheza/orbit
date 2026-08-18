@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
-use App\Application\Rules\RuleView;
 use Illuminate\Http\Request;
+use App\Application\Rules\RuleView;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
@@ -41,8 +41,8 @@ final class RuleResource extends JsonResource
         $rule = $view->rule;
 
         return [
-            'id' => $rule->id,
-            'text' => $rule->raw_text,
+            'id'     => $rule->id,
+            'text'   => $rule->raw_text,
             'active' => $rule->active,
             /* The list is newest first, and this is what says so. */
             'createdAt' => $rule->created_at->toIso8601String(),

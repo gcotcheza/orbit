@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Concerns;
 
-use App\Models\CalendarFare;
-use App\Models\PriceObservation;
+use App\Models\User;
 use App\Models\Route;
 use App\Models\RouteStats;
-use App\Models\User;
+use App\Models\CalendarFare;
 use App\Models\WatchlistItem;
+use App\Models\PriceObservation;
 use Illuminate\Support\Facades\Date;
 
 /**
@@ -31,9 +31,9 @@ trait BuildsRouteData
     protected function watch(User $user, Route $route, bool $active = true, int $position = 0): WatchlistItem
     {
         return WatchlistItem::query()->create([
-            'user_id' => $user->id,
+            'user_id'  => $user->id,
             'route_id' => $route->id,
-            'active' => $active,
+            'active'   => $active,
             'position' => $position,
         ]);
     }
@@ -49,7 +49,7 @@ trait BuildsRouteData
 
         foreach ($cents as $index => $value) {
             PriceObservation::query()->create([
-                'route_id' => $route->id,
+                'route_id'    => $route->id,
                 'observed_on' => $end->copy()->subDays(count($cents) - 1 - $index)->toDateString(),
                 'price_cents' => $value,
             ]);
@@ -89,12 +89,12 @@ trait BuildsRouteData
     protected function summarise(Route $route, int $min, int $p25, int $median, int $p75, int $max): void
     {
         RouteStats::query()->create([
-            'route_id' => $route->id,
-            'min_cents' => $min,
-            'p25_cents' => $p25,
+            'route_id'     => $route->id,
+            'min_cents'    => $min,
+            'p25_cents'    => $p25,
             'median_cents' => $median,
-            'p75_cents' => $p75,
-            'max_cents' => $max,
+            'p75_cents'    => $p75,
+            'max_cents'    => $max,
             'refreshed_at' => Date::now(),
         ]);
     }
@@ -114,11 +114,11 @@ trait BuildsRouteData
     {
         foreach ($pricesByDate as $date => $cents) {
             CalendarFare::query()->create([
-                'route_id' => $route->id,
+                'route_id'       => $route->id,
                 'departure_date' => $date,
-                'price_cents' => $cents,
-                'fetched_at' => Date::now(),
-                'found_at' => $foundAt === null ? null : Date::parse($foundAt),
+                'price_cents'    => $cents,
+                'fetched_at'     => Date::now(),
+                'found_at'       => $foundAt === null ? null : Date::parse($foundAt),
             ]);
         }
     }

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Application\Alerts;
 
-use App\Domain\Alerts\AlertType;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use App\Domain\Alerts\AlertType;
 
 /**
  * What one standing rule found this morning — everything of it, in one mail.

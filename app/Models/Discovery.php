@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Domain\Discovery\Lane;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Builder;
+use App\Domain\Discovery\Lane;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -141,15 +141,15 @@ final class Discovery extends Model
              * down; a `=== 'relative'` in a resource would be a third place that
              * has to agree about the spelling.
              */
-            'lane' => Lane::class,
+            'lane'           => Lane::class,
             'departure_date' => 'immutable_date',
-            'found_at' => 'immutable_datetime',
-            'discovered_at' => 'immutable_datetime',
-            'expires_at' => 'immutable_datetime',
-            'price_cents' => 'integer',
-            'savings_cents' => 'integer',
-            'cents_per_km' => 'float',
-            'percentile' => 'float',
+            'found_at'       => 'immutable_datetime',
+            'discovered_at'  => 'immutable_datetime',
+            'expires_at'     => 'immutable_datetime',
+            'price_cents'    => 'integer',
+            'savings_cents'  => 'integer',
+            'cents_per_km'   => 'float',
+            'percentile'     => 'float',
             'google_verdict' => 'array',
         ];
     }

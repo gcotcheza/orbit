@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Application\Routes;
 
+use App\Models\Route;
 use App\Domain\Pricing\DatedFare;
 use App\Domain\Pricing\DealScore;
-use App\Domain\Pricing\PriceHistory;
 use App\Domain\Pricing\PriceStats;
-use App\Models\Route;
+use App\Domain\Pricing\PriceHistory;
 
 /**
  * One route, as every screen needs it: the ends, the price, the judgement and

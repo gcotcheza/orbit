@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Jobs\RefreshRouteStats;
 use App\Models\Route;
+use App\Jobs\RefreshRouteStats;
 use Illuminate\Console\Command;
 
 /**

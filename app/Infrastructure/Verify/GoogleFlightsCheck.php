@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Verify;
 
-use App\Domain\Discovery\GoogleVerdict;
-use DateTimeImmutable;
-use Illuminate\Http\Client\Factory as Http;
-use Psr\Log\LoggerInterface;
 use Throwable;
+use DateTimeImmutable;
+use Psr\Log\LoggerInterface;
+use App\Domain\Discovery\GoogleVerdict;
+use Illuminate\Http\Client\Factory as Http;
 
 /**
  * A second opinion on one fare, from Google Flights via SerpAPI.
@@ -136,7 +136,7 @@ final readonly class GoogleFlightsCheck
         if ($spendable <= 0) {
             $this->logger->info('SerpAPI quota is at or below the reserve — skipping Google verification.', [
                 'remaining' => $remaining,
-                'reserve' => $this->reserve,
+                'reserve'   => $this->reserve,
             ]);
 
             return 0;
@@ -168,10 +168,10 @@ final readonly class GoogleFlightsCheck
                 ->timeout($this->timeout)
                 ->acceptJson()
                 ->get('/search.json', [
-                    'engine' => 'google_flights',
-                    'api_key' => $this->key,
-                    'departure_id' => $originIata,
-                    'arrival_id' => $destinationIata,
+                    'engine'        => 'google_flights',
+                    'api_key'       => $this->key,
+                    'departure_id'  => $originIata,
+                    'arrival_id'    => $destinationIata,
                     'outbound_date' => $departure->format('Y-m-d'),
                     /*
                      * ONE WAY, BECAUSE EVERY PRICE IN THE FUNNEL IS ONE WAY.
@@ -191,7 +191,7 @@ final readonly class GoogleFlightsCheck
                      * is always sent and never configurable.
                      */
                     'currency' => 'EUR',
-                    'hl' => 'en',
+                    'hl'       => 'en',
                     /*
                      * The market the owner books from. Google prices and even
                      * the set of carriers shown vary by country, and the
@@ -210,7 +210,7 @@ final readonly class GoogleFlightsCheck
 
         if (! $response->successful()) {
             $this->logger->info('SerpAPI refused a Google Flights check.', [
-                'route' => $originIata.'-'.$destinationIata,
+                'route'  => $originIata.'-'.$destinationIata,
                 'status' => $response->status(),
             ]);
 

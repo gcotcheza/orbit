@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
-use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
 
 /**
  * The clock, asserted rather than remembered.

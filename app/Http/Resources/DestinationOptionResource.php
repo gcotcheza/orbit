@@ -40,9 +40,9 @@ final class DestinationOptionResource extends JsonResource
         $airport = $this->resource;
 
         return [
-            'iata' => $airport->iata,
-            'city' => $airport->city,
-            'country' => $airport->country,
+            'iata'        => $airport->iata,
+            'city'        => $airport->city,
+            'country'     => $airport->country,
             'countryCode' => $airport->country_code,
         ];
     }

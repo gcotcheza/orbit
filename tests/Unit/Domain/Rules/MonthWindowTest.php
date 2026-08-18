@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Rules;
 
-use App\Domain\Rules\MonthWindow;
 use DateTimeImmutable;
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use App\Domain\Rules\MonthWindow;
+use PHPUnit\Framework\Attributes\Test;
 
 /**
  * "Mar – May", and what it means on a given morning.

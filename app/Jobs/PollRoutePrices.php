@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Application\Ports\PriceProvider;
-use App\Domain\Pricing\DatedFare;
+use App\Models\Route;
 use App\Models\CalendarFare;
 use App\Models\PriceObservation;
-use App\Models\Route;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
+use App\Domain\Pricing\DatedFare;
 use Illuminate\Support\Facades\Date;
+use App\Application\Ports\PriceProvider;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
  * Ask the provider what one route costs, and write down both answers.
@@ -137,13 +137,13 @@ final class PollRoutePrices implements ShouldQueue
          */
         CalendarFare::query()->upsert(
             array_map(fn (DatedFare $fare): array => [
-                'route_id' => $route->id,
+                'route_id'       => $route->id,
                 'departure_date' => $fare->departureDate->format('Y-m-d'),
-                'price_cents' => $fare->cents,
-                'fetched_at' => $now,
-                'found_at' => $fare->foundAt,
-                'created_at' => $now,
-                'updated_at' => $now,
+                'price_cents'    => $fare->cents,
+                'fetched_at'     => $now,
+                'found_at'       => $fare->foundAt,
+                'created_at'     => $now,
+                'updated_at'     => $now,
             ], $fares),
             ['route_id', 'departure_date'],
             /*
@@ -314,11 +314,11 @@ final class PollRoutePrices implements ShouldQueue
          */
         PriceObservation::query()->upsert(
             [[
-                'route_id' => $route->id,
+                'route_id'    => $route->id,
                 'observed_on' => $today->toDateString(),
                 'price_cents' => min(array_map(static fn (DatedFare $fare): int => $fare->cents, $near)),
-                'created_at' => $now,
-                'updated_at' => $now,
+                'created_at'  => $now,
+                'updated_at'  => $now,
             ]],
             ['route_id', 'observed_on'],
             ['price_cents', 'updated_at'],

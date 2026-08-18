@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -46,7 +46,7 @@ final class Destination extends Model
     protected function casts(): array
     {
         return [
-            'vibes' => 'array',
+            'vibes'  => 'array',
             'warmth' => 'array',
         ];
     }

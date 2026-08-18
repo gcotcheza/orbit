@@ -30,12 +30,12 @@ enum ChipKind: string
     public function category(): string
     {
         return match ($this) {
-            self::Origin => 'From',
-            self::MaxPrice => 'Max price',
+            self::Origin     => 'From',
+            self::MaxPrice   => 'Max price',
             self::TripLength => 'Trip length',
-            self::Depart => 'Depart',
+            self::Depart     => 'Depart',
             self::DateWindow => 'Date window',
-            self::Vibe => 'Vibe',
+            self::Vibe       => 'Vibe',
         };
     }
 }
