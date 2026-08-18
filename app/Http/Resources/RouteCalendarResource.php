@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
-use App\Application\Routes\MonthCalendar;
 use DateTimeZone;
 use Illuminate\Http\Request;
+use App\Application\Routes\MonthCalendar;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
@@ -46,7 +46,7 @@ final class RouteCalendarResource extends JsonResource
 
         return [
             'days' => array_map(static fn (array $day): array => [
-                'date' => $day['date'],
+                'date'  => $day['date'],
                 'price' => Euros::from($day['cents']),
                 // cheap | mid | pricey
                 'verdict' => $day['verdict'],
@@ -63,7 +63,7 @@ final class RouteCalendarResource extends JsonResource
             'max' => $calendar->maxCents === null ? null : Euros::from($calendar->maxCents),
 
             'cheapest' => $calendar->cheapest === null ? null : [
-                'date' => $calendar->cheapest->departureDate->format('Y-m-d'),
+                'date'  => $calendar->cheapest->departureDate->format('Y-m-d'),
                 'price' => Euros::from($calendar->cheapest->cents),
             ],
         ];

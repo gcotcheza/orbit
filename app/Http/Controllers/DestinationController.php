@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\DestinationOptionResource;
 use App\Models\Airport;
 use Illuminate\Http\JsonResponse;
+use App\Http\Resources\DestinationOptionResource;
 
 /**
  * Everywhere Orbit knows how to fly to — the add-route form's typeahead.

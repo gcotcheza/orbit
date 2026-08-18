@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Application\Ports;
 
+use DateTimeImmutable;
 use App\Domain\Pricing\NightsBand;
 use App\Domain\Pricing\ReturnTrip;
-use DateTimeImmutable;
 
 /**
  * Where ROUND-TRIP fares come from.

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Jobs\DiscoverDeals;
 use App\Models\Discovery;
+use App\Jobs\DiscoverDeals;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Date;
 

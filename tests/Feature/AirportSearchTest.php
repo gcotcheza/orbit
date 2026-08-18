@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Tests\TestCase;
+use App\Models\User;
 use App\Models\Airport;
 use App\Models\Destination;
-use App\Models\User;
-use Database\Seeders\DestinationSeeder;
-use Database\Seeders\WorldAirportSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
+use Database\Seeders\DestinationSeeder;
+use Database\Seeders\WorldAirportSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * `GET /api/airports?q=` — the other half of the add-route typeahead.
@@ -274,10 +274,10 @@ final class AirportSearchTest extends TestCase
     private function airport(string $iata, string $name, string $city, string $country, string $countryCode): Airport
     {
         return Airport::factory()->create([
-            'iata' => $iata,
-            'name' => $name,
-            'city' => $city,
-            'country' => $country,
+            'iata'         => $iata,
+            'name'         => $name,
+            'city'         => $city,
+            'country'      => $country,
             'country_code' => $countryCode,
         ]);
     }

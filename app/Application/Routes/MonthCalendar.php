@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Application\Routes;
 
-use App\Domain\Pricing\DatedFare;
 use DateTimeImmutable;
+use App\Domain\Pricing\DatedFare;
 
 /**
  * One month of the price heatmap, with each day already judged.
@@ -67,12 +67,12 @@ final readonly class MonthCalendar
             $position = $range > 0 ? ($fare->cents - $low) / $range : 0.5;
 
             $days[] = [
-                'date' => $fare->departureDate->format('Y-m-d'),
-                'cents' => $fare->cents,
+                'date'    => $fare->departureDate->format('Y-m-d'),
+                'cents'   => $fare->cents,
                 'verdict' => match (true) {
-                    $position <= $cheapAt => self::CHEAP,
+                    $position <= $cheapAt  => self::CHEAP,
                     $position >= $priceyAt => self::PRICEY,
-                    default => self::MID,
+                    default                => self::MID,
                 },
                 /*
                  * CARRIED THROUGH UNTOUCHED, and deliberately NOT folded into

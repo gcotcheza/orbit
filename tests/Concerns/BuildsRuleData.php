@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Concerns;
 
+use App\Models\User;
+use App\Models\Route;
 use App\Models\Airport;
 use App\Models\DealRule;
 use App\Models\Destination;
-use App\Models\Route;
-use App\Models\User;
 
 /**
  * Fixtures for the rules engine's tests.
@@ -43,7 +43,7 @@ trait BuildsRuleData
 
         Destination::query()->create([
             'airport_id' => $airport->id,
-            'vibes' => $vibes,
+            'vibes'      => $vibes,
             /* One rating for the whole year keeps the climate gate out of the way unless a test is about it. */
             'warmth' => array_fill(1, 12, $warmth),
         ]);
@@ -71,10 +71,10 @@ trait BuildsRuleData
     protected function makeRule(User $user, string $text, array $criteria, bool $active = true): DealRule
     {
         return DealRule::query()->create([
-            'user_id' => $user->id,
+            'user_id'  => $user->id,
             'raw_text' => $text,
             'criteria' => $criteria,
-            'active' => $active,
+            'active'   => $active,
         ]);
     }
 }

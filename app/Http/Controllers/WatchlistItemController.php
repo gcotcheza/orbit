@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Application\Routes\RouteSnapshots;
-use App\Application\Routes\WatchedRoute;
-use App\Http\Requests\AddWatchedRouteRequest;
-use App\Http\Requests\UpdateWatchedRouteRequest;
-use App\Http\Resources\WatchlistRouteResource;
-use App\Jobs\PollRoutePrices;
-use App\Jobs\RefreshRouteStats;
-use App\Models\Route;
 use App\Models\User;
-use App\Models\WatchlistItem;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Http\JsonResponse;
+use App\Models\Route;
 use Illuminate\Http\Request;
+use App\Jobs\PollRoutePrices;
+use App\Models\WatchlistItem;
+use App\Jobs\RefreshRouteStats;
+use Illuminate\Http\JsonResponse;
+use App\Application\Routes\WatchedRoute;
+use Illuminate\Database\Eloquent\Builder;
+use App\Application\Routes\RouteSnapshots;
+use App\Http\Requests\AddWatchedRouteRequest;
+use App\Http\Resources\WatchlistRouteResource;
+use App\Http\Requests\UpdateWatchedRouteRequest;
 
 /**
  * Adding, pausing and dropping a watched route (design/README.md §5).
@@ -66,15 +66,15 @@ final class WatchlistItemController extends Controller
         $route = Route::query()->firstOrCreate(
             ['code' => Route::codeFor($origin->iata, $destination->iata)],
             [
-                'origin_airport_id' => $origin->id,
+                'origin_airport_id'      => $origin->id,
                 'destination_airport_id' => $destination->id,
             ],
         );
 
         $item = WatchlistItem::query()->create([
-            'user_id' => $user->id,
+            'user_id'  => $user->id,
             'route_id' => $route->id,
-            'active' => true,
+            'active'   => true,
             // Onto the end of the owner's order. `-1` so the first route added
             // to an empty list gets position 0, like the seeder's.
             'position' => (int) ($user->watchlistItems()->max('position') ?? -1) + 1,

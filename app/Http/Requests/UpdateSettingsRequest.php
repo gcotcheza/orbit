@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * `PUT /api/settings` — the whole preferences object, every time.
@@ -31,8 +31,8 @@ final class UpdateSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'emailAlerts' => ['required', 'boolean'],
-            'pushAlerts' => ['required', 'boolean'],
+            'emailAlerts'  => ['required', 'boolean'],
+            'pushAlerts'   => ['required', 'boolean'],
             'weeklyDigest' => ['required', 'boolean'],
 
             'quietHours' => ['required', 'boolean'],
@@ -46,7 +46,7 @@ final class UpdateSettingsRequest extends FormRequest
              * which a naive \d{2}:\d{2} does not.
              */
             'quietStart' => ['required', 'string', 'date_format:H:i'],
-            'quietEnd' => ['required', 'string', 'date_format:H:i'],
+            'quietEnd'   => ['required', 'string', 'date_format:H:i'],
 
             /*
              * AGAINST THE CONFIG'D LEVELS rather than `between:0,2`. The scale
@@ -64,8 +64,8 @@ final class UpdateSettingsRequest extends FormRequest
     {
         return [
             'quietStart.date_format' => 'Quiet hours start at a time like 22:00.',
-            'quietEnd.date_format' => 'Quiet hours end at a time like 08:00.',
-            'sensitivity.in' => 'Pick one of the three sensitivity levels.',
+            'quietEnd.date_format'   => 'Quiet hours end at a time like 08:00.',
+            'sensitivity.in'         => 'Pick one of the three sensitivity levels.',
         ];
     }
 
@@ -80,13 +80,13 @@ final class UpdateSettingsRequest extends FormRequest
         $validated = $this->validated();
 
         return [
-            'email_alerts' => $this->boolean('emailAlerts'),
-            'push_alerts' => $this->boolean('pushAlerts'),
+            'email_alerts'  => $this->boolean('emailAlerts'),
+            'push_alerts'   => $this->boolean('pushAlerts'),
             'weekly_digest' => $this->boolean('weeklyDigest'),
-            'quiet_hours' => $this->boolean('quietHours'),
-            'quiet_start' => $this->string('quietStart')->toString(),
-            'quiet_end' => $this->string('quietEnd')->toString(),
-            'sensitivity' => (int) $validated['sensitivity'],
+            'quiet_hours'   => $this->boolean('quietHours'),
+            'quiet_start'   => $this->string('quietStart')->toString(),
+            'quiet_end'     => $this->string('quietEnd')->toString(),
+            'sensitivity'   => (int) $validated['sensitivity'],
         ];
     }
 

@@ -149,12 +149,12 @@ final readonly class ParsedRule
          * criteria field may hold.
          */
         return RuleCriteria::from([
-            'origins' => $origins,
-            'maxPriceCents' => $maxPriceCents,
+            'origins'          => $origins,
+            'maxPriceCents'    => $maxPriceCents,
             'tripLengthNights' => $tripLengthNights,
-            'departDows' => $departDows,
-            'dateWindow' => $dateWindow === null ? null : ['from' => $dateWindow->from, 'to' => $dateWindow->to],
-            'vibes' => $vibes,
+            'departDows'       => $departDows,
+            'dateWindow'       => $dateWindow === null ? null : ['from' => $dateWindow->from, 'to' => $dateWindow->to],
+            'vibes'            => $vibes,
         ]);
     }
 
@@ -204,12 +204,12 @@ final readonly class ParsedRule
     private static function dayName(int $dow): string
     {
         return match ($dow) {
-            1 => 'Monday',
-            2 => 'Tuesday',
-            3 => 'Wednesday',
-            4 => 'Thursday',
-            5 => 'Friday',
-            6 => 'Saturday',
+            1       => 'Monday',
+            2       => 'Tuesday',
+            3       => 'Wednesday',
+            4       => 'Thursday',
+            5       => 'Friday',
+            6       => 'Saturday',
             default => 'Sunday',
         };
     }

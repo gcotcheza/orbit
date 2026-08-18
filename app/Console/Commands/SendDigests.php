@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Jobs\SendWeeklyDigest;
 use App\Models\User;
+use App\Jobs\SendWeeklyDigest;
 use Illuminate\Console\Command;
 
 /**

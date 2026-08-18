@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Http\Controllers\Pwa\ManifestController;
-use App\Http\Controllers\Pwa\OfflineController;
-use App\Http\Controllers\Pwa\ServiceWorkerController;
-use App\Services\Pwa\BuildAssets;
-use Illuminate\Http\Request;
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use Illuminate\Http\Request;
+use App\Services\Pwa\BuildAssets;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
+use App\Http\Controllers\Pwa\OfflineController;
+use App\Http\Controllers\Pwa\ManifestController;
+use App\Http\Controllers\Pwa\ServiceWorkerController;
 
 /**
  * The three routes that make Orbit installable, and the three ways they break.
@@ -53,9 +53,9 @@ final class PwaShellTest extends TestCase
     public static function pwaRoutes(): array
     {
         return [
-            'manifest' => ['/manifest.webmanifest', ManifestController::class],
+            'manifest'       => ['/manifest.webmanifest', ManifestController::class],
             'service worker' => ['/sw.js', ServiceWorkerController::class],
-            'offline page' => ['/offline', OfflineController::class],
+            'offline page'   => ['/offline', OfflineController::class],
         ];
     }
 
@@ -131,12 +131,12 @@ final class PwaShellTest extends TestCase
         $response = $this->get('/manifest.webmanifest');
 
         $response->assertJson([
-            'name' => 'Orbit',
-            'short_name' => 'Orbit',
-            'start_url' => '/',
-            'scope' => '/',
-            'display' => 'standalone',
-            'theme_color' => '#0a0f1e',
+            'name'             => 'Orbit',
+            'short_name'       => 'Orbit',
+            'start_url'        => '/',
+            'scope'            => '/',
+            'display'          => 'standalone',
+            'theme_color'      => '#0a0f1e',
             'background_color' => '#0a0f1e',
         ]);
     }

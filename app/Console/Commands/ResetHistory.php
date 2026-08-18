@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Models\CalendarFare;
-use App\Models\PriceObservation;
 use App\Models\RouteStats;
+use App\Models\CalendarFare;
 use Illuminate\Console\Command;
+use App\Models\PriceObservation;
 
 /**
  * `php artisan orbit:reset-history --confirm` — throw away every price this app
@@ -80,8 +80,8 @@ final class ResetHistory extends Command
          */
         $tables = [
             'route_price_history' => PriceObservation::query()->count(),
-            'calendar_fares' => CalendarFare::query()->count(),
-            'route_price_stats' => RouteStats::query()->count(),
+            'calendar_fares'      => CalendarFare::query()->count(),
+            'route_price_stats'   => RouteStats::query()->count(),
         ];
 
         $this->components->info(sprintf(

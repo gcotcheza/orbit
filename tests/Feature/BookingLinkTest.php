@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Application\Routes\BookingLink;
+use Tests\TestCase;
 use App\Models\Route;
 use DateTimeImmutable;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\BuildsRouteData;
-use Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
+use App\Application\Routes\BookingLink;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * Where "book it" goes — both destinations, and the one digit that is easy to
@@ -166,8 +166,8 @@ final class BookingLinkTest extends TestCase
     public static function missingMarkers(): array
     {
         return [
-            'never set' => [null],
-            'set to nothing' => [''],
+            'never set'         => [null],
+            'set to nothing'    => [''],
             'set to whitespace' => ['   '],
         ];
     }

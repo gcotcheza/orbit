@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The catch-all, and the four things it must never swallow.
@@ -42,13 +42,13 @@ final class SpaShellTest extends TestCase
     public static function clientRoutes(): array
     {
         return [
-            'home' => ['/'],
-            'login' => ['/login'],
-            'calendar' => ['/calendar'],
-            'create' => ['/create'],
-            'watchlist' => ['/watch'],
-            'alerts' => ['/alerts'],
-            'route detail' => ['/route/AMS-LIS'],
+            'home'                    => ['/'],
+            'login'                   => ['/login'],
+            'calendar'                => ['/calendar'],
+            'create'                  => ['/create'],
+            'watchlist'               => ['/watch'],
+            'alerts'                  => ['/alerts'],
+            'route detail'            => ['/route/AMS-LIS'],
             'a path no screen claims' => ['/something-nobody-built'],
         ];
     }

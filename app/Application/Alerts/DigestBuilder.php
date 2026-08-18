@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace App\Application\Alerts;
 
-use App\Application\Routes\RouteSnapshots;
-use App\Application\Rules\RuleViews;
-use App\Models\Alert;
-use App\Models\DealRule;
-use App\Models\Route;
 use App\Models\User;
-use Carbon\CarbonImmutable;
+use App\Models\Alert;
+use App\Models\Route;
 use DateTimeInterface;
+use App\Models\DealRule;
+use Carbon\CarbonImmutable;
+use App\Application\Rules\RuleViews;
+use App\Application\Routes\RouteSnapshots;
 
 /**
  * Sunday morning: everything at once, and nothing urgent.

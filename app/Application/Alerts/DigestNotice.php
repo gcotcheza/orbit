@@ -110,9 +110,9 @@ final readonly class DigestNotice implements AlertNotice
     public function payload(): array
     {
         return [
-            'routes' => count($this->routes),
-            'rules' => count($this->rules),
-            'week' => count($this->week),
+            'routes'   => count($this->routes),
+            'rules'    => count($this->rules),
+            'week'     => count($this->week),
             'headline' => $this->subject(),
         ];
     }

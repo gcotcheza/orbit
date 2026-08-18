@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Concerns;
 
-use App\Domain\Alerts\AlertType;
-use App\Models\Alert;
-use App\Models\DealRule;
-use App\Models\Route;
 use App\Models\User;
+use App\Models\Alert;
+use App\Models\Route;
+use App\Models\DealRule;
 use Illuminate\Mail\Mailer;
-use Illuminate\Mail\Transport\ArrayTransport;
-use Illuminate\Support\Facades\Date;
+use App\Domain\Alerts\AlertType;
 use Symfony\Component\Mime\Email;
+use Illuminate\Support\Facades\Date;
+use Illuminate\Mail\Transport\ArrayTransport;
 
 /**
  * Fixtures for the alert pipeline's tests.
@@ -124,20 +124,20 @@ trait BuildsAlertData
         bool $delivered = true,
     ): Alert {
         $alert = Alert::query()->create([
-            'user_id' => $user->id,
-            'route_id' => $route?->id,
+            'user_id'      => $user->id,
+            'route_id'     => $route?->id,
             'deal_rule_id' => $rule?->id,
-            'type' => $type,
-            'score' => $type === AlertType::RouteDeal ? 94 : null,
-            'price_cents' => $cents,
-            'payload' => [
-                'routeCode' => $route?->code,
-                'origin' => 'Amsterdam',
+            'type'         => $type,
+            'score'        => $type === AlertType::RouteDeal ? 94 : null,
+            'price_cents'  => $cents,
+            'payload'      => [
+                'routeCode'   => $route?->code,
+                'origin'      => 'Amsterdam',
                 'destination' => 'Porto',
-                'priceCents' => $cents,
-                'headline' => 'AMS→OPO €'.intdiv($cents, 100),
+                'priceCents'  => $cents,
+                'headline'    => 'AMS→OPO €'.intdiv($cents, 100),
             ],
-            'channel' => Alert::CHANNEL_MAIL,
+            'channel'      => Alert::CHANNEL_MAIL,
             'triggered_at' => $triggeredAt,
             'delivered_at' => $delivered ? $triggeredAt : null,
         ]);

@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace App\Application\Rules;
 
-use App\Domain\Pricing\DatedFare;
-use App\Domain\Rules\DestinationProfile;
-use App\Domain\Rules\RuleCriteria;
-use App\Domain\Rules\RuleMatcher;
-use App\Models\CalendarFare;
-use App\Models\Destination;
-use App\Models\Route;
 use App\Models\User;
+use App\Models\Route;
+use App\Models\Destination;
+use App\Models\CalendarFare;
 use App\Models\WatchlistItem;
+use App\Domain\Pricing\DatedFare;
+use App\Domain\Rules\RuleMatcher;
+use App\Domain\Rules\RuleCriteria;
 use Illuminate\Support\Facades\Date;
+use App\Domain\Rules\DestinationProfile;
 
 /**
  * What a rule matches right now.

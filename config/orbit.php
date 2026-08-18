@@ -37,8 +37,8 @@ return [
     */
 
     'seed' => [
-        'email' => env('SEED_USER_EMAIL', 'ghie.cotcheza@gmail.com'),
-        'name' => env('SEED_USER_NAME', 'Ghie'),
+        'email'    => env('SEED_USER_EMAIL', 'ghie.cotcheza@gmail.com'),
+        'name'     => env('SEED_USER_NAME', 'Ghie'),
         'password' => env('SEED_USER_PASSWORD') ?: null,
     ],
 
@@ -100,8 +100,8 @@ return [
     */
 
     'providers' => [
-        'price' => env('ORBIT_PRICE_PROVIDER', 'fake'),
-        'stats' => env('ORBIT_STATS_PROVIDER', 'fake'),
+        'price'   => env('ORBIT_PRICE_PROVIDER', 'fake'),
+        'stats'   => env('ORBIT_STATS_PROVIDER', 'fake'),
         'returns' => env('ORBIT_RETURNS_PROVIDER', 'fake'),
 
         /*
@@ -228,7 +228,7 @@ return [
          * five seconds is down.
          */
         'connect_timeout' => 5,
-        'timeout' => 15,
+        'timeout'         => 15,
 
         /*
          * ONE RETRY, half a second apart. The data is a cache read, so a second
@@ -236,7 +236,7 @@ return [
          * that would otherwise leave a month of the calendar empty for a day.
          * A third would just be a slower way to find out the API is down.
          */
-        'retries' => 1,
+        'retries'        => 1,
         'retry_delay_ms' => 500,
 
         /*
@@ -333,8 +333,8 @@ return [
 
     'selfstats' => [
         'maturity_observations' => 30,
-        'history_days' => 365,
-        'cross_section_days' => 181,
+        'history_days'          => 365,
+        'cross_section_days'    => 181,
     ],
 
     /*
@@ -410,17 +410,17 @@ return [
     'score' => [
         'weights' => [
             'percentile' => 60,
-            'trend' => 25,
-            'absolute' => 15,
+            'trend'      => 25,
+            'absolute'   => 15,
         ],
 
         'tiers' => [
             'insane' => 80,
-            'great' => 65,
-            'good' => 50,
+            'great'  => 65,
+            'good'   => 50,
         ],
 
-        'trend_days' => 30,
+        'trend_days'               => 30,
         'trend_saturation_per_day' => 0.005,
     ],
 
@@ -534,7 +534,7 @@ return [
          | on not-knowing would have turned the whole alert system off on the
          | morning this shipped.
          */
-        'max_fare_age_days' => 2,
+        'max_fare_age_days'    => 2,
         'near_departure_weeks' => 3,
 
         /*
@@ -581,18 +581,18 @@ return [
 
         'sensitivities' => [
             0 => [
-                'name' => 'Relaxed',
-                'tier' => 'insane',
+                'name'  => 'Relaxed',
+                'tier'  => 'insane',
                 'blurb' => 'Only the truly insane deals — score %d and up. Rare, and worth clearing a weekend for.',
             ],
             1 => [
-                'name' => 'Balanced',
-                'tier' => 'great',
+                'name'  => 'Balanced',
+                'tier'  => 'great',
                 'blurb' => 'Anything Orbit rates a great deal — score %d and up. A handful a month.',
             ],
             2 => [
-                'name' => 'Eager',
-                'tier' => 'good',
+                'name'  => 'Eager',
+                'tier'  => 'good',
                 'blurb' => 'Every fare scoring %d or better. More to look at, and more that turns out to be ordinary.',
             ],
         ],
@@ -782,11 +782,11 @@ return [
     */
 
     'poll' => [
-        'window_days' => 181,
-        'horizon_days' => 334,
-        'far_refresh_weekday' => 6,
-        'stagger_minutes' => 3,
-        'stale_after_days' => 3,
+        'window_days'          => 181,
+        'horizon_days'         => 334,
+        'far_refresh_weekday'  => 6,
+        'stagger_minutes'      => 3,
+        'stale_after_days'     => 3,
         'far_stale_after_days' => 17,
     ],
 
@@ -923,9 +923,9 @@ return [
     */
 
     'returns' => [
-        'window_days' => 334,
+        'window_days'      => 334,
         'stale_after_days' => 3,
-        'max_nights' => 60,
+        'max_nights'       => 60,
 
         /*
          * SENT ON EVERY REQUEST, AND ITS ABSENCE IS A SILENT 91% DATA LOSS. The
@@ -1448,7 +1448,7 @@ return [
          * one thing it should not do.
          */
         'connect_timeout' => 5,
-        'timeout' => 20,
+        'timeout'         => 20,
     ],
 
     /*
@@ -1465,8 +1465,8 @@ return [
 
     'history' => [
         'sparkline_days' => 14,
-        'chart_days' => 60,
-        'backfill_days' => 60,
+        'chart_days'     => 60,
+        'backfill_days'  => 60,
     ],
 
     /*
@@ -1482,7 +1482,7 @@ return [
     */
 
     'calendar' => [
-        'cheap_at' => 0.28,
+        'cheap_at'  => 0.28,
         'pricey_at' => 0.66,
     ],
 
@@ -1585,8 +1585,8 @@ return [
          * keystroke can wait for.
          */
         'connect_timeout' => 5,
-        'timeout' => 30,
-        'max_retries' => 1,
+        'timeout'         => 30,
+        'max_retries'     => 1,
 
         /*
          * WHAT A PERSON CALLS THE THREE AIRPORTS. The codes themselves come
@@ -1600,12 +1600,12 @@ return [
          * them" rather than as an alias, because they name the SET.
          */
         'origin_aliases' => [
-            'ams' => 'AMS',
-            'amsterdam' => 'AMS',
-            'schiphol' => 'AMS',
-            'ein' => 'EIN',
-            'eindhoven' => 'EIN',
-            'dus' => 'DUS',
+            'ams'        => 'AMS',
+            'amsterdam'  => 'AMS',
+            'schiphol'   => 'AMS',
+            'ein'        => 'EIN',
+            'eindhoven'  => 'EIN',
+            'dus'        => 'DUS',
             'düsseldorf' => 'DUS',
             'dusseldorf' => 'DUS',
         ],
@@ -1624,15 +1624,15 @@ return [
          * "city" — App\Infrastructure\Nlp\RegexRuleTextParser relies on it.
          */
         'vibe_words' => [
-            'sunny' => ['sunshine', 'sunny', 'warm', 'hot', 'sun'],
-            'beach' => ['seaside', 'beaches', 'beach', 'coastal', 'coast', 'sand', 'swimming'],
-            'city' => ['city break', 'citybreak', 'city', 'urban'],
+            'sunny'   => ['sunshine', 'sunny', 'warm', 'hot', 'sun'],
+            'beach'   => ['seaside', 'beaches', 'beach', 'coastal', 'coast', 'sand', 'swimming'],
+            'city'    => ['city break', 'citybreak', 'city', 'urban'],
             'culture' => ['cultural', 'culture', 'museums', 'museum', 'history', 'historic', 'art'],
-            'food' => ['gastronomy', 'restaurants', 'foodie', 'food', 'cuisine', 'wine'],
+            'food'    => ['gastronomy', 'restaurants', 'foodie', 'food', 'cuisine', 'wine'],
             'islands' => ['archipelago', 'islands', 'island'],
-            'nature' => ['mountains', 'mountain', 'outdoors', 'hiking', 'hike', 'nature', 'forest', 'scenery'],
-            'party' => ['nightlife', 'clubbing', 'party', 'bars'],
-            'ski' => ['snowboard', 'skiing', 'slopes', 'piste', 'snow', 'ski'],
+            'nature'  => ['mountains', 'mountain', 'outdoors', 'hiking', 'hike', 'nature', 'forest', 'scenery'],
+            'party'   => ['nightlife', 'clubbing', 'party', 'bars'],
+            'ski'     => ['snowboard', 'skiing', 'slopes', 'piste', 'snow', 'ski'],
         ],
 
         /*
@@ -1643,15 +1643,15 @@ return [
          * goes quietly wrong the day the vocabulary moves.
          */
         'vibe_labels' => [
-            'sunny' => '☀ Sunny',
-            'beach' => '🏖 Beach',
-            'city' => 'City break',
+            'sunny'   => '☀ Sunny',
+            'beach'   => '🏖 Beach',
+            'city'    => 'City break',
             'culture' => 'Culture',
-            'food' => 'Food',
+            'food'    => 'Food',
             'islands' => 'Islands',
-            'nature' => 'Nature',
-            'party' => 'Nightlife',
-            'ski' => 'Snow',
+            'nature'  => 'Nature',
+            'party'   => 'Nightlife',
+            'ski'     => 'Snow',
         ],
     ],
 
@@ -1727,9 +1727,9 @@ return [
     */
 
     'rules' => [
-        'warm_at' => 4,
-        'warm_vibes' => ['sunny', 'beach'],
-        'sweep_cap' => 30,
+        'warm_at'            => 4,
+        'warm_vibes'         => ['sunny', 'beach'],
+        'sweep_cap'          => 30,
         'sweep_horizon_days' => 89,
         /* The design's match banner shows a handful, not a list (§4). */
         'sample' => 6,
@@ -1763,10 +1763,10 @@ return [
     */
 
     'pwa' => [
-        'name' => 'Orbit',
-        'short_name' => 'Orbit',
-        'description' => 'Watches the routes you care about and tells you when one gets insanely cheap.',
-        'theme_color' => '#0a0f1e',
+        'name'             => 'Orbit',
+        'short_name'       => 'Orbit',
+        'description'      => 'Watches the routes you care about and tells you when one gets insanely cheap.',
+        'theme_color'      => '#0a0f1e',
         'background_color' => '#0a0f1e',
     ],
 

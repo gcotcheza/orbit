@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Rules;
 
-use App\Domain\Pricing\DatedFare;
-use App\Domain\Rules\DestinationProfile;
-use App\Domain\Rules\MonthWindow;
-use App\Domain\Rules\RuleCriteria;
-use App\Domain\Rules\RuleMatcher;
 use DateTimeImmutable;
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use App\Domain\Pricing\DatedFare;
+use App\Domain\Rules\MonthWindow;
+use App\Domain\Rules\RuleMatcher;
+use App\Domain\Rules\RuleCriteria;
+use PHPUnit\Framework\Attributes\Test;
+use App\Domain\Rules\DestinationProfile;
 
 /**
  * Which places, and which fares.

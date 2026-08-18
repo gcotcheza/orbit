@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Jobs\PollRoutePrices;
 use App\Models\Route;
+use App\Jobs\PollRoutePrices;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Date;
 

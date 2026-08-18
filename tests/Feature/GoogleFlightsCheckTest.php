@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Infrastructure\Verify\GoogleFlightsCheck;
+use Tests\TestCase;
 use DateTimeImmutable;
-use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
+use App\Infrastructure\Verify\GoogleFlightsCheck;
+use Illuminate\Http\Client\Factory as HttpFactory;
 
 /**
  * The SerpAPI guardrails, which are the owner's mandate and are binding.
@@ -313,8 +313,8 @@ final class GoogleFlightsCheckTest extends TestCase
     public function the_container_reads_the_guardrails_out_of_config(): void
     {
         config([
-            'orbit.serpapi.key' => 'k',
-            'orbit.serpapi.reserve' => 7,
+            'orbit.serpapi.key'         => 'k',
+            'orbit.serpapi.reserve'     => 7,
             'orbit.serpapi.max_per_run' => 3,
         ]);
 

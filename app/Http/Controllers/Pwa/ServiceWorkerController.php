@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Pwa;
 
-use App\Http\Controllers\Controller;
-use App\Services\Pwa\BuildAssets;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use App\Services\Pwa\BuildAssets;
+use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\File;
 
 /**

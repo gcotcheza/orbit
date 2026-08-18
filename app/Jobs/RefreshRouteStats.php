@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Application\Ports\PriceStatsProvider;
 use App\Models\Route;
 use App\Models\RouteStats;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use App\Application\Ports\PriceStatsProvider;
 
 /**
  * Refresh what a route USUALLY costs.
@@ -46,11 +46,11 @@ final class RefreshRouteStats implements ShouldQueue
         RouteStats::query()->updateOrCreate(
             ['route_id' => $route->id],
             [
-                'min_cents' => $stats->minCents,
-                'p25_cents' => $stats->p25Cents,
+                'min_cents'    => $stats->minCents,
+                'p25_cents'    => $stats->p25Cents,
                 'median_cents' => $stats->medianCents,
-                'p75_cents' => $stats->p75Cents,
-                'max_cents' => $stats->maxCents,
+                'p75_cents'    => $stats->p75Cents,
+                'max_cents'    => $stats->maxCents,
                 'refreshed_at' => Date::now(),
             ],
         );

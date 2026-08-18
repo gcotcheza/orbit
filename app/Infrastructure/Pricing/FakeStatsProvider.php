@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Pricing;
 
-use App\Application\Ports\PriceStatsProvider;
 use App\Domain\Pricing\PriceStats;
 use Illuminate\Support\Facades\Date;
+use App\Application\Ports\PriceStatsProvider;
 
 /**
  * "Usual price", until Amadeus has a key.

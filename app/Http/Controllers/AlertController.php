@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\AlertResource;
 use App\Models\User;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use App\Http\Resources\AlertResource;
 
 /**
  * What Orbit has told this account, newest first.
@@ -45,8 +45,8 @@ final class AlertController extends Controller
             'limit' => ['sometimes', 'integer', 'min:1', 'max:'.self::MAX_LIMIT],
         ], [
             'limit.integer' => 'The limit is a number of rows.',
-            'limit.min' => 'Ask for at least one row.',
-            'limit.max' => 'Fifty rows is the most this endpoint returns at once.',
+            'limit.min'     => 'Ask for at least one row.',
+            'limit.max'     => 'Fifty rows is the most this endpoint returns at once.',
         ]);
 
         /** @var User $user */

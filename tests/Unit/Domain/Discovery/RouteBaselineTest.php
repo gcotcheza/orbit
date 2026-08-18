@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Discovery;
 
-use App\Domain\Discovery\RouteBaseline;
 use DateTimeImmutable;
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\Test;
+use App\Domain\Discovery\RouteBaseline;
 
 /**
  * The relative lane's arithmetic, hand-computed.

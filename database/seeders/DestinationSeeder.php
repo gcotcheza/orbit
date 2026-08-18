@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use RuntimeException;
 use App\Models\Airport;
 use App\Models\Destination;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use RuntimeException;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 /**
  * The places Orbit has an OPINION about.
@@ -183,13 +183,13 @@ final class DestinationSeeder extends Seeder
         return Airport::query()->updateOrCreate(
             ['iata' => $iata],
             [
-                'name' => $name,
-                'city' => $city,
-                'country' => $country,
+                'name'         => $name,
+                'city'         => $city,
+                'country'      => $country,
                 'country_code' => $countryCode,
-                'lat' => $lat,
-                'lng' => $lng,
-                'is_origin' => $isOrigin,
+                'lat'          => $lat,
+                'lng'          => $lng,
+                'is_origin'    => $isOrigin,
             ],
         );
     }

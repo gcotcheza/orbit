@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\CalendarFare;
-use App\Models\Route;
+use Tests\TestCase;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\Route;
+use App\Models\CalendarFare;
+use Tests\Concerns\BuildsRouteData;
 use Illuminate\Support\Facades\Date;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\Concerns\BuildsRouteData;
-use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * GET /api/routes/{code} — the route detail screen's whole supply.
@@ -71,16 +71,16 @@ final class RouteDetailApiTest extends TestCase
         $response->assertOk();
         $response->assertJsonStructure(['data' => [
             'code', 'score', 'tier', 'confident', 'trackingDays', 'sparkline',
-            'origin' => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
+            'origin'      => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
             'destination' => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
-            'price' => ['current', 'usual', 'pctBelow'],
-            'verdict' => ['label', 'short', 'tone'],
-            'history' => [['date', 'price']],
-            'stats' => ['min', 'p25', 'median', 'p75', 'max'],
-            'advice' => ['title', 'body', 'tone'],
+            'price'       => ['current', 'usual', 'pctBelow'],
+            'verdict'     => ['label', 'short', 'tone'],
+            'history'     => [['date', 'price']],
+            'stats'       => ['min', 'p25', 'median', 'p75', 'max'],
+            'advice'      => ['title', 'body', 'tone'],
             /* `foundAt` is the detail's addition to the shared summary shape. */
             'cheapest' => ['date', 'price', 'foundAt'],
-            'booking' => ['aviasales', 'skyscanner'],
+            'booking'  => ['aviasales', 'skyscanner'],
         ]]);
 
         // The detail must agree with the list it was opened from.

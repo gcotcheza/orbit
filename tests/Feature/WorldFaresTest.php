@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Jobs\PollRoutePrices;
+use Tests\TestCase;
+use App\Models\User;
+use App\Models\Route;
 use App\Models\Airport;
 use App\Models\CalendarFare;
-use App\Models\PriceObservation;
-use App\Models\Route;
-use App\Models\User;
+use App\Jobs\PollRoutePrices;
 use App\Models\WatchlistItem;
-use Database\Seeders\DestinationSeeder;
-use Database\Seeders\WorldAirportSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\PriceObservation;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
+use Database\Seeders\DestinationSeeder;
+use Database\Seeders\WorldAirportSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * Long-haul, on fares that were really there.
@@ -76,9 +76,9 @@ final class WorldFaresTest extends TestCase
          * same 90 for the same reason.
          */
         config([
-            'orbit.poll.window_days' => 90,
-            'orbit.providers.price' => 'travelpayouts',
-            'orbit.travelpayouts.token' => 'test-token',
+            'orbit.poll.window_days'             => 90,
+            'orbit.providers.price'              => 'travelpayouts',
+            'orbit.travelpayouts.token'          => 'test-token',
             'orbit.travelpayouts.retry_delay_ms' => 0,
         ]);
 

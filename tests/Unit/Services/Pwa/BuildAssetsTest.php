@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Services\Pwa;
 
+use Tests\TestCase;
 use App\Services\Pwa\BuildAssets;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
 
 /**
  * The precache list, read against a real Vite manifest.

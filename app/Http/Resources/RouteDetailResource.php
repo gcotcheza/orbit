@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
-use App\Application\Routes\BookingLink;
-use App\Domain\Pricing\PricePoint;
 use DateTimeZone;
 use Illuminate\Http\Request;
+use App\Domain\Pricing\PricePoint;
+use App\Application\Routes\BookingLink;
 
 /**
  * Everything the route detail screen draws (design/README.md §2): the summary,
@@ -43,22 +43,22 @@ final class RouteDetailResource extends RouteSummaryResource
              * The calendar endpoint is the other axis.
              */
             'history' => array_map(static fn (PricePoint $point): array => [
-                'date' => $point->on->format('Y-m-d'),
+                'date'  => $point->on->format('Y-m-d'),
                 'price' => Euros::from($point->cents),
             ], $snapshot->history->points),
 
             'stats' => $stats === null ? null : [
-                'min' => Euros::from($stats->minCents),
-                'p25' => Euros::from($stats->p25Cents),
+                'min'    => Euros::from($stats->minCents),
+                'p25'    => Euros::from($stats->p25Cents),
                 'median' => Euros::from($stats->medianCents),
-                'p75' => Euros::from($stats->p75Cents),
-                'max' => Euros::from($stats->maxCents),
+                'p75'    => Euros::from($stats->p75Cents),
+                'max'    => Euros::from($stats->maxCents),
             ],
 
             'advice' => [
                 'title' => $snapshot->deal->advice->title,
-                'body' => $snapshot->deal->advice->body,
-                'tone' => $snapshot->deal->advice->tone,
+                'body'  => $snapshot->deal->advice->body,
+                'tone'  => $snapshot->deal->advice->tone,
             ],
 
             /*
@@ -96,7 +96,7 @@ final class RouteDetailResource extends RouteSummaryResource
              * €68 and made that a correctness matter rather than a preference.
              */
             'booking' => [
-                'aviasales' => BookingLink::aviasales($snapshot->route, $cheapest?->departureDate),
+                'aviasales'  => BookingLink::aviasales($snapshot->route, $cheapest?->departureDate),
                 'skyscanner' => BookingLink::skyscanner($snapshot->route, $cheapest?->departureDate),
             ],
         ];

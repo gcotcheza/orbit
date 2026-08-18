@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use stdClass;
+use Tests\TestCase;
+use Illuminate\Mail\Markdown;
+use App\Notifications\WeeklyDigest;
+use App\Notifications\RouteDealAlert;
+use App\Notifications\RuleMatchAlert;
+use App\Application\Alerts\RuleDigest;
+use PHPUnit\Framework\Attributes\Test;
 use App\Application\Alerts\DealSummary;
 use App\Application\Alerts\DigestNotice;
 use App\Application\Alerts\RouteDealNotice;
-use App\Application\Alerts\RuleDigest;
 use App\Application\Alerts\RuleMatchNotice;
-use App\Notifications\RouteDealAlert;
-use App\Notifications\RuleMatchAlert;
-use App\Notifications\WeeklyDigest;
-use Illuminate\Mail\Markdown;
-use PHPUnit\Framework\Attributes\Test;
-use stdClass;
-use Tests\TestCase;
 
 /**
  * What the three Orbit mails actually look like when they are rendered.
@@ -344,8 +344,8 @@ final class MailRenderTest extends TestCase
             'route-deal' => ['deal' => $this->hero()],
             'rule-match' => [
                 'notice' => $this->ruleNotice(),
-                'deals' => $this->ruleNotice()->deals,
-                'more' => 24,
+                'deals'  => $this->ruleNotice()->deals,
+                'more'   => 24,
             ],
             'weekly-digest' => ['digest' => $this->digest()],
         };

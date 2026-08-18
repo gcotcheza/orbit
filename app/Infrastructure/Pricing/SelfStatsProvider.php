@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Pricing;
 
-use App\Application\Ports\PriceStatsProvider;
-use App\Domain\Pricing\PriceStats;
+use App\Models\Route;
 use App\Models\CalendarFare;
 use App\Models\PriceObservation;
-use App\Models\Route;
+use App\Domain\Pricing\PriceStats;
 use Illuminate\Support\Facades\Date;
+use App\Application\Ports\PriceStatsProvider;
 
 /**
  * "Usual price", computed from Orbit's own fares.

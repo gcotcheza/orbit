@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Database\Factories\AirportFactory;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 /**
  * @property int $id
@@ -42,8 +42,8 @@ final class Airport extends Model
     protected function casts(): array
     {
         return [
-            'lat' => 'float',
-            'lng' => 'float',
+            'lat'       => 'float',
+            'lng'       => 'float',
             'is_origin' => 'boolean',
         ];
     }

@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Jobs\PollRoutePrices;
+use Tests\TestCase;
+use App\Models\User;
+use App\Models\Route;
 use App\Jobs\SweepRuleFares;
 use App\Models\CalendarFare;
-use App\Models\Route;
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Jobs\PollRoutePrices;
+use Tests\Concerns\RunsCommands;
+use Tests\Concerns\BuildsRuleData;
+use Tests\Concerns\BuildsRouteData;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\Concerns\BuildsRouteData;
-use Tests\Concerns\BuildsRuleData;
-use Tests\Concerns\RunsCommands;
-use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * Going and finding out what a rule is worth.
@@ -76,7 +76,7 @@ final class RuleSweepTest extends TestCase
 
         $rule = $this->makeRule($this->owner, 'somewhere sunny from AMS', [
             'origins' => ['AMS'],
-            'vibes' => ['sunny'],
+            'vibes'   => ['sunny'],
         ]);
 
         $this->sweep($rule->id);
@@ -126,7 +126,7 @@ final class RuleSweepTest extends TestCase
 
         $rule = $this->makeRule($this->owner, 'beach from AMS', [
             'origins' => ['AMS'],
-            'vibes' => ['beach'],
+            'vibes'   => ['beach'],
         ]);
 
         $this->sweep($rule->id);
@@ -147,7 +147,7 @@ final class RuleSweepTest extends TestCase
 
         $rule = $this->makeRule($this->owner, 'beach from AMS', [
             'origins' => ['AMS'],
-            'vibes' => ['beach'],
+            'vibes'   => ['beach'],
         ]);
 
         $this->sweep($rule->id);
@@ -205,7 +205,7 @@ final class RuleSweepTest extends TestCase
 
         $rule = $this->makeRule($this->owner, 'somewhere sunny from AMS', [
             'origins' => ['AMS'],
-            'vibes' => ['sunny'],
+            'vibes'   => ['sunny'],
         ]);
 
         $this->sweep($rule->id);
@@ -235,7 +235,7 @@ final class RuleSweepTest extends TestCase
 
         $rule = $this->makeRule($this->owner, 'somewhere sunny from AMS', [
             'origins' => ['AMS'],
-            'vibes' => ['sunny'],
+            'vibes'   => ['sunny'],
         ]);
 
         $this->sweep($rule->id);
@@ -265,10 +265,10 @@ final class RuleSweepTest extends TestCase
         $this->makeRouteWithFares('AMS', 'FAO', ['2027-01-12' => 4000]);
 
         $this->makeRule($this->owner, 'somewhere sunny in January under €60', [
-            'origins' => ['AMS'],
-            'vibes' => ['sunny'],
+            'origins'       => ['AMS'],
+            'vibes'         => ['sunny'],
             'maxPriceCents' => 6000,
-            'dateWindow' => ['from' => 1, 'to' => 1],
+            'dateWindow'    => ['from' => 1, 'to' => 1],
         ]);
 
         $this->actingAs($this->owner)->getJson('/api/rules')

@@ -4,22 +4,22 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Nlp;
 
+use Throwable;
+use JsonException;
 use Anthropic\Client;
-use Anthropic\Core\Exceptions\APIException;
-use Anthropic\Messages\JSONOutputFormat;
+use Psr\Log\LoggerInterface;
 use Anthropic\Messages\Message;
+use App\Domain\Rules\ParsedRule;
+use Anthropic\Messages\TextBlock;
+use Anthropic\Messages\StopReason;
+use App\Domain\Rules\RuleCriteria;
 use Anthropic\Messages\MessageParam;
 use Anthropic\Messages\OutputConfig;
-use Anthropic\Messages\StopReason;
-use Anthropic\Messages\TextBlock;
-use Anthropic\Messages\TextBlockParam;
-use App\Application\Ports\RuleTextParser;
-use App\Domain\Rules\ParsedRule;
-use App\Domain\Rules\RuleCriteria;
 use App\Domain\Rules\RuleVocabulary;
-use JsonException;
-use Psr\Log\LoggerInterface;
-use Throwable;
+use Anthropic\Messages\TextBlockParam;
+use Anthropic\Messages\JSONOutputFormat;
+use App\Application\Ports\RuleTextParser;
+use Anthropic\Core\Exceptions\APIException;
 
 /**
  * Reading the sentence by asking Claude.
@@ -201,11 +201,11 @@ final readonly class AnthropicRuleTextParser implements RuleTextParser
         $window = $decoded['date_window'] ?? null;
 
         return RuleCriteria::from([
-            'origins' => $decoded['origins'] ?? [],
-            'maxPriceCents' => is_int($euros) ? $euros * 100 : null,
+            'origins'          => $decoded['origins'] ?? [],
+            'maxPriceCents'    => is_int($euros) ? $euros * 100 : null,
             'tripLengthNights' => $decoded['trip_length_nights'] ?? null,
-            'departDows' => $decoded['depart_weekdays'] ?? [],
-            'dateWindow' => is_array($window)
+            'departDows'       => $decoded['depart_weekdays'] ?? [],
+            'dateWindow'       => is_array($window)
                 ? ['from' => $window['from_month'] ?? null, 'to' => $window['to_month'] ?? null]
                 : null,
             'vibes' => $decoded['vibes'] ?? [],
@@ -220,9 +220,9 @@ final readonly class AnthropicRuleTextParser implements RuleTextParser
     {
         $this->logger->warning('Rule parse fell back to the regex parser.', [
             'failure' => $failure->value,
-            'model' => $this->model,
-            'prompt' => RulePrompt::VERSION,
-            'detail' => $detail,
+            'model'   => $this->model,
+            'prompt'  => RulePrompt::VERSION,
+            'detail'  => $detail,
         ]);
 
         return null;

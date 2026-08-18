@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Jobs\PollRoutePrices;
-use App\Jobs\RefreshRouteStats;
-use App\Models\Airport;
-use App\Models\PriceObservation;
-use App\Models\Route;
+use Tests\TestCase;
 use App\Models\User;
+use App\Models\Route;
+use App\Models\Airport;
+use App\Jobs\PollRoutePrices;
 use App\Models\WatchlistItem;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Jobs\RefreshRouteStats;
+use App\Models\PriceObservation;
+use Tests\Concerns\BuildsRouteData;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\Concerns\BuildsRouteData;
-use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The three writes behind the watchlist screen (design/README.md §5): the
@@ -116,10 +116,10 @@ final class WatchlistWritesTest extends TestCase
             ->assertJsonStructure([
                 'data' => [
                     'code', 'active', 'score', 'tier', 'confident', 'trackingDays', 'sparkline',
-                    'origin' => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
+                    'origin'      => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
                     'destination' => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
-                    'price' => ['current', 'usual', 'pctBelow'],
-                    'verdict' => ['label', 'short', 'tone'],
+                    'price'       => ['current', 'usual', 'pctBelow'],
+                    'verdict'     => ['label', 'short', 'tone'],
                 ],
             ])
             ->assertJsonPath('data.price.current', 50)

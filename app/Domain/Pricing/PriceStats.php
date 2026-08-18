@@ -123,7 +123,7 @@ final readonly class PriceStats
             return match (true) {
                 $cents < $this->minCents => 0.0,
                 $cents > $this->maxCents => 1.0,
-                default => 0.5,
+                default                  => 0.5,
             };
         }
 

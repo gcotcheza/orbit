@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Tests\TestCase;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
-use Database\Seeders\SingleUserSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Database\Seeders\SingleUserSeeder;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The seeder that creates Orbit's one account.
@@ -39,8 +39,8 @@ final class SingleUserSeederTest extends TestCase
         parent::setUp();
 
         config([
-            'orbit.seed.email' => self::EMAIL,
-            'orbit.seed.name' => 'Seeded Owner',
+            'orbit.seed.email'    => self::EMAIL,
+            'orbit.seed.name'     => 'Seeded Owner',
             'orbit.seed.password' => null,
         ]);
     }

@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Pricing;
 
+use DateTimeImmutable;
+use App\Domain\Pricing\Verdict;
+use PHPUnit\Framework\TestCase;
 use App\Domain\Pricing\DealScorer;
-use App\Domain\Pricing\PriceHistory;
 use App\Domain\Pricing\PricePoint;
 use App\Domain\Pricing\PriceStats;
+use App\Domain\Pricing\PriceHistory;
 use App\Domain\Pricing\ScoringPolicy;
-use App\Domain\Pricing\Verdict;
-use DateTimeImmutable;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * The one piece of Orbit that is genuinely ours.
@@ -284,11 +284,11 @@ final class DealScorerTest extends TestCase
     public static function maturities(): array
     {
         return [
-            'nothing at all' => [0, false],
+            'nothing at all'    => [0, false],
             'the first morning' => [1, false],
             'one morning short' => [6, false],
             'exactly the floor' => [7, true],
-            'a fortnight' => [14, true],
+            'a fortnight'       => [14, true],
         ];
     }
 

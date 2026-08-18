@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Airport;
-use App\Models\Route;
 use App\Models\User;
-use App\Models\WatchlistItem;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
+use App\Models\Route;
 use RuntimeException;
+use App\Models\Airport;
+use App\Models\WatchlistItem;
+use Illuminate\Database\Seeder;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 /**
  * The six routes the app opens on.
@@ -63,7 +63,7 @@ final class WatchlistSeeder extends Seeder
             $route = Route::query()->updateOrCreate(
                 ['code' => $code],
                 [
-                    'origin_airport_id' => self::airportId($originIata),
+                    'origin_airport_id'      => self::airportId($originIata),
                     'destination_airport_id' => self::airportId($destinationIata),
                 ],
             );

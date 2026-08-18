@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Application\Ports;
 
-use App\Domain\Pricing\DatedFare;
 use DateTimeImmutable;
+use App\Domain\Pricing\DatedFare;
 
 /**
  * Where fares come from.

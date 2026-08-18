@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Application\Ports\OriginSweepProvider;
+use App\Models\Airport;
+use App\Jobs\DiscoverDeals;
+use App\Domain\Geo\Haversine;
+use Illuminate\Database\Seeder;
+use App\Domain\Pricing\DatedFare;
+use App\Models\DiscoveryBaseline;
+use Illuminate\Support\Facades\Date;
+use App\Domain\Discovery\DealCandidate;
 use App\Application\Ports\PriceProvider;
 use App\Domain\Discovery\CandidateScorer;
-use App\Domain\Discovery\DealCandidate;
 use App\Domain\Discovery\DiscoveryPolicy;
 use App\Domain\Discovery\RelativeLanePolicy;
-use App\Domain\Geo\Haversine;
-use App\Domain\Pricing\DatedFare;
-use App\Jobs\DiscoverDeals;
-use App\Models\Airport;
-use App\Models\DiscoveryBaseline;
+use App\Application\Ports\OriginSweepProvider;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Date;
 
 /**
  * Fill the discovery strip on a fresh box — but ONLY while a fake is sweeping.
@@ -223,7 +223,7 @@ final class DiscoverySeeder extends Seeder
                 ['code' => $candidate->routeCode()],
                 [
                     'median_cents' => $median,
-                    'sample_days' => count($window),
+                    'sample_days'  => count($window),
                     /*
                      * MEASURED NOW, which is the one thing about these baselines
                      * that a fortnight of real exploration would have spread out.

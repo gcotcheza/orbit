@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Application\Ports\OriginSweepProvider;
-use App\Domain\Discovery\SweptFare;
-use App\Domain\Geo\Haversine;
-use App\Infrastructure\Discovery\FakeSweepProvider;
-use App\Infrastructure\Discovery\TravelpayoutsSweepProvider;
+use Tests\TestCase;
 use App\Models\Airport;
-use Database\Seeders\DestinationSeeder;
-use Database\Seeders\WorldAirportSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\Geo\Haversine;
+use InvalidArgumentException;
+use App\Domain\Discovery\SweptFare;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
+use Database\Seeders\DestinationSeeder;
+use Database\Seeders\WorldAirportSeeder;
+use App\Application\Ports\OriginSweepProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Infrastructure\Discovery\FakeSweepProvider;
+use App\Infrastructure\Discovery\TravelpayoutsSweepProvider;
 
 /**
  * The origin sweep adapter, against the real thing it recorded.
@@ -154,8 +154,8 @@ final class OriginSweepTest extends TestCase
     {
         $body = (string) json_encode([
             'currency' => 'eur',
-            'success' => true,
-            'data' => [[
+            'success'  => true,
+            'data'     => [[
                 'destination' => 'AGP', 'depart_date' => '2026-08-25', 'value' => 36,
                 'return_date' => '', 'actual' => true, 'found_at' => '2026-08-13T05:28:06Z',
             ]],
@@ -232,7 +232,7 @@ final class OriginSweepTest extends TestCase
     {
         $body = (string) json_encode([
             'currency' => 'eur', 'success' => true,
-            'data' => [
+            'data'     => [
                 ['destination' => 'AGP', 'depart_date' => '2026-08-25', 'value' => 36, 'actual' => true, 'found_at' => 'tomorrow'],
                 ['destination' => 'FAO', 'depart_date' => '2026-08-26', 'value' => 67, 'actual' => true, 'found_at' => '2026-02-31T00:00:00'],
             ],

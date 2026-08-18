@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Discovery;
 
-use App\Domain\Discovery\CandidateScorer;
-use App\Domain\Discovery\DealCandidate;
-use App\Domain\Discovery\DiscoveryPolicy;
 use DateTimeImmutable;
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\Test;
+use App\Domain\Discovery\DealCandidate;
+use App\Domain\Discovery\CandidateScorer;
+use App\Domain\Discovery\DiscoveryPolicy;
 
 /**
  * The cheap half of the discovery funnel, which is arithmetic and is therefore

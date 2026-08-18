@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Application\Rules;
 
-use App\Domain\Rules\ParsedRule;
-use App\Domain\Rules\RuleVocabulary;
-use App\Models\DealRule;
 use App\Models\User;
+use App\Models\DealRule;
+use App\Domain\Rules\ParsedRule;
 use Illuminate\Support\Collection;
+use App\Domain\Rules\RuleVocabulary;
 
 /**
  * Turns rules — saved ones, and the one somebody is still typing — into what

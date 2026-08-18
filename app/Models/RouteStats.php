@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Domain\Pricing\PriceStats;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
+use App\Domain\Pricing\PriceStats;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -56,11 +56,11 @@ final class RouteStats extends Model
     protected function casts(): array
     {
         return [
-            'min_cents' => 'integer',
-            'p25_cents' => 'integer',
+            'min_cents'    => 'integer',
+            'p25_cents'    => 'integer',
             'median_cents' => 'integer',
-            'p75_cents' => 'integer',
-            'max_cents' => 'integer',
+            'p75_cents'    => 'integer',
+            'max_cents'    => 'integer',
             'refreshed_at' => 'immutable_datetime',
         ];
     }

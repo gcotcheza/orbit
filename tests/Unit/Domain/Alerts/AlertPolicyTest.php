@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Alerts;
 
-use App\Domain\Alerts\AlertCandidate;
-use App\Domain\Alerts\AlertDecision;
-use App\Domain\Alerts\AlertPolicy;
-use App\Domain\Alerts\LastAlert;
 use DateTimeImmutable;
 use InvalidArgumentException;
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use App\Domain\Alerts\LastAlert;
+use App\Domain\Alerts\AlertPolicy;
+use App\Domain\Alerts\AlertDecision;
+use App\Domain\Alerts\AlertCandidate;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * Whether to interrupt somebody — every branch of it.
@@ -121,11 +121,11 @@ final class AlertPolicyTest extends TestCase
     public static function maturities(): array
     {
         return [
-            'nothing at all' => [0, AlertDecision::ImmatureData],
-            'the first morning' => [1, AlertDecision::ImmatureData],
+            'nothing at all'                 => [0, AlertDecision::ImmatureData],
+            'the first morning'              => [1, AlertDecision::ImmatureData],
             'one morning short of the floor' => [6, AlertDecision::ImmatureData],
-            'exactly the floor' => [7, AlertDecision::Fired],
-            'a fortnight' => [14, AlertDecision::Fired],
+            'exactly the floor'              => [7, AlertDecision::Fired],
+            'a fortnight'                    => [14, AlertDecision::Fired],
         ];
     }
 
@@ -259,9 +259,9 @@ final class AlertPolicyTest extends TestCase
     public static function sensitivities(): array
     {
         return [
-            'Relaxed (80) holds a 72' => [80, 72, AlertDecision::BelowThreshold],
-            'Balanced (65) fires on it' => [65, 72, AlertDecision::Fired],
-            'Eager (50) fires on it' => [50, 72, AlertDecision::Fired],
+            'Relaxed (80) holds a 72'     => [80, 72, AlertDecision::BelowThreshold],
+            'Balanced (65) fires on it'   => [65, 72, AlertDecision::Fired],
+            'Eager (50) fires on it'      => [50, 72, AlertDecision::Fired],
             'Eager (50) still holds a 43' => [50, 43, AlertDecision::BelowThreshold],
         ];
     }
@@ -490,7 +490,7 @@ final class AlertPolicyTest extends TestCase
     public static function impossiblePercentages(): array
     {
         return [
-            'negative' => [-1],
+            'negative'       => [-1],
             'over a hundred' => [101],
         ];
     }
@@ -759,7 +759,7 @@ final class AlertPolicyTest extends TestCase
     {
         return [
             'negative fare age' => [-1, 3],
-            'negative horizon' => [2, -1],
+            'negative horizon'  => [2, -1],
         ];
     }
 
@@ -779,12 +779,12 @@ final class AlertPolicyTest extends TestCase
     public static function decisions(): array
     {
         return [
-            'fired' => [AlertDecision::Fired, true],
+            'fired'                => [AlertDecision::Fired, true],
             'superseded by a drop' => [AlertDecision::SupersededByDrop, true],
-            'below the threshold' => [AlertDecision::BelowThreshold, false],
-            'immature data' => [AlertDecision::ImmatureData, false],
-            'cooling down' => [AlertDecision::CoolingDown, false],
-            'stale fare' => [AlertDecision::StaleFare, false],
+            'below the threshold'  => [AlertDecision::BelowThreshold, false],
+            'immature data'        => [AlertDecision::ImmatureData, false],
+            'cooling down'         => [AlertDecision::CoolingDown, false],
+            'stale fare'           => [AlertDecision::StaleFare, false],
         ];
     }
 }

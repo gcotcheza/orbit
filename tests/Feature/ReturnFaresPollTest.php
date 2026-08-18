@@ -4,28 +4,28 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Application\Ports\PriceProvider;
-use App\Application\Ports\ReturnTripProvider;
+use Tests\TestCase;
+use App\Models\User;
+use App\Models\Route;
+use DateTimeImmutable;
+use App\Models\ReturnFare;
+use App\Jobs\PollReturnFares;
+use App\Models\WatchlistItem;
+use InvalidArgumentException;
+use Tests\Concerns\RunsCommands;
 use App\Domain\Pricing\DatedFare;
 use App\Domain\Pricing\NightsBand;
 use App\Domain\Pricing\ReturnTrip;
-use App\Infrastructure\Pricing\FakeReturnProvider;
-use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
-use App\Jobs\PollReturnFares;
-use App\Models\ReturnFare;
-use App\Models\Route;
-use App\Models\User;
-use App\Models\WatchlistItem;
-use DateTimeImmutable;
-use Illuminate\Console\Scheduling\Event;
-use Illuminate\Console\Scheduling\Schedule;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\Concerns\RunsCommands;
-use Tests\TestCase;
+use App\Application\Ports\PriceProvider;
+use Illuminate\Console\Scheduling\Event;
+use Illuminate\Console\Scheduling\Schedule;
+use App\Application\Ports\ReturnTripProvider;
+use App\Infrastructure\Pricing\FakeReturnProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
 
 /**
  * The round-trip foundation, end to end: the switch, the fake, the job, the
@@ -79,7 +79,7 @@ final class ReturnFaresPollTest extends TestCase
     public function naming_travelpayouts_hands_out_the_travelpayouts_adapter(): void
     {
         config([
-            'orbit.providers.returns' => 'travelpayouts',
+            'orbit.providers.returns'   => 'travelpayouts',
             'orbit.travelpayouts.token' => 'test-token',
         ]);
 
@@ -90,7 +90,7 @@ final class ReturnFaresPollTest extends TestCase
     public function selecting_it_without_a_token_refuses_to_resolve(): void
     {
         config([
-            'orbit.providers.returns' => 'travelpayouts',
+            'orbit.providers.returns'   => 'travelpayouts',
             'orbit.travelpayouts.token' => null,
         ]);
 
@@ -119,9 +119,9 @@ final class ReturnFaresPollTest extends TestCase
          * coming from the fake.
          */
         config([
-            'orbit.providers.price' => 'travelpayouts',
+            'orbit.providers.price'     => 'travelpayouts',
             'orbit.travelpayouts.token' => 'test-token',
-            'orbit.providers.returns' => 'fake',
+            'orbit.providers.returns'   => 'fake',
         ]);
 
         $this->assertInstanceOf(FakeReturnProvider::class, $this->app->make(ReturnTripProvider::class));
@@ -617,9 +617,9 @@ final class ReturnFaresPollTest extends TestCase
         $route = Route::factory()->between($origin, $destination)->create();
 
         WatchlistItem::query()->create([
-            'user_id' => User::factory()->create()->id,
+            'user_id'  => User::factory()->create()->id,
             'route_id' => $route->id,
-            'active' => $active,
+            'active'   => $active,
         ]);
 
         return $route;
@@ -642,14 +642,14 @@ final class ReturnFaresPollTest extends TestCase
     private function seedFare(Route $route, string $departure, int $nights, ?string $fetchedAt = null): void
     {
         ReturnFare::query()->insert([
-            'route_id' => $route->id,
+            'route_id'       => $route->id,
             'departure_date' => $departure,
-            'nights' => $nights,
-            'price_cents' => 12345,
-            'fetched_at' => $fetchedAt ?? Date::now()->format('Y-m-d H:i:s'),
-            'found_at' => null,
-            'created_at' => Date::now(),
-            'updated_at' => Date::now(),
+            'nights'         => $nights,
+            'price_cents'    => 12345,
+            'fetched_at'     => $fetchedAt ?? Date::now()->format('Y-m-d H:i:s'),
+            'found_at'       => null,
+            'created_at'     => Date::now(),
+            'updated_at'     => Date::now(),
         ]);
     }
 }

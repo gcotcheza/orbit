@@ -62,13 +62,13 @@ final readonly class RuleCriteria
     public function toArray(): array
     {
         return [
-            'origins' => $this->origins,
-            'maxPriceCents' => $this->maxPriceCents,
+            'origins'          => $this->origins,
+            'maxPriceCents'    => $this->maxPriceCents,
             'tripLengthNights' => $this->tripLengthNights,
-            'departDows' => $this->departDows,
-            'dateWindow' => $this->dateWindow === null ? null : [
-                'from' => $this->dateWindow->from,
-                'to' => $this->dateWindow->to,
+            'departDows'       => $this->departDows,
+            'dateWindow'       => $this->dateWindow === null ? null : [
+                'from'  => $this->dateWindow->from,
+                'to'    => $this->dateWindow->to,
                 'label' => $this->dateWindow->label(),
             ],
             'vibes' => $this->vibes,

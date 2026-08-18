@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Discovery;
 
-use App\Domain\Discovery\DealCandidate;
+use DateTimeImmutable;
+use PHPUnit\Framework\TestCase;
 use App\Domain\Discovery\PickReason;
+use App\Domain\Discovery\RelativePick;
+use PHPUnit\Framework\Attributes\Test;
+use App\Domain\Discovery\DealCandidate;
+use App\Domain\Discovery\RouteBaseline;
 use App\Domain\Discovery\RelativeLanePolicy;
 use App\Domain\Discovery\RelativeLaneSelector;
-use App\Domain\Discovery\RelativePick;
-use App\Domain\Discovery\RouteBaseline;
-use DateTimeImmutable;
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\TestCase;
 
 /**
  * How the second lane spends its three fetches — the flywheel, as arithmetic.

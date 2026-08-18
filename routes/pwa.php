@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use App\Http\Controllers\Pwa\ManifestController;
-use App\Http\Controllers\Pwa\OfflineController;
-use App\Http\Controllers\Pwa\ServiceWorkerController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Pwa\OfflineController;
+use App\Http\Controllers\Pwa\ManifestController;
+use App\Http\Controllers\Pwa\ServiceWorkerController;
 
 /*
 |--------------------------------------------------------------------------

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Pricing;
 
-use App\Application\Ports\PriceProvider;
-use App\Domain\Pricing\DatedFare;
 use DateTimeImmutable;
+use App\Domain\Pricing\DatedFare;
 use Illuminate\Support\Facades\Date;
+use App\Application\Ports\PriceProvider;
 
 /**
  * Fares, until there are real ones.

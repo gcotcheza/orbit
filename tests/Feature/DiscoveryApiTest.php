@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Domain\Discovery\Lane;
+use Tests\TestCase;
+use App\Models\User;
 use App\Models\Airport;
 use App\Models\Discovery;
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\Discovery\Lane;
 use Illuminate\Support\Facades\Date;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * `GET /api/discoveries` — the contract in docs/API.md.
@@ -52,18 +52,18 @@ final class DiscoveryApiTest extends TestCase
 
         /** @var array<model-property<Discovery>, mixed> $attributes */
         $attributes = $overrides + [
-            'origin_airport_id' => $ids[$origin],
+            'origin_airport_id'      => $ids[$origin],
             'destination_airport_id' => $ids[$destination],
-            'code' => $code,
-            'departure_date' => '2026-10-24',
-            'price_cents' => 2900,
-            'cents_per_km' => 1.565,
-            'percentile' => 0.0,
-            'savings_cents' => 4900,
-            'google_verdict' => null,
-            'found_at' => Date::parse('2026-08-15 08:00:00'),
-            'discovered_at' => Date::parse('2026-08-16 05:20:00'),
-            'expires_at' => Date::parse('2026-08-17 17:20:00'),
+            'code'                   => $code,
+            'departure_date'         => '2026-10-24',
+            'price_cents'            => 2900,
+            'cents_per_km'           => 1.565,
+            'percentile'             => 0.0,
+            'savings_cents'          => 4900,
+            'google_verdict'         => null,
+            'found_at'               => Date::parse('2026-08-15 08:00:00'),
+            'discovered_at'          => Date::parse('2026-08-16 05:20:00'),
+            'expires_at'             => Date::parse('2026-08-17 17:20:00'),
         ];
 
         return Discovery::query()->create($attributes);
@@ -84,15 +84,15 @@ final class DiscoveryApiTest extends TestCase
 
         $response->assertOk()->assertJson([
             'data' => [[
-                'code' => 'DUS-AGP',
-                'lane' => 'absolute',
-                'origin' => ['iata' => 'DUS'],
-                'destination' => ['iata' => 'AGP', 'city' => 'Málaga', 'country' => 'Spain'],
-                'price' => 29,
+                'code'          => 'DUS-AGP',
+                'lane'          => 'absolute',
+                'origin'        => ['iata' => 'DUS'],
+                'destination'   => ['iata' => 'AGP', 'city' => 'Málaga', 'country' => 'Spain'],
+                'price'         => 29,
                 'departureDate' => '2026-10-24',
-                'percentile' => 0,
-                'savings' => 49,
-                'verdict' => ['verified' => false, 'label' => 'Unverified'],
+                'percentile'    => 0,
+                'savings'       => 49,
+                'verdict'       => ['verified' => false, 'label' => 'Unverified'],
             ]],
             'meta' => ['count' => 1],
         ]);
@@ -128,7 +128,7 @@ final class DiscoveryApiTest extends TestCase
     public function it_publishes_googles_own_price_even_when_it_disagrees(): void
     {
         $this->discovery(['google_verdict' => [
-            'level' => 'typical', 'lowest' => 7000,
+            'level'       => 'typical', 'lowest' => 7000,
             'typical_low' => 5500, 'typical_high' => 17500, 'confirmed' => false,
         ]]);
 
@@ -145,7 +145,7 @@ final class DiscoveryApiTest extends TestCase
     public function an_earned_badge_says_so(): void
     {
         $this->discovery(['google_verdict' => [
-            'level' => 'low', 'lowest' => 4800,
+            'level'       => 'low', 'lowest' => 4800,
             'typical_low' => 5500, 'typical_high' => 17500, 'confirmed' => true,
         ]]);
 

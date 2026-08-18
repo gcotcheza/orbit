@@ -142,10 +142,10 @@ final readonly class FakeFareModel
     private function dayOfWeek(int $isoDayOfWeek): float
     {
         return match ($isoDayOfWeek) {
-            4 => 1.03,
-            5 => 1.14,
-            6 => 1.08,
-            7 => 1.12,
+            4       => 1.03,
+            5       => 1.14,
+            6       => 1.08,
+            7       => 1.12,
             default => 1.0,
         };
     }

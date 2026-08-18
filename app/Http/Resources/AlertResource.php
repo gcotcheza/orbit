@@ -34,7 +34,7 @@ final class AlertResource extends JsonResource
         $alert = $this->resource;
 
         return [
-            'id' => $alert->id,
+            'id'   => $alert->id,
             'type' => $alert->type->value,
 
             /*
@@ -43,7 +43,7 @@ final class AlertResource extends JsonResource
              * Null on the weekly digest, which is about no route in particular.
              */
             'route' => $this->text($alert, 'routeCode'),
-            'rule' => $this->rule($alert),
+            'rule'  => $this->rule($alert),
 
             'score' => $alert->score,
             'price' => $alert->price_cents === null ? null : Euros::from($alert->price_cents),
@@ -77,8 +77,8 @@ final class AlertResource extends JsonResource
         $chips = $rule['chips'] ?? null;
 
         return [
-            'id' => is_int($id) ? $id : null,
-            'text' => is_string($text) ? $text : null,
+            'id'    => is_int($id) ? $id : null,
+            'text'  => is_string($text) ? $text : null,
             'chips' => is_array($chips) ? array_values(array_filter($chips, 'is_string')) : [],
         ];
     }

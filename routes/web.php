@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-use App\Http\Controllers\AirportController;
-use App\Http\Controllers\AlertController;
-use App\Http\Controllers\Auth\CurrentUserController;
-use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\Auth\PasswordController;
-use App\Http\Controllers\DestinationController;
-use App\Http\Controllers\DiscoveryController;
-use App\Http\Controllers\RouteCalendarController;
-use App\Http\Controllers\RouteController;
-use App\Http\Controllers\RuleController;
-use App\Http\Controllers\RuleParseController;
-use App\Http\Controllers\SettingsController;
-use App\Http\Controllers\WatchlistController;
-use App\Http\Controllers\WatchlistItemController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\RuleController;
+use App\Http\Controllers\AlertController;
+use App\Http\Controllers\RouteController;
+use App\Http\Controllers\AirportController;
+use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\DiscoveryController;
+use App\Http\Controllers\RuleParseController;
+use App\Http\Controllers\WatchlistController;
+use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\DestinationController;
+use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\RouteCalendarController;
+use App\Http\Controllers\WatchlistItemController;
+use App\Http\Controllers\Auth\CurrentUserController;
 
 /*
 |--------------------------------------------------------------------------

@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Rules;
 
-use App\Domain\Rules\MonthWindow;
-use App\Domain\Rules\ParsedRule;
 use App\Domain\Rules\RuleChip;
+use PHPUnit\Framework\TestCase;
+use App\Domain\Rules\ParsedRule;
+use App\Domain\Rules\MonthWindow;
 use App\Domain\Rules\RuleCriteria;
 use App\Domain\Rules\RuleVocabulary;
 use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\TestCase;
 
 /**
  * The chips, and taking one off.

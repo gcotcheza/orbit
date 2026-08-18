@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\DiscoveryResource;
 use App\Models\Discovery;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Date;
+use App\Http\Resources\DiscoveryResource;
 
 /**
  * The current set of discoveries — "the insanely cheap routes you never thought

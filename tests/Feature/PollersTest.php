@@ -4,23 +4,23 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Application\Ports\PriceProvider;
-use App\Domain\Pricing\DatedFare;
-use App\Jobs\PollRoutePrices;
-use App\Jobs\RefreshRouteStats;
-use App\Models\CalendarFare;
-use App\Models\PriceObservation;
-use App\Models\Route;
-use App\Models\RouteStats;
+use Tests\TestCase;
 use App\Models\User;
-use App\Models\WatchlistItem;
+use App\Models\Route;
 use DateTimeImmutable;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\RouteStats;
+use App\Models\CalendarFare;
+use App\Jobs\PollRoutePrices;
+use App\Models\WatchlistItem;
+use App\Jobs\RefreshRouteStats;
+use App\Models\PriceObservation;
+use Tests\Concerns\RunsCommands;
+use App\Domain\Pricing\DatedFare;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
-use Tests\Concerns\RunsCommands;
-use Tests\TestCase;
+use App\Application\Ports\PriceProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The two jobs that make the app move, and the two commands that fan them out.
@@ -56,9 +56,9 @@ final class PollersTest extends TestCase
     private function watch(Route $route, bool $active = true): void
     {
         WatchlistItem::query()->create([
-            'user_id' => User::factory()->create()->id,
+            'user_id'  => User::factory()->create()->id,
             'route_id' => $route->id,
-            'active' => $active,
+            'active'   => $active,
         ]);
     }
 

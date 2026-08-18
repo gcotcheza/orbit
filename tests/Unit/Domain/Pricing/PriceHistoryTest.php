@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Pricing;
 
-use App\Domain\Pricing\PriceHistory;
-use App\Domain\Pricing\PricePoint;
 use DateTimeImmutable;
 use InvalidArgumentException;
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use App\Domain\Pricing\PricePoint;
+use App\Domain\Pricing\PriceHistory;
+use PHPUnit\Framework\Attributes\Test;
 
 /**
  * Our own observations, and the trend read out of them.

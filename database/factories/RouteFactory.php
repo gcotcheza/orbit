@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Airport;
 use App\Models\Route;
+use App\Models\Airport;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -21,7 +21,7 @@ final class RouteFactory extends Factory
     public function definition(): array
     {
         return [
-            'origin_airport_id' => Airport::factory()->origin(),
+            'origin_airport_id'      => Airport::factory()->origin(),
             'destination_airport_id' => Airport::factory(),
 
             /*
@@ -46,9 +46,9 @@ final class RouteFactory extends Factory
     public function between(string $originIata, string $destinationIata): self
     {
         return $this->state(fn (): array => [
-            'origin_airport_id' => self::airport($originIata, isOrigin: true)->id,
+            'origin_airport_id'      => self::airport($originIata, isOrigin: true)->id,
             'destination_airport_id' => self::airport($destinationIata, isOrigin: false)->id,
-            'code' => Route::codeFor($originIata, $destinationIata),
+            'code'                   => Route::codeFor($originIata, $destinationIata),
         ]);
     }
 

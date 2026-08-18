@@ -4,22 +4,22 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Domain\Alerts\AlertType;
-use App\Jobs\SendWeeklyDigest;
-use App\Models\Alert;
+use Tests\TestCase;
 use App\Models\User;
+use App\Models\Alert;
 use App\Models\UserSettings;
+use App\Jobs\SendWeeklyDigest;
+use App\Domain\Alerts\AlertType;
+use Tests\Concerns\RunsCommands;
+use Tests\Concerns\BuildsRuleData;
 use App\Notifications\WeeklyDigest;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Date;
-use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Queue;
-use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\BuildsAlertData;
 use Tests\Concerns\BuildsRouteData;
-use Tests\Concerns\BuildsRuleData;
-use Tests\Concerns\RunsCommands;
-use Tests\TestCase;
+use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\Queue;
+use PHPUnit\Framework\Attributes\Test;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * Sunday, 09:00 Europe/Amsterdam.
@@ -80,8 +80,8 @@ final class WeeklyDigestTest extends TestCase
         $this->makeDestination('FAO', ['beach']);
         $this->makeRouteWithFares('AMS', 'FAO', ['2026-09-04' => 3900]);
         $this->makeRule($this->owner, 'a beach somewhere under €80', [
-            'origins' => ['AMS'],
-            'vibes' => ['beach'],
+            'origins'       => ['AMS'],
+            'vibes'         => ['beach'],
             'maxPriceCents' => 8000,
         ]);
 

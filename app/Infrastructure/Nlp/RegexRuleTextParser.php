@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Nlp;
 
-use App\Application\Ports\RuleTextParser;
-use App\Domain\Rules\MonthWindow;
+use DateTimeImmutable;
 use App\Domain\Rules\ParsedRule;
+use App\Domain\Rules\MonthWindow;
 use App\Domain\Rules\RuleCriteria;
 use App\Domain\Rules\RuleVocabulary;
-use DateTimeImmutable;
+use App\Application\Ports\RuleTextParser;
 
 /**
  * Reading the sentence without asking anybody.
@@ -73,15 +73,15 @@ final readonly class RegexRuleTextParser implements RuleTextParser
     ];
 
     private const MONTHS = [
-        1 => ['january', 'jan'],
-        2 => ['february', 'feb'],
-        3 => ['march', 'mar'],
-        4 => ['april', 'apr'],
-        5 => ['may'],
-        6 => ['june', 'jun'],
-        7 => ['july', 'jul'],
-        8 => ['august', 'aug'],
-        9 => ['september', 'sept', 'sep'],
+        1  => ['january', 'jan'],
+        2  => ['february', 'feb'],
+        3  => ['march', 'mar'],
+        4  => ['april', 'apr'],
+        5  => ['may'],
+        6  => ['june', 'jun'],
+        7  => ['july', 'jul'],
+        8  => ['august', 'aug'],
+        9  => ['september', 'sept', 'sep'],
         10 => ['october', 'oct'],
         11 => ['november', 'nov'],
         12 => ['december', 'dec'],
@@ -92,7 +92,7 @@ final readonly class RegexRuleTextParser implements RuleTextParser
         'spring' => [3, 5],
         'summer' => [6, 8],
         'autumn' => [9, 11],
-        'fall' => [9, 11],
+        'fall'   => [9, 11],
         'winter' => [12, 2],
     ];
 

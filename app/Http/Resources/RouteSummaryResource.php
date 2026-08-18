@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
-use App\Application\Routes\RouteSnapshot;
 use Illuminate\Http\Request;
+use App\Application\Routes\RouteSnapshot;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
@@ -37,18 +37,18 @@ class RouteSummaryResource extends JsonResource
         $deal = $snapshot->deal;
 
         return [
-            'code' => $route->code,
-            'origin' => AirportResource::make($route->origin)->toArray($request),
+            'code'        => $route->code,
+            'origin'      => AirportResource::make($route->origin)->toArray($request),
             'destination' => AirportResource::make($route->destination)->toArray($request),
 
             'price' => [
-                'current' => $snapshot->currentCents === null ? null : Euros::from($snapshot->currentCents),
-                'usual' => $snapshot->usualCents() === null ? null : Euros::from($snapshot->usualCents()),
+                'current'  => $snapshot->currentCents === null ? null : Euros::from($snapshot->currentCents),
+                'usual'    => $snapshot->usualCents() === null ? null : Euros::from($snapshot->usualCents()),
                 'pctBelow' => $snapshot->percentUnderUsual(),
             ],
 
             'score' => $deal->score,
-            'tier' => $deal->tier,
+            'tier'  => $deal->tier,
             /*
              * FALSE MEANS THE SCORE IS A PLACEHOLDER, not a bad deal. Show the
              * "tracking N days" note instead of the gauge.
@@ -89,7 +89,7 @@ class RouteSummaryResource extends JsonResource
              * "today": a screen with no date must print no date.
              */
             'cheapest' => $snapshot->cheapest === null ? null : [
-                'date' => $snapshot->cheapest->departureDate->format('Y-m-d'),
+                'date'  => $snapshot->cheapest->departureDate->format('Y-m-d'),
                 'price' => Euros::from($snapshot->cheapest->cents),
             ],
         ];

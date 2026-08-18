@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Pwa;
 
-use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
+use App\Http\Controllers\Controller;
 
 /**
  * `GET /manifest.webmanifest` — what "Add to Home Screen" reads.
@@ -48,8 +48,8 @@ final class ManifestController extends Controller
     public function __invoke(): JsonResponse
     {
         $manifest = [
-            'name' => (string) config('orbit.pwa.name'),
-            'short_name' => (string) config('orbit.pwa.short_name'),
+            'name'        => (string) config('orbit.pwa.name'),
+            'short_name'  => (string) config('orbit.pwa.short_name'),
             'description' => (string) config('orbit.pwa.description'),
 
             /*
@@ -60,8 +60,8 @@ final class ManifestController extends Controller
              * installed app's URL differ from the one the owner bookmarked.
              */
             'start_url' => '/',
-            'scope' => '/',
-            'id' => '/',
+            'scope'     => '/',
+            'id'        => '/',
 
             'display' => 'standalone',
 
@@ -73,30 +73,30 @@ final class ManifestController extends Controller
              */
             'orientation' => 'portrait',
 
-            'theme_color' => (string) config('orbit.pwa.theme_color'),
+            'theme_color'      => (string) config('orbit.pwa.theme_color'),
             'background_color' => (string) config('orbit.pwa.background_color'),
 
             'lang' => 'en-GB',
-            'dir' => 'ltr',
+            'dir'  => 'ltr',
 
             'icons' => [
                 // Vector first: a browser that can use it never rasterises.
                 [
-                    'src' => '/icon.svg',
-                    'sizes' => 'any',
-                    'type' => 'image/svg+xml',
+                    'src'     => '/icon.svg',
+                    'sizes'   => 'any',
+                    'type'    => 'image/svg+xml',
                     'purpose' => 'any',
                 ],
                 [
-                    'src' => '/icons/icon-192.png',
-                    'sizes' => '192x192',
-                    'type' => 'image/png',
+                    'src'     => '/icons/icon-192.png',
+                    'sizes'   => '192x192',
+                    'type'    => 'image/png',
                     'purpose' => 'any',
                 ],
                 [
-                    'src' => '/icons/icon-512.png',
-                    'sizes' => '512x512',
-                    'type' => 'image/png',
+                    'src'     => '/icons/icon-512.png',
+                    'sizes'   => '512x512',
+                    'type'    => 'image/png',
                     'purpose' => 'any',
                 ],
                 /*
@@ -109,15 +109,15 @@ final class ManifestController extends Controller
                  * needlessly small glyph or a maskable one that is clipped.
                  */
                 [
-                    'src' => '/icons/icon-maskable-192.png',
-                    'sizes' => '192x192',
-                    'type' => 'image/png',
+                    'src'     => '/icons/icon-maskable-192.png',
+                    'sizes'   => '192x192',
+                    'type'    => 'image/png',
                     'purpose' => 'maskable',
                 ],
                 [
-                    'src' => '/icons/icon-maskable-512.png',
-                    'sizes' => '512x512',
-                    'type' => 'image/png',
+                    'src'     => '/icons/icon-maskable-512.png',
+                    'sizes'   => '512x512',
+                    'type'    => 'image/png',
                     'purpose' => 'maskable',
                 ],
             ],

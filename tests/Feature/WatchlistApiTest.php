@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\Route;
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Date;
-use Illuminate\Support\Facades\DB;
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Test;
-use Tests\Concerns\BuildsRouteData;
 use Tests\TestCase;
+use App\Models\User;
+use App\Models\Route;
+use Illuminate\Support\Facades\DB;
+use Tests\Concerns\BuildsRouteData;
+use Illuminate\Support\Facades\Date;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * GET /api/watchlist — the response the globe home and the watchlist screen
@@ -77,10 +77,10 @@ final class WatchlistApiTest extends TestCase
         $response->assertJsonStructure([
             'data' => [[
                 'code', 'active', 'score', 'tier', 'confident', 'trackingDays', 'sparkline',
-                'origin' => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
+                'origin'      => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
                 'destination' => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
-                'price' => ['current', 'usual', 'pctBelow'],
-                'verdict' => ['label', 'short', 'tone'],
+                'price'       => ['current', 'usual', 'pctBelow'],
+                'verdict'     => ['label', 'short', 'tone'],
                 /*
                  * THE DAY THE PRICE IS FOR, on the summary and not only on the
                  * detail. Every screen that draws `price.current` was drawing a
@@ -302,9 +302,9 @@ final class WatchlistApiTest extends TestCase
     public static function maturities(): array
     {
         return [
-            'the first morning' => [1, false],
+            'the first morning'              => [1, false],
             'one morning short of the floor' => [6, false],
-            'exactly the floor' => [7, true],
+            'exactly the floor'              => [7, true],
         ];
     }
 

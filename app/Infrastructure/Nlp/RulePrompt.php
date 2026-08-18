@@ -79,51 +79,51 @@ final readonly class RulePrompt
     public static function schema(RuleVocabulary $vocabulary): array
     {
         return [
-            'type' => 'object',
+            'type'       => 'object',
             'properties' => [
                 'origins' => [
-                    'type' => 'array',
+                    'type'        => 'array',
                     'description' => 'Airports to depart from. Empty means no preference.',
-                    'items' => ['type' => 'string', 'enum' => $vocabulary->origins],
+                    'items'       => ['type' => 'string', 'enum' => $vocabulary->origins],
                 ],
                 'max_price_euros' => [
                     'description' => 'Ceiling on one fare, in whole euros. Null when the text names no price.',
-                    'anyOf' => [['type' => 'integer'], ['type' => 'null']],
+                    'anyOf'       => [['type' => 'integer'], ['type' => 'null']],
                 ],
                 'trip_length_nights' => [
                     'description' => '[minimum, maximum] nights away. Null when the text says nothing about length.',
-                    'anyOf' => [
+                    'anyOf'       => [
                         ['type' => 'array', 'items' => ['type' => 'integer']],
                         ['type' => 'null'],
                     ],
                 ],
                 'depart_weekdays' => [
-                    'type' => 'array',
+                    'type'        => 'array',
                     'description' => 'ISO weekday numbers a departure is allowed on. Empty means any day.',
-                    'items' => ['type' => 'integer', 'enum' => [1, 2, 3, 4, 5, 6, 7]],
+                    'items'       => ['type' => 'integer', 'enum' => [1, 2, 3, 4, 5, 6, 7]],
                 ],
                 'date_window' => [
                     'description' => 'Months of the year the trip may fall in. Null when the text names no season or month.',
-                    'anyOf' => [
+                    'anyOf'       => [
                         [
-                            'type' => 'object',
+                            'type'       => 'object',
                             'properties' => [
                                 'from_month' => ['type' => 'integer', 'enum' => range(1, 12)],
-                                'to_month' => ['type' => 'integer', 'enum' => range(1, 12)],
+                                'to_month'   => ['type' => 'integer', 'enum' => range(1, 12)],
                             ],
-                            'required' => ['from_month', 'to_month'],
+                            'required'             => ['from_month', 'to_month'],
                             'additionalProperties' => false,
                         ],
                         ['type' => 'null'],
                     ],
                 ],
                 'vibes' => [
-                    'type' => 'array',
+                    'type'        => 'array',
                     'description' => 'What the trip is for. Empty means anywhere.',
-                    'items' => ['type' => 'string', 'enum' => $vocabulary->vibes()],
+                    'items'       => ['type' => 'string', 'enum' => $vocabulary->vibes()],
                 ],
             ],
-            'required' => ['origins', 'max_price_euros', 'trip_length_nights', 'depart_weekdays', 'date_window', 'vibes'],
+            'required'             => ['origins', 'max_price_euros', 'trip_length_nights', 'depart_weekdays', 'date_window', 'vibes'],
             'additionalProperties' => false,
         ];
     }

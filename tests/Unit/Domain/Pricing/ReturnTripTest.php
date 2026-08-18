@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain\Pricing;
 
+use DateTimeZone;
+use DateTimeImmutable;
+use InvalidArgumentException;
+use PHPUnit\Framework\TestCase;
 use App\Domain\Pricing\NightsBand;
 use App\Domain\Pricing\ReturnTrip;
-use DateTimeImmutable;
-use DateTimeZone;
-use InvalidArgumentException;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * The two round-trip values, which are pure PHP and are tested as such.

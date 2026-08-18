@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Tests\Unit\Infrastructure;
 
 use App\Domain\Rules\RuleChip;
-use App\Domain\Rules\RuleVocabulary;
-use App\Infrastructure\Nlp\RegexRuleTextParser;
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use App\Domain\Rules\RuleVocabulary;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
+use App\Infrastructure\Nlp\RegexRuleTextParser;
 
 /**
  * Reading English without a key.
@@ -100,12 +100,12 @@ final class RegexRuleTextParserTest extends TestCase
     public static function prices(): array
     {
         return [
-            'under with a symbol' => ['sunny under €80', 8000],
-            'below in words' => ['somewhere sunny below 80 euros', 8000],
-            'max with a symbol' => ['beach, max €80', 8000],
-            'maximum spelled out' => ['beach maximum 80 eur', 8000],
-            'less than' => ['city break less than 65 euros', 6500],
-            'a bare symbol' => ['ski trip €150', 15000],
+            'under with a symbol'      => ['sunny under €80', 8000],
+            'below in words'           => ['somewhere sunny below 80 euros', 8000],
+            'max with a symbol'        => ['beach, max €80', 8000],
+            'maximum spelled out'      => ['beach maximum 80 eur', 8000],
+            'less than'                => ['city break less than 65 euros', 6500],
+            'a bare symbol'            => ['ski trip €150', 15000],
             'a trailing currency word' => ['ski trip 150 euros', 15000],
 
             /*
@@ -113,8 +113,8 @@ final class RegexRuleTextParserTest extends TestCase
              * live in the same sentences as prices do, and a reader that took
              * any number would turn every trip length into a €3 ceiling.
              */
-            'a night count is not a price' => ['somewhere sunny for 3 nights', null],
-            'a weekday is not a price' => ['leaving Friday', null],
+            'a night count is not a price'   => ['somewhere sunny for 3 nights', null],
+            'a weekday is not a price'       => ['leaving Friday', null],
             'the word cheap is not a number' => ['somewhere cheap and sunny', null],
         ];
     }
@@ -134,12 +134,12 @@ final class RegexRuleTextParserTest extends TestCase
     public static function origins(): array
     {
         return [
-            'the whole set' => ['sunny, from any NL airport', ['AMS', 'EIN', 'DUS']],
-            'the country' => ['beach from any dutch airport', ['AMS', 'EIN', 'DUS']],
-            'one code' => ['sunny from AMS', ['AMS']],
-            'one city' => ['sunny from Eindhoven', ['EIN']],
-            'an airport by name' => ['sunny from Schiphol', ['AMS']],
-            'two of them, in config order' => ['city break from DUS or AMS', ['AMS', 'DUS']],
+            'the whole set'                   => ['sunny, from any NL airport', ['AMS', 'EIN', 'DUS']],
+            'the country'                     => ['beach from any dutch airport', ['AMS', 'EIN', 'DUS']],
+            'one code'                        => ['sunny from AMS', ['AMS']],
+            'one city'                        => ['sunny from Eindhoven', ['EIN']],
+            'an airport by name'              => ['sunny from Schiphol', ['AMS']],
+            'two of them, in config order'    => ['city break from DUS or AMS', ['AMS', 'DUS']],
             'an umlaut somebody did not type' => ['ski from dusseldorf', ['DUS']],
 
             /*
@@ -148,7 +148,7 @@ final class RegexRuleTextParserTest extends TestCase
              * understood" must not claim the sentence said something it did
              * not — see RegexRuleTextParser::origins().
              */
-            'silence claims nothing' => ['somewhere sunny under €80', []],
+            'silence claims nothing'            => ['somewhere sunny under €80', []],
             'anywhere is about the destination' => ['fly anywhere under €50', []],
         ];
     }
@@ -171,18 +171,18 @@ final class RegexRuleTextParserTest extends TestCase
     public static function windows(): array
     {
         return [
-            'spring' => ['somewhere sunny in spring', [3, 5]],
-            'summer' => ['beach in summer', [6, 8]],
-            'autumn' => ['city break in autumn', [9, 11]],
-            'fall' => ['city break in the fall', [9, 11]],
-            'winter wraps the year' => ['ski in winter', [12, 2]],
-            'one month' => ['beach in July', [7, 7]],
-            'an abbreviated month' => ['beach in sept', [9, 9]],
-            'a range with a word' => ['sunny march to may', [3, 5]],
-            'a range with a dash' => ['sunny jun - aug', [6, 8]],
-            'between' => ['sunny between june and august', [6, 8]],
+            'spring'                     => ['somewhere sunny in spring', [3, 5]],
+            'summer'                     => ['beach in summer', [6, 8]],
+            'autumn'                     => ['city break in autumn', [9, 11]],
+            'fall'                       => ['city break in the fall', [9, 11]],
+            'winter wraps the year'      => ['ski in winter', [12, 2]],
+            'one month'                  => ['beach in July', [7, 7]],
+            'an abbreviated month'       => ['beach in sept', [9, 9]],
+            'a range with a word'        => ['sunny march to may', [3, 5]],
+            'a range with a dash'        => ['sunny jun - aug', [6, 8]],
+            'between'                    => ['sunny between june and august', [6, 8]],
             'the first month named wins' => ['a trip in October, or maybe March', [10, 10]],
-            'silence' => ['somewhere sunny', null],
+            'silence'                    => ['somewhere sunny', null],
         ];
     }
 
@@ -214,17 +214,17 @@ final class RegexRuleTextParserTest extends TestCase
     {
         return [
             'a weekend is two or three nights, leaving Friday or Saturday' => ['a cheap weekend', [2, 3], [5, 6]],
-            'a long weekend is longer' => ['a long weekend somewhere sunny', [3, 4], [5, 6]],
-            'a named day refines the weekend' => ['a weekend leaving Saturday', [2, 3], [6]],
-            'a week is seven nights' => ['a week in the sun', [7, 7], []],
-            'a ski week too' => ['ski week in winter', [7, 7], []],
-            'next week is a date, not a length' => ['somewhere sunny next week', null, []],
-            'an exact count' => ['5 nights somewhere warm', [5, 5], []],
-            'a single night' => ['1 night in Berlin', [1, 1], []],
-            'a range' => ['3 to 5 nights somewhere sunny', [3, 5], []],
-            'a dashed range' => ['3-5 nights somewhere sunny', [3, 5], []],
-            'two days named' => ['leaving Monday or Thursday', null, [1, 4]],
-            'silence' => ['somewhere sunny', null, []],
+            'a long weekend is longer'                                     => ['a long weekend somewhere sunny', [3, 4], [5, 6]],
+            'a named day refines the weekend'                              => ['a weekend leaving Saturday', [2, 3], [6]],
+            'a week is seven nights'                                       => ['a week in the sun', [7, 7], []],
+            'a ski week too'                                               => ['ski week in winter', [7, 7], []],
+            'next week is a date, not a length'                            => ['somewhere sunny next week', null, []],
+            'an exact count'                                               => ['5 nights somewhere warm', [5, 5], []],
+            'a single night'                                               => ['1 night in Berlin', [1, 1], []],
+            'a range'                                                      => ['3 to 5 nights somewhere sunny', [3, 5], []],
+            'a dashed range'                                               => ['3-5 nights somewhere sunny', [3, 5], []],
+            'two days named'                                               => ['leaving Monday or Thursday', null, [1, 4]],
+            'silence'                                                      => ['somewhere sunny', null, []],
         ];
     }
 
@@ -250,11 +250,11 @@ final class RegexRuleTextParserTest extends TestCase
     public static function vibes(): array
     {
         return [
-            'sunny' => ['somewhere sunny', ['sunny']],
-            'warm means sunny' => ['somewhere warm in may', ['sunny']],
-            'beach' => ['a beach holiday', ['beach']],
-            'a phrase beats the word inside it' => ['a city break', ['city']],
-            'snow means ski' => ['somewhere with snow', ['ski']],
+            'sunny'                                => ['somewhere sunny', ['sunny']],
+            'warm means sunny'                     => ['somewhere warm in may', ['sunny']],
+            'beach'                                => ['a beach holiday', ['beach']],
+            'a phrase beats the word inside it'    => ['a city break', ['city']],
+            'snow means ski'                       => ['somewhere with snow', ['ski']],
             'several at once, in vocabulary order' => ['a sunny beach with nightlife', ['sunny', 'beach', 'party']],
 
             /*
@@ -263,7 +263,7 @@ final class RegexRuleTextParserTest extends TestCase
              * "mar" out of "market".
              */
             'a substring is not a word' => ['a trip to the supermarket', []],
-            'silence' => ['under €80 from AMS', []],
+            'silence'                   => ['under €80 from AMS', []],
         ];
     }
 
@@ -285,13 +285,13 @@ final class RegexRuleTextParserTest extends TestCase
     public static function nonsense(): array
     {
         return [
-            'empty' => [''],
-            'whitespace' => ["  \n\t "],
-            'keyboard mashing' => ['asdf qwerty zzz'],
-            'punctuation' => ['!!! ??? ...'],
-            'a different language entirely' => ['なにもない'],
+            'empty'                             => [''],
+            'whitespace'                        => ["  \n\t "],
+            'keyboard mashing'                  => ['asdf qwerty zzz'],
+            'punctuation'                       => ['!!! ??? ...'],
+            'a different language entirely'     => ['なにもない'],
             'an unclosed regex somebody pasted' => ['(?<broken['],
-            'html' => ['<script>alert(1)</script>'],
+            'html'                              => ['<script>alert(1)</script>'],
         ];
     }
 

@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace App\Application\Alerts;
 
+use App\Models\User;
+use App\Models\Alert;
+use App\Models\Route;
+use DateTimeInterface;
+use App\Models\DealRule;
+use Carbon\CarbonImmutable;
 use App\Domain\Alerts\AlertType;
 use App\Domain\Alerts\LastAlert;
-use App\Models\Alert;
-use App\Models\DealRule;
-use App\Models\Route;
-use App\Models\User;
-use Carbon\CarbonImmutable;
-use DateTimeInterface;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -108,14 +108,14 @@ final class AlertLedger
         DateTimeInterface $now,
     ): Alert {
         return Alert::query()->create([
-            'user_id' => $user->getAuthIdentifier(),
-            'route_id' => $route?->id,
+            'user_id'      => $user->getAuthIdentifier(),
+            'route_id'     => $route?->id,
             'deal_rule_id' => $rule?->id,
-            'type' => $type,
-            'score' => $score,
-            'price_cents' => $priceCents,
-            'payload' => $payload,
-            'channel' => Alert::CHANNEL_MAIL,
+            'type'         => $type,
+            'score'        => $score,
+            'price_cents'  => $priceCents,
+            'payload'      => $payload,
+            'channel'      => Alert::CHANNEL_MAIL,
             'triggered_at' => $now,
             'delivered_at' => null,
         ]);

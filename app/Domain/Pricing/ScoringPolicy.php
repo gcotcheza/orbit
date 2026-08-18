@@ -73,9 +73,9 @@ final readonly class ScoringPolicy
     {
         return match (true) {
             $score >= $this->insaneAt => self::TIER_INSANE,
-            $score >= $this->greatAt => self::TIER_GREAT,
-            $score >= $this->goodAt => self::TIER_GOOD,
-            default => self::TIER_NONE,
+            $score >= $this->greatAt  => self::TIER_GREAT,
+            $score >= $this->goodAt   => self::TIER_GOOD,
+            default                   => self::TIER_NONE,
         };
     }
 }

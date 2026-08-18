@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -45,9 +45,9 @@ final class CalendarFare extends Model
     {
         return [
             'departure_date' => 'immutable_date',
-            'fetched_at' => 'immutable_datetime',
-            'found_at' => 'immutable_datetime',
-            'price_cents' => 'integer',
+            'fetched_at'     => 'immutable_datetime',
+            'found_at'       => 'immutable_datetime',
+            'price_cents'    => 'integer',
         ];
     }
 }

@@ -257,7 +257,7 @@ final readonly class DealScorer
             Verdict::TONE_GOOD => sprintf('%s is %d%% under its usual %s — a solid time to lock it in.', $price, $gap, $usual),
             Verdict::TONE_INFO => sprintf('%s against a usual %s, and still sliding — waiting a few days could pay off.', $price, $usual),
             Verdict::TONE_WARN => sprintf('%s is %d%% above its usual %s. Hold off — fares this far up tend to settle back.', $price, $gap, $usual),
-            default => sprintf('%s sits close to its usual %s. No rush, and no bargain either.', $price, $usual),
+            default            => sprintf('%s sits close to its usual %s. No rush, and no bargain either.', $price, $usual),
         };
 
         return new Advice($verdict->label, $body, $verdict->tone);

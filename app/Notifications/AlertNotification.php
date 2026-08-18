@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
-use App\Application\Alerts\CarriesAlerts;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use App\Application\Alerts\CarriesAlerts;
 use Illuminate\Notifications\Notification;
+use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
  * What the three Orbit mails have in common: they are queued, they go by mail,

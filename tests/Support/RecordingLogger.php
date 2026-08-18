@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Support;
 
-use Psr\Log\AbstractLogger;
 use Stringable;
+use Psr\Log\AbstractLogger;
 
 /**
  * A logger that remembers, for the tests that are about what an adapter SAYS.
@@ -32,7 +32,7 @@ final class RecordingLogger extends AbstractLogger
     public function log($level, string|Stringable $message, array $context = []): void
     {
         $this->lines[] = [
-            'level' => is_string($level) ? $level : gettype($level),
+            'level'   => is_string($level) ? $level : gettype($level),
             'message' => (string) $message,
             'context' => $context,
         ];

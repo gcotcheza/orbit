@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Routing\Route as RoutingRoute;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Testing\TestResponse;
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use App\Models\User;
+use Illuminate\Testing\TestResponse;
+use Illuminate\Support\Facades\Route;
+use PHPUnit\Framework\Attributes\Test;
+use Illuminate\Routing\Route as RoutingRoute;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The whole authentication surface, including the parts of it that must not
@@ -33,7 +33,7 @@ final class AuthenticationTest extends TestCase
     private function owner(): User
     {
         return User::factory()->create([
-            'email' => 'owner@orbit.test',
+            'email'    => 'owner@orbit.test',
             'password' => self::PASSWORD,
         ]);
     }
@@ -46,14 +46,14 @@ final class AuthenticationTest extends TestCase
         $user = $this->owner();
 
         $response = $this->postJson('/login', [
-            'email' => $user->email,
+            'email'    => $user->email,
             'password' => self::PASSWORD,
         ]);
 
         $response->assertOk()->assertExactJson([
             'data' => [
-                'id' => $user->id,
-                'name' => $user->name,
+                'id'    => $user->id,
+                'name'  => $user->name,
                 'email' => $user->email,
             ],
         ]);
@@ -67,7 +67,7 @@ final class AuthenticationTest extends TestCase
         $user = $this->owner();
 
         $response = $this->postJson('/login', [
-            'email' => $user->email,
+            'email'    => $user->email,
             'password' => self::PASSWORD,
         ]);
 
@@ -81,7 +81,7 @@ final class AuthenticationTest extends TestCase
         $user = $this->owner();
 
         $this->postJson('/login', [
-            'email' => $user->email,
+            'email'    => $user->email,
             'password' => 'not-the-password',
         ])->assertStatus(422)->assertJsonValidationErrors('email');
 
@@ -99,12 +99,12 @@ final class AuthenticationTest extends TestCase
         $user = $this->owner();
 
         $known = $this->postJson('/login', [
-            'email' => $user->email,
+            'email'    => $user->email,
             'password' => 'not-the-password',
         ]);
 
         $unknown = $this->postJson('/login', [
-            'email' => 'nobody@orbit.test',
+            'email'    => 'nobody@orbit.test',
             'password' => 'not-the-password',
         ]);
 
@@ -123,7 +123,7 @@ final class AuthenticationTest extends TestCase
         $user = $this->owner();
 
         $attempt = fn (): TestResponse => $this->postJson('/login', [
-            'email' => $user->email,
+            'email'    => $user->email,
             'password' => 'not-the-password',
         ]);
 
@@ -137,7 +137,7 @@ final class AuthenticationTest extends TestCase
         // And the throttle is not a way IN: the right password does not get
         // past it either.
         $this->postJson('/login', [
-            'email' => $user->email,
+            'email'    => $user->email,
             'password' => self::PASSWORD,
         ])->assertStatus(429);
 
@@ -171,8 +171,8 @@ final class AuthenticationTest extends TestCase
 
         $this->actingAs($user)->getJson('/api/me')->assertOk()->assertExactJson([
             'data' => [
-                'id' => $user->id,
-                'name' => $user->name,
+                'id'    => $user->id,
+                'name'  => $user->name,
                 'email' => $user->email,
             ],
         ]);
@@ -221,12 +221,12 @@ final class AuthenticationTest extends TestCase
     public static function absentAuthPaths(): array
     {
         return [
-            'registration' => ['register'],
-            'forgot password' => ['forgot-password'],
-            'reset password' => ['reset-password'],
-            'email verification' => ['verify-email'],
+            'registration'          => ['register'],
+            'forgot password'       => ['forgot-password'],
+            'reset password'        => ['reset-password'],
+            'email verification'    => ['verify-email'],
             'password confirmation' => ['confirm-password'],
-            'password update' => ['password'],
+            'password update'       => ['password'],
         ];
     }
 

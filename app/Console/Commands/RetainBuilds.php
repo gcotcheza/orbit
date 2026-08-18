@@ -220,7 +220,7 @@ final class RetainBuilds extends Command
 
             $snapshots[] = [
                 'version' => basename($path, '.json'),
-                'path' => $path,
+                'path'    => $path,
                 // The file's own timestamp is the fallback, for a snapshot
                 // written by hand or truncated by a half-finished deploy.
                 'at' => is_string($recordedAt) ? $recordedAt : date(DATE_ATOM, (int) File::lastModified($path)),

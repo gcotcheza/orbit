@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Rules;
 
-use App\Domain\Pricing\DatedFare;
 use DateTimeImmutable;
+use App\Domain\Pricing\DatedFare;
 
 /**
  * Which places a rule is about, and which fares it would fire on.
