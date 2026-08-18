@@ -82,6 +82,56 @@ Schedule::command('orbit:poll-fares --far')
     ->withoutOverlapping();
 
 /*
+ * 04:40 — ROUND TRIPS, AND THE HOUR WAS PICKED BEFORE THERE WAS AN ENTRY TO PUT
+ * IN IT. config/orbit.php's `returns` section did the arithmetic when the table
+ * shipped unscheduled; this is that recommendation, taken.
+ *
+ * ONE REQUEST PER WATCHED ROUTE, FLAT — nine today — because
+ * `/v2/prices/latest` with `period_type=year` answers for the whole horizon in a
+ * single call, where the one-way calendar is billed per calendar month and costs
+ * seven a morning or twelve on the far run. Against Travelpayouts' ~200 an hour
+ * per IP:
+ *
+ *     06:00 hour   poll 63 + sweep 120 = 183, + 9 = 192   ⚠ 8 requests of room
+ *     04:00 hour   far poll 108 (Saturdays)  , + 9 = 117  ← this one
+ *
+ * The 06:00 hour is the one that breaks first as the watchlist grows (config/
+ * orbit.php: at twelve watched routes it is already 204 without this), so the
+ * nine go where there is room rather than where the other polls are.
+ *
+ * 04:40 AND NOT EARLIER IN THAT HOUR, which is about the per-minute limit rather
+ * than the hourly one. Saturday's far poll fans out nine jobs at
+ * config('orbit.poll.stagger_minutes'), so it is still queueing until 04:34;
+ * starting at 04:20 would interleave two fan-outs and hand the provider two
+ * bursts in the same minutes, which is the exact thing the stagger exists to
+ * prevent. 04:40 begins after the last far job is away. Six mornings a week the
+ * hour is empty anyway.
+ *
+ * ITS OWN FAN-OUT ENDS AT 05:04 — nine jobs at a three-minute stagger — which is
+ * sixteen minutes before `orbit:discover` at 05:20, so the two runs sharing the
+ * 05:00 hour are sequential rather than overlapping. Two of the nine requests
+ * land in that hour; config/orbit.php's `poll` section has what it costs.
+ *
+ * WHY IT IS SCHEDULED NOW, WHEN App\Console\Commands\PollReturns SAID THE PR
+ * THAT ADDS THE FIRST READER WOULD ADD THIS. Nothing reads `return_fares` yet
+ * and that part has not changed. What changed is that the polling has been
+ * happening every morning regardless, driven by a cron OUTSIDE this repository —
+ * so the provider calls the old decision was protecting are already being spent,
+ * and the only thing the outside runner adds is a way for the accumulation to
+ * stop on a box nobody is watching, silently, in the weeks before the screens
+ * land. The argument that moved is about WHO HOLDS THE CLOCK, not about the
+ * budget. This entry puts it in the stack that is deployed, tested and reviewed;
+ * the external runner is deleted when this ships.
+ *
+ * withoutOverlapping() as everywhere else here: two runs writing the same
+ * (route, departure date, nights) at once would race on the upsert.
+ */
+Schedule::command('orbit:poll-returns')
+    ->dailyAt('04:40')
+    ->timezone($timezone)
+    ->withoutOverlapping();
+
+/*
  * 05:20 — THE SURPRISE, and the only entry in this file that goes looking for
  * routes nobody has named.
  *
@@ -112,6 +162,9 @@ Schedule::command('orbit:poll-fares --far')
  * That was deliberate there and this is deliberate here: returns filled a table
  * with no readers, and this ships with `GET /api/discoveries` and the screen
  * that draws it, so the requests buy something the owner sees tomorrow morning.
+ * (There IS a returns entry above now, at 04:40, and NOT because a reader
+ * arrived — read that block. It is a different argument, about a cron outside
+ * this repository already spending the calls.)
  *
  * AND IT CANNOT WAKE ANYBODY UP. Discovery surfaces, it never interrupts — no
  * mail, no notification, nothing in `alerts` (docs/BUSINESS-LOGIC.md §16). The

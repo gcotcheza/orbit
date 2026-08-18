@@ -734,11 +734,14 @@ return [
     |   ROUND TRIPS ARE NOT IN EITHER SUM AND CANNOT MOVE EITHER NUMBER MUCH.
     |   `orbit:poll-returns` is ONE request per watched route (9 today, W in
     |   general) because `/v2/prices/latest` answers for the whole horizon at
-    |   once — and it is NOT SCHEDULED, so today it costs nothing at all. The
-    |   `returns` section below carries the arithmetic and says which clock hour
-    |   the schedule entry should go in when a later PR adds one: the 04:00 one,
-    |   because the 06:00 hour is already at 183 of ~200 and 9 more would leave
-    |   it with 8 requests of headroom.
+    |   once. It runs DAILY AT 04:40, which is the 04:00 hour this file picked
+    |   for it before there was an entry to put in it: the 06:00 hour is already
+    |   at 183 of ~200 and 9 more would leave it 8 requests of headroom, where
+    |   the far-poll hour goes to 117 on a Saturday and 9 on every other morning.
+    |   At most 2 of those 9 land in the 05:00 hour instead — its staggered
+    |   fan-out ends at 05:04 — so 117 is a ceiling rather than a count, and the
+    |   hour it spills into is discovery's 59. The `returns` section below
+    |   carries the arithmetic.
     |
     | STAGGER_MINUTES spaces the per-route jobs so nine routes' worth of provider
     | calls do not arrive as a burst — the real APIs are rate-limited per minute
@@ -810,12 +813,15 @@ return [
     | one, and "AMS-JFK from €334" was never a lie about the arithmetic and
     | always a lie about the trip.
     |
-    | ⚠ NOTHING READS THIS TABLE YET AND NOTHING POLLS IT ON A SCHEDULE. This is
-    | the foundation PR of the return-trip milestone: a port, two adapters, a
-    | table and `orbit:poll-returns` to fill it by hand. routes/console.php is
-    | deliberately untouched — see App\Console\Commands\PollReturns for why, and
-    | for the fact that a fortnight of accumulated real fares is worth more to
-    | the PR that draws them than an empty table is.
+    | ⚠ NOTHING READS THIS TABLE YET, BUT IT IS POLLED DAILY AT 04:40. The
+    | foundation PR of the return-trip milestone shipped a port, two adapters, a
+    | table and `orbit:poll-returns` to fill it by hand, with routes/console.php
+    | deliberately untouched until a screen read the table. The schedule entry
+    | arrived first anyway, for a different reason: the poll was already being
+    | run every morning by a cron outside this repository — a fortnight of
+    | accumulated real fares is worth more to the PR that draws them than an
+    | empty table is, and that history only accumulates in real time. See
+    | routes/console.php and App\Console\Commands\PollReturns.
     |
     | =========================================================================
     | THE BUDGET, AND IT IS THE CHEAPEST THING IN THIS FILE
@@ -832,18 +838,20 @@ return [
     | ordinary morning already breaches at W = 12 on the one-way poll and the
     | rule sweep alone (see `poll` above), long before this could matter.
     |
-    | WHERE THE SCHEDULE ENTRY SHOULD GO WHEN A LATER PR ADDS ONE, worked out
-    | here so nobody has to rediscover it:
+    | WHERE THE SCHEDULE ENTRY WENT, worked out here before it existed:
     |
     |     06:00 hour   poll 63 + sweep 120 = 183, + 9 = 192 of ~200   ⚠ too tight
     |     04:00 hour   far poll 108        = 108, + 9 = 117 of ~200   ← this one
     |
     | The 06:00 hour is already at 92% of the allowance and is the hour that
     | breaks first as the watchlist grows; the far-poll hour has room to spare
-    | and is idle six mornings a week. A returns poll at 04:40 costs nothing
-    | anybody else is using. THAT IS A RECOMMENDATION AND NOT A SETTING — there
-    | is no key for it here, because a schedule belongs in routes/console.php
-    | where "the returns poll runs at 04:40" is one readable line.
+    | and is idle six mornings a week. So: 04:40 daily, and it costs nothing
+    | anybody else is using. THERE IS STILL NO KEY FOR IT HERE, because a
+    | schedule belongs in routes/console.php where "the returns poll runs at
+    | 04:40" is one readable line — and that is also where the minute is argued
+    | rather than the hour: 04:40 and not 04:20, because Saturday's far poll is
+    | still queueing its staggered fan-out until 04:34 and two fan-outs
+    | interleaving is what the stagger exists to prevent.
     |
     | WINDOW_DAYS IS 334, WHICH IS `poll.horizon_days`' NUMBER AND NOT A
     | REFERENCE TO IT. Round trips are maintained exactly as deep as the one-way
@@ -864,8 +872,8 @@ return [
     | and `far_stale_after_days`, and a two-pass prune). This one is fetched
     | whole, in a single request, so every row is always exactly as fresh as
     | every other and one clock is the honest description. THREE DAYS is the same
-    | sentence as its one-way twin — two missed runs plus a day — and it only
-    | starts meaning anything once there IS a schedule.
+    | sentence as its one-way twin — two missed runs plus a day — and it started
+    | meaning something the morning the 04:40 entry above began keeping time.
     |
     | MAX_NIGHTS IS A SANITY CEILING, NOT A PRODUCT DECISION. The longest real
     | stay recorded was 56 nights (AMS-BKK, which serves stays from 3 to 56); 60

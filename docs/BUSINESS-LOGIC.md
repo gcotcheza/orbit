@@ -266,7 +266,9 @@ Travelpayouts allows ~200 requests an hour per IP, nine routes are watched:
 | 06:10 daily | poll, 9 × ≤7 months | 63 |
 | 06:40 daily | rule sweep, 30 × ≤4 months | 120 |
 | | **the ordinary morning's clock hour** | **183** |
-| 04:10 Saturday | far poll, 9 × ≤12 months | 108, alone in that hour |
+| 04:10 Saturday | far poll, 9 × ≤12 months | 108 |
+| 04:40 daily | returns poll, 9 × 1 call | 9 |
+| | **the 04:00 hour on a Saturday** | **117** |
 
 So the eleven months cost **nothing in the worst hour**. What breaches first is
 the ordinary morning, at **twelve watched routes** (7 × 12 + 120 = 204); the far
@@ -1168,6 +1170,7 @@ looked at their phone. Every entry is `withoutOverlapping()`.
 | --- | --- | --- |
 | **06:10 daily** | `orbit:poll-fares` | before the owner is awake, after the airlines' overnight fare loads have settled. Fans out per-route jobs at a 3-minute stagger, each asking for the **near** window |
 | **Sat 04:10** | `orbit:poll-fares --far` | the same fan-out asking for the whole **eleven-month** horizon — twelve provider calls a route where the daily poll costs seven. In its own clock hour because 9 × 12 beside the sweep's 120 would be 228 against a ~200/hour limit; Saturday because eleven months out is holiday planning. It does **not** replace that day's 06:10 poll, and cannot: both write the same near-window observation, idempotently |
+| **04:40 daily** | `orbit:poll-returns` | round trips, **one** request per watched route because one call covers the whole horizon — 9 today. In the 04:00 hour and not the 06:00 one, which is already at 183 of ~200 (§15). **04:40 and not 04:20** because Saturday's far poll is still queueing its staggered fan-out until 04:34, and two fan-outs interleaving is what the stagger exists to prevent |
 | **06:40 daily** | `orbit:sweep-rules` | **after** the poll, so the sweep's capped budget is not spent re-fetching routes the watchlist just priced. Half an hour is comfortable room for six staggered polls |
 | **06:55 daily** | `orbit:alerts` | **last**. It talks to no provider — every fare it reads was written by the two runs above. Running it first would not fail; it would mail this morning's verdict on yesterday's prices, every day, invisibly |
 | **Mon 05:40** | `orbit:refresh-stats` | ahead of that morning's poll, so the week's scores are read against the week's statistics. Weekly because the answer is monthly: a route's usual price is built from months of fares, and the score is deliberately most sensitive to it — an argument for it being stable, not fresh |
@@ -1268,10 +1271,10 @@ week.
 
 ## 15. Return trips (foundation)
 
-> **Status: groundwork.** A port, two adapters, the `return_fares` table and a
-> command to fill it. **Nothing reads the table yet and nothing polls it on a
-> schedule.** The screens, the statistics and the rule matching are later PRs in
-> this milestone.
+> **Status: groundwork, accumulating.** A port, two adapters, the `return_fares`
+> table and a command to fill it — **now polled daily at 04:40**, so the history
+> is building. **Nothing reads the table yet**: the screens, the statistics and
+> the rule matching are later PRs in this milestone.
 
 ### Why one-way was never the whole truth
 
@@ -1391,20 +1394,31 @@ Adding a band costs **no requests** (the API ignores `trip_duration`). What it
 does cost is fake data — `FakeReturnProvider` prices only the lengths the bands
 cover, so emptying the list leaves the fake with no fares at all.
 
-### The budget, and why it is not scheduled
+### The budget, and the hour it bought
 
 **One request per watched route per run** — 9 today — because one call covers
 the whole horizon, against 7 or 12 for the one-way calendar. At W routes it is W
 requests, flat, so returns polling never becomes the binding constraint.
 
-It is nonetheless **not in `routes/console.php`**, because a schedule that spent
-calls every morning filling a table with no readers is a standing cost for no
-benefit. The PR that adds the first reader adds the entry, and the arithmetic is
-already done: the 06:00 hour is at 183 of ~200 and 9 more would leave 8 requests
-of headroom, so it belongs in the **04:00** hour next to the far poll (108 + 9 =
-117). Until then `php artisan orbit:poll-returns` fills the table by hand — and
-a fortnight of accumulated real fares is worth considerably more to the PR that
-draws them than an empty table and a fake.
+`orbit:poll-returns` runs **daily at 04:40** (§13). The 06:00 hour is at 183 of
+~200 and 9 more would leave 8 requests of headroom, so the run goes in the
+**04:00** hour beside the far poll instead: 108 + 9 = 117 on a Saturday, 9 on
+every other morning. **04:40 rather than 04:20** is the per-minute limit rather
+than the hourly one — the far poll is still queueing its nine staggered jobs
+until 04:34, and starting inside that window would hand the provider two bursts
+in the same minutes.
+
+**It was scheduled before the table had a reader, which was not the plan.** The
+foundation PR left `routes/console.php` untouched on the argument that morning
+calls filling a table nothing draws are a standing cost for no benefit, and said
+the PR adding the first reader would add the entry. In the event the poll was
+run daily anyway, by a cron **outside this repository**, because a fortnight of
+accumulated real fares is worth considerably more to the PR that draws them than
+an empty table and a fake — and that history only accumulates in real time. The
+calls were being spent either way; what the outside runner added was somewhere
+for the accumulation to stop silently. Moving the clock into the deployed stack
+cost nothing and removed that. `php artisan orbit:poll-returns --now` still
+fills the table by hand.
 
 ### What later PRs add
 
