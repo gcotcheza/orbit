@@ -17,6 +17,7 @@ use App\Models\Route;
 use App\Models\User;
 use App\Models\WatchlistItem;
 use DateTimeImmutable;
+use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
@@ -36,10 +37,10 @@ use Tests\TestCase;
  * writes and prunes `return_fares` the way the migration says it does, and that
  * `orbit:poll-returns` fans out over the watchlist.
  *
- * ⚠ NOTHING HERE ASSERTS A SCHEDULE, ON PURPOSE. This command is deliberately
- * absent from routes/console.php until a later PR gives the table a reader —
- * see App\Console\Commands\PollReturns — and `the_returns_poll_is_not_scheduled`
- * below is the guard that keeps that decision explicit rather than forgotten.
+ * ⚠ THE TIME IS ASSERTED NEXT DOOR, in tests/Feature/ScheduleTest, with the rest
+ * of the clock. `the_returns_poll_is_on_the_schedule` below only asserts that
+ * the entry EXISTS — it is the descendant of a guard that once asserted the
+ * opposite, and it carries the story of why that reversed.
  */
 final class ReturnFaresPollTest extends TestCase
 {
@@ -486,21 +487,35 @@ final class ReturnFaresPollTest extends TestCase
     }
 
     #[Test]
-    public function the_returns_poll_is_not_scheduled(): void
+    public function the_returns_poll_is_on_the_schedule(): void
     {
         /*
-         * THE GUARD ON A DELIBERATE DECISION. Nothing reads `return_fares` yet,
-         * so a schedule entry would spend provider calls every morning filling a
-         * table with no readers. The PR that adds the first reader adds the
-         * entry — and config/orbit.php's `returns` section already says which
-         * clock hour it belongs in (04:00, because the 06:00 one is at 183 of
-         * ~200). If that PR forgets, this test is what fails.
+         * THIS TEST USED TO ASSERT THE OPPOSITE, and the reversal is worth the
+         * paragraph. `return_fares` shipped with no readers and no schedule
+         * entry, on the argument that morning provider calls filling a table
+         * nothing draws are a standing cost for no benefit — the PR that added
+         * the first reader was to add the entry.
+         *
+         * There is still no reader. What changed is that the poll was being run
+         * daily anyway by a cron OUTSIDE this repository, because the history is
+         * only worth anything if it accumulates in real time: the calls were
+         * being spent either way, and the only thing the outside runner added
+         * was somewhere for the accumulation to stop unnoticed. The clock moved
+         * into the deployed stack.
+         *
+         * tests/Feature/ScheduleTest is where the time, the timezone and the
+         * collision arithmetic are asserted; this is the guard that the returns
+         * milestone does not silently lose its entry again.
          */
-        $events = app(Schedule::class)->events();
+        $commands = array_map(
+            static fn (Event $event): string => (string) $event->command,
+            app(Schedule::class)->events(),
+        );
 
-        foreach ($events as $event) {
-            $this->assertStringNotContainsString('orbit:poll-returns', $event->command ?? '');
-        }
+        $this->assertNotEmpty(
+            array_filter($commands, static fn (string $c): bool => str_contains($c, 'orbit:poll-returns')),
+            'orbit:poll-returns is not on the schedule.',
+        );
     }
 
     // ------------------------------------------------------------------- the config

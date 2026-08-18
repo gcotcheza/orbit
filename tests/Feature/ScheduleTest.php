@@ -89,6 +89,57 @@ final class ScheduleTest extends TestCase
         );
     }
 
+    /**
+     * ROUND TRIPS GO WHERE THERE IS ROOM, NOT WHERE THE OTHER POLLS ARE.
+     *
+     * One request per watched route, flat — `/v2/prices/latest` answers for the
+     * whole horizon in a single call — so nine today. The 06:00 hour is already
+     * at 183 of Travelpayouts' ~200 (poll 63 + sweep 120) and is the hour that
+     * breaks first as the watchlist grows; the 04:00 hour holds 108 on Saturday
+     * and nothing at all on the other six mornings. 108 + 9 = 117.
+     */
+    #[Test]
+    public function round_trips_are_polled_in_the_hour_the_budget_left_free(): void
+    {
+        $event = $this->find('orbit:poll-returns');
+
+        $this->assertSame('40 4 * * *', $event->expression);
+        $this->assertSame('Europe/Amsterdam', $event->timezone);
+        $this->assertTrue($event->withoutOverlapping);
+
+        $returns = $this->minuteOfDay('orbit:poll-returns');
+        $poll = $this->minuteOfDay('orbit:poll-fares');
+        $sweep = $this->minuteOfDay('orbit:sweep-rules');
+
+        /* Not in the hour that is at 92% of the allowance before it arrives. */
+        $this->assertLessThan(intdiv($poll, 60), intdiv($returns, 60));
+        $this->assertLessThan(intdiv($sweep, 60), intdiv($returns, 60));
+    }
+
+    /**
+     * THE GAP IS THE PER-MINUTE LIMIT, NOT THE HOURLY ONE.
+     *
+     * Both of these share the 04:00 hour on a Saturday and both are staggered
+     * fan-outs: nine routes at `orbit.poll.stagger_minutes` is twenty-four
+     * minutes, so the far poll is still queueing jobs until 04:34. Starting the
+     * returns run at 04:20 would interleave the two and hand the provider two
+     * bursts in the same minutes — which is the one thing the stagger exists to
+     * prevent, and which the hourly arithmetic above would not notice.
+     */
+    #[Test]
+    public function the_returns_run_starts_after_the_far_polls_fan_out_is_away(): void
+    {
+        $far = $this->minuteOfDay('orbit:poll-fares --far');
+        $returns = $this->minuteOfDay('orbit:poll-returns');
+
+        $this->assertSame(intdiv($far, 60), intdiv($returns, 60), 'Both belong in the 04:00 hour.');
+        $this->assertGreaterThanOrEqual(
+            30,
+            $returns - $far,
+            'The far fan-out takes 24 minutes at nine routes; the returns run must not start inside it.',
+        );
+    }
+
     #[Test]
     public function statistics_are_refreshed_on_monday_ahead_of_that_mornings_poll(): void
     {
@@ -177,6 +228,7 @@ final class ScheduleTest extends TestCase
     public function no_job_can_start_on_top_of_itself(): void
     {
         $this->assertTrue($this->find('orbit:poll-fares')->withoutOverlapping);
+        $this->assertTrue($this->find('orbit:poll-returns')->withoutOverlapping);
         $this->assertTrue($this->find('orbit:refresh-stats')->withoutOverlapping);
         $this->assertTrue($this->find('orbit:sweep-rules')->withoutOverlapping);
         $this->assertTrue($this->find('orbit:alerts')->withoutOverlapping);

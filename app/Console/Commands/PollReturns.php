@@ -13,29 +13,35 @@ use Illuminate\Support\Facades\Date;
  * The round-trip fare poll — fan-out only.
  *
  * =============================================================================
- * ⚠ THIS IS NOT SCHEDULED, AND THAT IS THE DECISION RATHER THAN AN OVERSIGHT
+ * SCHEDULED DAILY AT 04:40 — AND NOT FOR THE REASON THIS DOCBLOCK PREDICTED
  * =============================================================================
- * routes/console.php does not name this command. Nothing in Orbit reads
- * `return_fares` yet — the screens, the statistics and the rule matching that
- * will are later PRs in the return-trip milestone — and a schedule entry that
- * spent provider calls every morning to fill a table with no readers is a
- * standing cost for no benefit, on an API with a ~200-requests-an-hour ceiling.
+ * This shipped unscheduled on purpose: nothing in Orbit reads `return_fares`
+ * yet — the screens, the statistics and the rule matching that will are later
+ * PRs in the return-trip milestone — and a schedule entry that spent provider
+ * calls every morning to fill a table with no readers looked like a standing
+ * cost for no benefit, on an API with a ~200-requests-an-hour ceiling. The plan
+ * said the PR that added the first reader would add the entry.
  *
- * THE PR THAT ADDS THE FIRST READER ADDS THE SCHEDULE ENTRY. The budget is
- * already worked out in config/orbit.php's `returns` section and comes to ONE
+ * WHAT ACTUALLY HAPPENED IS THAT THE POLLING STARTED ANYWAY, every morning,
+ * from a cron OUTSIDE this repository, because the accumulated history is what
+ * the screens will be built against and it only accumulates in real time. So
+ * the calls were being spent regardless and the choice was never "poll or
+ * don't" — it was whether the clock lived in the deployed stack or on a box
+ * nobody reviews, where a run can stop silently and be noticed a fortnight
+ * later by the PR it was for.
+ *
+ * IT IS IN routes/console.php NOW, at 04:40 Europe/Amsterdam, with the reasoning
+ * and the collision arithmetic in the block above the entry. The budget is ONE
  * request per watched route per run — nine today, against seven or twelve for
  * the one-way calendar — because `/v2/prices/latest` answers for the whole
- * horizon in a single call. That section also says which clock hour it should go
- * in and why the obvious one is the wrong one.
+ * horizon in a single call; config/orbit.php's `returns` section is where that
+ * was worked out, including why the 06:00 hour was the wrong one.
  *
- * UNTIL THEN THIS COMMAND IS HOW THE TABLE GETS FILLED: by hand, on a box, when
- * somebody wants real data to build the next PR against. That is also why it
- * exists now rather than arriving with the screens — a fortnight of accumulated
- * fares is worth considerably more to the PR that draws them than an empty
- * table and a fake.
+ * `--now` IS STILL HOW THE TABLE GETS FILLED BY HAND, on a box, when somebody
+ * wants today's fares without waiting for tomorrow's run.
  *
- * WHY A COMMAND RATHER THAN `Schedule::job()` PER ROUTE, for when it is
- * scheduled: routes/console.php is loaded on EVERY artisan invocation including
+ * WHY A COMMAND RATHER THAN `Schedule::job()` PER ROUTE: routes/console.php is
+ * loaded on EVERY artisan invocation including
  * `migrate` on an empty database, so a schedule that enumerated routes there
  * would put a query in the boot path of every command and fail on the first
  * deploy. The schedule names one command; the command knows what the watchlist
@@ -46,7 +52,7 @@ final class PollReturns extends Command
     protected $signature = 'orbit:poll-returns
         {--now : run the polls inline instead of queueing them}';
 
-    protected $description = 'Fetch round-trip fares for every actively watched route (not scheduled — see the class docblock)';
+    protected $description = 'Fetch round-trip fares for every actively watched route (scheduled daily at 04:40)';
 
     public function handle(): int
     {
