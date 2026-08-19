@@ -96,7 +96,7 @@ final class RouteDetailResource extends RouteSummaryResource
         $cheapest = $snapshot->cheapest;
         $lowest = $this->live?->lowestCents();
 
-        if ($cheapest !== null && $lowest !== null && $lowest > $cheapest->cents) {
+        if ($cheapest !== null && $lowest !== null && self::contradicts($cheapest->cents, $lowest)) {
             return [
                 'title' => 'Google cannot find this fare',
                 'body'  => sprintf(
@@ -113,9 +113,14 @@ final class RouteDetailResource extends RouteSummaryResource
             return [
                 'title' => 'Cheap, but it may be gone',
                 'body'  => sprintf(
-                    '%s is %d%% under this route’s usual price, and old enough that fares like it have usually sold. Check the live price before counting on it.',
+                    '%s is %d%% under this route’s usual price, and old enough that fares like it have usually sold. %s',
                     self::money($cheapest->cents),
                     abs((int) $snapshot->stats?->percentUnderUsual($cheapest->cents)),
+                    /* Telling somebody to check a price they have just checked
+                       is the app forgetting the answer it charged them for. */
+                    $this->live === null
+                        ? 'Check the live price before counting on it.'
+                        : 'Google had no live price for it either.',
                 ),
                 'tone' => 'warn',
             ];
@@ -128,6 +133,17 @@ final class RouteDetailResource extends RouteSummaryResource
             'body'  => $advice->body,
             'tone'  => $advice->tone,
         ];
+    }
+
+    /**
+     * ⚠ A GAP, NOT A STRICT `>`. €76.50 against €77 is a rounding difference,
+     * and "treat the cached fare as gone" is far too strong a sentence for it.
+     */
+    private static function contradicts(int $cachedCents, int $liveCents): bool
+    {
+        $percent = (int) config('orbit.live_check.contradiction_percent');
+
+        return $liveCents * 100 >= $cachedCents * (100 + $percent);
     }
 
     /** The same spelling App\Domain\Pricing\DealScorer's sentences use. */

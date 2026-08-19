@@ -2,10 +2,8 @@
 /*
  * The tone-tinted callout under the chart (design/README.md §2).
  *
- * `advice.title` always equals `verdict.label` and `advice.tone` always equals
- * `verdict.tone` — they are generated together server-side so the prose and the
- * gauge cannot disagree (docs/API.md). So this component takes the tone it is
- * given and never derives one from the words.
+ * ⚠ `advice` USUALLY mirrors `verdict`, but the server replaces it where the
+ * document doubts its own headline (docs/API.md). Take the tone as given.
  */
 /*
  * =============================================================================
@@ -55,6 +53,13 @@ defineProps({
             stroke-linecap="round"
             stroke-linejoin="round"
           />
+        </template>
+
+        <!-- ⚠ A tick is the mark for "checked, and it is fine". Over "Cheap,
+             but it may be gone" it contradicts the sentence beside it. -->
+        <template v-else-if="tone === 'warn'">
+          <path d="M9 3.6v6.6" stroke-width="2" stroke-linecap="round" />
+          <path d="M9 13.6v.2" stroke-width="2.2" stroke-linecap="round" />
         </template>
 
         <path v-else d="M4 9.5l3 3 7-8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />

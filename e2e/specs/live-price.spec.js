@@ -29,9 +29,15 @@ function ageTheCheapestFare(body) {
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 3_600_000).toISOString()
 
     body.data.cheapest = { ...body.data.cheapest, foundAt: threeDaysAgo, mayBeGone: true }
+
+    /* The sentence RouteDetailResource::advice() builds, to the letter, so the
+       screenshot is of the real callout rather than an approximation. */
     body.data.advice = {
         title: 'Cheap, but it may be gone',
-        body: 'It is old enough that fares like it have usually sold. Check the live price before counting on it.',
+        body:
+            `€${body.data.cheapest.price} is ${body.data.price.pctBelow}% under this route’s usual price, ` +
+            'and old enough that fares like it have usually sold. ' +
+            'Check the live price before counting on it.',
         tone: 'warn',
     }
 
@@ -102,10 +108,16 @@ test('the live price takes the headline and Orbit’s own becomes context', asyn
             checkedAt: new Date().toISOString(),
         }
 
-        /* What the server sends once Google has contradicted the cached fare. */
+        /* What the server sends once Google has contradicted the cached fare,
+           in the same words — €150 is well past `contradiction_percent`. */
+        const day = new Date(`${body.data.cheapest.date}T00:00:00Z`)
+        const when = `${day.getUTCDate()} ${day.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`
+
         body.data.advice = {
             title: 'Google cannot find this fare',
-            body: `Orbit has €${body.data.cheapest.price} cached; the cheapest Google can find is €150. Treat the cached fare as gone.`,
+            body:
+                `Orbit has €${body.data.cheapest.price} cached; ` +
+                `the cheapest Google can find for ${when} is €150. Treat the cached fare as gone.`,
             tone: 'warn',
         }
 

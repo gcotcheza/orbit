@@ -501,6 +501,46 @@ final class LivePriceCheckTest extends TestCase
     }
 
     /**
+     * ⚠ A GAP, NOT A STRICT `>`. €37 against a cached €36 is Google agreeing;
+     * "treat the cached fare as gone" would be a claim off a rounding error.
+     */
+    #[Test]
+    public function a_live_price_a_shade_dearer_is_not_a_contradiction(): void
+    {
+        $this->seedRoute();
+        $this->fakeQuotaAnd($this->fixtureWith('google-flights-typical', [
+            'price_insights' => ['lowest_price' => 37],
+        ]));
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/routes/AMS-OPO/live-price')
+            ->assertOk()
+            ->assertJsonPath('meta.liveCheck.lowest', 37)
+            ->assertJsonPath('data.advice.title', fn (mixed $t): bool => $t !== 'Google cannot find this fare');
+    }
+
+    /**
+     * ⚠ NOBODY IS TOLD TO CHECK A PRICE THEY HAVE JUST CHECKED. A silent answer
+     * still cost a search, and the callout has to say that rather than send
+     * them back to the button that is no longer there.
+     */
+    #[Test]
+    public function a_silent_answer_stops_the_callout_asking_for_another_check(): void
+    {
+        $this->seedRoute();
+        $this->fakeQuotaAndSearch('google-flights-no-insights');
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/routes/AMS-OPO/live-price')
+            ->assertOk()
+            ->assertJsonPath('data.advice.title', 'Cheap, but it may be gone')
+            ->assertJsonPath(
+                'data.advice.body',
+                '€36 is 55% under this route’s usual price, and old enough that fares like it have usually sold. Google had no live price for it either.',
+            );
+    }
+
+    /**
      * A route with no fares in the window has no departure to ask about — not a
      * bad request and not a missing route, a question with no subject.
      */

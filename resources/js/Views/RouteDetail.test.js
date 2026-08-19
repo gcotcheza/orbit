@@ -588,6 +588,15 @@ describe('a fare that may already be gone', () => {
         expect(wrapper.get('.booking__cta').classes()).toContain('booking__cta--secondary')
     })
 
+    /* ⚠ A tick means "checked, and it is fine". Over "may be gone" it is the
+       callout contradicting the sentence next to it. */
+    it('does not put a confident tick on a warning', async () => {
+        const tick = 'M4 9.5l3 3 7-8'
+
+        expect((await detail(GONE)).get('.callout__icon').html()).not.toContain(tick)
+        expect((await detail()).get('.callout__icon').html()).toContain(tick)
+    })
+
     /*
      * ⚠ THE RULE IS THE SERVER'S. Both facts it is made of are on this page —
      * the age and the percentage — and the screen deliberately does not

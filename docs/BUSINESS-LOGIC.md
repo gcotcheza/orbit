@@ -1747,9 +1747,17 @@ Two states override it, **server-side**, in
   it in" is the single loudest wrong sentence this app can print, and it is
   printed under a fare the same document has just demoted. It becomes *"Cheap,
   but it may be gone"*, tone `warn`.
-* a fresh live check whose `lowest` is **dearer than the cached fare** — the
+* a fresh live check whose `lowest` is at least
+  `live_check.contradiction_percent` (**10%**) **above the cached fare** — the
   callout would otherwise still be reasoning about a number Google has just
-  contradicted. It becomes *"Google cannot find this fare"*, tone `warn`.
+  contradicted. It becomes *"Google cannot find this fare"*, tone `warn`. A
+  *gap* and not a strict `>`, because €76.50 against €77 is rounding and "treat
+  the cached fare as gone" is far too strong a sentence for it; inside the gap
+  Google has corroborated the fare and the ordinary advice stands.
+
+When the fare may be gone and **Google has already been asked and was silent**,
+the callout says so instead of telling the reader to check a price they have just
+paid to check.
 
 `verdict` is left alone in both: the gauge is about the price level, the callout
 is about whether to act on it. **The client renders the sentence and reads
@@ -1783,6 +1791,13 @@ loser catches the constraint violation, re-reads the winner's row and serves it:
 both taps see one number, and **a paid answer is never returned as a 500**. The
 loser's own answer is discarded rather than overwriting — both are equally fresh,
 and one row per route and date is what every reader of this table expects.
+
+⚠ **That catch requires there to be no open transaction around it.** Postgres
+marks a transaction as aborted the moment a statement raises `23505`, so a
+`LivePriceChecks::store()` called inside one would fail on the re-read instead of
+recovering. The endpoint runs it outside any transaction and must go on doing
+so; wrapping the write would need a savepoint (`DB::transaction()` nested), not a
+plain `beginTransaction`.
 
 `departure_date` is stored as a **bare `Y-m-d`** by a mutator on
 `App\Models\LivePriceCheck` rather than by a date cast. The cast writes

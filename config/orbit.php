@@ -1456,16 +1456,18 @@ return [
     | "Seen 3 days ago — may be gone", and the way to find out
     |--------------------------------------------------------------------------
     |
-    | The demotion needs BOTH halves (48 h old and 20% under usual) and the
-    | cooldown is how long one paid answer is worth. The reasoning, and the fare
-    | that bought all three numbers: docs/BUSINESS-LOGIC.md §17.
+    | The demotion needs BOTH halves (48 h old and 20% under usual), the
+    | cooldown is how long one paid answer is worth, and `contradiction_percent`
+    | is how far above the cached fare Google has to be before the callout says
+    | the fare is gone. The reasoning: docs/BUSINESS-LOGIC.md §17.
     |
     */
 
     'live_check' => [
-        'stale_after_hours'   => 48,
-        'under_usual_percent' => 20,
-        'cooldown_hours'      => 6,
+        'stale_after_hours'     => 48,
+        'under_usual_percent'   => 20,
+        'cooldown_hours'        => 6,
+        'contradiction_percent' => 10,
     ],
 
     /*

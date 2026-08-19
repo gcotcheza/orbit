@@ -86,6 +86,9 @@ final readonly class LivePriceChecks
     /**
      * ⚠ A CONCURRENT TAP MUST NOT COST A 500. Both requests paid; the unique
      * key lets one row through and the loser serves the winner's answer.
+     *
+     * ⚠ DO NOT CALL THIS INSIDE A TRANSACTION: Postgres poisons an open one on
+     * the constraint violation and the re-read below would throw.
      */
     private function store(Route $route, DateTimeImmutable $departure, ?GoogleVerdict $verdict): LivePriceCheck
     {
