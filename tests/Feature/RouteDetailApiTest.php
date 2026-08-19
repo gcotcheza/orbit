@@ -262,6 +262,28 @@ final class RouteDetailApiTest extends TestCase
             ->assertJsonPath('data.cheapest.mayBeGone', true);
     }
 
+    /**
+     * ⚠ AND THE CALLOUT STOPS RECOMMENDING IT. "A solid time to lock it in"
+     * under a fare the same document has just doubted is the page arguing with
+     * itself, and the client must not have to compose the qualification.
+     */
+    #[Test]
+    public function a_demoted_fare_takes_the_callout_down_with_it(): void
+    {
+        $route = $this->makeRoute('AMS', 'OPO');
+        $this->summarise($route, 4000, 6000, 8000, 11000, 16000);
+        $this->trackedSince($route, 9000);
+        $this->offer($route, ['2026-09-03' => 3600], foundAt: '2026-08-11 09:00:00');
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('data.advice.title', 'Cheap, but it may be gone')
+            ->assertJsonPath('data.advice.tone', 'warn')
+            ->assertJsonPath(
+                'data.advice.body',
+                '€36 is 55% under this route’s usual price, and old enough that fares like it have usually sold. Check the live price before counting on it.',
+            );
+    }
+
     #[Test]
     public function a_fresh_bargain_is_left_alone(): void
     {
@@ -274,7 +296,10 @@ final class RouteDetailApiTest extends TestCase
         $this->offer($route, ['2026-09-03' => 3600], foundAt: '2026-08-14 06:10:00');
 
         $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
-            ->assertJsonPath('data.cheapest.mayBeGone', false);
+            ->assertJsonPath('data.cheapest.mayBeGone', false)
+            /* And its callout still says what the score says. */
+            ->assertJsonPath('data.advice.title', fn (mixed $title): bool => $title !== 'Cheap, but it may be gone')
+            ->assertJsonPath('data.advice.tone', fn (mixed $tone): bool => $tone !== 'warn');
     }
 
     #[Test]

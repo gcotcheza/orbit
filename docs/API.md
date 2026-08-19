@@ -192,7 +192,7 @@ The route detail screen (`design/README.md` §2). The summary above, plus:
 | --- | --- |
 | `history` | Up to 60 daily observations, **oldest first**. This is the line chart; `sparkline` is its last fortnight. Days we did not poll are simply absent — plot by date, not by index. |
 | `stats` | The dashed "usual price" reference line, and the five-number summary the score is built from. **`null`** when the provider has none; draw the chart without a reference rather than with one at zero. |
-| `advice` | The tinted callout. `title` always equals `verdict.label` and `tone` always equals `verdict.tone` — they are generated together so the prose and the gauge cannot disagree. |
+| `advice` | The tinted callout. `title` equals `verdict.label` and `tone` equals `verdict.tone` — generated together, so the prose and the gauge cannot disagree — **except in the two states where the same document doubts its own headline**: when `cheapest.mayBeGone` is true, and when a fresh `meta.liveCheck.lowest` is **dearer** than `cheapest.price`. Then the callout is replaced and `tone` is `warn` while `verdict` is unchanged, because the gauge is still about the price level and the callout is about whether to act on it. **The client renders `advice` and must not compose its own qualification**; the booking hand-off reads `advice.tone` alone. |
 | `cheapest.foundAt` | **Detail only** — the summary's `cheapest` carries `date` and `price` alone. When the cheapest fare was *found*, same semantics and same null rule as the calendar's `days[].foundAt`. The detail screen prints "Seen 4 days ago" beside the departure line **only past 24 h**: under that it is the ordinary state of a route polled this morning, and a line nobody needs teaches people to skip the place the important version appears. The three summary-only screens have no room for it and do not get it. |
 | `cheapest.mayBeGone` | **Detail only, and the one JUDGEMENT in `data`.** `true` when the cheapest fare was found more than `orbit.live_check.stale_after_hours` (48 h) ago **and** is at least `orbit.live_check.under_usual_percent` (20%) below usual — the combination that put DUS→VCE on screen at €36, "seen 3 days ago", against a live market of about $150. The client **demotes the headline** and labels it ("Seen 3 days ago — may be gone") instead of drawing the app's most confident number over a fare that has probably sold. Both halves are required: age alone is the ordinary state of a quiet route, cheapness alone is what this app is for. **`false` whenever `foundAt` is null** — not-knowing is never demoted. Do not recompute it in a client: the thresholds are the server's. |
 | `booking.aviasales` | **The primary hand-off**, aimed at `cheapest.date`. Falls back to Aviasales' *pre-filled search form* (`/?params=AMSOPO1`) when there are no fares — there is no day to show results for, so the reader gets the search box with the route already in it. Carries the affiliate marker when the box has one. Always present. |
@@ -417,9 +417,14 @@ new has to be parsed.
 | `level` | Google's word — `low`, `typical`, `high` — or `null`. |
 | `checkedAt` | When **Orbit asked**. ISO-8601 with the offset, in the owner's timezone; the client reads it as "checked just now". The cooldown is measured from it. |
 
-**What it costs, and the four guardrails.** The SerpAPI key is a free plan: **250
-searches a month**, 50 of them reserved and ~150 already spent by nightly
-discovery. So one tap is at most one search, and:
+**What it costs, and the four guardrails.** The SerpAPI key is a free plan:
+**250 searches a month**. What is *enforced* is the 50-search reserve — nothing
+is spent at or below it — and nothing else counts live checks against a monthly
+figure. A back-of-envelope projection (250 − 50 reserve − up to 5 a night for
+discovery) leaves *roughly* 50 taps a month, but that is an estimate and not a
+property of the system: discovery may spend less, and nothing stops a month of
+taps from reaching the reserve early. **The reserve is the floor; the projection
+is arithmetic.** So one tap is at most one search, and:
 
 * **the cooldown first** — a check for this route and date inside
   `orbit.live_check.cooldown_hours` (6) is served from the stored row and costs
@@ -432,11 +437,22 @@ discovery. So one tap is at most one search, and:
   10 an hour** (`live-check` in `App\Providers\AppServiceProvider`), keyed on the
   account. Nothing schedules this and nothing takes a list.
 
-**503**: `{"message": "Orbit is holding its remaining live checks in reserve."}` —
-the budget said no, or this box has no `SERPAPI_KEY` (the default state of the
-app). **Deliberately not a 200 with an empty answer**: the screen must be able to
-tell "Google says €150" from "nobody asked Google". The cached price stays
-exactly where it was.
+**Two 503s, and they are different facts.** Both leave the cached price exactly
+where it was, and neither is a 200 with an empty answer — the screen must be able
+to tell "Google says €150" from "nobody asked Google".
+
+* `{"message": "Orbit is holding its remaining live checks in reserve."}` — the
+  budget said no, or this box has no `SERPAPI_KEY` (the default state of the
+  app). Nothing was asked and nothing will be until the quota moves.
+* `{"message": "Orbit could not reach Google just now. Nothing was spent — try
+  again in a moment."}` — SerpAPI timed out, refused, or answered something that
+  was not a finished search in euros. **No search was billed, so no row is
+  written, no cooldown starts, and the button stays**: an immediate retry is
+  honest here and is not in the case above.
+
+**A row is written only for a search SerpAPI actually billed** — including one
+where Google had no opinion (`lowest: null`), which is a real answer and must not
+be re-bought every six hours.
 
 **409**: `{"message": "Orbit has no fare for this route to check."}` — a route
 with no fares in the window has no departure to ask about. Not a bad request, not

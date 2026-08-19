@@ -521,17 +521,24 @@ describe('the booking hand-off', () => {
 // =============================================================================
 // The fare that may already be gone, and the way to find out
 // =============================================================================
-// DUS→VCE was on this screen at €36 — "Seen 3 days ago", usual €62 — and the
-// live market was about $150 with nothing anywhere near it. Every number was
-// true and the headline was a fare nobody could buy. Two things came of it: the
-// headline stops being drawn at full confidence, and there is a button that
-// goes and asks Google.
+// DUS→VCE was on this screen at €36 — "Seen 3 days ago", usual €62 — against a
+// live market of about $150. Every number was true and the headline was a fare
+// nobody could buy.
 // =============================================================================
 
-/** The state that started it: €36 against a usual €62, found three days ago. */
+/**
+ * The state that started it: €36 against a usual €62, found three days ago.
+ * ⚠ The advice is the SERVER's qualified one — a document with `mayBeGone`
+ * true and "a solid time to lock it in" is not one this API produces.
+ */
 const GONE = {
     price: { current: 36, usual: 62, pctBelow: 42 },
     cheapest: { date: '2026-09-09', price: 36, foundAt: '2026-08-12T12:00:00+02:00', mayBeGone: true },
+    advice: {
+        title: 'Cheap, but it may be gone',
+        body: '€36 is 42% under this route’s usual price, and old enough that fares like it have usually sold. Check the live price before counting on it.',
+        tone: 'warn',
+    },
 }
 
 /** What the server answers a live check with (docs/API.md, `meta.liveCheck`). */
@@ -556,12 +563,8 @@ describe('a fare that may already be gone', () => {
         vi.useRealTimers()
     })
 
-    /*
-     * THE DEMOTION IS THE POINT AND IT IS VISIBLE. The 42 px display face is
-     * what a reader takes away; the small print under it was already true and
-     * was already being skipped. So the number steps down a level and gains a
-     * sentence that says, in words, what is wrong with it.
-     */
+    /* The display face is what a reader takes away, so it steps down a level
+       and gains a sentence saying what is wrong with it. */
     it('draws the headline quieter and says why', async () => {
         const wrapper = await detail(GONE)
 
@@ -569,33 +572,26 @@ describe('a fare that may already be gone', () => {
         expect(wrapper.get('.price__gone').text()).toBe('Seen 3 days ago — may be gone')
     })
 
-    /* One line about the fare's age, not two — the plain "Seen 3 days ago" is
-       replaced rather than joined, because two grey lines about one fact is how
-       a page teaches people to skip both. */
+    /* One line about the fare's age, not two. */
     it('replaces the plain freshness line rather than stacking on it', async () => {
         const wrapper = await detail(GONE)
 
         expect(wrapper.find('.price__seen').exists()).toBe(false)
     })
 
-    /*
-     * AND THE HAND-OFF GOES QUIET WITH IT, for the same reason it does under
-     * advice that says to wait: the page has just said this price may not
-     * exist, and a glowing button under that would be the loudest thing on the
-     * screen sending somebody off to buy it.
-     */
-    it('stops shouting the booking hand-off', async () => {
+    /* The callout is the server's, and the hand-off follows its tone rather
+       than composing a second opinion out of `mayBeGone`. */
+    it('prints the server’s qualified callout and quiets the hand-off', async () => {
         const wrapper = await detail(GONE)
 
+        expect(wrapper.get('.callout__title').text()).toBe('Cheap, but it may be gone')
         expect(wrapper.get('.booking__cta').classes()).toContain('booking__cta--secondary')
     })
 
     /*
      * ⚠ THE RULE IS THE SERVER'S. Both facts it is made of are on this page —
      * the age and the percentage — and the screen deliberately does not
-     * recompute it: two thresholds in a Vue component is two thresholds to
-     * retune, and this is the one that would go on being applied afterwards.
-     * An old fare the server did NOT demote is drawn exactly as it always was.
+     * recompute it. An old fare the server did NOT demote is drawn as it was.
      */
     it('does not decide for itself that an old fare is stale', async () => {
         const wrapper = await detail({
@@ -641,13 +637,8 @@ describe('checking the live price', () => {
         expect(post).toHaveBeenCalledWith('/api/routes/AMS-LIS/live-price', null, { timeout: 30_000 })
     })
 
-    /*
-     * THE SWAP, WHICH IS THE WHOLE FEATURE. Google's number takes the headline
-     * because it is the only figure on the screen somebody can act on, and
-     * Orbit's own does not disappear — it becomes the context that makes the
-     * disagreement visible. "Orbit said €36, Google says €150" is what was paid
-     * for.
-     */
+    /* The swap, which is the whole feature: "Orbit said €36, Google says €150"
+       is what the search was paid for, and both halves stay on the page. */
     it('puts the live price in the headline and Orbit’s beside it', async () => {
         const wrapper = await detail(GONE)
         answers(LIVE)
@@ -663,30 +654,32 @@ describe('checking the live price', () => {
     })
 
     /*
-     * AND THE PAGE'S LAST CONTROL DOES NOT ENDORSE THE NUMBER JUST DISPROVED.
-     * The callout under the chart is still reasoning about the cached €36 —
-     * that is what it is for — and a glowing accent button under it, after
-     * Google has said the market is €150, would be the loudest element on the
-     * screen agreeing with the one figure the reader just paid to doubt.
+     * ⚠ THE PAGE'S LAST CONTROL DOES NOT ENDORSE THE NUMBER JUST DISPROVED —
+     * and the sentence saying so is the SERVER's, arriving with the document.
      */
     it('keeps the hand-off quiet while Google says the fare is dearer', async () => {
         const wrapper = await detail(GONE)
-        answers(LIVE)
+        answers(LIVE, {
+            ...GONE,
+            advice: {
+                title: 'Google cannot find this fare',
+                body: 'Orbit has €36 cached; the cheapest Google can find for 9 Sep is €150. Treat the cached fare as gone.',
+                tone: 'warn',
+            },
+        })
 
         await wrapper.get('.live__action').trigger('click')
         await flushPromises()
 
+        expect(wrapper.get('.callout__title').text()).toBe('Google cannot find this fare')
         expect(wrapper.get('.booking__cta').classes()).toContain('booking__cta--secondary')
     })
 
-    /*
-     * AND IT COMES BACK WHEN GOOGLE AGREES. A live answer at or under Orbit's
-     * own price is the app being right about a cheap fare — which is the case
-     * this whole screen exists for, and the one where saying yes is honest.
-     */
+    /* And it comes back when Google agrees: a live answer at or under Orbit's
+       own price is the app being right about a cheap fare. */
     it('says yes again when Google confirms the fare', async () => {
         const wrapper = await detail(GONE)
-        answers({ ...LIVE, lowest: 30 })
+        answers({ ...LIVE, lowest: 30 }, { ...GONE, advice: DETAIL.advice })
 
         await wrapper.get('.live__action').trigger('click')
         await flushPromises()
@@ -695,11 +688,8 @@ describe('checking the live price', () => {
         expect(wrapper.get('.booking__cta').classes()).toContain('booking__cta--primary')
     })
 
-    /*
-     * AND THE CAPTION GOES. "42% below its usual €62" is Orbit's opinion of
-     * Orbit's cached fare; printed under Google's €150 it reads as an opinion
-     * about that one.
-     */
+    /* "42% below its usual €62" under Google's €150 would read as an opinion
+       about Google's number. */
     it('does not read Orbit’s comparison as if it were about the live price', async () => {
         const wrapper = await detail(GONE)
         answers(LIVE)
@@ -710,12 +700,8 @@ describe('checking the live price', () => {
         expect(wrapper.find('.price__caption').exists()).toBe(false)
     })
 
-    /*
-     * NO SECOND TAP TO SELL. The server serves the same answer from its row for
-     * six hours and spends nothing, so a button offering to check again would
-     * be a lie about what it costs — and on a screen opened later in the day it
-     * would be an offer to re-buy an answer already paid for.
-     */
+    /* The server serves the same answer free for six hours, so a button
+       offering to check again would be a lie about what it costs. */
     it('offers no button once there is an answer', async () => {
         const wrapper = await detail(GONE, { ...META, liveCheck: LIVE })
 
@@ -723,11 +709,7 @@ describe('checking the live price', () => {
         expect(wrapper.get('.price__value').text()).toBe('€150')
     })
 
-    /*
-     * GOOGLE HAVING NO OPINION IS A REAL ANSWER AND IT IS NOT PERMISSION. Thin
-     * routes come back checked and silent; the cached fare stays exactly as
-     * demoted as it was, and the screen says so.
-     */
+    /* ⚠ Checked and silent is a real answer and it is not permission. */
     it('says when Google had nothing to say, and leaves the fare demoted', async () => {
         const wrapper = await detail(GONE, { ...META, liveCheck: { ...LIVE, lowest: null, typicalLow: null, typicalHigh: null, level: null } })
 
@@ -736,13 +718,8 @@ describe('checking the live price', () => {
         expect(wrapper.get('.live__note').text()).toContain('Google had no live price for this date')
     })
 
-    /*
-     * THE REFUSAL, AND IT IS NOT AN ERROR. A 503 means the SerpAPI quota is at
-     * or below the fifty searches Orbit will not spend on a screen — or that
-     * this box has no key at all, which is the app's default state. The price
-     * on screen is untouched, and the server's own sentence is what the reader
-     * gets.
-     */
+    /* A refusal is not an error: the price on screen is untouched and the
+       server's own sentence is what the reader gets. */
     it('keeps the cached price and explains when the budget is reserved', async () => {
         const wrapper = await detail(GONE)
 
@@ -757,6 +734,31 @@ describe('checking the live price', () => {
         expect(wrapper.get('.price__value').text()).toBe('€36')
         expect(wrapper.get('.price__value').classes()).toContain('price__value--gone')
         expect(wrapper.get('.price__gone').text()).toBe('Seen 3 days ago — may be gone')
+    })
+
+    /*
+     * ⚠ A CHECK THAT NEVER HAPPENED LEAVES THE BUTTON THERE. Nothing was spent
+     * and nothing was recorded, so the offer to try again is honest — which is
+     * the difference between this 503 and the reserved one above.
+     */
+    it('keeps offering the check when Google could not be reached', async () => {
+        const wrapper = await detail(GONE)
+
+        post.mockRejectedValue({
+            response: {
+                status: 503,
+                data: { message: 'Orbit could not reach Google just now. Nothing was spent — try again in a moment.' },
+            },
+        })
+
+        await wrapper.get('.live__action').trigger('click')
+        await flushPromises()
+
+        expect(wrapper.get('.live__error').text()).toBe(
+            'Orbit could not reach Google just now. Nothing was spent — try again in a moment.',
+        )
+        expect(wrapper.get('.live__action').attributes('disabled')).toBeUndefined()
+        expect(wrapper.get('.price__value').text()).toBe('€36')
     })
 
     it('offers nothing to check on a route with no fare', async () => {

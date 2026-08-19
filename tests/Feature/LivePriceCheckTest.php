@@ -8,43 +8,20 @@ use Tests\TestCase;
 use App\Models\User;
 use App\Models\Route;
 use App\Models\LivePriceCheck;
+use Illuminate\Support\Facades\DB;
 use Tests\Concerns\BuildsRouteData;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
-use Illuminate\Support\Facades\Route as Router;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * POST /api/routes/{code}/live-price — "Check live price", and the guardrails
- * that stand between one tap and a month's SerpAPI quota.
+ * between one tap and a month's SerpAPI quota (docs/BUSINESS-LOGIC.md §17).
  *
- * =============================================================================
- * WHAT THIS ENDPOINT IS FOR
- * =============================================================================
- * Orbit's fares are Travelpayouts' cache of other people's searches. DUS→VCE
- * was on the detail screen at €36 — "Seen 3 days ago", usual €62 — and the live
- * market was about $150 with nothing anywhere near it. The screen's half of the
- * answer is the demotion (tests/Feature/RouteDetailApiTest, `mayBeGone`); this
- * is the other half: a way to go and ask, once, on purpose.
- *
- * =============================================================================
- * THE GUARDRAILS ARE THE OWNER'S MANDATE AND EVERY ONE OF THEM IS A TEST HERE
- * =============================================================================
- *   1. NO KEY, NO CALLS — and no key is the default state of the app.
- *   2. THE QUOTA IS READ BEFORE ANY SEARCH, from the free `account.json`.
- *   3. AT OR BELOW THE 50-SEARCH RESERVE, NOTHING IS SPENT AT ALL.
- *   4. A COOLDOWN: the same route and date is answered from the row for
- *      `orbit.live_check.cooldown_hours`, and re-taps cost nothing.
- *   5. USER-INITIATED ONLY: authenticated, and throttled.
- *
- * AND THE RULE WITH TEETH: a check that was not made never becomes a price. A
- * refusal is a 503 with a sentence, and the cached fare on screen is left
- * exactly as it was — demoted if it was demoted.
- *
- * NO REAL SERPAPI REQUEST IS MADE BY ANYTHING IN THIS FILE. The fixtures under
- * tests/Fixtures/serpapi/ are the ones recorded on 2026-08-16 for the discovery
- * work; this feature spent none of its own.
+ * ⚠ NO REAL SERPAPI REQUEST IS MADE BY ANYTHING IN THIS FILE. The fixtures are
+ * the ones recorded on 2026-08-16 for the discovery work.
  */
 final class LivePriceCheckTest extends TestCase
 {
@@ -53,6 +30,10 @@ final class LivePriceCheckTest extends TestCase
     private const ACCOUNT = 'https://serpapi.com/account.json*';
 
     private const SEARCH = 'https://serpapi.com/search.json*';
+
+    private const UNREACHABLE = 'Orbit could not reach Google just now. Nothing was spent — try again in a moment.';
+
+    private const RESERVED = 'Orbit is holding its remaining live checks in reserve.';
 
     private User $owner;
 
@@ -63,12 +44,7 @@ final class LivePriceCheckTest extends TestCase
         Date::setTestNow('2026-08-14 09:00:00');
         $this->owner = User::factory()->create();
 
-        /*
-         * A KEY, BECAUSE THE DEFAULT IS NOT HAVING ONE. `.env.testing` pins
-         * `SERPAPI_KEY=` and the binding reads that as "no key" — which is the
-         * subject of its own test below and would make every other test here
-         * pass for the wrong reason.
-         */
+        /* `.env.testing` pins an empty key, which is its own test below. */
         config(['orbit.serpapi.key' => 'test-key']);
     }
 
@@ -85,8 +61,19 @@ final class LivePriceCheckTest extends TestCase
     }
 
     /**
-     * A route with a cheapest departure on 2026-09-03, three days after
-     * anybody last saw the price — the shape of the fare that started all this.
+     * @param  array<string, mixed>  $overrides
+     */
+    private function fixtureWith(string $name, array $overrides): string
+    {
+        /** @var array<string, mixed> $body */
+        $body = (array) json_decode($this->fixture($name), true);
+
+        return (string) json_encode(array_replace_recursive($body, $overrides));
+    }
+
+    /**
+     * A route whose cheapest departure is on 2026-09-03 at €36 against a usual
+     * €80, last seen three days ago — the shape of the fare that started this.
      */
     private function seedRoute(): Route
     {
@@ -111,11 +98,14 @@ final class LivePriceCheckTest extends TestCase
         ]);
     }
 
-    /**
-     * =========================================================================
-     * 5. USER-INITIATED ONLY — the two halves of "only from this surface"
-     * =========================================================================
-     */
+    private function fakeQuotaAnd(callable|string $search): void
+    {
+        Http::fake([
+            self::ACCOUNT => Http::response($this->fixture('account'), 200),
+            self::SEARCH  => is_string($search) ? Http::response($search, 200) : $search,
+        ]);
+    }
+
     #[Test]
     public function a_guest_cannot_spend_a_search(): void
     {
@@ -128,23 +118,27 @@ final class LivePriceCheckTest extends TestCase
         $this->assertDatabaseCount('live_price_checks', 0);
     }
 
+    /**
+     * Three a minute is a mistap and a change of mind; the fourth is a loop.
+     * No key, so the three that get through spend nothing to prove it.
+     */
     #[Test]
-    public function the_endpoint_is_throttled(): void
+    public function the_fourth_check_in_a_minute_is_refused(): void
     {
-        $route = Router::getRoutes()->getByName('routes.live-price');
+        config(['orbit.serpapi.key' => null]);
+        $this->seedRoute();
 
-        $this->assertNotNull($route);
-        $this->assertContains('throttle:live-check', $route->gatherMiddleware());
+        foreach (range(1, 3) as $ignored) {
+            $this->actingAs($this->owner)
+                ->postJson('/api/routes/AMS-OPO/live-price')
+                ->assertStatus(503);
+        }
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/routes/AMS-OPO/live-price')
+            ->assertStatus(429);
     }
 
-    /**
-     * =========================================================================
-     * 1. NO KEY, NO CALLS — and this is the DEFAULT state of the app
-     * =========================================================================
-     * The screen is told, in a sentence, and the cached price it is showing is
-     * left alone. What must never happen is a 200 with nothing in it, which a
-     * client cannot tell from "Google agreed".
-     */
     #[Test]
     public function without_a_key_nothing_is_spent_and_the_screen_is_told(): void
     {
@@ -154,16 +148,11 @@ final class LivePriceCheckTest extends TestCase
         $this->actingAs($this->owner)
             ->postJson('/api/routes/AMS-OPO/live-price')
             ->assertStatus(503)
-            ->assertJsonPath('message', 'Orbit is holding its remaining live checks in reserve.');
+            ->assertJsonPath('message', self::RESERVED);
 
         $this->assertDatabaseCount('live_price_checks', 0);
     }
 
-    /**
-     * =========================================================================
-     * 2. THE QUOTA IS READ BEFORE ANY SEARCH — and the answer is published
-     * =========================================================================
-     */
     #[Test]
     public function it_reads_the_quota_first_and_then_asks_google_once(): void
     {
@@ -181,13 +170,11 @@ final class LivePriceCheckTest extends TestCase
             ->assertJsonPath('meta.liveCheck.date', '2026-09-03')
             ->assertJsonPath('meta.liveCheck.checkedAt', '2026-08-14T11:00:00+02:00');
 
-        /* The cached fare is still there, and still says what it always said —
-           the live answer is published beside it, not instead of it. */
         $response->assertJsonPath('data.cheapest.price', 36);
 
         Http::assertSentCount(2);
 
-        /* THE ORDER IS THE GUARDRAIL. The quota is not a thing to check after
+        /* ⚠ THE ORDER IS THE GUARDRAIL. The quota is not a thing to check after
            spending the search it was supposed to authorise. */
         Http::assertSentInOrder([
             fn ($request): bool => str_contains($request->url(), 'account.json'),
@@ -211,13 +198,21 @@ final class LivePriceCheckTest extends TestCase
         $this->assertSame('2026-08-14 09:00:00', $check->checked_at->format('Y-m-d H:i:s'));
     }
 
+    /** ⚠ A bare `Y-m-d`, which is what makes the unique index findable. */
+    #[Test]
+    public function the_departure_date_is_stored_as_a_bare_day(): void
+    {
+        $this->seedRoute();
+        $this->fakeQuotaAndSearch();
+
+        $this->actingAs($this->owner)->postJson('/api/routes/AMS-OPO/live-price')->assertOk();
+
+        $this->assertSame('2026-09-03', DB::table('live_price_checks')->value('departure_date'));
+    }
+
     /**
-     * =========================================================================
-     * 3. THE RESERVE — the one that refuses, and it refuses BEFORE spending
-     * =========================================================================
      * `account-exhausted` is 12 searches left against a reserve of 50. One
-     * request goes out, to the endpoint SerpAPI does not bill, and nothing else
-     * happens.
+     * request goes out, to the endpoint SerpAPI does not bill.
      */
     #[Test]
     public function at_or_below_the_reserve_it_spends_nothing(): void
@@ -231,7 +226,8 @@ final class LivePriceCheckTest extends TestCase
 
         $this->actingAs($this->owner)
             ->postJson('/api/routes/AMS-OPO/live-price')
-            ->assertStatus(503);
+            ->assertStatus(503)
+            ->assertJsonPath('message', self::RESERVED);
 
         Http::assertSentCount(1);
         Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'search.json'));
@@ -239,11 +235,6 @@ final class LivePriceCheckTest extends TestCase
         $this->assertDatabaseCount('live_price_checks', 0);
     }
 
-    /**
-     * =========================================================================
-     * 4. THE COOLDOWN — the second tap is free, and so is the second visit
-     * =========================================================================
-     */
     #[Test]
     public function a_second_tap_inside_the_cooldown_costs_nothing(): void
     {
@@ -257,8 +248,7 @@ final class LivePriceCheckTest extends TestCase
         $this->actingAs($this->owner)
             ->postJson('/api/routes/AMS-OPO/live-price')
             ->assertOk()
-            /* The FIRST answer, unchanged — including when it was made, which is
-               how the screen can say "checked 5 hours ago" rather than lying. */
+            /* The FIRST answer, unchanged — including when it was made. */
             ->assertJsonPath('meta.liveCheck.checkedAt', '2026-08-14T11:00:00+02:00');
 
         Http::assertSentCount(2);
@@ -283,8 +273,7 @@ final class LivePriceCheckTest extends TestCase
 
         Http::assertSentCount(4);
 
-        /* ONE ROW, OVERWRITTEN. The table is the latest answer per route and
-           date, not a log of every time somebody asked — see the migration. */
+        /* One row, overwritten: the latest answer per route and date. */
         $this->assertDatabaseCount('live_price_checks', 1);
     }
 
@@ -296,16 +285,12 @@ final class LivePriceCheckTest extends TestCase
 
         $this->actingAs($this->owner)->postJson('/api/routes/AMS-OPO/live-price')->assertOk();
 
-        /* A plain view of the screen, five hours later: the live answer is
-           still what the headline is drawn from, and no button is offered. */
         Date::setTestNow('2026-08-14 14:00:00');
 
         $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
             ->assertOk()
             ->assertJsonPath('meta.liveCheck.lowest', 70);
 
-        /* And past the cooldown it is simply not published — an answer that old
-           is not a live price, and the button comes back. */
         Date::setTestNow('2026-08-14 16:00:00');
 
         $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
@@ -316,11 +301,8 @@ final class LivePriceCheckTest extends TestCase
     }
 
     /**
-     * A STORED ANSWER IS ABOUT A FLIGHT, NOT ABOUT A ROUTE. The cheapest
-     * departure moves — a poll finds a better date, a date goes by — and an
-     * answer about the 3rd must never be shown over a screen about the 10th.
-     * That would be this app's oldest mistake (a true number about a different
-     * flight) with "checked live" printed on it.
+     * ⚠ A stored answer is about a FLIGHT, not about a route: an answer about
+     * the 3rd must never be shown over a screen about the 10th.
      */
     #[Test]
     public function an_answer_for_another_date_is_not_published_over_this_one(): void
@@ -340,11 +322,13 @@ final class LivePriceCheckTest extends TestCase
     }
 
     /**
-     * GOOGLE HAVING NO OPINION IS A REAL ANSWER, AND IT WAS STILL BILLED.
-     * Thin routes come back without a `price_insights` block — EIN-VNO did on
-     * 2026-08-16 — and SerpAPI counted that search. The row is written anyway,
-     * so the cooldown covers it and the same silence is not re-bought every six
-     * hours.
+     * =========================================================================
+     * BILLED OR NOT BILLED — the difference a row is written on
+     * =========================================================================
+     * Google answering without a `price_insights` block is a real answer on a
+     * thin route and SerpAPI counted the search, so the row is written and the
+     * cooldown covers it. Everything below this is a search that never
+     * happened: no row, and the button is still there to try again.
      */
     #[Test]
     public function a_silent_answer_is_recorded_rather_than_re_bought(): void
@@ -364,10 +348,161 @@ final class LivePriceCheckTest extends TestCase
         $this->assertDatabaseCount('live_price_checks', 1);
     }
 
+    #[Test]
+    public function a_google_that_could_not_be_reached_is_not_an_answer(): void
+    {
+        $this->seedRoute();
+        $this->fakeQuotaAnd(fn (): never => throw new ConnectionException('Connection timed out'));
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/routes/AMS-OPO/live-price')
+            ->assertStatus(503)
+            ->assertJsonPath('message', self::UNREACHABLE);
+
+        $this->assertDatabaseCount('live_price_checks', 0);
+
+        /* And the screen still offers the button, because nothing was spent. */
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('meta.liveCheck', null);
+    }
+
+    #[Test]
+    public function a_search_serpapi_refused_is_not_an_answer(): void
+    {
+        $this->seedRoute();
+
+        Http::fake([
+            self::ACCOUNT => Http::response($this->fixture('account'), 200),
+            self::SEARCH  => Http::response('rate limited', 429),
+        ]);
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/routes/AMS-OPO/live-price')
+            ->assertStatus(503)
+            ->assertJsonPath('message', self::UNREACHABLE);
+
+        $this->assertDatabaseCount('live_price_checks', 0);
+    }
+
     /**
-     * A route with no fares in the window has no departure to ask about. That
-     * is not a bad request and not a missing route — it is a question with no
-     * subject, and it must not reach the quota.
+     * ⚠ A PRICE IN DOLLARS WOULD BE SILENTLY WRONG IN THE REASSURING
+     * DIRECTION. The parameter is always sent; this is the echo being read.
+     */
+    #[Test]
+    public function an_answer_in_another_currency_is_not_an_answer(): void
+    {
+        $this->seedRoute();
+        $this->fakeQuotaAnd($this->fixtureWith('google-flights-typical', [
+            'search_parameters' => ['currency' => 'USD'],
+        ]));
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/routes/AMS-OPO/live-price')
+            ->assertStatus(503)
+            ->assertJsonPath('message', self::UNREACHABLE);
+
+        $this->assertDatabaseCount('live_price_checks', 0);
+    }
+
+    #[Test]
+    public function a_search_that_did_not_succeed_is_not_an_answer(): void
+    {
+        $this->seedRoute();
+        $this->fakeQuotaAnd($this->fixtureWith('google-flights-typical', [
+            'search_metadata' => ['status' => 'Error'],
+        ]));
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/routes/AMS-OPO/live-price')
+            ->assertStatus(503)
+            ->assertJsonPath('message', self::UNREACHABLE);
+
+        $this->assertDatabaseCount('live_price_checks', 0);
+    }
+
+    /**
+     * =========================================================================
+     * ⚠ TWO TAPS THAT RACE — a paid answer must never come back as a 500
+     * =========================================================================
+     * Both requests pass the cooldown and the quota, both spend a search, and
+     * the unique key lets exactly one row through. The listener below is the
+     * other request committing its row while this one is mid-flight.
+     */
+    #[Test]
+    public function a_tap_that_loses_the_race_serves_the_winners_answer(): void
+    {
+        $route = $this->seedRoute();
+        $this->fakeQuotaAndSearch();
+
+        LivePriceCheck::creating(static function () use ($route): bool {
+            LivePriceCheck::flushEventListeners();
+
+            DB::table('live_price_checks')->insert([
+                'route_id'       => $route->id,
+                'departure_date' => '2026-09-03',
+                'checked_at'     => '2026-08-14 09:00:00',
+                'google_verdict' => (string) json_encode([
+                    'level' => 'low', 'lowest' => 4800, 'typical_low' => null, 'typical_high' => null, 'confirmed' => true,
+                ]),
+                'created_at' => '2026-08-14 09:00:00',
+                'updated_at' => '2026-08-14 09:00:00',
+            ]);
+
+            return true;
+        });
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/routes/AMS-OPO/live-price')
+            ->assertOk()
+            /* The winner's €48, not a 500 and not a second row. */
+            ->assertJsonPath('meta.liveCheck.lowest', 48);
+
+        $this->assertDatabaseCount('live_price_checks', 1);
+    }
+
+    /**
+     * =========================================================================
+     * ⚠ THE CALLOUT MAY NOT RECOMMEND A FARE THIS DOCUMENT DOUBTS
+     * =========================================================================
+     * The demoted half is in tests/Feature/RouteDetailApiTest; this is the half
+     * with a live price behind it.
+     */
+    #[Test]
+    public function a_live_price_dearer_than_the_cached_one_replaces_the_advice(): void
+    {
+        $this->seedRoute();
+        $this->fakeQuotaAndSearch();
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/routes/AMS-OPO/live-price')
+            ->assertOk()
+            ->assertJsonPath('data.advice.title', 'Google cannot find this fare')
+            ->assertJsonPath('data.advice.tone', 'warn')
+            ->assertJsonPath(
+                'data.advice.body',
+                'Orbit has €36 cached; the cheapest Google can find for 3 Sep is €70. Treat the cached fare as gone.',
+            );
+    }
+
+    #[Test]
+    public function a_live_price_that_agrees_leaves_the_advice_alone(): void
+    {
+        $this->seedRoute();
+        $this->fakeQuotaAnd($this->fixtureWith('google-flights-typical', [
+            'price_insights' => ['lowest_price' => 30],
+        ]));
+
+        $response = $this->actingAs($this->owner)->postJson('/api/routes/AMS-OPO/live-price');
+
+        $response->assertOk()->assertJsonPath('meta.liveCheck.lowest', 30);
+
+        $this->assertNotSame('Google cannot find this fare', $response->json('data.advice.title'));
+        $this->assertNotSame('Cheap, but it may be gone', $response->json('data.advice.title'));
+    }
+
+    /**
+     * A route with no fares in the window has no departure to ask about — not a
+     * bad request and not a missing route, a question with no subject.
      */
     #[Test]
     public function a_route_with_no_fare_has_nothing_to_check(): void

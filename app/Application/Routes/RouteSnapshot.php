@@ -13,20 +13,7 @@ use App\Domain\Pricing\PriceHistory;
 
 /**
  * One route, as every screen needs it: the ends, the price, the judgement and
- * the series behind it.
- *
- * WHY A VIEW MODEL RATHER THAN THE ELOQUENT MODEL. Half of what a screen shows
- * is not in any column — the score, the verdict, the percentage under usual,
- * the sparkline — and the alternative to assembling it once here is accessors
- * on the model that each run their own query the first time they are touched.
- * That is the shape N+1s and inconsistent snapshots come from: the API would
- * be able to answer with a score computed against statistics a later line
- * re-read after a refresh job had rewritten them.
- *
- * It holds the Route MODEL rather than copying its columns, because that half
- * really is plain CRUD and docs/PLAN.md is explicit that Eloquent is used
- * directly for it. The relations it exposes (`origin`, `destination`) are
- * eager-loaded by RouteSnapshots before this is built.
+ * the series behind it — assembled once, so nothing recomputes mid-response.
  */
 final readonly class RouteSnapshot
 {
@@ -51,36 +38,11 @@ final readonly class RouteSnapshot
 
     /**
      * Whether the cheapest fare is the kind that has probably already gone —
-     * old AND well under this route's usual price.
+     * old AND well under this route's usual price. Both halves are required,
+     * and a null `foundAt` is never demoted (docs/BUSINESS-LOGIC.md §17).
      *
-     * =========================================================================
-     * BOTH HALVES ARE REQUIRED, AND THE COMBINATION IS THE WHOLE RULE
-     * =========================================================================
-     * A four-day-old fare AT its usual price is the ordinary state of a quiet
-     * route and disappoints nobody. A fare 40% under usual found an hour ago is
-     * exactly what this app is for, at full volume. It is the pair that is the
-     * trap — cheap enough to be the reason somebody opened the screen, old
-     * enough to be the first kind of fare to disappear — and DUS→VCE at €36
-     * against a usual €62, seen three days earlier and unbuyable at any price
-     * near it, is the fare this method is named after. config/orbit.php,
-     * `live_check`, carries the argument and the two numbers.
-     *
-     * THE THRESHOLDS ARE PASSED IN, like every policy number in this app: this
-     * is Application code, and a `config()` call here would be a second place
-     * the rule is defined, next to the resource that draws it.
-     *
-     * IT READS THE CHEAPEST DEPARTURE, NOT `currentCents`. They are the same
-     * number on almost every screen, by two different routes — one is the
-     * morning's observation, the other is the row in the calendar — and only
-     * one of them carries a `found_at`. A demotion drawn from an age belongs to
-     * the fare that HAS that age.
-     *
-     * A NULL `foundAt` IS NEVER DEMOTED. It means "we do not know how old this
-     * is" (App\Domain\Pricing\DatedFare), which is the state of every row
-     * written before that column existed and of any provider that will not say.
-     * Demoting on not-knowing would grey out a whole database on the morning it
-     * shipped — the same reading App\Domain\Alerts\AlertPolicy takes of the same
-     * null, for the same reason.
+     * ⚠ It judges the CHEAPEST DEPARTURE, which is the fare carrying a
+     * `found_at` and the one the screen draws the demotion on.
      */
     public function cheapestMayBeGone(DateTimeImmutable $now, int $staleAfterHours, int $underUsualPercent): bool
     {

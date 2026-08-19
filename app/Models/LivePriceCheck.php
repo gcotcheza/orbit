@@ -4,23 +4,19 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use DateTimeInterface;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * One live second opinion — a row of `live_price_checks`.
+ * One live second opinion — a row of `live_price_checks`, written only by
+ * App\Application\Routes\LivePriceChecks.
  *
- * WRITTEN ONLY BY App\Application\Routes\LivePriceChecks, which is the one place
- * a SerpAPI search is spent from a person's tap. Read by the route detail
- * resource, and by the cooldown that stops the same tap being paid for twice.
- *
- * `google_verdict` IS THE STORED FACTS AND NOT A CONCLUSION, the same bargain
- * `discoveries` makes: `confirmed` is derivable from the other three and is
- * written anyway, so that what a screen claimed on the day it claimed it cannot
- * be rewritten by a retuned rule. NULL means "asked, and Google would not say" —
- * a real answer, and never "assume the cached price is fine".
+ * A null `google_verdict` means Google was asked and would not say; a search
+ * that was never spent gets no row at all (docs/BUSINESS-LOGIC.md §17).
  *
  * @property int $id
  * @property int $route_id
@@ -40,16 +36,7 @@ final class LivePriceCheck extends Model
         return $this->belongsTo(Route::class);
     }
 
-    /**
-     * The cheapest seat Google itself could find, in cents — or null when it had
-     * no opinion.
-     *
-     * THE FIELD THE HEADLINE IS SWAPPED FOR, and the reason a null here is not a
-     * cosmetic detail: with no live price there is nothing to promote, so the
-     * screen keeps the cached figure exactly as demoted as it already was and
-     * says Google had nothing to add. An accessor rather than three `?? null`
-     * reads spread over a resource and a test.
-     */
+    /** The cheapest seat Google could find, in cents; null when it was silent. */
     public function lowestCents(): ?int
     {
         $lowest = $this->google_verdict['lowest'] ?? null;
@@ -57,18 +44,25 @@ final class LivePriceCheck extends Model
         return is_int($lowest) ? $lowest : null;
     }
 
-    /**
-     * Whether this answer is still inside the cooldown, i.e. whether re-asking
-     * would be spending a search on a question already answered.
-     *
-     * THE HOURS ARE PASSED IN rather than read from config here, for the reason
-     * every policy in this app is handed its numbers: a model that read
-     * `config()` would be a second place the cooldown is defined, one refactor
-     * away from disagreeing with the endpoint that enforces it.
-     */
     public function isFresh(CarbonImmutable $now, int $cooldownHours): bool
     {
         return $this->checked_at->greaterThan($now->subHours($cooldownHours));
+    }
+
+    /**
+     * ⚠ A BARE `Y-m-d`, AND NOT A DATE CAST. The cast stores `Y-m-d H:i:s`,
+     * which SQLite keeps verbatim and an exact-match lookup never finds.
+     *
+     * @return Attribute<CarbonImmutable, string>
+     */
+    protected function departureDate(): Attribute
+    {
+        return Attribute::make(
+            get: static fn (string $value): CarbonImmutable => CarbonImmutable::parse($value),
+            set: static fn (DateTimeInterface|string $value): string => $value instanceof DateTimeInterface
+                ? $value->format('Y-m-d')
+                : $value,
+        );
     }
 
     /**
@@ -77,7 +71,6 @@ final class LivePriceCheck extends Model
     protected function casts(): array
     {
         return [
-            'departure_date' => 'immutable_date',
             'checked_at'     => 'immutable_datetime',
             'google_verdict' => 'array',
         ];

@@ -1703,6 +1703,15 @@ is not evidence of staleness, the same reading `AlertPolicy` takes.
 (the poll is daily, so one missed morning must not demote everything) and is
 deliberately **longer** than the 24 hours at which the screen starts printing
 "Seen …" at all: the line comes first and quietly, the demotion a day later.
+**20%** is where a fare stops being ordinary variation and starts being the
+point — at 10% under usual nobody clears a weekend, at 20% they look twice, and
+the fare that started this was 42% below.
+
+The judgement reads the **cheapest departure**, not `price.current`: they are the
+same number by contract (`docs/API.md`) but only one of them carries a
+`found_at`, and a demotion drawn from an age belongs to the fare that has the
+age. The screen draws the pill, the callout and the number they sit over from
+that same fare, so one claim is never made about two fares.
 
 ### The check — one button, one search, and four guardrails
 
@@ -1721,17 +1730,74 @@ which is 250 searches a **month** on a free plan. So:
 | **Cooldown**: the same route and date is served from the stored row for 6 h, free | `App\Application\Routes\LivePriceChecks` |
 | **User-initiated only**: authenticated, CSRF, throttled 3/min and 10/h; nothing schedules it | `routes/web.php`, the `live-check` limiter |
 
-**A refusal is a 503 with a sentence, never an empty 200.** The screen has to be
-able to tell "Google says €150" from "nobody asked Google": the second leaves the
-cached price standing, demoted, and says the checks are being held in reserve.
-**Google having no opinion is a real answer too** — thin routes come back without
-a `price_insights` block — and it is *recorded*, because SerpAPI billed that
-search either way and the same silence must not be re-bought every six hours.
+⚠ **The reserve is the only enforced floor.** "Roughly fifty live checks a
+month" (250 − 50 reserve − up to 5 a night for discovery) is arithmetic, not a
+property of the system: nothing counts taps against a monthly figure, discovery
+may spend less, and a busy month reaches the reserve early. The limiter is not
+the rationing either — 10 an hour would clear the month by Tuesday; it is there
+for a client stuck in a retry loop.
 
-The answers live in `live_price_checks`, one row per route and departure date,
-overwritten rather than logged. Nothing but the detail screen reads it today;
-verifying an alert before it is sent is the obvious next reader, and is why the
-answer is a table rather than a cache entry `cache:clear` can take.
+### The callout stops recommending a fare the page doubts
+
+`advice` is generated with the score so the prose and the gauge cannot disagree.
+Two states override it, **server-side**, in
+`App\Http\Resources\RouteDetailResource`:
+
+* `cheapest.mayBeGone` — "€36 is 42% under its usual €62 — a solid time to lock
+  it in" is the single loudest wrong sentence this app can print, and it is
+  printed under a fare the same document has just demoted. It becomes *"Cheap,
+  but it may be gone"*, tone `warn`.
+* a fresh live check whose `lowest` is **dearer than the cached fare** — the
+  callout would otherwise still be reasoning about a number Google has just
+  contradicted. It becomes *"Google cannot find this fare"*, tone `warn`.
+
+`verdict` is left alone in both: the gauge is about the price level, the callout
+is about whether to act on it. **The client renders the sentence and reads
+`advice.tone` for the booking hand-off; it composes no qualification of its
+own** — a claim assembled in a Vue component is one the server cannot be held to
+and one a future alert would not repeat.
+
+### Asked and silent, or never asked at all
+
+Three outcomes, and only the first two cost money
+(`App\Domain\Discovery\GoogleAnswer`):
+
+| outcome | billed | row written | what the screen says |
+| --- | --- | --- | --- |
+| Google answered with `price_insights` | yes | yes | the live price takes the headline |
+| Google answered without it (thin route) | yes | yes | "Google had no live price for this date" |
+| SerpAPI timed out, refused, or answered something that is not a finished euro search | **no** | **no** | "could not reach Google — nothing was spent", and the button stays |
+
+⚠ The third case is the one that was wrong: recording it would have served
+"Google had no opinion" for six hours off a search that never happened, and
+blocked the retry that would have worked. A body is only read as an answer when
+`search_parameters.currency` is `EUR` **and** `search_metadata.status` is
+`Success` — a price in dollars would be silently wrong in the reassuring
+direction, and a search that did not finish is not a market.
+
+### Two taps at once
+
+Two requests can both pass the cooldown and the quota, both spend a search, and
+then collide on `live_price_checks`' unique `(route_id, departure_date)`. The
+loser catches the constraint violation, re-reads the winner's row and serves it:
+both taps see one number, and **a paid answer is never returned as a 500**. The
+loser's own answer is discarded rather than overwriting — both are equally fresh,
+and one row per route and date is what every reader of this table expects.
+
+`departure_date` is stored as a **bare `Y-m-d`** by a mutator on
+`App\Models\LivePriceCheck` rather than by a date cast. The cast writes
+`Y-m-d H:i:s`, which Postgres coerces into the `date` column and SQLite keeps
+verbatim — so an exact-match lookup on the unique index finds the row on
+production and not on the database the test suite runs on.
+
+### Why a table rather than a cache entry
+
+The answer cost a metered search, and `cache:clear` is a routine deploy step: it
+must not be able to make somebody's phone spend a search it already spent. One
+row per route and departure date, overwritten rather than logged — every reader
+wants the most recent answer for that flight, and the departure date is in the
+key because a check of the 12th says nothing about the 19th. The obvious next
+reader is alert verification, which does not exist yet and is not pretended to.
 
 ---
 
