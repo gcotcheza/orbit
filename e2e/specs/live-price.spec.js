@@ -111,7 +111,9 @@ test('the live price takes the headline and Orbit’s own becomes context', asyn
         /* What the server sends once Google has contradicted the cached fare,
            in the same words — €150 is well past `contradiction_percent`. */
         const day = new Date(`${body.data.cheapest.date}T00:00:00Z`)
-        const when = `${day.getUTCDate()} ${day.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })}`
+        /* `en-US`, because `en-GB` abbreviates September to "Sept" and PHP's
+           `M` — the format the server uses — never does. */
+        const when = `${day.getUTCDate()} ${day.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })}`
 
         body.data.advice = {
             title: 'Google cannot find this fare',
