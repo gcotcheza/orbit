@@ -1,15 +1,16 @@
 # Orbit — API
 
-The seventeen endpoints the screens are built from — six reads, ten writes and
+The eighteen endpoints the screens are built from — six reads, eleven writes and
 one account action.
 **This file is the contract**: the globe home, the route detail, the price
 calendar, the watchlist, the alerts screen and the rule creator are all built
 against these shapes, and every field below has a feature test behind it
 (`tests/Feature/WatchlistApiTest`, `RouteDetailApiTest`, `RouteCalendarApiTest`,
-`WatchlistWritesTest`, `RouteLookupTest`, `SettingsApiTest`, `RulesApiTest`,
-`AlertsApiTest`, `DestinationsApiTest`, `PasswordChangeTest`).
+`WatchlistWritesTest`, `RouteLookupTest`, `LivePriceCheckTest`,
+`SettingsApiTest`, `RulesApiTest`, `AlertsApiTest`, `DestinationsApiTest`,
+`PasswordChangeTest`).
 
-One of the seventeen has no screen yet: `GET /api/alerts` is the alert ledger,
+One of the eighteen has no screen yet: `GET /api/alerts` is the alert ledger,
 and the alerts screen stays settings-only for now.
 
 ---
@@ -173,7 +174,12 @@ The route detail screen (`design/README.md` §2). The summary above, plus:
       "body": "€44 against a usual €93, and still sliding — waiting a few days could pay off.",
       "tone": "info"
     },
-    "cheapest": { "date": "2026-09-15", "price": 44, "foundAt": "2026-08-11T22:04:13+02:00" },
+    "cheapest": {
+      "date": "2026-09-15",
+      "price": 44,
+      "foundAt": "2026-08-11T22:04:13+02:00",
+      "mayBeGone": false
+    },
     "booking": {
       "aviasales": "https://www.aviasales.com/search/AMS1509OPO1?marker=123456",
       "skyscanner": "https://www.skyscanner.nl/transport/flights/ams/opo/260915/"
@@ -186,8 +192,9 @@ The route detail screen (`design/README.md` §2). The summary above, plus:
 | --- | --- |
 | `history` | Up to 60 daily observations, **oldest first**. This is the line chart; `sparkline` is its last fortnight. Days we did not poll are simply absent — plot by date, not by index. |
 | `stats` | The dashed "usual price" reference line, and the five-number summary the score is built from. **`null`** when the provider has none; draw the chart without a reference rather than with one at zero. |
-| `advice` | The tinted callout. `title` always equals `verdict.label` and `tone` always equals `verdict.tone` — they are generated together so the prose and the gauge cannot disagree. |
+| `advice` | The tinted callout. `title` equals `verdict.label` and `tone` equals `verdict.tone` — generated together, so the prose and the gauge cannot disagree — **except in the two states where the same document doubts its own headline**: when `cheapest.mayBeGone` is true, and when a fresh `meta.liveCheck.lowest` is **dearer** than `cheapest.price`. Then the callout is replaced and `tone` is `warn` while `verdict` is unchanged, because the gauge is still about the price level and the callout is about whether to act on it. **The client renders `advice` and must not compose its own qualification**; the booking hand-off reads `advice.tone` alone. |
 | `cheapest.foundAt` | **Detail only** — the summary's `cheapest` carries `date` and `price` alone. When the cheapest fare was *found*, same semantics and same null rule as the calendar's `days[].foundAt`. The detail screen prints "Seen 4 days ago" beside the departure line **only past 24 h**: under that it is the ordinary state of a route polled this morning, and a line nobody needs teaches people to skip the place the important version appears. The three summary-only screens have no room for it and do not get it. |
+| `cheapest.mayBeGone` | **Detail only, and the one JUDGEMENT in `data`.** `true` when the cheapest fare was found more than `orbit.live_check.stale_after_hours` (48 h) ago **and** is at least `orbit.live_check.under_usual_percent` (20%) below usual — the combination that put DUS→VCE on screen at €36, "seen 3 days ago", against a live market of about $150. The client **demotes the headline** and labels it ("Seen 3 days ago — may be gone") instead of drawing the app's most confident number over a fare that has probably sold. Both halves are required: age alone is the ordinary state of a quiet route, cheapness alone is what this app is for. **`false` whenever `foundAt` is null** — not-knowing is never demoted. Do not recompute it in a client: the thresholds are the server's. |
 | `booking.aviasales` | **The primary hand-off**, aimed at `cheapest.date`. Falls back to Aviasales' *pre-filled search form* (`/?params=AMSOPO1`) when there are no fares — there is no day to show results for, so the reader gets the search box with the route already in it. Carries the affiliate marker when the box has one. Always present. |
 | `booking.skyscanner` | The secondary "compare" link, same date. Falls back to the route without a date (`…/ams/opo/`). No marker — this one has never been monetised. Always present. |
 
@@ -207,6 +214,7 @@ is, and expect the booking site to be the one holding live availability.
   "data": { "…": "…" },
   "meta": {
     "watched": false,
+    "liveCheck": null,
     "fares": { "fetchedAt": "2026-08-15T06:12:07+02:00", "fresh": true }
   }
 }
@@ -215,6 +223,7 @@ is, and expect the booking site to be the one holding live availability.
 | field | notes |
 | --- | --- |
 | `meta.watched` | Whether **this account** has the route on its watchlist. Draws the "Watch this route" strip on the detail screen; a route that is already watched gets no strip at all, and that screen is unchanged from what it always was. |
+| `meta.liveCheck` | What **Google** said when somebody last pressed "Check live price" for `cheapest.date` — **`null`** when nobody has, or when the last answer is older than `orbit.live_check.cooldown_hours` (6 h). Its shape is below, under `POST /api/routes/{code}/live-price`. `null` is what the client draws the button from. |
 | `meta.fares.fetchedAt` | When the provider was last asked about this route — the newest `calendar_fares.fetched_at`. **`null`** when Orbit has never got a fare for it. The **only timestamp in this API** (every other date is a bare `YYYY-MM-DD` because it names a day); it is ISO-8601 with the offset, in the owner's timezone. |
 | `meta.fares.fresh` | `fetchedAt` is inside `orbit.lookup.fresh_for_hours` (24). **The client's rule is "not fresh AND not watched → ask for a lookup"**: a watched route is polled every morning, so stale fares on one are a broken poll rather than provider calls to spend from somebody's phone. |
 
@@ -362,6 +371,94 @@ typed a code Orbit has never heard of.
 GET that does either is one a browser prefetch, a link preview or a retry will
 eventually do on somebody's behalf. That is also why it is not a `?refresh=1` on
 the read above it.
+
+---
+
+## `POST /api/routes/{code}/live-price`
+
+**Go and ask Google.** Orbit's fares are Travelpayouts' cache of other people's
+searches, so the headline on a route detail can be a price nobody can buy —
+DUS→VCE at €36, seen three days earlier, against a live market of about $150.
+This is the "Check live price" button: one live Google Flights search, through
+SerpAPI, about the exact departure the screen is showing.
+
+**No body, and no date.** The date checked is the `cheapest.date` in the
+document the screen is drawing, read from the same snapshot. A client-supplied
+date could ask about a different flight than the one under it — this app's oldest
+mistake with a "checked live" label on top — and would be a way to spend the
+month one date at a time.
+
+**200** answers **the whole detail document again**, exactly like the lookup, with
+`meta.liveCheck` filled in. The client adopts it and the headline swaps; nothing
+new has to be parsed.
+
+```json
+{
+  "data": { "…": "the detail document, unchanged" },
+  "meta": {
+    "watched": true,
+    "liveCheck": {
+      "date": "2026-09-15",
+      "lowest": 150,
+      "typicalLow": 90,
+      "typicalHigh": 260,
+      "level": "typical",
+      "checkedAt": "2026-08-19T18:04:11+02:00"
+    },
+    "fares": { "…": "…" }
+  }
+}
+```
+
+| field | notes |
+| --- | --- |
+| `lowest` | The cheapest seat **Google itself** could find, in euros. **`null` when Google had no opinion** — it publishes `price_insights` only where it has enough history, and thin routes routinely come back without it. Null confirms nothing: the client keeps the cached fare, exactly as demoted as it was, and says Google had nothing to add. It is **never** filled in from Orbit's own price. |
+| `typicalLow` · `typicalHigh` | Google's own typical band, or `null`. A second "usual" beside Orbit's, from a market Orbit cannot see. |
+| `level` | Google's word — `low`, `typical`, `high` — or `null`. |
+| `checkedAt` | When **Orbit asked**. ISO-8601 with the offset, in the owner's timezone; the client reads it as "checked just now". The cooldown is measured from it. |
+
+**What it costs, and the four guardrails.** The SerpAPI key is a free plan:
+**250 searches a month**. What is *enforced* is the 50-search reserve — nothing
+is spent at or below it — and nothing else counts live checks against a monthly
+figure. A back-of-envelope projection (250 − 50 reserve − up to 5 a night for
+discovery) leaves *roughly* 50 taps a month, but that is an estimate and not a
+property of the system: discovery may spend less, and nothing stops a month of
+taps from reaching the reserve early. **The reserve is the floor; the projection
+is arithmetic.** So one tap is at most one search, and:
+
+* **the cooldown first** — a check for this route and date inside
+  `orbit.live_check.cooldown_hours` (6) is served from the stored row and costs
+  **nothing**, whether it is a second tap or a second visit;
+* **then the quota**, read from SerpAPI's free `account.json` before any search,
+  failing closed on anything unreadable;
+* **and the reserve** — at or below `orbit.serpapi.reserve` (50) remaining,
+  nothing is spent at all;
+* **user-initiated only** — authenticated, CSRF, and throttled **3 a minute /
+  10 an hour** (`live-check` in `App\Providers\AppServiceProvider`), keyed on the
+  account. Nothing schedules this and nothing takes a list.
+
+**Two 503s, and they are different facts.** Both leave the cached price exactly
+where it was, and neither is a 200 with an empty answer — the screen must be able
+to tell "Google says €150" from "nobody asked Google".
+
+* `{"message": "Orbit is holding its remaining live checks in reserve."}` — the
+  budget said no, or this box has no `SERPAPI_KEY` (the default state of the
+  app). Nothing was asked and nothing will be until the quota moves.
+* `{"message": "Orbit could not reach Google just now. Nothing was spent — try
+  again in a moment."}` — SerpAPI timed out, refused, or answered something that
+  was not a finished search in euros. **No search was billed, so no row is
+  written, no cooldown starts, and the button stays**: an immediate retry is
+  honest here and is not in the case above.
+
+**A row is written only for a search SerpAPI actually billed** — including one
+where Google had no opinion (`lowest: null`), which is a real answer and must not
+be re-bought every six hours.
+
+**409**: `{"message": "Orbit has no fare for this route to check."}` — a route
+with no fares in the window has no departure to ask about. Not a bad request, not
+a missing route: a question with no subject.
+
+**429** over the throttle, **404** for an unknown route, **401** for a guest.
 
 ---
 

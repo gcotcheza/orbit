@@ -93,6 +93,9 @@ const LOOKUP_TIMEOUT_MS = 25_000
  */
 const SEEN_AFTER_HOURS = 24
 
+/* Ends the WAIT, not the work: the server stores what it paid for either way. */
+const LIVE_CHECK_TIMEOUT_MS = 30_000
+
 const props = defineProps({
   id: { type: String, required: true },
 })
@@ -123,6 +126,12 @@ const refreshNotice = ref('')
 /** The "Add to watchlist" button's own state. */
 const watching = ref(false)
 const watchError = ref('')
+
+/** The live check is in flight — one SerpAPI search, and somebody is waiting. */
+const checkingLive = ref(false)
+
+/** Why no live answer arrived, in the reader's words rather than a status code. */
+const liveError = ref('')
 
 /**
  * This screen is what put the route on the list, just now.
@@ -213,13 +222,77 @@ const seen = computed(() => {
 })
 
 /**
+ * ⚠ The SERVER's judgement that this fare has probably gone, never recomputed
+ * here — `=== true` because an older build's answer carries no such field.
+ */
+const mayBeGone = computed(() => detail.value?.cheapest?.mayBeGone === true)
+
+/** Google's answer, when Orbit has one inside its cooldown (docs/API.md). */
+const live = computed(() => meta.value?.liveCheck ?? null)
+
+/** ⚠ Null is "Google had no opinion" — never reassurance, never a fallback. */
+const livePrice = computed(() => live.value?.lowest ?? null)
+
+/** "just now", "2 hours ago" — how long ago Orbit asked. */
+const liveWhen = computed(() => (live.value === null ? null : seenLabel(live.value.checkedAt)))
+
+/** The headline is Orbit's own, and it is one of the ones worth doubting. */
+const demoted = computed(() => mayBeGone.value && livePrice.value === null)
+
+/**
+ * ⚠ The fare the demotion and the live check are about: `cheapest`, the one
+ * carrying `foundAt` and the one the server judged. docs/API.md has it as
+ * `price.current` by another name — where they differ, the pill, the callout
+ * and the number under them must still be about one fare.
+ */
+const judgedFare = computed(() => detail.value?.cheapest?.price ?? null)
+
+/** Google's live figure when there is one; Orbit's own fare otherwise. */
+const headline = computed(
+  () => livePrice.value ?? (demoted.value ? judgedFare.value : detail.value?.price?.current) ?? null,
+)
+
+const goneLabel = computed(() =>
+  seen.value === null ? 'This fare may already be gone' : `Seen ${seen.value} — may be gone`,
+)
+
+/* Orbit's own fare stays on the page once Google's takes the headline: the
+   disagreement is what the search was paid for. */
+const cachedLine = computed(() => {
+  const cached = euro(judgedFare.value)
+
+  if (livePrice.value === null || cached === null) {
+    return null
+  }
+
+  return seen.value === null
+    ? `Orbit’s cached fare ${cached}`
+    : `Orbit’s cached fare ${cached}, seen ${seen.value}`
+})
+
+/* Google's "usual", from a market Orbit cannot see. Often absent. */
+const liveTypical = computed(() => {
+  const low = euro(live.value?.typicalLow ?? null)
+  const high = euro(live.value?.typicalHigh ?? null)
+
+  return low === null || high === null ? null : `Google’s typical ${low}–${high}`
+})
+
+/**
  * The line under the price.
  *
  * `pctBelow` IS SIGNED: −14 means fourteen percent ABOVE the usual price
  * (docs/API.md), so the sentence flips rather than printing "−14% below".
+ *
+ * Silent under a live headline: it is Orbit's opinion of Orbit's own fare, and
+ * under Google's number it would read as an opinion about that one.
  */
 const caption = computed(() => {
   const price = detail.value?.price
+
+  if (livePrice.value !== null) {
+    return null
+  }
 
   if (!price || price.current === null) {
     return 'No fare seen for this route yet.'
@@ -275,6 +348,8 @@ async function load() {
   refreshNotice.value = ''
   watchError.value = ''
   justWatched.value = false
+  checkingLive.value = false
+  liveError.value = ''
 
   if (!CODE_PATTERN.test(code.value)) {
     notFound.value = true
@@ -406,6 +481,71 @@ function describeLookupFailure(error) {
 
   console.error('Could not look this route up.', error)
   failed.value = true
+}
+
+/**
+ * ⚠ One tap spends one SerpAPI search out of 250 a MONTH. Nothing here is
+ * automatic: no watcher, no mounted hook, no retry — it is a tap or it is not.
+ */
+async function checkLivePrice() {
+  if (checkingLive.value || !detail.value?.cheapest) {
+    return
+  }
+
+  const mine = request
+
+  checkingLive.value = true
+  liveError.value = ''
+
+  try {
+    const { data } = await http.post(
+      `/api/routes/${code.value}/live-price`,
+      null,
+      { timeout: LIVE_CHECK_TIMEOUT_MS },
+    )
+
+    if (mine !== request) {
+      return
+    }
+
+    adopt(data)
+  } catch (error) {
+    if (mine !== request) {
+      return
+    }
+
+    liveError.value = describeLiveFailure(error)
+  } finally {
+    if (mine === request) {
+      checkingLive.value = false
+    }
+  }
+}
+
+/**
+ * Why there is no live answer. The server's own sentence is preferred: a 503 is
+ * either a budget held in reserve or a Google that could not be reached, and
+ * only the server knows which. Nothing here touches the price on screen.
+ */
+function describeLiveFailure(error) {
+  const status = error.response?.status
+  const said = error.response?.data?.message
+
+  if (status === 503) {
+    return said || 'Orbit could not check this fare just now. This is still its cached price.'
+  }
+
+  if (status === 429) {
+    return 'That is a lot of live checks in one go. Give it a minute and try again.'
+  }
+
+  if (status === 409) {
+    return said || 'Orbit has no fare on this route to check.'
+  }
+
+  console.error('Could not check the live price.', error)
+
+  return 'Could not reach Google just now. This is still Orbit’s cached price.'
 }
 
 /** Take a detail document — from either endpoint, they are the same shape. */
@@ -578,19 +718,59 @@ function goBack() {
 
       <div class="price">
         <div>
-          <p class="price__value tabular">{{ detail.price.current === null ? '—' : euro(detail.price.current) }}</p>
+          <!-- `aria-live` because this number is swapped in place by the button
+               below: a screen reader has to be told the headline changed. -->
+          <p
+            class="price__value tabular"
+            :class="{ 'price__value--gone': demoted }"
+            aria-live="polite"
+          >
+            {{ headline === null ? '—' : euro(headline) }}
+          </p>
+
+          <!-- Whose number it is: "€150" and "€150, from Google" are different
+               claims, and only one of them cost a metered search. -->
+          <p v-if="livePrice !== null" class="price__live">Live on Google · checked {{ liveWhen }}</p>
+
           <!-- "Cheapest departure", spelled out, because this screen's other
                dates are the days we LOOKED and the two must never be read for
                each other. -->
           <p v-if="departure" class="price__when">Cheapest departure · {{ departure }}</p>
+
+          <!-- Replaces the plain "Seen …" line rather than joining it. -->
+          <p v-if="demoted" class="price__gone">{{ goneLabel }}</p>
           <!-- Next to the departure line because it is a qualifier on THAT
                fare, and only past a day old — see SEEN_AFTER_HOURS. Absent
                rather than reassuring when the age is unknown. -->
-          <p v-if="seen" class="price__seen">Seen {{ seen }}</p>
-          <p class="price__caption">{{ caption }}</p>
+          <p v-else-if="seen && livePrice === null" class="price__seen">Seen {{ seen }}</p>
+
+          <p v-if="liveTypical" class="price__typical">{{ liveTypical }}</p>
+
+          <p v-if="cachedLine" class="price__cached">{{ cachedLine }}</p>
+
+          <p v-if="caption" class="price__caption">{{ caption }}</p>
         </div>
 
         <DealScoreGauge :score="detail.score" :confident="detail.confident" />
+      </div>
+
+      <!-- "Check live price": drawn only when there is a fare to check, and
+           replaced by its own answer, which the server serves free for six
+           hours. A second tap would buy nothing. -->
+      <div v-if="detail.cheapest" class="live">
+        <button v-if="live === null" class="live__action" type="button" :disabled="checkingLive" @click="checkLivePrice">
+          {{ checkingLive ? 'Asking Google…' : 'Check live price' }}
+        </button>
+
+        <!-- ⚠ Asked and silent, which confirms NOTHING. -->
+        <p v-else-if="livePrice === null" class="live__note">
+          Google had no live price for this date. This is still Orbit’s cached fare.
+        </p>
+
+        <p v-else class="live__note">Orbit keeps this live answer for a few hours.</p>
+
+        <!-- `status` and not `alert`: nothing is broken. -->
+        <p v-if="liveError" class="live__error" role="status">{{ liveError }}</p>
       </div>
 
       <PriceHistoryChart
@@ -610,17 +790,11 @@ function goBack() {
         :confident="detail.confident"
       />
 
-      <!-- A CALLOUT THAT SAYS "WAIT" ABOVE A BUTTON THAT SHOUTS "BOOK" is the
-           app arguing with itself, and the button wins because it is the
-           loudest thing on the screen. When the advice is a warning the
-           hand-off goes quiet — still there, still one tap, no longer the
-           conclusion of the page. Read off `advice.tone`, which is
-           `verdict.tone` (docs/API.md), so the button cannot disagree with the
-           sentence above it. -->
-      <!-- AVIASALES IS THE PRIMARY HAND-OFF and Skyscanner the second opinion:
-           Orbit's prices come out of Aviasales' cache, and pointing at a
-           different meta-search is how this screen came to show €29 for a fare
-           Skyscanner listed at €68. See App\Application\Routes\BookingLink. -->
+      <!-- A callout that says "wait" over a glowing "book" is the page arguing
+           with itself, and the button wins. ⚠ The tone is the SERVER's — it
+           already accounts for a fare that may be gone and for a live price
+           that contradicts the cached one — so this must not add conditions of
+           its own. Aviasales is the primary hand-off (BookingLink). -->
       <BookingCta
         :aviasales-url="detail.booking.aviasales"
         :skyscanner-url="detail.booking.skyscanner"
@@ -702,6 +876,47 @@ function goBack() {
   color: var(--muted);
 }
 
+/* ⚠ A step DOWN the hierarchy, not a decoration: still legible, still the
+   price, no longer the app's most confident statement. Never struck through —
+   Orbit does not know the fare is gone. */
+.price__value--gone {
+  font-size: 32px;
+  color: var(--muted);
+}
+
+/* The `good` ink is the palette's "verified" colour, and this is the only
+   number on the screen that has been. */
+.price__live {
+  margin-top: 7px;
+
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--good-ink);
+}
+
+/* A pill rather than another grey line: skipped grey lines are the failure
+   this whole feature is fixing. */
+.price__gone {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 3px 8px;
+
+  border-radius: var(--radius-chip);
+  background: var(--warn-bg);
+
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--warn-ink);
+}
+
+/* Evidence under a live headline, drawn as quietly as the freshness line. */
+.price__typical,
+.price__cached {
+  margin-top: 4px;
+  font-size: var(--text-md);
+  color: var(--muted);
+}
+
 .price__caption {
   margin-top: 6px;
   font-size: var(--text-lg);
@@ -713,6 +928,52 @@ function goBack() {
 .price__when + .price__caption,
 .price__seen + .price__caption {
   margin-top: 3px;
+}
+
+/* --- "Check live price" — an OUTLINE control, because the accent belongs to
+   the watch strip and the booking hand-off. This is a question, not the
+   conclusion. */
+
+.live {
+  margin: 12px 2px 0;
+}
+
+.live__action {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 14px;
+
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  background: var(--card);
+
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--accent-ink);
+}
+
+.live__action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Quiet: the number above it is the news. */
+.live__note {
+  font-size: var(--text-md);
+  color: var(--muted);
+}
+
+/* Quiet colours, not warning ones: nothing broke. */
+.live__error {
+  margin-top: 8px;
+  padding: 9px 11px;
+
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+
+  font-size: var(--text-md);
+  color: var(--muted);
 }
 
 /* The gauge is pushed to the far edge rather than the price block being

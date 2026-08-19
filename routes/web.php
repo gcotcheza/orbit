@@ -24,7 +24,7 @@ use App\Http\Controllers\Auth\CurrentUserController;
 |--------------------------------------------------------------------------
 |
 | Five routes are the entire authentication surface, seven more are the read
-| API the screens are built on, ten more are the writes those screens make,
+| API the screens are built on, eleven more are the writes those screens make,
 | and the last one is the single-page app.
 |
 | WHAT IS DELIBERATELY ABSENT: registration, password RESET, email
@@ -295,6 +295,16 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
     Route::post('/routes/lookup', [RouteController::class, 'lookup'])
         ->middleware('throttle:route-lookup')
         ->name('routes.lookup');
+
+    /*
+     * ⚠ The most expensive write in this file: one tap spends one SerpAPI
+     * search out of 250 a MONTH. No body, and the date is the server's
+     * (docs/BUSINESS-LOGIC.md §17).
+     */
+    Route::post('/routes/{code}/live-price', [RouteController::class, 'liveCheck'])
+        ->where('code', '[A-Z]{3}-[A-Z]{3}')
+        ->middleware('throttle:live-check')
+        ->name('routes.live-price');
 
     Route::post('/watchlist', [WatchlistItemController::class, 'store'])->name('watchlist.store');
 

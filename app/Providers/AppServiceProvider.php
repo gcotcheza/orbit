@@ -644,6 +644,19 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         /*
+         * ⚠ NOT what rations the SerpAPI month — the reserve and the cooldown
+         * are (docs/BUSINESS-LOGIC.md §17). This catches a retry loop.
+         */
+        RateLimiter::for('live-check', static function (Request $request): array {
+            $key = (string) ($request->user()?->getAuthIdentifier() ?? $request->ip());
+
+            /** @var list<Limit> $limits */
+            $limits = [Limit::perMinute(3)->by($key), Limit::perHour(10)->by($key)];
+
+            return $limits;
+        });
+
+        /*
          * ORBIT ISSUES NO API TOKENS, so a bearer token is never a credential
          * here — see bootstrap/app.php for why Sanctum is in cookie/session
          * mode.

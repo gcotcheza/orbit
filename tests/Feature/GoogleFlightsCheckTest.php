@@ -12,22 +12,9 @@ use App\Infrastructure\Verify\GoogleFlightsCheck;
 use Illuminate\Http\Client\Factory as HttpFactory;
 
 /**
- * The SerpAPI guardrails, which are the owner's mandate and are binding.
- *
- * THE KEY IS A FREE PLAN: 250 SEARCHES A MONTH. That is a budget that cannot be
- * reasoned about per clock hour the way Travelpayouts' ~200-an-hour can, and
- * every test below is one of the four rules that keeps a nightly job from
- * spending it:
- *
- *   1. no key, no calls
- *   2. the quota is read before any search
- *   3. nothing at all is spent below the reserve
- *   4. one run spends at most `max_per_run`
- *
- * AND THE FIFTH RULE, WHICH IS THE ONE WITH TEETH: a skipped check is not an
- * error and never becomes a claim. Half this file is about failure paths
- * answering null rather than throwing, and about null never turning into a
- * badge.
+ * The SerpAPI guardrails on a free plan's 250 searches a MONTH: no key no
+ * calls, quota before any search, nothing below the reserve, `max_per_run` a
+ * run — and the one with teeth, that a skipped check never becomes a claim.
  */
 final class GoogleFlightsCheckTest extends TestCase
 {
@@ -82,13 +69,8 @@ final class GoogleFlightsCheckTest extends TestCase
     #[Test]
     public function the_key_is_unset_by_default_so_a_box_verifies_nothing_until_it_is_given_one(): void
     {
-        /*
-         * BLANK RATHER THAN LITERALLY NULL, because .env.testing pins
-         * `SERPAPI_KEY=` and Dotenv reads that as the empty string — which is
-         * exactly the shape a production .env has before somebody fills it in.
-         * The binding is what turns both into "no key", and that is the
-         * behaviour worth asserting.
-         */
+        /* Blank rather than null: `.env.testing` pins `SERPAPI_KEY=`, which is
+           the shape a production .env has before somebody fills it in. */
         $this->assertSame('', (string) config('orbit.serpapi.key'));
         $this->assertFalse($this->app->make(GoogleFlightsCheck::class)->isConfigured());
     }
@@ -264,44 +246,73 @@ final class GoogleFlightsCheckTest extends TestCase
      * =========================================================================
      * DEGRADATION — every one of these is a skip, not a fault
      * =========================================================================
+     * ⚠ And `ask()` says which kind: a search SerpAPI answered was billed even
+     * when Google had nothing to say; one it never ran was not, and a caller
+     * must be able to tell those apart before it records anything.
      */
     #[Test]
-    public function a_route_google_has_no_opinion_about_is_no_verdict(): void
+    public function a_route_google_has_no_opinion_about_was_still_billed(): void
     {
         Http::fake([self::SEARCH => Http::response($this->fixture('google-flights-no-insights'), 200)]);
 
-        $this->assertNull($this->check()->check('EIN', 'VNO', new DateTimeImmutable('2027-01-06')));
+        $answer = $this->check()->ask('EIN', 'VNO', new DateTimeImmutable('2027-01-06'));
+
+        $this->assertTrue($answer->wasSpent);
+        $this->assertNull($answer->verdict);
     }
 
     #[Test]
-    public function a_refused_or_unreachable_search_is_no_verdict(): void
+    public function a_refused_or_unreachable_search_was_never_spent(): void
     {
         Http::fake([self::SEARCH => Http::response('rate limited', 429)]);
 
-        $this->assertNull($this->check()->check('DUS', 'AGP', new DateTimeImmutable('2026-10-24')));
+        $this->assertFalse($this->check()->ask('DUS', 'AGP', new DateTimeImmutable('2026-10-24'))->wasSpent);
 
         Http::fake([self::SEARCH => Http::response('not json', 200)]);
 
-        $this->assertNull($this->check()->check('DUS', 'AGP', new DateTimeImmutable('2026-10-24')));
+        $this->assertFalse($this->check()->ask('DUS', 'AGP', new DateTimeImmutable('2026-10-24'))->wasSpent);
     }
 
     /**
-     * A free flight would be the best verdict ever recorded — the same trap
-     * every fare adapter in this app guards.
+     * ⚠ A body that does not echo EUR back, or a search that did not finish, is
+     * not an answer to the question this app asked. Dollars would read as a
+     * bargain, and a partial result as a market.
      */
+    #[Test]
+    public function a_body_that_is_not_a_finished_euro_search_is_no_answer(): void
+    {
+        foreach ([['search_parameters' => ['currency' => 'USD']], ['search_metadata' => ['status' => 'Error']]] as $wrong) {
+            /** @var array<string, mixed> $body */
+            $body = (array) json_decode($this->fixture('google-flights-typical'), true);
+
+            Http::fake([self::SEARCH => Http::response((string) json_encode(array_replace_recursive($body, $wrong)), 200)]);
+
+            $answer = $this->check()->ask('DUS', 'AGP', new DateTimeImmutable('2026-10-24'));
+
+            $this->assertFalse($answer->wasSpent);
+            $this->assertNull($answer->verdict);
+        }
+    }
+
+    /** A free flight would be the best verdict ever recorded. */
     #[Test]
     public function a_zero_price_is_read_as_no_price(): void
     {
-        $body = (string) json_encode(['price_insights' => [
-            'lowest_price' => 0, 'price_level' => 'low', 'typical_price_range' => [0, 0],
-        ]]);
+        $body = (string) json_encode([
+            'search_metadata'   => ['status' => 'Success'],
+            'search_parameters' => ['currency' => 'EUR'],
+            'price_insights'    => [
+                'lowest_price' => 0, 'price_level' => 'low', 'typical_price_range' => [0, 0],
+            ],
+        ]);
 
         Http::fake([self::SEARCH => Http::response($body, 200)]);
 
         $verdict = $this->check()->check('DUS', 'AGP', new DateTimeImmutable('2026-10-24'));
 
-        $this->assertNull($verdict?->lowestCents);
-        $this->assertNull($verdict?->typicalLowCents);
+        $this->assertNotNull($verdict);
+        $this->assertNull($verdict->lowestCents);
+        $this->assertNull($verdict->typicalLowCents);
     }
 
     /**

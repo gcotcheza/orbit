@@ -6,23 +6,26 @@ namespace App\Http\Resources;
 
 use DateTimeZone;
 use Illuminate\Http\Request;
+use App\Models\LivePriceCheck;
 use App\Domain\Pricing\PricePoint;
+use Illuminate\Support\Facades\Date;
 use App\Application\Routes\BookingLink;
+use App\Application\Routes\RouteSnapshot;
 
 /**
- * Everything the route detail screen draws (design/README.md §2): the summary,
- * the series behind the chart, the reference line, the callout and the button.
+ * Everything the route detail screen draws (design/README.md §2).
  *
- * `history` IS THE CHART and `sparkline` (inherited from the summary) is its
- * last fortnight. Both are sent because the watchlist needs only the short one
- * and this screen needs both — the header re-uses the summary shape exactly.
- *
- * `stats` IS THE DASHED "usual price" LINE, and null when the provider has no
- * statistics for the pair. The chart then draws without a reference, which is
- * the honest picture rather than a line at zero.
+ * The live check is passed in because the ADVICE depends on it: a callout that
+ * says "lock it in" over a fare Google cannot find is the client composing a
+ * claim this server never made. docs/BUSINESS-LOGIC.md §17.
  */
 final class RouteDetailResource extends RouteSummaryResource
 {
+    public function __construct(RouteSnapshot $snapshot, private readonly ?LivePriceCheck $live = null)
+    {
+        parent::__construct($snapshot);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -34,13 +37,18 @@ final class RouteDetailResource extends RouteSummaryResource
 
         $summary = parent::toArray($request);
 
+        $mayBeGone = $snapshot->cheapestMayBeGone(
+            Date::now()->toDateTimeImmutable(),
+            (int) config('orbit.live_check.stale_after_hours'),
+            (int) config('orbit.live_check.under_usual_percent'),
+        );
+
         return [
             ...$summary,
 
             /*
-             * Oldest first, up to config('orbit.history.chart_days'). Dates are
-             * the OBSERVATION dates — when we looked — not departure dates.
-             * The calendar endpoint is the other axis.
+             * Observation dates — when we looked — not departure dates. The
+             * calendar endpoint is the other axis.
              */
             'history' => array_map(static fn (PricePoint $point): array => [
                 'date'  => $point->on->format('Y-m-d'),
@@ -55,50 +63,94 @@ final class RouteDetailResource extends RouteSummaryResource
                 'max'    => Euros::from($stats->maxCents),
             ],
 
-            'advice' => [
-                'title' => $snapshot->deal->advice->title,
-                'body'  => $snapshot->deal->advice->body,
-                'tone'  => $snapshot->deal->advice->tone,
-            ],
+            'advice' => $this->advice($snapshot, $mayBeGone),
 
-            /*
-             * `cheapest` — the cheapest DEPARTURE still on offer in the poll
-             * window — is INHERITED from the summary, because the screens that
-             * read the summary needed it too (see the note there). THIS
-             * RESOURCE ADDS ONE FIELD TO IT rather than restating the shape:
-             * how old that price is.
-             *
-             * ONLY HERE AND NOT ON THE SUMMARY, deliberately. The three screens
-             * that read the summary — the globe's spotlight card, the watchlist
-             * rows, the chips — print a fare in a space that has room for a
-             * number and nothing else; a freshness line they cannot draw would
-             * be a field they all had to ignore. This is the screen with room
-             * to explain itself, and the one with a Book button under it.
-             */
             'cheapest' => $summary['cheapest'] === null ? null : [
                 ...$summary['cheapest'],
                 'foundAt' => $cheapest?->foundAt?->setTimezone(
                     new DateTimeZone((string) config('orbit.timezone')),
                 )->format('c'),
+
+                /*
+                 * ⚠ THE SERVER'S JUDGEMENT AND NOT THE CLIENT'S: old enough AND
+                 * far enough under usual that the headline should not be shouted.
+                 */
+                'mayBeGone' => $mayBeGone,
             ],
 
-            /*
-             * WHERE "BOOK IT" GOES — both of them, dated to the cheapest
-             * departure. Null before the first poll, and then each link points
-             * at the route without a date, which is still a useful place to
-             * land (Aviasales' pre-filled search form, Skyscanner's whole
-             * month).
-             *
-             * `aviasales` IS THE PRIMARY and the screen draws it as such: it is
-             * the search Orbit's own fares come out of, so it is the only site
-             * that can be expected to be holding the price shown above it. See
-             * App\Application\Routes\BookingLink for the €29 that was really
-             * €68 and made that a correctness matter rather than a preference.
-             */
             'booking' => [
                 'aviasales'  => BookingLink::aviasales($snapshot->route, $cheapest?->departureDate),
                 'skyscanner' => BookingLink::skyscanner($snapshot->route, $cheapest?->departureDate),
             ],
         ];
+    }
+
+    /**
+     * ⚠ The callout is the page's conclusion, so it is the thing that must not
+     * recommend a fare the same document has just cast doubt on.
+     *
+     * @return array{title: string, body: string, tone: string}
+     */
+    private function advice(RouteSnapshot $snapshot, bool $mayBeGone): array
+    {
+        $cheapest = $snapshot->cheapest;
+        $lowest = $this->live?->lowestCents();
+
+        if ($cheapest !== null && $lowest !== null && self::contradicts($cheapest->cents, $lowest)) {
+            return [
+                'title' => 'Google cannot find this fare',
+                'body'  => sprintf(
+                    'Orbit has %s cached; the cheapest Google can find for %s is %s. Treat the cached fare as gone.',
+                    self::money($cheapest->cents),
+                    $cheapest->departureDate->format('j M'),
+                    self::money($lowest),
+                ),
+                'tone' => 'warn',
+            ];
+        }
+
+        if ($mayBeGone && $lowest === null && $cheapest !== null) {
+            return [
+                'title' => 'Cheap, but it may be gone',
+                'body'  => sprintf(
+                    '%s is %d%% under this route’s usual price, and old enough that fares like it have usually sold. %s',
+                    self::money($cheapest->cents),
+                    abs((int) $snapshot->stats?->percentUnderUsual($cheapest->cents)),
+                    /* Telling somebody to check a price they have just checked
+                       is the app forgetting the answer it charged them for. */
+                    $this->live === null
+                        ? 'Check the live price before counting on it.'
+                        : 'Google had no live price for it either.',
+                ),
+                'tone' => 'warn',
+            ];
+        }
+
+        $advice = $snapshot->deal->advice;
+
+        return [
+            'title' => $advice->title,
+            'body'  => $advice->body,
+            'tone'  => $advice->tone,
+        ];
+    }
+
+    /**
+     * ⚠ A GAP, NOT A STRICT `>`. €76.50 against €77 is a rounding difference,
+     * and "treat the cached fare as gone" is far too strong a sentence for it.
+     */
+    private static function contradicts(int $cachedCents, int $liveCents): bool
+    {
+        $percent = (int) config('orbit.live_check.contradiction_percent');
+
+        return $liveCents * 100 >= $cachedCents * (100 + $percent);
+    }
+
+    /** The same spelling App\Domain\Pricing\DealScorer's sentences use. */
+    private static function money(int $cents): string
+    {
+        return $cents % 100 === 0
+            ? '€'.intdiv($cents, 100)
+            : '€'.number_format($cents / 100, 2);
     }
 }

@@ -517,3 +517,262 @@ describe('the booking hand-off', () => {
         expect(wrapper.get('.booking__cta').attributes('href')).toBe(DETAIL.booking.aviasales)
     })
 })
+
+// =============================================================================
+// The fare that may already be gone, and the way to find out
+// =============================================================================
+// DUS→VCE was on this screen at €36 — "Seen 3 days ago", usual €62 — against a
+// live market of about $150. Every number was true and the headline was a fare
+// nobody could buy.
+// =============================================================================
+
+/**
+ * The state that started it: €36 against a usual €62, found three days ago.
+ * ⚠ The advice is the SERVER's qualified one — a document with `mayBeGone`
+ * true and "a solid time to lock it in" is not one this API produces.
+ */
+const GONE = {
+    price: { current: 36, usual: 62, pctBelow: 42 },
+    cheapest: { date: '2026-09-09', price: 36, foundAt: '2026-08-12T12:00:00+02:00', mayBeGone: true },
+    advice: {
+        title: 'Cheap, but it may be gone',
+        body: '€36 is 42% under this route’s usual price, and old enough that fares like it have usually sold. Check the live price before counting on it.',
+        tone: 'warn',
+    },
+}
+
+/** What the server answers a live check with (docs/API.md, `meta.liveCheck`). */
+const LIVE = {
+    date: '2026-09-09',
+    lowest: 150,
+    typicalLow: 90,
+    typicalHigh: 260,
+    level: 'typical',
+    checkedAt: '2026-08-15T12:00:00+02:00',
+}
+
+describe('a fare that may already be gone', () => {
+    const NOW = new Date('2026-08-15T12:00:00+02:00')
+
+    beforeEach(() => {
+        vi.useFakeTimers()
+        vi.setSystemTime(NOW)
+    })
+
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    /* The display face is what a reader takes away, so it steps down a level
+       and gains a sentence saying what is wrong with it. */
+    it('draws the headline quieter and says why', async () => {
+        const wrapper = await detail(GONE)
+
+        expect(wrapper.get('.price__value').classes()).toContain('price__value--gone')
+        expect(wrapper.get('.price__gone').text()).toBe('Seen 3 days ago — may be gone')
+    })
+
+    /* One line about the fare's age, not two. */
+    it('replaces the plain freshness line rather than stacking on it', async () => {
+        const wrapper = await detail(GONE)
+
+        expect(wrapper.find('.price__seen').exists()).toBe(false)
+    })
+
+    /* The callout is the server's, and the hand-off follows its tone rather
+       than composing a second opinion out of `mayBeGone`. */
+    it('prints the server’s qualified callout and quiets the hand-off', async () => {
+        const wrapper = await detail(GONE)
+
+        expect(wrapper.get('.callout__title').text()).toBe('Cheap, but it may be gone')
+        expect(wrapper.get('.booking__cta').classes()).toContain('booking__cta--secondary')
+    })
+
+    /* ⚠ A tick means "checked, and it is fine". Over "may be gone" it is the
+       callout contradicting the sentence next to it. */
+    it('does not put a confident tick on a warning', async () => {
+        const tick = 'M4 9.5l3 3 7-8'
+
+        expect((await detail(GONE)).get('.callout__icon').html()).not.toContain(tick)
+        expect((await detail()).get('.callout__icon').html()).toContain(tick)
+    })
+
+    /*
+     * ⚠ THE RULE IS THE SERVER'S. Both facts it is made of are on this page —
+     * the age and the percentage — and the screen deliberately does not
+     * recompute it. An old fare the server did NOT demote is drawn as it was.
+     */
+    it('does not decide for itself that an old fare is stale', async () => {
+        const wrapper = await detail({
+            cheapest: { date: '2026-09-09', price: 75, foundAt: '2026-08-12T12:00:00+02:00', mayBeGone: false },
+        })
+
+        expect(wrapper.get('.price__value').classes()).not.toContain('price__value--gone')
+        expect(wrapper.get('.price__seen').text()).toBe('Seen 3 days ago')
+        expect(wrapper.find('.price__gone').exists()).toBe(false)
+    })
+})
+
+describe('checking the live price', () => {
+    const NOW = new Date('2026-08-15T12:00:00+02:00')
+
+    beforeEach(() => {
+        vi.useFakeTimers()
+        vi.setSystemTime(NOW)
+    })
+
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    /** The server answers a live check with the whole detail document again. */
+    function answers(liveCheck, overrides = GONE) {
+        post.mockResolvedValue({
+            data: {
+                data: { ...DETAIL, ...overrides },
+                meta: { ...META, liveCheck },
+            },
+        })
+    }
+
+    it('asks the server once, with no body and its own timeout', async () => {
+        const wrapper = await detail(GONE)
+        answers(LIVE)
+
+        await wrapper.get('.live__action').trigger('click')
+        await flushPromises()
+
+        expect(post).toHaveBeenCalledTimes(1)
+        expect(post).toHaveBeenCalledWith('/api/routes/AMS-LIS/live-price', null, { timeout: 30_000 })
+    })
+
+    /* The swap, which is the whole feature: "Orbit said €36, Google says €150"
+       is what the search was paid for, and both halves stay on the page. */
+    it('puts the live price in the headline and Orbit’s beside it', async () => {
+        const wrapper = await detail(GONE)
+        answers(LIVE)
+
+        await wrapper.get('.live__action').trigger('click')
+        await flushPromises()
+
+        expect(wrapper.get('.price__value').text()).toBe('€150')
+        expect(wrapper.get('.price__value').classes()).not.toContain('price__value--gone')
+        expect(wrapper.get('.price__live').text()).toBe('Live on Google · checked just now')
+        expect(wrapper.get('.price__typical').text()).toBe('Google’s typical €90–€260')
+        expect(wrapper.get('.price__cached').text()).toBe('Orbit’s cached fare €36, seen 3 days ago')
+    })
+
+    /*
+     * ⚠ THE PAGE'S LAST CONTROL DOES NOT ENDORSE THE NUMBER JUST DISPROVED —
+     * and the sentence saying so is the SERVER's, arriving with the document.
+     */
+    it('keeps the hand-off quiet while Google says the fare is dearer', async () => {
+        const wrapper = await detail(GONE)
+        answers(LIVE, {
+            ...GONE,
+            advice: {
+                title: 'Google cannot find this fare',
+                body: 'Orbit has €36 cached; the cheapest Google can find for 9 Sep is €150. Treat the cached fare as gone.',
+                tone: 'warn',
+            },
+        })
+
+        await wrapper.get('.live__action').trigger('click')
+        await flushPromises()
+
+        expect(wrapper.get('.callout__title').text()).toBe('Google cannot find this fare')
+        expect(wrapper.get('.booking__cta').classes()).toContain('booking__cta--secondary')
+    })
+
+    /* And it comes back when Google agrees: a live answer at or under Orbit's
+       own price is the app being right about a cheap fare. */
+    it('says yes again when Google confirms the fare', async () => {
+        const wrapper = await detail(GONE)
+        answers({ ...LIVE, lowest: 30 }, { ...GONE, advice: DETAIL.advice })
+
+        await wrapper.get('.live__action').trigger('click')
+        await flushPromises()
+
+        expect(wrapper.get('.price__value').text()).toBe('€30')
+        expect(wrapper.get('.booking__cta').classes()).toContain('booking__cta--primary')
+    })
+
+    /* "42% below its usual €62" under Google's €150 would read as an opinion
+       about Google's number. */
+    it('does not read Orbit’s comparison as if it were about the live price', async () => {
+        const wrapper = await detail(GONE)
+        answers(LIVE)
+
+        await wrapper.get('.live__action').trigger('click')
+        await flushPromises()
+
+        expect(wrapper.find('.price__caption').exists()).toBe(false)
+    })
+
+    /* The server serves the same answer free for six hours, so a button
+       offering to check again would be a lie about what it costs. */
+    it('offers no button once there is an answer', async () => {
+        const wrapper = await detail(GONE, { ...META, liveCheck: LIVE })
+
+        expect(wrapper.find('.live__action').exists()).toBe(false)
+        expect(wrapper.get('.price__value').text()).toBe('€150')
+    })
+
+    /* ⚠ Checked and silent is a real answer and it is not permission. */
+    it('says when Google had nothing to say, and leaves the fare demoted', async () => {
+        const wrapper = await detail(GONE, { ...META, liveCheck: { ...LIVE, lowest: null, typicalLow: null, typicalHigh: null, level: null } })
+
+        expect(wrapper.get('.price__value').text()).toBe('€36')
+        expect(wrapper.get('.price__value').classes()).toContain('price__value--gone')
+        expect(wrapper.get('.live__note').text()).toContain('Google had no live price for this date')
+    })
+
+    /* A refusal is not an error: the price on screen is untouched and the
+       server's own sentence is what the reader gets. */
+    it('keeps the cached price and explains when the budget is reserved', async () => {
+        const wrapper = await detail(GONE)
+
+        post.mockRejectedValue({
+            response: { status: 503, data: { message: 'Orbit is holding its remaining live checks in reserve.' } },
+        })
+
+        await wrapper.get('.live__action').trigger('click')
+        await flushPromises()
+
+        expect(wrapper.get('.live__error').text()).toBe('Orbit is holding its remaining live checks in reserve.')
+        expect(wrapper.get('.price__value').text()).toBe('€36')
+        expect(wrapper.get('.price__value').classes()).toContain('price__value--gone')
+        expect(wrapper.get('.price__gone').text()).toBe('Seen 3 days ago — may be gone')
+    })
+
+    /*
+     * ⚠ A CHECK THAT NEVER HAPPENED LEAVES THE BUTTON THERE. Nothing was spent
+     * and nothing was recorded, so the offer to try again is honest — which is
+     * the difference between this 503 and the reserved one above.
+     */
+    it('keeps offering the check when Google could not be reached', async () => {
+        const wrapper = await detail(GONE)
+
+        post.mockRejectedValue({
+            response: {
+                status: 503,
+                data: { message: 'Orbit could not reach Google just now. Nothing was spent — try again in a moment.' },
+            },
+        })
+
+        await wrapper.get('.live__action').trigger('click')
+        await flushPromises()
+
+        expect(wrapper.get('.live__error').text()).toBe(
+            'Orbit could not reach Google just now. Nothing was spent — try again in a moment.',
+        )
+        expect(wrapper.get('.live__action').attributes('disabled')).toBeUndefined()
+        expect(wrapper.get('.price__value').text()).toBe('€36')
+    })
+
+    it('offers nothing to check on a route with no fare', async () => {
+        const wrapper = await detail({ cheapest: null, price: { current: null, usual: null, pctBelow: null } })
+
+        expect(wrapper.find('.live').exists()).toBe(false)
+    })
+})

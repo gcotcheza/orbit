@@ -41,6 +41,8 @@ The prototype renders inside a 372×760 phone frame; content area ≈ 352×740, 
 ### 2. Route detail (`02-route-detail.png`) — no tab bar
 - "‹ Back" header, route "AMS → OPO" (Space Grotesk 700 ~28px), "Porto, Portugal" muted.
 - Price block: €52 huge (Space Grotesk 700), "38% below its usual €84" caption; right: circular **deal score** gauge (84) — ring stroke in score color (≥80 `--good`, ≥60 `--info`, ≥45 `--warn`, else `--bad`), 157 circumference dash.
+- **A cheap fare that may already be gone is demoted**: over 48 h old *and* ≥20% under usual (server's judgement, `cheapest.mayBeGone`) drops the price to 32px in `--muted` with a "Seen 3 days ago — may be gone" pill in `--warn-ink`/`--warn-bg`, and the booking hand-off goes to its outline variant. Fresh fares and fares near usual are untouched.
+- **"Check live price"** under the price block: a full-width outline control (card bg, `--line` hairline, `--accent-ink` label) that asks Google via SerpAPI for that exact departure. Its answer takes the headline with a `--good-ink` "Live on Google · checked just now" line, Google's typical band under it, and Orbit's own fare relegated to a muted "Orbit's cached fare €36, seen 3 days ago". Refusals leave the price alone and explain in a quiet card-coloured note — "held in reserve" (nothing will be spent) and "could not reach Google" (nothing *was* spent, so the button stays) are different sentences.
 - Price-history line chart (300×140): area fill + 2px line in tone color, dashed horizontal "usual price" reference at the normal-price y, end dot.
 - Advice callout: tone-tinted bg, 34px icon square in tone color, title Space Grotesk 700 15px.
 
