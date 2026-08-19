@@ -644,6 +644,47 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         /*
+         * The live price check's throttle (`POST /api/routes/{code}/live-price`).
+         *
+         * THE STRICTEST BUDGET IN THE APP SITS BEHIND THIS ONE. A tap costs at
+         * most one SerpAPI search out of a free plan's 250 a MONTH, of which 50
+         * are reserved and discovery already spends up to 5 a night:
+         *
+         *     250 a month
+         *   −  50 reserve            (orbit.serpapi.reserve, untouched here)
+         *   − 150 discovery          (5 a night × 30, orbit.serpapi.max_per_run)
+         *     ---
+         *   ≈  50 a month            for every live check anybody taps
+         *
+         * — call it one or two a day, which is what this feature is FOR: the
+         * fare that looks too good, once, before booking.
+         *
+         * ⚠ THE LIMITER IS NOT WHAT RATIONS THAT. Ten an hour is 240 a day and
+         * would clear the month by Tuesday; what actually stops the month being
+         * spent is the RESERVE, checked against SerpAPI's own account endpoint
+         * before every single search (App\Application\Routes\LivePriceChecks),
+         * and the COOLDOWN, which makes the second tap on the same fare free.
+         * This limiter is here for the two things a budget check cannot catch: a
+         * client stuck in a retry loop, and a tap repeated on twenty different
+         * routes in one minute — neither of which is a person deciding whether
+         * to book a flight.
+         *
+         * BOTH LIMITS, for the reason `route-lookup` gives above: three a minute
+         * is a mistap and a change of mind, ten an hour is a long evening of
+         * looking at fares, and either one alone permits the other's failure.
+         *
+         * BY THE ACCOUNT, like every limiter in this file.
+         */
+        RateLimiter::for('live-check', static function (Request $request): array {
+            $key = (string) ($request->user()?->getAuthIdentifier() ?? $request->ip());
+
+            /** @var list<Limit> $limits */
+            $limits = [Limit::perMinute(3)->by($key), Limit::perHour(10)->by($key)];
+
+            return $limits;
+        });
+
+        /*
          * ORBIT ISSUES NO API TOKENS, so a bearer token is never a credential
          * here — see bootstrap/app.php for why Sanctum is in cookie/session
          * mode.

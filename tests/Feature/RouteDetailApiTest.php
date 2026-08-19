@@ -78,8 +78,9 @@ final class RouteDetailApiTest extends TestCase
             'history'     => [['date', 'price']],
             'stats'       => ['min', 'p25', 'median', 'p75', 'max'],
             'advice'      => ['title', 'body', 'tone'],
-            /* `foundAt` is the detail's addition to the shared summary shape. */
-            'cheapest' => ['date', 'price', 'foundAt'],
+            /* `foundAt` and `mayBeGone` are the detail's additions to the
+               shared summary shape. */
+            'cheapest' => ['date', 'price', 'foundAt', 'mayBeGone'],
             'booking'  => ['aviasales', 'skyscanner'],
         ]]);
 
@@ -231,6 +232,97 @@ final class RouteDetailApiTest extends TestCase
         $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
             ->assertJsonPath('data.cheapest.price', 50)
             ->assertJsonPath('data.cheapest.foundAt', null);
+    }
+
+    /**
+     * =========================================================================
+     * ⚠ `mayBeGone` — WHETHER THIS SCREEN SHOULD BE SHOUTING ITS HEADLINE
+     * =========================================================================
+     * The fare that bought this field: DUS→VCE at €36 against a usual €62,
+     * "Seen 3 days ago", when the live market was about $150 and nothing was on
+     * sale within sight of it. Every number was true and the headline was a
+     * fare nobody could buy.
+     *
+     * THE RULE IS OLD **AND** WELL UNDER USUAL, and the four tests below are
+     * its four corners. Age alone would demote half the app on a quiet week;
+     * cheapness alone would demote the feature. config/orbit.php `live_check`
+     * carries the argument and both numbers (48 hours, 20%).
+     */
+    #[Test]
+    public function an_old_and_far_below_usual_fare_is_demoted(): void
+    {
+        $route = $this->makeRoute('AMS', 'OPO');
+        $this->summarise($route, 4000, 6000, 8000, 11000, 16000);
+        $this->trackedSince($route, 9000);
+
+        /* €36 against a usual €80 — 55% below — found three days ago. */
+        $this->offer($route, ['2026-09-03' => 3600], foundAt: '2026-08-11 09:00:00');
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('data.cheapest.mayBeGone', true);
+    }
+
+    #[Test]
+    public function a_fresh_bargain_is_left_alone(): void
+    {
+        $route = $this->makeRoute('AMS', 'OPO');
+        $this->summarise($route, 4000, 6000, 8000, 11000, 16000);
+        $this->trackedSince($route, 9000);
+
+        /* The same €36, found this morning — which is exactly what this app is
+           for, and it is drawn at full volume. */
+        $this->offer($route, ['2026-09-03' => 3600], foundAt: '2026-08-14 06:10:00');
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('data.cheapest.mayBeGone', false);
+    }
+
+    #[Test]
+    public function an_old_fare_at_its_usual_price_is_left_alone(): void
+    {
+        $route = $this->makeRoute('AMS', 'OPO');
+        $this->summarise($route, 4000, 6000, 8000, 11000, 16000);
+        $this->trackedSince($route, 9000);
+
+        /* €78 against a usual €80, three days old. Nobody is going to be
+           disappointed by that, and greying it out would teach the reader that
+           the treatment means nothing. */
+        $this->offer($route, ['2026-09-03' => 7800], foundAt: '2026-08-11 09:00:00');
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('data.cheapest.mayBeGone', false);
+    }
+
+    /**
+     * A NULL `found_at` IS NEVER DEMOTED. It means "we do not know how old this
+     * is" — every row written before that column existed, and any provider that
+     * will not say — and demoting on not-knowing would have greyed out the whole
+     * database on the morning this shipped. The same reading AlertPolicy takes.
+     */
+    #[Test]
+    public function a_fare_of_unknown_age_is_never_demoted(): void
+    {
+        $route = $this->makeRoute('AMS', 'OPO');
+        $this->summarise($route, 4000, 6000, 8000, 11000, 16000);
+        $this->trackedSince($route, 9000);
+        $this->offer($route, ['2026-09-03' => 3600]);
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('data.cheapest.mayBeGone', false);
+    }
+
+    /**
+     * NOBODY HAS ASKED GOOGLE, so there is nothing to publish — and `null` is
+     * what the screen draws its "Check live price" button from. Its filled
+     * shape is tests/Feature/LivePriceCheckTest.
+     */
+    #[Test]
+    public function the_live_check_is_null_until_somebody_makes_one(): void
+    {
+        $this->seedRoute();
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('meta.liveCheck', null);
     }
 
     #[Test]

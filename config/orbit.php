@@ -1453,6 +1453,97 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | "Seen 3 days ago — may be gone", and the way to find out
+    |--------------------------------------------------------------------------
+    |
+    | Read by App\Http\Resources\RouteDetailResource (the first two numbers) and
+    | App\Application\Routes\LivePriceChecks (the third). The screen is
+    | design/README.md §2; docs/BUSINESS-LOGIC.md §17 is the rulebook.
+    |
+    | =========================================================================
+    | ⚠ THE FARE THAT STARTED THIS, FOR THE THIRD TIME
+    | =========================================================================
+    | DUS→VCE, shown at €36 — "Seen 3 days ago", usual €62. Tapping through to
+    | Aviasales, the live direct was about $150 and there was nothing within
+    | sight of €36. Nothing had miscalculated: Travelpayouts serves a CACHE of
+    | other people's searches (docs/BUSINESS-LOGIC.md §2), ultra-cheap fares die
+    | in hours, and Orbit had faithfully reprinted one that was already gone.
+    |
+    | This app has now written that sentence down three times — €36 against a
+    | live €56 (the `found_at` migration), €29 against a Skyscanner €68 (the
+    | `booking` section below), and this. Each time the fix was to SAY more: a
+    | freshness line, a second booking link, an age on the card. Every one of
+    | those is small print under a number in 42-point type, and the number is
+    | what people read. So this time the fix is to STOP SHOUTING IT, and to
+    | offer the one thing the app had never offered — a way to go and ask.
+    |
+    | =========================================================================
+    | THE DEMOTION IS TWO CONDITIONS AND NEEDS BOTH
+    | =========================================================================
+    | A fare is demoted when it was found more than STALE_AFTER_HOURS ago AND it
+    | is at least UNDER_USUAL_PERCENT below what this route usually costs.
+    |
+    | AGE ALONE WOULD DEMOTE HALF THE APP. A four-day-old fare sitting at its
+    | usual price is not a claim anybody will be disappointed by — it is the
+    | ordinary state of a route on a quiet week, and greying it out would teach
+    | the reader that the treatment means nothing.
+    |
+    | CHEAPNESS ALONE WOULD DEMOTE THE FEATURE. A genuinely cheap fare found an
+    | hour ago is exactly what this app exists to show, at full volume.
+    |
+    | It is the COMBINATION that is the trap: cheap enough to be the reason
+    | somebody is on the screen, old enough that it is the first kind of fare to
+    | disappear. The same shape as App\Domain\Alerts\AlertPolicy's stale-fare
+    | rule, which holds a MAIL only when the fare is old AND the flight is near
+    | — and deliberately a different second half, because that rule is about
+    | whether a price has had time to move and this one is about whether a
+    | headline is making a claim worth doubting.
+    |
+    | FORTY-EIGHT HOURS is `alerts.max_fare_age_days`' two days, arrived at from
+    | the same fact — the poll is daily, so one missed morning must not demote
+    | everything, and by the third day a cheap cached fare is a guess. It is
+    | written here as its own number because it is a different decision: that
+    | one decides whether to send mail, this one decides how loudly to draw a
+    | price. It is also deliberately LONGER than the 24 hours at which the
+    | screen starts printing "Seen …" at all — the line comes first and quietly,
+    | the demotion arrives a day later.
+    |
+    | TWENTY PERCENT is where a fare stops being ordinary variation and starts
+    | being the point: at 10% below usual nobody clears a weekend, at 20% they
+    | look twice, and the fare that started this was 42% below. It reads the
+    | CHEAPEST DEPARTURE against the route's usual price — the fare with the
+    | `found_at` on it, and the one the button below goes and checks — rather
+    | than `price.current`, which is the same number by a different route on
+    | almost every screen and is not the one carrying an age.
+    |
+    | =========================================================================
+    | COOLDOWN_HOURS — HOW LONG A LIVE ANSWER IS WORTH
+    | =========================================================================
+    | A successful check for a route and date is stored (`live_price_checks`)
+    | and served from there for six hours: re-taps and re-views spend nothing.
+    |
+    | SIX HOURS, NOT TWENTY-FOUR. The whole premise of the feature is that
+    | ultra-cheap fares die in hours, so a "live" price a day old would be the
+    | very mistake it was built to fix, with a more confident label on it. Six
+    | is an evening of browsing — open the screen, think about it, come back
+    | after dinner — and it is short enough that a check somebody trusts is one
+    | somebody could plausibly still buy.
+    |
+    | WHAT IT DOES NOT DO IS RATION THE MONTH. The budget guardrails are the
+    | `serpapi` section above and they are unchanged: quota read before every
+    | spend, nothing at all spent at or below the 50-search reserve. This number
+    | only decides when the same question stops being free.
+    |
+    */
+
+    'live_check' => [
+        'stale_after_hours'   => 48,
+        'under_usual_percent' => 20,
+        'cooldown_hours'      => 6,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | How much history the screens get
     |--------------------------------------------------------------------------
     |

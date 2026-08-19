@@ -24,7 +24,7 @@ use App\Http\Controllers\Auth\CurrentUserController;
 |--------------------------------------------------------------------------
 |
 | Five routes are the entire authentication surface, seven more are the read
-| API the screens are built on, ten more are the writes those screens make,
+| API the screens are built on, eleven more are the writes those screens make,
 | and the last one is the single-page app.
 |
 | WHAT IS DELIBERATELY ABSENT: registration, password RESET, email
@@ -295,6 +295,36 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
     Route::post('/routes/lookup', [RouteController::class, 'lookup'])
         ->middleware('throttle:route-lookup')
         ->name('routes.lookup');
+
+    /*
+     * GO AND ASK GOOGLE WHAT THIS ROUTE COSTS RIGHT NOW — the "Check live
+     * price" button on the route detail (design/README.md §2).
+     *
+     * A WRITE, AND THE MOST EXPENSIVE ONE IN THIS FILE. Orbit's own fares are
+     * Travelpayouts' cache of other people's searches, so the headline can be a
+     * price nobody can buy — DUS→VCE at €36, seen three days earlier, against a
+     * live market of about $150. This is the way to find out, and one tap of it
+     * spends one search out of a SerpAPI free plan's 250 A MONTH. A GET that
+     * could do that is a GET a link preview would eventually do on somebody's
+     * behalf; it is a POST for exactly the reason the lookup above it is.
+     *
+     * THROTTLED, and it is the fourth route in this file to be — for the
+     * strictest budget any of them stands in front of. See the `live-check`
+     * limiter in App\Providers\AppServiceProvider for what one tap costs and
+     * what actually rations the month (the reserve, not the limiter).
+     *
+     * `{code}` IN THE PATH AND NO BODY AT ALL, which is the opposite shape to
+     * the lookup above and is the same reasoning pointed the other way. There
+     * is nothing to validate: the route must already exist for this screen to
+     * be drawn, and the DATE is the server's — the cheapest departure the
+     * detail document is showing. A client-supplied date would be a way to ask
+     * a different question than the one on screen, and a way to spend the
+     * month one date at a time.
+     */
+    Route::post('/routes/{code}/live-price', [RouteController::class, 'liveCheck'])
+        ->where('code', '[A-Z]{3}-[A-Z]{3}')
+        ->middleware('throttle:live-check')
+        ->name('routes.live-price');
 
     Route::post('/watchlist', [WatchlistItemController::class, 'store'])->name('watchlist.store');
 

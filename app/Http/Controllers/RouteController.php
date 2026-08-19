@@ -9,8 +9,11 @@ use App\Models\Route;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Application\Routes\FareFreshness;
+use App\Application\Routes\RouteSnapshot;
 use App\Http\Requests\LookupRouteRequest;
+use App\Http\Resources\LivePriceResource;
 use App\Application\Routes\RouteSnapshots;
+use App\Application\Routes\LivePriceChecks;
 use App\Http\Resources\RouteDetailResource;
 
 /**
@@ -27,7 +30,7 @@ use App\Http\Resources\RouteDetailResource;
  * permission. There is one account, so there is nothing here to scope to.
  *
  * =============================================================================
- * TWO ACTIONS, ONE BODY, AND WHY THE SECOND ONE IS A POST
+ * THREE ACTIONS, ONE BODY, AND WHY THE TWO WRITES ARE POSTS
  * =============================================================================
  * `show()` is a read and costs a handful of queries. `lookup()` answers with
  * exactly the same document, and getting to it may cost a route row, six or
@@ -38,29 +41,28 @@ use App\Http\Resources\RouteDetailResource;
  * can spend money is a GET a browser prefetch, a link preview or a retry will
  * eventually spend money on.
  *
+ * `liveCheck()` IS THE SAME ARGUMENT AGAIN, ONE VENDOR OVER. It spends at most
+ * one SerpAPI search out of two hundred and fifty a MONTH — the most expensive
+ * single request this app can make — so it is a POST, throttled, and it is the
+ * only path in Orbit that spends that budget from a person's tap. Nothing
+ * schedules it and nothing takes a list. See App\Application\Routes\
+ * LivePriceChecks for the four guardrails around it.
+ *
  * THEY SHARE `present()` DELIBERATELY. The detail screen adopts a lookup's
  * answer without re-fetching, exactly as the watchlist screen adopts a write's
- * row (WatchlistItemController), so the two bodies are not merely similar —
- * they have to be the same shape or the screen would have two ways to read
- * itself.
+ * row (WatchlistItemController), so the bodies are not merely similar — they
+ * have to be the same shape or the screen would have three ways to read itself.
+ * That is also why the live check answers the WHOLE detail document rather than
+ * a bare price: the screen swaps its headline by adopting a document, exactly
+ * as it already does after a lookup.
  */
 final class RouteController extends Controller
 {
-    public function show(Request $request, string $code, RouteSnapshots $snapshots, FareFreshness $freshness): JsonResponse
+    public function show(Request $request, string $code, RouteSnapshots $snapshots, FareFreshness $freshness, LivePriceChecks $liveChecks): JsonResponse
     {
-        /*
-         * `abort()` rather than `firstOrFail()`, whose 404 body is Laravel's
-         * "No query results for model [App\Models\Route]" — a message that
-         * names an internal class and that the client cannot show a person.
-         * The client branches on the status; the string is for a developer
-         * reading a network tab.
-         */
-        $route = Route::query()
-            ->where('code', $code)
-            ->with(['origin', 'destination', 'stats'])
-            ->first() ?? abort(404, 'Unknown route.');
+        $route = self::find($code);
 
-        return $this->present($request, $route, $snapshots, $freshness, 200);
+        return $this->present($request, $route, $snapshots->of($route), $freshness, $liveChecks, 200);
     }
 
     /**
@@ -83,7 +85,7 @@ final class RouteController extends Controller
      * is the one place in Orbit that happens. See FareFreshness for the rule,
      * what it costs and what bounds it.
      */
-    public function lookup(LookupRouteRequest $request, RouteSnapshots $snapshots, FareFreshness $freshness): JsonResponse
+    public function lookup(LookupRouteRequest $request, RouteSnapshots $snapshots, FareFreshness $freshness, LivePriceChecks $liveChecks): JsonResponse
     {
         $origin = $request->airport('origin');
         $destination = $request->airport('destination');
@@ -106,7 +108,96 @@ final class RouteController extends Controller
 
         $freshness->refreshIfStale($route);
 
-        return $this->present($request, $route, $snapshots, $freshness, $created ? 201 : 200);
+        return $this->present($request, $route, $snapshots->of($route), $freshness, $liveChecks, $created ? 201 : 200);
+    }
+
+    /**
+     * Go and ask Google what this route really costs today — the button under
+     * a fare that may already be gone.
+     *
+     * =========================================================================
+     * THE ONLY PLACE IN ORBIT A TAP SPENDS A SERPAPI SEARCH
+     * =========================================================================
+     * The budget is 250 a MONTH on a free plan, with fifty of them reserved and
+     * about five a night already going to discovery, so this endpoint is built
+     * to spend as little of it as it can get away with:
+     *
+     *   - THE COOLDOWN FIRST. A check made for this route and date inside
+     *     `orbit.live_check.cooldown_hours` is served from the row and costs
+     *     nothing, whether it is a second tap or a second visit.
+     *   - THEN THE QUOTA, read from SerpAPI's free account endpoint before a
+     *     single search is spent, failing closed on anything it cannot read.
+     *   - AND THE RESERVE, which is the one that refuses. See
+     *     App\Application\Routes\LivePriceChecks.
+     *
+     * =========================================================================
+     * THE DATE IS THE SERVER'S AND NOT THE REQUEST'S, WHICH IS A GUARDRAIL
+     * =========================================================================
+     * There is no body. The date checked is the CHEAPEST DEPARTURE this screen
+     * is showing — the same `cheapest` the detail document publishes, read from
+     * the same snapshot — for two reasons that both matter. It cannot disagree
+     * with the fare being questioned: a client-supplied date would let the
+     * answer be about a different flight than the one under it, which is this
+     * app's oldest mistake with a "checked live" label on top. And it cannot be
+     * used to spend the month: with no date to vary, the cooldown covers every
+     * repeat of the only question this endpoint can be asked about a route.
+     *
+     * 503 WHEN THE BUDGET SAYS NO, and it is deliberately not a 200 with an
+     * empty answer. The screen has to be able to tell "Google says €150" from
+     * "nobody asked Google" — the second one leaves the cached price standing,
+     * demoted, with a sentence saying the check is held in reserve. A body that
+     * looked like an answer and was not is precisely the failure mode this
+     * whole feature exists to remove.
+     *
+     * 409 WHEN THERE IS NOTHING TO CHECK. A route with no fares in the window
+     * has no departure to ask about; that is not an error in the request and
+     * not a route that is missing, it is a question with no subject.
+     */
+    public function liveCheck(
+        Request $request,
+        string $code,
+        RouteSnapshots $snapshots,
+        FareFreshness $freshness,
+        LivePriceChecks $liveChecks,
+    ): JsonResponse {
+        $route = self::find($code);
+        $snapshot = $snapshots->of($route);
+        $departure = $snapshot->cheapest?->departureDate;
+
+        if ($departure === null) {
+            abort(409, 'Orbit has no fare for this route to check.');
+        }
+
+        if ($liveChecks->check($route, $departure) === null) {
+            abort(503, 'Orbit is holding its remaining live checks in reserve.');
+        }
+
+        /*
+         * THE SNAPSHOT IS REBUILT rather than reused, because the check that
+         * has just run wrote a row this document has to carry — `present()`
+         * reads the stored answer back through the same path a plain view of
+         * the screen does, so there is exactly one way a live check reaches a
+         * client and no chance of a freshly made one being published on terms
+         * a re-view would not repeat.
+         */
+        return $this->present($request, $route, $snapshots->of($route), $freshness, $liveChecks, 200);
+    }
+
+    /**
+     * The route by its code, or a 404 the client can act on.
+     *
+     * `abort()` rather than `firstOrFail()`, whose 404 body is Laravel's "No
+     * query results for model [App\Models\Route]" — a message that names an
+     * internal class and that the client cannot show a person. The client
+     * branches on the status; the string is for a developer reading a network
+     * tab.
+     */
+    private static function find(string $code): Route
+    {
+        return Route::query()
+            ->where('code', $code)
+            ->with(['origin', 'destination', 'stats'])
+            ->first() ?? abort(404, 'Unknown route.');
     }
 
     /**
@@ -130,16 +221,45 @@ final class RouteController extends Controller
     private function present(
         Request $request,
         Route $route,
-        RouteSnapshots $snapshots,
+        RouteSnapshot $snapshot,
         FareFreshness $freshness,
+        LivePriceChecks $liveChecks,
         int $status,
     ): JsonResponse {
         $fetchedAt = $freshness->lastFetchedAt($route);
+        $departure = $snapshot->cheapest?->departureDate;
 
-        return RouteDetailResource::make($snapshots->of($route))
+        /*
+         * WHAT GOOGLE SAID, IF ANYBODY HAS ASKED IT LATELY — one indexed row,
+         * and null on every screen where nobody has.
+         *
+         * READ ON EVERY VIEW AND NOT ONLY AFTER THE BUTTON. A check somebody
+         * paid a metered search for at lunchtime is what this screen shows at
+         * teatime; offering to buy the same answer again would be the app
+         * forgetting what it knows, at 250 searches a month. `latest()` applies
+         * the cooldown, so an answer past its six hours is not published as
+         * "live" — it simply is not published, and the button comes back.
+         *
+         * ABOUT THE CHEAPEST DEPARTURE, and null when there is none: a check
+         * belongs to a flight, and a stored answer for the 12th says nothing
+         * about a screen that is now showing the 19th.
+         */
+        $liveCheck = $departure === null ? null : $liveChecks->latest($route, $departure);
+
+        return RouteDetailResource::make($snapshot)
             ->additional(['meta' => [
                 'watched' => self::isWatched($request, $route),
-                'fares'   => [
+
+                /*
+                 * IN `meta` BESIDE `fares`, and for the same reason it is: this
+                 * is how fresh what you are looking at is and what the screen
+                 * should offer to do about it. `data` is the shared route
+                 * summary four screens read, and three of them have neither the
+                 * room to draw a live check nor a button to make one.
+                 */
+                'liveCheck' => $liveCheck === null ? null : LivePriceResource::make($liveCheck)->toArray($request),
+
+                'fares' => [
                     /*
                      * A TIMESTAMP, in the owner's timezone, and the only one in
                      * this API — every other date here is a bare `YYYY-MM-DD`

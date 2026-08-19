@@ -7,6 +7,7 @@ namespace App\Http\Resources;
 use DateTimeZone;
 use Illuminate\Http\Request;
 use App\Domain\Pricing\PricePoint;
+use Illuminate\Support\Facades\Date;
 use App\Application\Routes\BookingLink;
 
 /**
@@ -20,6 +21,11 @@ use App\Application\Routes\BookingLink;
  * `stats` IS THE DASHED "usual price" LINE, and null when the provider has no
  * statistics for the pair. The chart then draws without a reference, which is
  * the honest picture rather than a line at zero.
+ *
+ * `cheapest.mayBeGone` IS THE ONE FIELD HERE THAT IS A JUDGEMENT rather than a
+ * fact — whether the headline fare is old enough AND cheap enough that drawing
+ * it at full volume would be a claim this app cannot support. See the note on
+ * it below, and config/orbit.php's `live_check` for the fare that bought it.
  */
 final class RouteDetailResource extends RouteSummaryResource
 {
@@ -80,6 +86,35 @@ final class RouteDetailResource extends RouteSummaryResource
                 'foundAt' => $cheapest?->foundAt?->setTimezone(
                     new DateTimeZone((string) config('orbit.timezone')),
                 )->format('c'),
+
+                /*
+                 * ⚠ AND WHETHER THIS SCREEN SHOULD BE SHOUTING IT.
+                 *
+                 * TRUE MEANS OLD AND WELL UNDER USUAL — the combination that
+                 * produced DUS→VCE at €36 against a live market of about $150,
+                 * three days after anybody had seen the €36. The client demotes
+                 * the headline and says "may be gone" instead of drawing the
+                 * app's most confident number over a fare that has probably
+                 * already sold. config/orbit.php, `live_check`, is the rule and
+                 * both of its numbers; App\Application\Routes\RouteSnapshot is
+                 * where it is applied.
+                 *
+                 * THE SERVER'S JUDGEMENT AND NOT THE CLIENT'S, for the reason
+                 * `confident` is: the two thresholds live in config, the same
+                 * answer has to reach a future alert as reaches this screen, and
+                 * a rule re-derived in a Vue component is a rule that goes on
+                 * being applied the day the config is retuned. The client styles
+                 * on this flag; it does not recompute it.
+                 *
+                 * FALSE IS THE ORDINARY ANSWER, including on every fare whose
+                 * age is unknown. See the snapshot for why not-knowing is never
+                 * demoted.
+                 */
+                'mayBeGone' => $snapshot->cheapestMayBeGone(
+                    Date::now()->toDateTimeImmutable(),
+                    (int) config('orbit.live_check.stale_after_hours'),
+                    (int) config('orbit.live_check.under_usual_percent'),
+                ),
             ],
 
             /*

@@ -1664,6 +1664,77 @@ its `serpapi` section and the lane's own numbers are in `discovery.lanes`.
 
 ---
 
+## 17. A cheap fare that may already be gone, and the way to check
+
+**The fare that bought this section.** DUS→VCE, on the route detail at **€36** —
+*"Seen 3 days ago"*, usual €62. Tapping through to Aviasales, the live direct was
+about **$150** and there was nothing within sight of €36. Nothing had
+miscalculated: Orbit's fares are Travelpayouts' cache of other people's searches
+(§2), ultra-cheap fares die in hours, and the app had faithfully reprinted one
+that was already gone.
+
+That is the **third** time this app has written that sentence down — €36 against
+a live €56, €29 against a Skyscanner €68, and now this. Each previous fix was to
+**say more**: a freshness line, a second booking link, an age on the card. All of
+it is small print under a number in 42-point type. So this one does two other
+things.
+
+### The demotion — two conditions, and it needs both
+
+A fare is drawn **quieter, with a plain label**, when
+
+* it was **found more than `live_check.stale_after_hours` ago** (48 h), **and**
+* it is **at least `live_check.under_usual_percent` below usual** (20%).
+
+*Age alone would demote half the app* — a four-day-old fare at its usual price is
+the ordinary state of a quiet route and disappoints nobody. *Cheapness alone
+would demote the feature* — a fare 40% under usual, found an hour ago, is exactly
+what Orbit is for. It is the **combination** that is the trap: cheap enough to be
+the reason somebody opened the screen, old enough to be the first kind of fare to
+disappear.
+
+The rule is the **server's**, published as `data.cheapest.mayBeGone`
+(`docs/API.md`) and applied in `App\Application\Routes\RouteSnapshot`. The screen
+styles on the flag and does not recompute it, so retuning the config retunes the
+screen. **A null `found_at` is never demoted** — "we do not know how old this is"
+is not evidence of staleness, the same reading `AlertPolicy` takes.
+
+48 hours is `alerts.max_fare_age_days`' two days arrived at from the same fact
+(the poll is daily, so one missed morning must not demote everything) and is
+deliberately **longer** than the 24 hours at which the screen starts printing
+"Seen …" at all: the line comes first and quietly, the demotion a day later.
+
+### The check — one button, one search, and four guardrails
+
+`POST /api/routes/{code}/live-price` asks **Google Flights, live, via SerpAPI**
+about the exact departure the screen is showing, and swaps the headline for what
+it gets. Orbit's own figure stays on the page as context — *"Orbit's cached fare
+€36, seen 3 days ago"* — because the disagreement is the answer.
+
+It is the **only place in Orbit where a person's tap spends the SerpAPI budget**,
+which is 250 searches a **month** on a free plan. So:
+
+| guardrail | where |
+| --- | --- |
+| **Quota read before every spend**, from the free `account.json`, failing closed | `GoogleFlightsCheck::available()` |
+| **Nothing spent at or below the 50-search reserve** — refused with a sentence | the same method, `orbit.serpapi.reserve` |
+| **Cooldown**: the same route and date is served from the stored row for 6 h, free | `App\Application\Routes\LivePriceChecks` |
+| **User-initiated only**: authenticated, CSRF, throttled 3/min and 10/h; nothing schedules it | `routes/web.php`, the `live-check` limiter |
+
+**A refusal is a 503 with a sentence, never an empty 200.** The screen has to be
+able to tell "Google says €150" from "nobody asked Google": the second leaves the
+cached price standing, demoted, and says the checks are being held in reserve.
+**Google having no opinion is a real answer too** — thin routes come back without
+a `price_insights` block — and it is *recorded*, because SerpAPI billed that
+search either way and the same silence must not be re-bought every six hours.
+
+The answers live in `live_price_checks`, one row per route and departure date,
+overwritten rather than logged. Nothing but the detail screen reads it today;
+verifying an alert before it is sent is the obvious next reader, and is why the
+answer is a table rather than a cache entry `cache:clear` can take.
+
+---
+
 ## Where the rules live
 
 | concern | code |
@@ -1673,6 +1744,7 @@ its `serpapi` section and the lane's own numbers are in `discovery.lanes`.
 | alert decisions, quiet hours | `app/Domain/Alerts/` |
 | rule matching, month windows, chips | `app/Domain/Rules/` |
 | discovery thresholds, ranking, Google verdict | `app/Domain/Discovery/` |
+| the live price check and its cooldown | `app/Application/Routes/LivePriceChecks.php` |
 | great-circle distance, server side | `app/Domain/Geo/Haversine.php` |
 | assembling what the screens read | `app/Application/Routes/`, `app/Application/Rules/` |
 | the alert pipeline | `app/Application/Alerts/` |
