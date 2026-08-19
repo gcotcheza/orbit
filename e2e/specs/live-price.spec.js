@@ -105,7 +105,7 @@ test('the live price takes the headline and Orbit’s own becomes context', asyn
         /* What the server sends once Google has contradicted the cached fare. */
         body.data.advice = {
             title: 'Google cannot find this fare',
-            body: `Orbit has ${body.data.cheapest.price} cached; the cheapest Google can find is €150. Treat the cached fare as gone.`,
+            body: `Orbit has €${body.data.cheapest.price} cached; the cheapest Google can find is €150. Treat the cached fare as gone.`,
             tone: 'warn',
         }
 
