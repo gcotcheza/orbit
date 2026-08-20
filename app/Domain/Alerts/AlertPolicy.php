@@ -53,7 +53,7 @@ final readonly class AlertPolicy
     }
 
     /**
-     * @param  int  \$minimumScore  the score this account's sensitivity fires at
+     * @param  int  $minimumScore  the score this account's sensitivity fires at
      * @param  LastAlert|null  $last  the last alert for this route and kind, null when there
      *                                has never been one or the last is older than the cooldown
      */
