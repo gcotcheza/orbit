@@ -1,26 +1,16 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The home screen's four states, and the tour it drives
-// =============================================================================
-// GlobeStage.test.js covers the camera. This covers everything around it: what
-// the screen shows while the watchlist is in flight, what it shows when the
-// request fails, what it shows when there is nothing to fly, and — the part
-// that is easy to get subtly wrong — that the spotlight card, the rail and the
-// tour are always talking about THE SAME ROUTE.
+// The home screen's four states, and the tour it drives. GlobeStage.test.js
+// covers the camera; this covers the screen's decisions — loading, failure,
+// empty, and that the spotlight, rail and tour agree on THE SAME ROUTE.
 //
-// docs/API.md is the fixture. `AMS-LIS` is lifted from the document's own
-// example payload, and the other two are the shapes it warns about: a paused
-// route (must not be toured) and a route added this morning (null price, null
-// statistics, `confident: false` — must not be rendered as €0).
+// Fixtures come from docs/API.md's example payload and the shapes it warns
+// about (paused route, day-one route with nulls).
+// Why: docs/BUSINESS-LOGIC.md §36.
 //
-// The globe itself is stubbed. It has its own tests, it needs a GPU, and this
-// file is about the screen's decisions rather than its scenery.
+// The globe is stubbed — it has its own tests and needs a GPU.
 //
-// A PINIA PER MOUNT. The watchlist is a store since the DRY pass, and a store
-// is shared state — one instance across the file would carry the routes of the
-// previous test into the next one, which is exactly the kind of leakage the
-// empty-list and failure cases would stop catching.
-// =============================================================================
+// A Pinia instance per mount, so one test's routes can't leak into the next.
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia } from 'pinia'
 import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
@@ -195,7 +185,6 @@ describe('a route we know nothing about yet', () => {
         // docs/API.md: null is "not known yet", never zero.
         expect(wrapper.text()).not.toContain('€0')
         expect(wrapper.text()).not.toContain('0% below usual')
-        // No sparkline to draw, so none is drawn.
         expect(wrapper.find('.spark').exists()).toBe(false)
         // And no departure date either: `cheapest: null` is not today.
         expect(wrapper.find('.spotlight__when').exists()).toBe(false)
@@ -204,14 +193,9 @@ describe('a route we know nothing about yet', () => {
 
 describe('nothing to show', () => {
     /*
-     * DAY ONE IS STILL THIS APP'S SCREEN, and that is what changed here. The
-     * empty state used to be a card in a void — the globe was not drawn at all,
-     * so the signature screen of a flight tracker showed neither a flight nor a
-     * tracker on the morning somebody installed it. The planet is now drawn
-     * with NOTHING ON IT: no routes, so no arcs and no tour, which is the
-     * honest picture of an empty watchlist and the picture of what the screen
-     * becomes. The assertion is the empty `routes` prop, because a globe handed
-     * the paused route would be the actual bug this state exists to avoid.
+     * Day one is still this app's screen: the globe now draws with NOTHING ON
+     * IT (empty routes) rather than not being drawn at all.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     it('draws an empty globe and one way out of the empty state', async () => {
         const wrapper = await mountHome([PAUSED])

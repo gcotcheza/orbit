@@ -70,10 +70,8 @@ final readonly class GoogleFlightsCheck
     }
 
     /**
-     * Google's verdict on one route and date, or null when there is none.
-     *
-     * `ask()` is the same question with the billing outcome attached; a caller
-     * that stores or charges for the answer needs that one instead.
+     * Google's verdict on one route/date, or null when there is none. `ask()`
+     * is the same question with the billing outcome attached.
      */
     public function check(string $originIata, string $destinationIata, DateTimeImmutable $departure): ?GoogleVerdict
     {
@@ -172,10 +170,8 @@ final readonly class GoogleFlightsCheck
     }
 
     /**
-     * The searches this key has left, or null if it could not be read.
-     *
-     * ⚠ `total_searches_left`, never `plan_searches_left`: the plan figure
-     * ignores `extra_credits` and would refuse an account that had topped up.
+     * The searches this key has left, or null if unreadable. ⚠ Always
+     * `total_searches_left`, never `plan_searches_left` (ignores extra_credits).
      */
     private function remaining(): ?int
     {

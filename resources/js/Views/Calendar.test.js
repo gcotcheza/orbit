@@ -1,30 +1,7 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The calendar's month navigation, and the edge of the poll window
-// =============================================================================
-// The grid, the heat scale and the day sheet are covered by their own files and
-// by e2e/specs/calendar.spec.js, which is the only place the computed colours
-// can actually be read back. This is about the two things the six-month window
-// changed and neither of those can see:
-//
-//   1. HOW FAR THE ARROWS GO. `orbit.poll.horizon_days` is 334 days, which can
-//      never touch more than twelve calendar months, so the screen offers this
-//      month and eleven more. One arrow too few hides a month of real fares;
-//      one too many is a promise of data that cannot exist.
-//
-//   2. WHAT THE FAR END LOOKS LIKE WHEN IT IS EMPTY, which is now the ORDINARY
-//      case rather than a few mornings a year: months 7 to 11 are refreshed
-//      once a week, the provider's cache thins with distance, and a horizon
-//      that opens early in a month closes inside the twelfth one. The e2e suite
-//      cannot produce an empty month at all — its fake provider prices every
-//      day of whatever window it is handed. Here the endpoint is a stub and an
-//      empty month is one line of fixture.
-//
-// EVERY EXPECTED MONTH IS DERIVED, never written out. The screen's first month
-// is `currentMonthKey()` read at import time, so a test that named "February
-// 2027" would be a test with a shelf life — and freezing the clock would not
-// help, because the component reads it before any hook in here runs.
-// =============================================================================
+// The calendar's month navigation and the empty-far-month edge; not covered
+// by e2e/specs/calendar.spec.js (computed colours only).
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia } from 'pinia'
 import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
@@ -80,9 +57,8 @@ function priced(month) {
 }
 
 /**
- * Answer the watchlist with one route, and the calendar endpoint with whatever
- * `month` it is asked for — priced by default, empty for the months in
- * `emptyMonths`.
+ * Answer the watchlist with one route; the calendar endpoint returns priced
+ * data, or empty for months in `emptyMonths`.
  */
 function answering({ emptyMonths = [] } = {}) {
     get.mockImplementation((url, config) => {
@@ -143,9 +119,8 @@ describe('how far the arrows go', () => {
             )
         }
 
-        // Eleven months out is the edge of the maintained horizon — the airline
-        // booking edge — so there is nothing beyond it to ask for, and the arrow
-        // says so rather than fetching a grid that can only be empty.
+        // Eleven months out is the maintained horizon's edge, so the arrow
+        // disables rather than fetching a grid that can only be empty.
         expect(next(wrapper).attributes('disabled')).toBeDefined()
         expect(prev(wrapper).attributes('disabled')).toBeUndefined()
     })
@@ -185,9 +160,8 @@ describe('a month at the far end with no fares in it', () => {
         expect(subtitle(wrapper)).toBe(`Cheapest fare per day · ${monthLabel(far)}`)
         expect(wrapper.text()).toContain('No fares seen for this month yet.')
 
-        // The grid is still drawn — an empty month is a month of blank cells,
-        // not a missing screen — and neither the heat legend nor the "cheapest
-        // this month" banner appears over a range that does not exist.
+        // The grid still draws — an empty month is blank cells, not a missing
+        // screen — but the legend and "cheapest" banner don't appear for it.
         expect(wrapper.find('.grid-card').exists()).toBe(true)
         expect(wrapper.find('.legend').exists()).toBe(false)
         expect(wrapper.find('.banner').exists()).toBe(false)
@@ -206,24 +180,9 @@ describe('a month at the far end with no fares in it', () => {
     })
 })
 
-/*
- * ============================================================================
- * WHICH MONTH IT OPENS ON
- * ============================================================================
- * It opened on the current month, always — the one month the poll window only
- * half covers, because everything before today is gone. So "when is it cheap?"
- * was answered with a half-grey grid while the route's actual cheapest day sat
- * several taps away in another month, unmentioned: the banner at the foot of
- * the grid says "cheapest THIS month" and nothing ever said which month to be
- * in.
- *
- * `cheapest.date` is on the watchlist row now (docs/API.md), so the landing
- * month is a lookup rather than a request — and it is CLAMPED into the window
- * the arrows enforce, which is the half of this that cannot be tested against a
- * live sandbox: a route whose cheapest departure is a year out is exactly what
- * a wider poll window, or a stale row, produces, and landing there would be a
- * grid the navigation cannot get back from.
- */
+// Which month it opens on: the watched route's cheapest-departure month,
+// clamped into the eleven-month arrow window and never in the past.
+// Why: docs/BUSINESS-LOGIC.md §36.
 describe('which month it opens on', () => {
     /** One watched route whose cheapest departure is on `date`. */
     function watching(date) {
@@ -245,7 +204,6 @@ describe('which month it opens on', () => {
         const wrapper = await mountCalendar()
 
         expect(subtitle(wrapper)).toBe(`Cheapest fare per day · ${monthLabel(third)}`)
-        // And it asked the endpoint for that month rather than for this one.
         expect(get).toHaveBeenLastCalledWith('/api/routes/AMS-LIS/calendar', { params: { month: third } })
     })
 

@@ -24,40 +24,24 @@ use Anthropic\Core\Exceptions\APIException;
 /**
  * Reading the sentence by asking Claude.
  *
- * ---------------------------------------------------------------------------
- * THE THINGS THAT ARE NOT OBVIOUS
+ * 1. Evidence first, then the instruction — untrusted text can never become
+ *    part of our instruction; this is the prompt-injection defence.
+ *    Why: docs/BUSINESS-LOGIC.md §36.
  *
- * 1. EVIDENCE FIRST, THEN THE INSTRUCTION. Content blocks are ordered, so the
- *    owner's sentence goes in its own block and RulePrompt::TEXT closes the
- *    message. That ordering is also the prompt-injection defence: untrusted
- *    text never becomes part of our instruction, and the final word is ours.
+ * 2. Schema enforced server-side — the first text block IS the JSON;
+ *    nothing here hunts for a `{`.
+ *    Why: docs/BUSINESS-LOGIC.md §36.
  *
- * 2. THE SCHEMA IS ENFORCED SERVER-SIDE. `outputConfig.format` with a
- *    json_schema means the first text block IS the JSON — no prose to strip,
- *    no fenced block to unwrap, and no "sometimes it apologises first" branch.
- *    Nothing here hunts for a `{`.
+ * 3. `stop_reason` checked before `content` is read — a refusal is a 200
+ *    with empty content, so indexing content[0] first crashes on that case.
+ *    Why: docs/BUSINESS-LOGIC.md §36.
  *
- * 3. `stop_reason` IS CHECKED BEFORE `content` IS READ. A refusal is a
- *    perfectly successful HTTP 200 with an empty content array, so code that
- *    indexes content[0] first crashes on exactly the case it most needs to
- *    explain. `max_tokens` is checked for the same reason: truncated JSON is
- *    not a small problem, it is unparseable.
- *
- * 4. NO temperature / top_p / top_k. They are removed on current models and a
+ * 4. No temperature/top_p/top_k — removed on current models, and a
  *    request carrying one is rejected outright rather than ignored.
  *
- * 5. EVERY FAILURE FALLS BACK TO THE REGEX PARSER, and this is where this
- *    class deliberately differs from health-tracker's analyzer, which reports
- *    failures to the user. The difference is what the caller can do about it:
- *    a meal photo that could not be analysed has a "log it by hand" button
- *    behind it, and this is a screen that re-parses on a 500 ms debounce while
- *    somebody is mid-sentence. There is no useful error message to show
- *    between two keystrokes. So a refusal, a truncation, an unreadable answer
- *    and an unreachable API all produce the same thing — a slightly less
- *    clever parse of the same sentence — and the only place the difference is
- *    visible is the log (see ParseFailure). The owner's create screen never
- *    breaks because a third party did.
- * ---------------------------------------------------------------------------
+ * 5. Every failure falls back to the regex parser, unlike health-tracker's
+ *    analyzer — there's no useful error to show mid-sentence; only the log sees why.
+ *    Why: docs/BUSINESS-LOGIC.md §36.
  */
 final readonly class AnthropicRuleTextParser implements RuleTextParser
 {
@@ -87,11 +71,8 @@ final readonly class AnthropicRuleTextParser implements RuleTextParser
     }
 
     /**
-     * The call, reduced to "the document, or nothing".
-     *
-     * Returns the decoded JSON, or NULL after logging which of ParseFailure's
-     * cases happened. The caller does not get to care which — see the class
-     * comment — but the log does.
+     * The call, reduced to "the document, or nothing" — NULL after logging
+     * which ParseFailure case happened; the caller doesn't get to care which.
      *
      * @return array<string, mixed>|null
      */
@@ -115,11 +96,9 @@ final readonly class AnthropicRuleTextParser implements RuleTextParser
                 ),
             );
         } catch (APIException $e) {
-            /*
-             * The message of an SDK exception is the API's own error text. It
-             * never contains the key, and it is the difference between "the
-             * model is down" and "the model is not configured".
-             */
+            // SDK exception's message is the API's own error text — never the key —
+            // telling apart "the model is down" from "the model is not configured".
+            // Why: docs/BUSINESS-LOGIC.md §36.
             return $this->failed(ParseFailure::Unreachable, $e->getMessage());
         } catch (Throwable $e) {
             return $this->failed(ParseFailure::Unreachable, $e::class.': '.$e->getMessage());
@@ -134,18 +113,9 @@ final readonly class AnthropicRuleTextParser implements RuleTextParser
     private function interpret(Message $message): ?array
     {
         if ($message->stopReason === StopReason::REFUSAL->value) {
-            /*
-             * A safety classifier declined. Not an error, not a bug, and not
-             * something a retry fixes — so it is not retried.
-             *
-             * `isset()` AND NOT `?->`. The SDK declares `stopDetails` as a
-             * typed property with no default and only initialises it when the
-             * key was in the response — so reading it off a refusal that came
-             * back without one is a fatal "must not be accessed before
-             * initialization", inside the branch whose entire job is to keep
-             * this class from crashing. The null-safe operator does not help:
-             * uninitialised is not null.
-             */
+            // A safety classifier declined; not retried. `isset()`, not `?->` —
+            // `stopDetails` is uninitialised when absent, and null-safe doesn't help.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             return $this->failed(
                 ParseFailure::Refused,
                 isset($message->stopDetails) ? $message->stopDetails->explanation : null,
@@ -174,11 +144,8 @@ final readonly class AnthropicRuleTextParser implements RuleTextParser
             /** @var array<string, mixed> $decoded */
             $decoded = json_decode($json, true, 16, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
-            /*
-             * Structured outputs should make this unreachable. It is handled
-             * anyway because "should" is not a guarantee, and the alternative
-             * to handling it is a 500 on the create screen.
-             */
+            // Structured outputs should make this unreachable; handled anyway because
+            // "should" isn't a guarantee, and the alternative is a 500 on the create screen.
             return $this->failed(ParseFailure::Unreadable, $e->getMessage());
         }
 
@@ -188,10 +155,9 @@ final readonly class AnthropicRuleTextParser implements RuleTextParser
     /**
      * The model's JSON, in this app's own words.
      *
-     * EVERY FIELD GOES THROUGH RuleCriteria::from(), which is the same
-     * validation the database's stored criteria get. The schema already
-     * constrains the answer, so this is not distrust of the model — it is
-     * refusing to have two definitions of what a criteria field may hold.
+     * Every field goes through RuleCriteria::from() — the same validation
+     * stored criteria get; not distrust, just one definition of a valid field.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @param  array<string, mixed>  $decoded
      */

@@ -7,25 +7,20 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * `POST /api/rules/parse` and `POST /api/rules` — the sentence, and the chips
- * the owner took off it.
+ * `POST /api/rules/parse` and `POST /api/rules` — the sentence, and the
+ * chips the owner took off it.
  *
- * ONE REQUEST CLASS FOR BOTH, because they take the same two fields and the
- * create screen sends the same object to both: whatever was last parsed is
- * exactly what should be saved. A second class differing only in its name is
- * two places to add the next field to.
+ * One request class for both: they share the same two fields, and a second
+ * class differing only in name is two places to add the next field to.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * `text` MAY BE EMPTY ON THE PARSE ENDPOINT and may not on the create one, but
- * that is not this class's rule — an empty box is a normal state of a screen
- * that re-parses while somebody types, and the create endpoint refuses it for
- * a better reason than emptiness (see App\Http\Controllers\RuleController).
+ * `text` may be empty on parse but not on create — that's the create
+ * endpoint's rule, not this class's. See App\Http\Controllers\RuleController.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * `removed` IS A LIST OF CHIP IDS, and unknown ids are accepted deliberately:
- * the client holds them across re-parses of a sentence that is still being
- * edited, so an id for a chip the current text no longer produces is the
- * ordinary case (App\Domain\Rules\ParsedRule::without explains it in full).
- * Validating them against the current parse would mean parsing twice and
- * rejecting somebody for typing.
+ * `removed` accepts unknown chip ids deliberately — the client holds them
+ * across re-parses of a sentence still being edited.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class ParseRuleRequest extends FormRequest
 {
@@ -36,18 +31,13 @@ final class ParseRuleRequest extends FormRequest
     {
         return [
             /*
-             * 500 characters is about six lines in the design's textarea and
-             * far more than anybody types. It is here because this endpoint
-             * may reach a metered API one day (config('orbit.nlp.parser')) and
-             * an unbounded string is an unbounded bill.
+             * 500 chars: far more than anybody types, capped because this endpoint
+             * may reach a metered API one day (config('orbit.nlp.parser')).
              */
             /*
-             * `nullable` NEXT TO `present`, which reads like a contradiction
-             * and is not: Laravel's ConvertEmptyStringsToNull middleware turns
-             * an empty textarea into NULL before any rule runs, so without it
-             * a screen that re-parses while somebody deletes their sentence
-             * gets "The text field must be a string." for the ordinary act of
-             * clearing the box. `present` still requires the key.
+             * `nullable` next to `present` isn't a contradiction: Laravel's
+             * ConvertEmptyStringsToNull turns an empty textarea into NULL first.
+             * Why: docs/BUSINESS-LOGIC.md §36.
              */
             'text'      => ['present', 'nullable', 'string', 'max:500'],
             'removed'   => ['sometimes', 'array', 'max:50'],

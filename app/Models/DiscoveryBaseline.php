@@ -13,18 +13,13 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
  * What Orbit last measured a route's usual price to be — the relative lane's
  * memory.
  *
- * THE ONLY THING IN DISCOVERY THAT PERSISTS ACROSS RUNS. A `discoveries` row is
- * deliberately ephemeral (36 hours, then gone); this is the opposite and has to
- * be, because it is the entire reason the lane gets better rather than repeating
- * itself. Every window the lane fetches leaves one of these behind, including —
- * especially — the windows that produced no card at all.
+ * The only thing in Discovery that persists across runs (a `discoveries` row is
+ * ephemeral, 36 hours then gone); every window the lane fetches leaves one behind.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * IT IS NOT A CACHE OF `calendar_fares` AND MUST NOT GROW INTO ONE. See the
- * migration for the three things that break if this becomes a `routes`-keyed
- * window: the watchlist's notion of "pairs this app knows about", the 201 from
- * `POST /api/routes/lookup`, and — the serious one — the rule engine reading
- * discovery's data and mailing somebody about it. One number per route, plus the
- * two facts that say whether it may be believed.
+ * Not a cache of `calendar_fares`: stays one number per route, not a `routes`-keyed
+ * window. See the migration for what breaks if it grows into one.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
  * NO USER, LIKE `discoveries` AND FOR THE SAME REASON (docs/BUSINESS-LOGIC.md
  * §1). What a route usually costs is a fact about the world.
@@ -39,21 +34,16 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 final class DiscoveryBaseline extends Model
 {
     /**
-     * Laravel would pluralise this correctly, and it is named anyway.
-     *
-     * The same one-line insurance App\Models\Discovery buys: the table is named
-     * in a migration, a job and three tests, and an inflector disagreeing with
-     * any of them is a "relation does not exist" on the first deploy.
+     * Laravel would pluralise this correctly; named explicitly anyway, so an inflector
+     * disagreement with the migration/job/tests fails fast, not as "relation does not exist".
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     protected $table = 'discovery_baselines';
 
     /**
-     * The domain's shape of this row.
-     *
-     * THE MODEL IS THE STORAGE AND App\Domain\Discovery\RouteBaseline IS THE
-     * RULE — the same split every other pure type in this app has from the table
-     * behind it. The selector does arithmetic on baselines and must be testable
-     * without a database, so the conversion happens here, once, at the boundary.
+     * The model is storage; RouteBaseline is the rule — conversion happens here, once,
+     * so the selector's arithmetic stays testable without a database.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     public function toDomain(): RouteBaseline
     {

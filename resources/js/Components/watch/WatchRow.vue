@@ -2,37 +2,11 @@
 /*
  * One watched route, drawn as a boarding pass (design/README.md §5).
  *
- * The card is in two halves with a perforated tear line between them: the
- * itinerary above — flight number, status pill, both IATA codes with their
- * cities and a dashed flight path — and the stub below, with the fare, the
- * usual price, a barcode, the switch and the remove action.
+ * Renders a route with no price history yet as day-1 honest: no data shown, not a guess.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * IT RENDERS A ROUTE THAT KNOWS NOTHING ABOUT ITSELF. A route added a minute
- * ago has `confident: false`, `price.current: null` and an empty sparkline
- * (docs/API.md, day-1 honesty), and that is the state this card is in for the
- * first morning of every route's life. Prices fall back to an em dash and the
- * stub says how long we have been watching instead of pretending to a fare.
- *
- * THE STATUS PILL IS THE SHARED ONE, at its smaller size. It was a scoped copy
- * of `VerdictPill.vue` while that file was being written in a parallel branch;
- * the two were the same pill in the same tone colours, so the copy went on the
- * DRY pass and the size difference is a prop.
- *
- * THE TOP HALF OPENS THE ROUTE. The design gave this card two controls and no
- * way into /route/AMS-LIS, so the only route detail reachable on a phone was
- * whichever one the globe happened to be flying — tapping a row you can see,
- * named, in a list, did nothing. Everything above the tear line is now a link
- * to that route's detail screen, for paused rows as much as for active ones.
- *
- * IT IS A REAL <a>, AND IT STOPS AT THE TEAR LINE. Wrapping the WHOLE card
- * would put a switch and a remove button inside a link — nested interactives,
- * which is both an accessibility fault and a row where a tap near the switch is
- * a coin toss. The half above the tear has no controls in it at all, so it can
- * be an ordinary RouterLink: long-pressable, openable in a new tab, announced
- * as a link, keyboard-activated by the browser rather than by a keydown handler
- * of ours. The stub below keeps the switch and the bin, and neither of them can
- * navigate anywhere because neither is inside the link. Same reasoning as
- * SpotlightCard.vue, which is the other way into this screen.
+ * The link stops at the tear line, so the switch and remove button are never nested inside it.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 import { computed, ref } from 'vue'
 import ToggleSwitch from '@/Components/ToggleSwitch.vue'
@@ -56,26 +30,8 @@ const flightNumber = computed(() => flightNumberFor(props.route.code))
 const flagStyle = computed(() => ({ background: flagFor(props.route.destination.countryCode) }))
 
 /*
- * =============================================================================
- * THE ONE LINE OF THIS CARD THAT SAYS WHAT ORBIT IS DOING WITH THE ROUTE
- * =============================================================================
- * The design's "tracking N days" note lives here, shown while the route has less
- * than a fortnight of history (the threshold docs/API.md sets) and phrased for
- * the very first morning when there is nothing at all. Otherwise the slot holds
- * the boarding pass's barcode, which is set dressing.
- *
- * AND "PAUSED" NOW WINS BOTH, because a paused row said nothing whatsoever. The
- * only cues were a 58% opacity — which reads as "loading" or as a rendering
- * glitch at least as readily as it reads as "off" — and a 46 px switch in the
- * off position, which somebody has to already know the meaning of. The word is
- * what a paused route was missing, and this slot is where it belongs: it is
- * already the line that answers "what is happening with this one", and it is
- * already beside the switch that changes the answer.
- *
- * IT OUTRANKS THE TRACKING NOTE rather than sitting next to it. Both can be true
- * of a route paused on the day it was added, and only one of them matters then:
- * "Tracking 1 day" is a promise about tomorrow morning that a paused route is
- * not going to keep.
+ * `stubNote` puts "Paused" ahead of the tracking note, deliberately.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 const stubNote = computed(() => {
   if (!props.route.active) {
@@ -108,12 +64,8 @@ function confirmRemove() {
 <template>
   <article class="pass">
     <!--
-      `aria-label` rather than the eight words of content this link contains:
-      the name would otherwise open with a flight number that is set dressing
-      (boardingPass.js — there is no flight) and continue into two IATA codes
-      read out a letter at a time. "Open AMS-LIS" is what the link does, phrased
-      like the "Stop watching AMS-LIS" button in the stub below it, and the row
-      it labels is still read normally.
+      aria-label overrides this link's own text (the flight number is set dressing).
+      Why: docs/BUSINESS-LOGIC.md §36.
     -->
     <RouterLink
       class="pass__open"
@@ -155,11 +107,10 @@ function confirmRemove() {
           </p>
         </div>
 
-        <!-- The affordance. Same glyph, same weight and same colour as the one
-             on the home screen's spotlight card, at the row's icon size — this
-             card and that one now do the same thing, and they should look like
-             it. Stroked from the style block so the colour is a token in both
-             themes rather than a var() in a presentation attribute. -->
+        <!--
+          Same chevron affordance as SpotlightCard.vue, sized to this row.
+          Why: docs/BUSINESS-LOGIC.md §36.
+        -->
         <svg class="chevron" width="15" height="15" viewBox="0 0 18 18" fill="none" aria-hidden="true">
           <path d="M6 4l5 5-5 5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
@@ -223,10 +174,8 @@ function confirmRemove() {
   box-shadow: var(--shadow);
 }
 
-/* The link over the itinerary half. It carries no look of its own — the card
-   already has one — so all it does here is refuse the two things a browser
-   gives an <a> for free and this one has no use for: the underline and the
-   link colour. The focus ring is the global one in app.css. */
+/* Resets only what a bare <a> adds (underline, colour) — the card supplies
+   the look; focus ring is global (app.css). */
 .pass__open {
   display: block;
   color: inherit;
@@ -255,8 +204,6 @@ function confirmRemove() {
   text-transform: uppercase;
   color: var(--muted);
 }
-
-/* --- Itinerary ----------------------------------------------------------- */
 
 .pass__itinerary {
   display: flex;
@@ -322,10 +269,8 @@ function confirmRemove() {
   border-top: 1.5px dashed var(--line);
 }
 
-/* Centred on the itinerary rather than sitting on its baseline: the row's flex
-   line is bottom-aligned so that the two city names line up under the two IATA
-   codes, and a chevron following that alignment would hang off the bottom of a
-   block it is pointing out of. */
+/* align-self: center, not the row's bottom alignment — a bottom-aligned
+   chevron would hang off the block it's pointing out of. */
 .chevron {
   align-self: center;
   flex-shrink: 0;
@@ -335,11 +280,8 @@ function confirmRemove() {
   stroke: var(--muted);
 }
 
-/* --- The tear line ------------------------------------------------------
-   Two half-circles bitten out of the card's edges, drawn in the PAGE colour
-   rather than in a transparent hole — the card sits on the app's gradient
-   wash, and a real hole would show the wash's own colour at that point rather
-   than the flat background the design draws. */
+/* Notches use var(--bg), not a transparent hole — the page has a gradient
+   wash that a real hole would reveal instead of a flat background. */
 
 .pass__tear {
   position: relative;
@@ -366,8 +308,6 @@ function confirmRemove() {
 .pass__notch--right {
   right: -9px;
 }
-
-/* --- The stub ------------------------------------------------------------ */
 
 .pass__stub {
   display: flex;
@@ -427,10 +367,8 @@ function confirmRemove() {
   color: var(--muted);
 }
 
-/* The one word that is a STATE rather than a progress note, so it is set like
-   one: the card's own ink and a little weight. It is not a warning — pausing is
-   something the owner chose — so it stays out of the tone colours, and the whole
-   row is already dimmed to 58% around it. */
+/* Ink colour, not a warning tone — pausing is something the owner chose, not
+   an alert, and the row is already dimmed 58% around it. */
 .stub__tracking--paused {
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -455,10 +393,8 @@ function confirmRemove() {
   color: var(--warn);
 }
 
-/* --- Inline confirmation -------------------------------------------------
-   In the stub's place, not in a browser confirm(): a native dialog is the one
-   piece of UI this app cannot theme, cannot animate and cannot show inside the
-   card the question is about. */
+/* Inline confirmation, not browser confirm() — a native dialog is the one
+   piece of UI this app can't theme or animate. */
 
 .confirm {
   display: flex;

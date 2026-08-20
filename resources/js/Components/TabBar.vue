@@ -1,45 +1,13 @@
 <script setup>
-/*
- * The five-item bottom bar, per design/README.md §Interactions: Orbit,
- * Calendar, a centre accent button, Watch, Alerts.
- *
- * =============================================================================
- * THE CENTRE BUTTON IS A MAGNIFYING GLASS, AND USED TO BE A + THAT WROTE A RULE
- * =============================================================================
- * Changed on 2026-08-16, on the evidence of the first day of real use: thirty-
- * two look-ups, zero rules. The most-used thing in the app was folded away
- * behind a small + in the watch screen's header and the least-used one had the
- * biggest button on the screen, which is the tab bar arguing with the person
- * using it.
- *
- * So the centre goes to /search (Views/Search.vue) and rule creation keeps its
- * screen but loses this seat: /create is reached from the "+ New rule" button
- * in the rules section of the watch screen, which is where the rules already
- * are. Nothing was deleted — a shortcut was given to the feature that earned it.
- *
- * THE LABEL SAYS "SEARCH", and the label itself is a fix from the day before:
- * this was the only unlabelled item in the app, and there were two accent
- * squares within forty pixels of each other doing entirely different writes.
- * That argument outlived the + it was about — a labelled icon is simply what
- * the other four are.
- *
- * WHY THE ICONS ARE WRITTEN OUT RATHER THAN LOOPED. Four of the five items are
- * the same shape and the fifth — the accent button — is not: it has a different
- * box, a shadow and a negative top margin. A v-for would need the odd one
- * special-cased anyway, and the price of the loop would be five 22 px icon paths
- * moved out of the file that draws them. They are drawn here, once.
- *
- * ACTIVE STATE IS CSS, NOT JAVASCRIPT. RouterLink puts
- * `router-link-exact-active` on the current item; every icon strokes with
- * `currentColor`, so the whole active/inactive treatment is one colour on one
- * rule. Exact rather than the loose `router-link-active` because '/' is a
- * prefix of every other path and would otherwise light Orbit up on all five
- * screens.
- */
 </script>
 
 <template>
   <nav class="tab-bar" aria-label="Primary">
+    <!--
+      Icons are written out, not v-for'd — only 4 of 5 share a shape, and the
+      loop would still special-case the accent button.
+      Why: docs/BUSINESS-LOGIC.md §36.
+    -->
     <RouterLink class="tab" :to="{ name: 'home' }">
       <svg class="tab__icon" width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
         <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1.6" />
@@ -58,13 +26,14 @@
     </RouterLink>
 
     <!--
-      NO `aria-label`, UNLIKE THE + THAT WAS HERE. That one carried "Create an
-      alert rule" because it had no visible text at all, and it kept the
-      attribute after it grew a label — which left the item's accessible name
-      disagreeing with the word printed under it, and made this the one tab that
-      `e2e/fixtures.js`'s `tab()` helper could not find by the name a person
-      reads. The visible label is the name now, exactly as it is for the four
-      either side.
+      Centre item goes to /search, not rule creation — changed 2026-08-16 on
+      real usage; creation moved to Watch's "+ New rule", nothing deleted.
+      Why: docs/BUSINESS-LOGIC.md §36.
+    -->
+    <!--
+      No `aria-label` — a stale one here disagreed with the visible word and
+      broke e2e/fixtures.js's tab() lookup by name.
+      Why: docs/BUSINESS-LOGIC.md §36.
     -->
     <RouterLink class="tab tab--search" :to="{ name: 'search' }">
       <span class="tab__button">
@@ -81,12 +50,9 @@
         </svg>
       </span>
       <!--
-        LABELLED, LIKE THE FOUR EITHER SIDE OF IT. This button was the only
-        unlabelled thing in the app; the four neighbours already prove a 10 px
-        word fits under an icon.
-
-        The word is "Search" and not "Find" or "Look up": it is the noun for the
-        screen, and the screen is a flight search.
+        Labelled, like the four either side of it — the only unlabelled item
+        the app had. Word is "Search", the noun for the screen.
+        Why: docs/BUSINESS-LOGIC.md §36.
       -->
       <span class="tab__label">Search</span>
     </RouterLink>
@@ -110,9 +76,9 @@
 
 <style scoped>
 .tab-bar {
-  /* Fixed rather than sticky: the bar belongs to the app, not to the scroller,
-     and every screen already reserves room for it (.app-shell--tabs). Centred
-     the same way the shell is, so it stays phone-width on a laptop. */
+  /* Fixed, not sticky: belongs to the app, not the scroller — every screen
+     already reserves room for it (.app-shell--tabs).
+     Why: docs/BUSINESS-LOGIC.md §36. */
   position: fixed;
   inset-inline: 0;
   bottom: 0;
@@ -144,6 +110,9 @@
   transition: color 0.18s ease;
 }
 
+/* Active state is CSS only: RouterLink sets `router-link-exact-active`, every
+   icon strokes with currentColor. Exact avoids '/' matching every route.
+   Why: docs/BUSINESS-LOGIC.md §36. */
 .tab.router-link-exact-active {
   color: var(--accent);
 }
@@ -154,14 +123,13 @@
   letter-spacing: 0.01em;
 }
 
-/* The centre button sits proud of the bar and is the only item that keeps its
-   accent fill whether or not it is the current screen — it reads as an action,
-   not as a destination.
+/* Centre button keeps its accent fill regardless of active state — it reads
+   as an action, not a destination.
+   Why: docs/BUSINESS-LOGIC.md §36.
 
-   THE -6px IS WHAT ITS LABEL FITS IN. The bar gives its content 67px (78px
-   less the 11px top padding); this item is 42px of button, a 4px gap and a
-   13px line of text, which is 59px starting 6px high — so the word clears the
-   bottom edge without the bar growing. */
+   DO NOT change -6px without recomputing: sized so the button + label (59px)
+   clears the bar's 67px content height without growing it.
+   Why: docs/BUSINESS-LOGIC.md §36. */
 .tab--search {
   margin-top: -6px;
 }

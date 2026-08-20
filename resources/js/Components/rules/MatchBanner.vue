@@ -1,32 +1,8 @@
 <script setup>
 /*
  * "ⓘ 6 trips match this right now — cheapest €34" (design/README.md §4).
- *
- * INFO TONE, NOT GOOD. It is a statement of fact about the rule rather than a
- * verdict on a fare — the tone pair in tokens.css says "here is something to
- * know", and painting it green would make every rule look like a good deal
- * before a single price had been judged.
- *
- * IT SHIMMERS RATHER THAN EMPTYING while a parse is in flight. The banner is
- * re-answered on every keystroke, and a number that blinked out and back would
- * be the most distracting thing on a screen whose whole job is to be read
- * while somebody types. The old figure stays put under the shimmer until the
- * new one replaces it.
- *
- * ZERO IS A SENTENCE, NOT A NUMBER. "0 trips match" reads as a broken feature;
- * a rule with no matches yet is usually a rule whose routes Orbit has not
- * priced (App\Jobs\SweepRuleFares), so it says so.
- *
- * AND NEITHER IS A COUNT THAT IS STILL GROWING. `matches.partial` means some of
- * the routes this rule is about have no fare yet (docs/API.md), so `count` is a
- * floor and not a total — the sentence measured on the real app was "2 trips
- * match this right now" before saving and "32 already match" a minute after,
- * which reads as the app having been wrong rather than as it having been busy.
- * The number is the same number; what changes is that it is now phrased as the
- * floor it always was. The CHEAPEST is dropped from that phrasing on purpose:
- * "cheapest €34" is a superlative over a set that is still being assembled, and
- * a fare that turns out not to be the cheapest is a worse thing to have said
- * than nothing.
+ * Info tone, shimmers instead of emptying, phrases a partial count as a floor.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 defineProps({
   /** A parse's `matches`: { count, partial, cheapest, sample }. */

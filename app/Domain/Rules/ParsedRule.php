@@ -8,17 +8,11 @@ namespace App\Domain\Rules;
  * A sentence, read: the chips design/README.md §4 draws, and the criteria they
  * add up to.
  *
- * ONE DIRECTION ONLY — criteria in, chips out, criteria back. Both adapters
- * (the model and the regexes) answer with a RuleCriteria and hand it to
- * `of()`; nothing builds chips by hand. That is what guarantees the chips on
- * screen and the rule that gets saved can never describe different trips,
- * which is the failure this screen is most able to hide: a chip nobody notices
- * is missing is a rule that quietly does not do what it says.
+ * One direction only: criteria in, chips out, criteria back — nothing builds chips by hand.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * `without()` IS THE WHOLE POINT OF THE CLASS. Removing a chip re-derives the
- * criteria from what is left rather than re-reading edited text, so taking
- * "From EIN" off leaves every other chip exactly where it was, and putting it
- * back (Reset) is the same parse again.
+ * `without()` re-derives criteria from the remaining chips rather than re-parsing text.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final readonly class ParsedRule
 {
@@ -89,10 +83,8 @@ final readonly class ParsedRule
     /**
      * The same parse with some chips taken off.
      *
-     * UNKNOWN IDS ARE IGNORED rather than rejected. The client holds its
-     * removed-ids list across re-parses of a sentence somebody is still
-     * typing, so an id for a chip the current text no longer produces is the
-     * normal case and not a bad request.
+     * Unknown ids are ignored, not rejected — normal while the client re-parses text as somebody types.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @param  list<string>  $removedIds
      */
@@ -111,9 +103,7 @@ final readonly class ParsedRule
     /**
      * What the surviving chips add up to.
      *
-     * The type guards are not decoration: `$chip->value` is `mixed` because
-     * one list holds six shapes, and this is the one place that has to know
-     * which is which.
+     * The type guards aren't decoration: `$chip->value` is `mixed`, and this is the one place that must know which of six shapes it is.
      */
     public function criteria(): RuleCriteria
     {
@@ -143,10 +133,7 @@ final readonly class ParsedRule
         }
 
         /*
-         * Back through RuleCriteria::from() rather than into the constructor,
-         * so the shapes a chip carries are validated by the same code that
-         * validates the shapes the database carries. One definition of what a
-         * criteria field may hold.
+         * Through RuleCriteria::from(), not the constructor, so chip shapes are validated the same way database shapes are.
          */
         return RuleCriteria::from([
             'origins'          => $origins,

@@ -9,14 +9,9 @@ use App\Services\Pwa\BuildAssets;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
- * The precache list, read against a real Vite manifest.
- *
- * tests/Fixtures/vite-manifest.json is a trimmed copy of the one `npm run
- * build` actually produced — same keys, same shapes, same relationships — so
- * these assertions are about Vite's format rather than about a format invented
- * to make them pass. What matters most is what is NOT in the list: this is the
- * only place that decides whether a phone downloads 1.9 MB of globe on the
- * first launch after a deploy.
+ * Precache list tested against a real (trimmed) Vite manifest fixture, since
+ * this decides how much a phone downloads on first launch after a deploy.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class BuildAssetsTest extends TestCase
 {
@@ -36,9 +31,9 @@ final class BuildAssetsTest extends TestCase
     }
 
     /**
-     * The entry chunk is useless without them — they are its `import`
-     * statements — so caching one and not the others would buy a hit on the
-     * cheapest file and a network round trip on the expensive one.
+     * Entry chunk's statically-imported chunks must precache too, or caching
+     * the entry alone still costs a network round trip for the rest.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function chunks_the_entry_imports_statically_are_precached_too(): void
@@ -50,13 +45,9 @@ final class BuildAssetsTest extends TestCase
     }
 
     /**
-     * THE ONE THAT MATTERS. globe.gl is 1.88 MB and reached through a dynamic
-     * import from the home screen; precaching it would spend that on install,
-     * on mobile data, for a chunk the runtime cache picks up the moment the
-     * globe first draws.
-     *
-     * Nothing names it — the exclusion falls out of walking `imports` and never
-     * `dynamicImports`, which is also what keeps every lazy view out.
+     * DO NOT precache dynamic imports (globe.gl, lazy views): walk `imports`
+     * only, never `dynamicImports`, or installs balloon by ~1.9 MB on mobile.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function the_globe_and_the_lazy_views_are_not_precached(): void
@@ -69,9 +60,9 @@ final class BuildAssetsTest extends TestCase
     }
 
     /**
-     * woff2 only. Every browser that can run a service worker has read woff2
-     * for a decade, so caching the fallback doubles the font cost of an install
-     * for a file nothing will request.
+     * woff2 only: every browser that can run a service worker reads woff2,
+     * so caching the .woff fallback doubles font install cost for nothing.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function fonts_are_precached_in_one_format(): void
@@ -83,9 +74,9 @@ final class BuildAssetsTest extends TestCase
     }
 
     /**
-     * The stylesheet is both an entry in its own right and a `css` entry on the
-     * script, and the fonts hang off both. A duplicate would make the worker
-     * fetch the same file twice on install.
+     * Stylesheet is both its own entry and a `css` entry on the script (fonts
+     * hang off both); must dedupe or the worker double-fetches on install.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function nothing_is_listed_twice(): void
@@ -124,9 +115,9 @@ final class BuildAssetsTest extends TestCase
     }
 
     /**
-     * A fresh checkout that has never run `npm run build` still has to serve a
-     * coherent worker: the precache list is then the static shell alone, and
-     * the version says what happened rather than throwing.
+     * No build yet (fresh checkout) must still serve a coherent worker: the
+     * precache list falls back to the static shell instead of throwing.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function a_checkout_with_no_build_is_not_an_error(): void
@@ -139,9 +130,9 @@ final class BuildAssetsTest extends TestCase
     }
 
     /**
-     * Anything that is not a build artefact is dropped rather than trusted:
-     * this file is read at request time, and a manifest truncated by a build
-     * that was killed halfway must not become a 500 on /sw.js.
+     * Untrusted manifest content must never 500 /sw.js: a build killed
+     * halfway can leave a truncated file, read live at request time.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function a_manifest_that_is_not_a_manifest_yields_the_static_shell(): void

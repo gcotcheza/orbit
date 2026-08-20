@@ -14,23 +14,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * One route Orbit went and found on its own.
  *
- * THE ROW BEHIND App\Domain\Discovery\DealCandidate ONCE IT HAS SURVIVED
- * VERIFICATION. Everything a candidate carried that was a working number — the
- * raw sweep entry, the shortlist position — is gone; what is stored is what the
- * card says and the evidence for it.
+ * The row behind App\Domain\Discovery\DealCandidate once verified; only
+ * the card's claim and its evidence survive, not the raw sweep entry.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * IT HAS NO `route_id` AND THAT IS DELIBERATE — see the migration. A discovery
- * is by definition a pair nobody watches and Orbit has usually never priced, so
- * it names its airports by key and its ROUTE by the `code` string the rest of
- * the app navigates on. Tapping one opens the ordinary lookup flow, which is
- * what creates the `routes` row, at the moment somebody actually shows interest.
+ * Deliberately has no `route_id` — a discovery is an unwatched, often
+ * unpriced pair, named by airport key and `code` until someone taps it.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * NO USER EITHER, unlike `alerts` and `watchlist_items`. A discovery is a fact
- * about the world and about the three home airports in config/orbit.php — not
- * about an account's relationship to one (docs/BUSINESS-LOGIC.md §1). There is
- * one account today and this table would not gain a column if there were two:
- * the sweep is the same sweep. What is per-user is whether you have WATCHED the
- * thing you were shown, and that already lives on `watchlist_items`.
+ * Deliberately has no user_id, unlike `alerts`/`watchlist_items` — a
+ * discovery is a fact about the world, not an account's relationship to it.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
  * @property int $id
  * @property int $origin_airport_id
@@ -57,11 +51,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 final class Discovery extends Model
 {
     /**
-     * Laravel would pluralise this to `discoverys`.
-     *
-     * A one-word override that is worth its line: the table is named in the
-     * migration, in the prune and in three tests, and an inflector disagreeing
-     * with all of them is a "relation does not exist" on the first deploy.
+     * Laravel would pluralise this to `discoverys` — overridden because the
+     * table name must agree with the migration, the prune, and three tests.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     protected $table = 'discoveries';
 
@@ -84,15 +76,13 @@ final class Discovery extends Model
     /**
      * The current set: still live, cheapest per kilometre first.
      *
-     * A SCOPE RATHER THAN A CONTROLLER QUERY, because the same two clauses are
-     * the API's read AND the definition of "current" that the prune is written
-     * against. Two spellings of "live" is how a row disappears from the screen
-     * while the job still thinks it is showing.
+     * A scope, not a controller query — these clauses are both the API's read
+     * and the prune's definition of "current"; diverging spellings desync them.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
-     * THE ORDER IS €/km AND NOT PRICE, which is the same decision the ranking
-     * made: sorted by price this list is the nearest airports every day. The
-     * card shows the price big and the reader sorts on their own instincts
-     * from there.
+     * Ordered by €/km, not price — sorted by price this list is just the
+     * nearest airports; the reader sorts on instinct from the price shown.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @param  Builder<Discovery>  $query
      * @return Builder<Discovery>
@@ -101,14 +91,9 @@ final class Discovery extends Model
     {
         return $query
             ->where('expires_at', '>', $now)
-            /*
-             * AND NOT A DEPARTURE THAT HAS GONE BY. `expires_at` bounds how long
-             * a FIND is believable; this bounds whether the flight is still
-             * takeable. A discovery made on Sunday for a Tuesday departure is
-             * live and correct on Monday and is neither on Wednesday — and the
-             * prune is daily, so without this clause the screen would offer it
-             * for the rest of that day.
-             */
+            // AND NOT a departure that has gone by: `expires_at` bounds find
+            // believability, this bounds flight takeability — different things.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             ->whereDate('departure_date', '>=', $now->toDateString())
             ->orderBy('cents_per_km')
             ->orderBy('code');
@@ -117,11 +102,9 @@ final class Discovery extends Model
     /**
      * Whether Google was asked and said yes.
      *
-     * READ OFF THE STORED VERDICT AND NOT RECOMPUTED. `confirmed` is what this
-     * row CLAIMED when it was written, which is what the badge on the card
-     * means; re-deriving it from the other three fields would let a retuned
-     * rule silently rewrite yesterday's claims. Absent verdict, absent claim —
-     * there is no path here that answers true without a stored `confirmed`.
+     * Read off the stored verdict, never recomputed — re-deriving from the
+     * other fields would let a retuned rule silently rewrite past claims.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     public function isVerified(): bool
     {
@@ -134,13 +117,9 @@ final class Discovery extends Model
     protected function casts(): array
     {
         return [
-            /*
-             * THE ENUM IS THE CAST, so nothing downstream compares a lane to a
-             * string literal. `App\Domain\Discovery\Lane` is where the two cases
-             * are defined and where the argument for there being two is written
-             * down; a `=== 'relative'` in a resource would be a third place that
-             * has to agree about the spelling.
-             */
+            // THE ENUM IS THE CAST: nothing downstream compares a lane to a string
+            // literal. See App\Domain\Discovery\Lane for the two cases.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             'lane'           => Lane::class,
             'departure_date' => 'immutable_date',
             'found_at'       => 'immutable_datetime',

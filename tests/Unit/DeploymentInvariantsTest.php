@@ -9,21 +9,10 @@ use Symfony\Component\Yaml\Yaml;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
- * The deployment invariants, asserted rather than remembered.
- *
- * Everything checked here is a property of docker-compose.yml that is invisible
- * at runtime when it is WRONG. A container that quietly gained a capability, a
- * port that quietly moved from 127.0.0.1 to 0.0.0.0, a uid that stopped
- * matching the host `orbit` user — none of those break a page, fail a request
- * or write a log line. They are found by someone reading the file, on the day
- * they think to read it.
- *
- * So they are tested. Not because the file is likely to be edited carelessly,
- * but because the cost of the test is thirty lines and the cost of the miss is
- * an app on the public internet that nobody knows is on the public internet.
- *
- * This is a unit test in the strict sense: it parses two files and asserts on
- * the result. No database, no container, no network.
+ * The deployment invariants, asserted rather than remembered: silent
+ * docker-compose.yml misconfigurations (capabilities, exposed ports, uid
+ * drift) are invisible at runtime until the day someone reads the file.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class DeploymentInvariantsTest extends TestCase
 {
@@ -75,12 +64,8 @@ final class DeploymentInvariantsTest extends TestCase
     }
 
     /**
-     * The deliberate exception, asserted so that "postgres has no cap_drop" is
-     * read as a decision rather than as an oversight to be tidied up.
-     *
-     * Both entrypoints start as root and drop to their own user, which needs
-     * CHOWN, SETUID, SETGID, DAC_OVERRIDE and FOWNER. `cap_drop: ALL` there is
-     * a container that does not boot.
+     * Deliberate exception: both entrypoints start as root and need CHOWN,
+     * SETUID, SETGID, DAC_OVERRIDE, FOWNER — `cap_drop: ALL` would not boot.
      */
     #[Test]
     public function the_datastores_keep_the_capabilities_their_entrypoints_need(): void
@@ -130,9 +115,8 @@ final class DeploymentInvariantsTest extends TestCase
     }
 
     /**
-     * postgres:18 moved PGDATA to /var/lib/postgresql/18/docker and declares the
-     * VOLUME one level up. Mounting the deeper path is not an error and not a
-     * warning — it is a database that loses everything on the next recreate.
+     * postgres:18 moved PGDATA under /var/lib/postgresql/18/docker; mounting
+     * the deeper path silently loses all data on the next recreate.
      */
     #[Test]
     public function the_postgres_volume_mounts_the_parent_of_pgdata(): void
@@ -147,9 +131,8 @@ final class DeploymentInvariantsTest extends TestCase
     }
 
     /**
-     * The image builds a user with these ids; compose then runs the container as
-     * them. If the two drift, the container runs as a uid that owns nothing
-     * inside its own image and has no home for composer's cache.
+     * The image builds a user with these ids; compose runs the container as
+     * them. Drift = a uid that owns nothing in its own image.
      */
     #[Test]
     public function the_image_builds_the_uid_that_compose_runs_as(): void

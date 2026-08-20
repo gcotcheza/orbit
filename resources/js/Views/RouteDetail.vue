@@ -4,38 +4,14 @@
  * (design/README.md §2). No tab bar — see this route's meta in
  * resources/js/router/index.js.
  *
- * NULL IS NOT ZERO, AND THIS IS THE SCREEN THAT PROVES IT. A route added this
- * morning comes back with `price.current: null`, `stats: null`, `score: 0` and
- * `confident: false` (docs/API.md). Rendering that as a €0 fare against a €0
- * usual, with a damning red gauge, would be the app inventing a deal — so
- * every block below asks whether its own field exists and says "not yet" rather
- * than drawing a confident nothing.
+ * Null fields render as "not yet", never a false €0.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * THE DATES HERE ARE OBSERVATION DATES. `history[].date` is the day we LOOKED.
- * The days you FLY live on the calendar screen. Nothing on this screen may be
- * derived from one and labelled as the other.
+ * `history[].date` is when we LOOKED, never the day you FLY.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * =============================================================================
- * AND SINCE "LOOK BEFORE YOU WATCH", THIS SCREEN CAN BE ABOUT A ROUTE ORBIT HAS
- * NEVER PRICED
- * =============================================================================
- * The watch form's "Look up" navigates straight here with a pair that may have
- * no route row at all, so this screen owns the fetch: when the read comes back
- * 404, or comes back with fares older than the server's freshness window, it
- * asks `POST /api/routes/lookup` to price the pair NOW and adopts the answer,
- * which arrives in exactly the shape the read does (docs/API.md).
- *
- * THREE RULES IT FOLLOWS, and each of them is a way this could lie:
- *
- *   - A WATCHED ROUTE IS NEVER REFRESHED FROM HERE. It is polled every morning;
- *     stale fares on one are a poll to fix, not a provider call to make from
- *     somebody's phone. `meta.watched` is what that reads.
- *   - THE WAIT IS SHOWN, AND IT IS BOUNDED. "Checking current fares…" while it
- *     runs, an honest failure when it does not — never a spinner that outlives
- *     the request, which is why the POST carries its own timeout.
- *   - WHAT IS ALREADY ON SCREEN SURVIVES A FAILED REFRESH. A month-old price
- *     with a line saying when it was fetched is worth more than an error page
- *     that replaces it.
+ * A route Orbit has never priced is fetched on demand from here.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -47,50 +23,19 @@ import DealScoreGauge from '@/Components/route/DealScoreGauge.vue'
 import PriceHistoryChart from '@/Components/route/PriceHistoryChart.vue'
 import { departureLabel, euro, hoursSince, seenLabel } from '@/lib/format'
 
-/*
- * The API constrains `{code}` to `[A-Z]{3}-[A-Z]{3}` at the router and answers
- * anything else with a 404 rather than a redirect (docs/API.md). A pasted link
- * in the wrong case is a normal thing for a human to produce, though, so the
- * case is normalised HERE — where it is a display concern — and a shape that
- * still does not match is answered locally instead of by a round trip that can
- * only come back 404.
- */
+// Case-normalised here (a display concern) so a bad shape is rejected
+// locally instead of by a round trip that can only come back 404.
+// Why: docs/BUSINESS-LOGIC.md §36.
 const CODE_PATTERN = /^[A-Z]{3}-[A-Z]{3}$/
 
-/*
- * HOW LONG THE FETCH IS GIVEN BEFORE THIS SCREEN STOPS WAITING FOR IT.
- *
- * The server's own bound is the fare provider's timeouts — five seconds to
- * connect and fifteen to read, per calendar month of the six-month window,
- * which is minutes if Travelpayouts is hanging rather than answering. Nobody
- * watches a phone for minutes. Twenty-five seconds is several times the two or
- * three a healthy fetch takes and still inside anybody's patience.
- *
- * NOTHING IS LOST BY GIVING UP. The writes behind it are upserts, so a fetch
- * this screen has stopped waiting for still leaves its fares in the database
- * for the next visit — the timeout ends the WAIT, not the work.
- */
+// 25s: several times a healthy fetch's own 2-3s, still short of anyone's
+// patience. Giving up loses nothing — the writes behind it are upserts.
+// Why: docs/BUSINESS-LOGIC.md §36.
 const LOOKUP_TIMEOUT_MS = 25_000
 
-/*
- * HOW OLD THE CHEAPEST FARE HAS TO BE BEFORE THIS SCREEN MENTIONS ITS AGE.
- *
- * The day sheet prints "Seen …" under EVERY price, because that sheet is one
- * day and one number and the line is the second thing on it. This screen is a
- * headline fare, a gauge, a chart, a callout and a button, and a "Seen 2 hours
- * ago" on a route polled this morning would be one more grey line on a page
- * that already has several — noise that teaches the reader to skip the place
- * the important version of this message will appear.
- *
- * A DAY, BECAUSE THAT IS THE POLL'S OWN PERIOD (`orbit.poll.window_days` is the
- * window; the schedule is daily, docs/BUSINESS-LOGIC.md §13). Anything under it
- * is the ordinary state of a watched route and says nothing; past it, the fare
- * has survived a morning it should have been repriced in, and that IS worth a
- * line. It is the same 24 hours the server calls a route's fares fresh for
- * (`orbit.lookup.fresh_for_hours`) — deliberately the same number, arrived at
- * from the same fact, though this one is a display threshold and that one
- * decides whether to spend a provider call.
- */
+// 24h, matching the poll's own daily period — under it is an ordinary
+// watched route; past it, a fare that survived a morning it should not have.
+// Why: docs/BUSINESS-LOGIC.md §36.
 const SEEN_AFTER_HOURS = 24
 
 /* Ends the WAIT, not the work: the server stores what it paid for either way. */
@@ -105,9 +50,8 @@ const watchlist = useWatchlistStore()
 
 const detail = ref(null)
 
-/** The route's `meta` — `watched` and how old the fares are. Null before the
- *  first answer, and null on any answer that carries none: the two things it
- *  drives both fail closed. */
+/** `meta`: `watched` + fare age. Null before the first answer and on any
+ *  answer without one — both dependents fail closed. */
 const meta = ref(null)
 
 const loading = ref(true)
@@ -133,38 +77,20 @@ const checkingLive = ref(false)
 /** Why no live answer arrived, in the reader's words rather than a status code. */
 const liveError = ref('')
 
-/**
- * This screen is what put the route on the list, just now.
- *
- * A SEPARATE FLAG FROM `meta.watched`, and the difference is the point: a route
- * that was ALREADY watched when this screen opened says nothing at all about it
- * — that screen is exactly the screen it has always been, with no strip and
- * nothing moved. This one is the answer to a button somebody pressed a second
- * ago, and a button that vanishes without a word is a button people press twice.
- */
+/** Separate from `meta.watched`: this is the answer to a button just
+ *  pressed, not whether the route was already watched on open.
+ *  Why: docs/BUSINESS-LOGIC.md §36. */
 const justWatched = ref(false)
 
 const code = computed(() => props.id.toUpperCase())
 
-/**
- * Whether to offer the watchlist, and it is `=== false` rather than falsy on
- * purpose: `meta` is null on an answer that carries none, and a screen that
- * cannot tell whether a route is watched must not offer to add it twice.
- */
+/** `=== false`, not falsy on purpose: `meta` is null when it carries none,
+ *  and a screen that can't tell must not offer to add a route twice. */
 const unwatched = computed(() => meta.value?.watched === false)
 
-/**
- * The day Orbit last got fares for this route, for the line that admits a
- * refresh did not happen.
- *
- * NOT `departureLabel`, though it would print the same three words. That
- * function names a DAY YOU FLY and this is a day WE LOOKED — the two axes this
- * screen is most careful about (docs/API.md) — and a shared formatter would be
- * the one place the distinction stopped being visible. `fetchedAt` is the one
- * timestamp in the API and it arrives in the owner's own timezone, so the
- * calendar day is its first ten characters: no parsing, and no chance of
- * printing yesterday.
- */
+/** The day Orbit last got fares, for the "refresh did not happen" line.
+ *  NOT `departureLabel` — this is a day WE LOOKED, not a day you FLY.
+ *  Why: docs/BUSINESS-LOGIC.md §36. */
 const lastChecked = computed(() => {
   const at = meta.value?.fares?.fetchedAt
 
@@ -186,34 +112,14 @@ const lastChecked = computed(() => {
 // reference line rather than one at zero.
 const median = computed(() => detail.value?.stats?.median ?? null)
 
-/**
- * THE DAY THE BIG NUMBER IS FOR.
- *
- * The headline fare had no date on it, and a fare without one is not something
- * anybody can act on: €75 could be this Friday or eleven weeks out, and the two
- * are different answers to "should I book". `cheapest` is a DEPARTURE date
- * (docs/API.md) — the day you fly — which is why it is labelled as one here and
- * why nothing on this screen derives it from `history[].date`, the day we
- * looked. Null before the first poll, and then no line is printed at all.
- */
+/** `cheapest.date` is a DEPARTURE date (day you fly), never derived from
+ *  `history[].date` (day we looked). Null before the first poll.
+ *  Why: docs/BUSINESS-LOGIC.md §36. */
 const departure = computed(() => departureLabel(detail.value?.cheapest?.date ?? null))
 
-/**
- * "Seen 4 days ago" — but only once that is worth saying.
- *
- * A THIRD DATE, AND THIS SCREEN IS ALREADY THE CAREFUL ONE ABOUT THE OTHER TWO.
- * `history[].date` is when we LOOKED and `cheapest.date` is when you FLY;
- * `cheapest.foundAt` is when the PRICE WAS FOUND, which is neither. Orbit's
- * fares come from a cache of other people's searches, so the big number at the
- * top of this screen can be days old — €36 shown against a live €56 is what
- * started this — and the one place that matters most is directly above a button
- * that leaves for a booking site.
- *
- * NULL WHEN THERE IS NOTHING HONEST TO SAY, and that covers three separate
- * cases which all deserve the same silence: no fare yet, no `foundAt` on the
- * one there is (an old row, or a provider that will not say), and a fare young
- * enough that its age is not news. None of them may render as a reassurance.
- */
+/** `cheapest.foundAt` is a THIRD date (when the price was found) — distinct
+ *  from looked-at and fly-at. Null unless there's an honest age to show.
+ *  Why: docs/BUSINESS-LOGIC.md §36. */
 const seen = computed(() => {
   const foundAt = detail.value?.cheapest?.foundAt ?? null
   const age = hoursSince(foundAt)
@@ -221,10 +127,8 @@ const seen = computed(() => {
   return age === null || age < SEEN_AFTER_HOURS ? null : seenLabel(foundAt)
 })
 
-/**
- * ⚠ The SERVER's judgement that this fare has probably gone, never recomputed
- * here — `=== true` because an older build's answer carries no such field.
- */
+/** ⚠ The SERVER's judgement, never recomputed here — `=== true` because
+ *  an older build's answer carries no such field. */
 const mayBeGone = computed(() => detail.value?.cheapest?.mayBeGone === true)
 
 /** Google's answer, when Orbit has one inside its cooldown (docs/API.md). */
@@ -239,12 +143,8 @@ const liveWhen = computed(() => (live.value === null ? null : seenLabel(live.val
 /** The headline is Orbit's own, and it is one of the ones worth doubting. */
 const demoted = computed(() => mayBeGone.value && livePrice.value === null)
 
-/**
- * ⚠ The fare the demotion and the live check are about: `cheapest`, the one
- * carrying `foundAt` and the one the server judged. docs/API.md has it as
- * `price.current` by another name — where they differ, the pill, the callout
- * and the number under them must still be about one fare.
- */
+/** ⚠ `cheapest` — the fare demotion/live-check reference (docs/API.md's
+ *  `price.current`). Pill, callout and number must stay about ONE fare. */
 const judgedFare = computed(() => detail.value?.cheapest?.price ?? null)
 
 /** Google's live figure when there is one; Orbit's own fare otherwise. */
@@ -278,15 +178,9 @@ const liveTypical = computed(() => {
   return low === null || high === null ? null : `Google’s typical ${low}–${high}`
 })
 
-/**
- * The line under the price.
- *
- * `pctBelow` IS SIGNED: −14 means fourteen percent ABOVE the usual price
- * (docs/API.md), so the sentence flips rather than printing "−14% below".
- *
- * Silent under a live headline: it is Orbit's opinion of Orbit's own fare, and
- * under Google's number it would read as an opinion about that one.
- */
+/** `pctBelow` IS SIGNED (docs/API.md): negative means ABOVE usual. Silent
+ *  under a live headline — it would misread as an opinion of Google's.
+ *  Why: docs/BUSINESS-LOGIC.md §36. */
 const caption = computed(() => {
   const price = detail.value?.price
 
@@ -302,20 +196,9 @@ const caption = computed(() => {
     return 'No usual price for this route yet.'
   }
 
-  /*
-   * NOT CONFIDENT, SO NO PERCENTAGE — and this is the same honesty rule the
-   * gauge already follows one element to the right.
-   *
-   * `confident: false` means Orbit is not expressing an opinion (docs/API.md):
-   * either it has no statistics, or it has under a week of this route's own
-   * prices, in which case the statistics are computed from a handful of fares
-   * it collected itself and the current price IS the median. "36% below its
-   * usual €99" stated in bold under a dash-filled gauge is that placeholder
-   * arithmetic read out as a finding — the screen drawing a confident number
-   * while the ring beside it says it has nothing to say. The usual price is
-   * still shown, because it is a fact; what is dropped is the comparison drawn
-   * from it.
-   */
+  /* NOT CONFIDENT, SO NO PERCENTAGE — `confident: false` means Orbit has no
+     opinion yet; the usual price still shows, the comparison doesn't.
+     Why: docs/BUSINESS-LOGIC.md §36. */
   if (detail.value?.confident === false) {
     return `Usual ${euro(price.usual)} · still learning`
   }
@@ -368,12 +251,9 @@ async function load() {
     adopt(data)
     loading.value = false
 
-    /*
-     * STALE, AND NOBODY IS POLLING IT. A route on the watchlist is priced every
-     * morning, so old fares there are a broken poll rather than something a
-     * screen should spend provider calls fixing; a route somebody looked up in
-     * March and came back to today has nothing else that will ever refresh it.
-     */
+    // Refresh only when STALE AND UNWATCHED: a watched route's poll will fix
+    // stale fares; an unwatched one has nothing else that ever will.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     if (!meta.value?.fares?.fresh && unwatched.value) {
       await lookUp(mine)
     }
@@ -382,14 +262,9 @@ async function load() {
       return
     }
 
-    /*
-     * A 404 IS NOT A DEAD END ANY MORE. Orbit has no route row for this pair —
-     * which is the ordinary state of a pair somebody has just typed into the
-     * watch screen's box — so the next question is whether it can price it,
-     * and that is what the lookup asks. An invalid pair (an origin Orbit does
-     * not fly from, an airport it has never heard of) is refused there, with a
-     * sentence.
-     */
+    // 404 means no route row yet, not a dead end: try pricing it via lookup.
+    // An invalid pair is refused there instead, with its own message.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     if (error.response?.status === 404) {
       loading.value = false
 
@@ -407,11 +282,7 @@ async function load() {
   }
 }
 
-/**
- * Ask Orbit to price this pair now.
- *
- * @param {number} mine the request token this belongs to — see `load`
- */
+/** @param {number} mine the request token this belongs to — see `load` */
 async function lookUp(mine) {
   const [origin, destination] = code.value.split('-')
 
@@ -442,15 +313,9 @@ async function lookUp(mine) {
   }
 }
 
-/**
- * What went wrong, in the place the person is looking.
- *
- * THE ORDER OF THESE BRANCHES IS THE JUDGEMENT. A 422 means the pair itself is
- * not a route Orbit can price, which is the "no such route" answer however it
- * arrived. Anything else, when there is already a price on screen, leaves that
- * price alone and says the refresh failed — replacing readable fares from last
- * week with an error page is a screen punishing somebody for revisiting it.
- */
+/** THE ORDER OF THESE BRANCHES IS THE JUDGEMENT — 422 means unpriceable,
+ *  a price already on screen says "refresh failed" without replacing it.
+ *  Why: docs/BUSINESS-LOGIC.md §36. */
 function describeLookupFailure(error) {
   const status = error.response?.status
 
@@ -522,11 +387,8 @@ async function checkLivePrice() {
   }
 }
 
-/**
- * Why there is no live answer. The server's own sentence is preferred: a 503 is
- * either a budget held in reserve or a Google that could not be reached, and
- * only the server knows which. Nothing here touches the price on screen.
- */
+/** Prefers the server's own sentence: a 503 could be budget-reserved or an
+ *  unreachable Google, and only the server knows which. */
 function describeLiveFailure(error) {
   const status = error.response?.status
   const said = error.response?.data?.message
@@ -554,14 +416,9 @@ function adopt(payload) {
   meta.value = payload.meta ?? null
 }
 
-/**
- * Start watching the route being shown.
- *
- * THE SAME WRITE THE ADD FORM MAKES, through the same store, which is what
- * keeps the globe's tour and the watch list in step with a route added from
- * here — Home is kept alive between navigations and would otherwise not learn
- * about it until a reload.
- */
+/** Uses the same store write the add form makes, so Home's globe/tour stays
+ *  in step — Home stays mounted between navigations, not reloaded.
+ *  Why: docs/BUSINESS-LOGIC.md §36. */
 async function watchRoute() {
   if (watching.value || detail.value === null) {
     return
@@ -590,15 +447,9 @@ async function watchRoute() {
 
 watch(code, load, { immediate: true })
 
-/**
- * Back to wherever this was opened from — the globe home, the watchlist, the
- * spotlight card.
- *
- * `history.state.back` is vue-router's own record of whether there IS a
- * previous entry in THIS app. Calling `router.back()` without checking would,
- * for someone who opened a shared link straight into a route, walk them out of
- * the app and back to whatever they were reading before it.
- */
+/** Checks `history.state.back` first — else a shared-link visitor with no
+ *  prior entry gets walked out of the app by router.back().
+ *  Why: docs/BUSINESS-LOGIC.md §36. */
 function goBack() {
   if (window.history.state?.back) {
     router.back()
@@ -628,16 +479,9 @@ function goBack() {
       <div class="skeleton__block skeleton__block--chart"></div>
     </div>
 
-    <!--
-      A ROUTE ORBIT IS PRICING RIGHT NOW, with nothing yet to draw underneath.
-      Not the skeleton above it: a skeleton says "this is arriving", and what is
-      actually happening is a fare provider being asked six or seven questions
-      about six months of departures. That takes a second or three and is worth
-      saying out loud, because the alternative — a pulsing grey page — is
-      indistinguishable from a broken screen.
-
-      `role="status"`: it is progress, not an alarm.
-    -->
+    <!-- Distinct from the skeleton above: this is an active provider call (a few
+         seconds), not a generic loading state — worth saying out loud.
+         Why: docs/BUSINESS-LOGIC.md §36. -->
     <div v-else-if="checking && detail === null" class="checking" role="status">
       <span class="checking__spinner" aria-hidden="true"></span>
       <p class="checking__title">Checking current fares…</p>
@@ -652,9 +496,8 @@ function goBack() {
         Orbit could not look up <span class="empty__code">{{ code }}</span>. Check the code, or pick a route from the
         watchlist.
       </p>
-      <!-- The server's own sentence when there is one — "Orbit does not know an
-           airport with that code", "Orbit only tracks departures from AMS, EIN
-           or DUS" — which says which HALF of the pair is the problem. -->
+      <!-- The server's own sentence, when there is one — says which HALF of the
+           pair (origin vs destination) is the problem. -->
       <p v-if="failedBody" class="empty__why">{{ failedBody }}</p>
       <button class="empty__action" @click="goBack">Go back</button>
     </div>
@@ -671,21 +514,9 @@ function goBack() {
         <p class="detail__where">{{ detail.destination.city }}, {{ detail.destination.country }}</p>
       </div>
 
-      <!--
-        =====================================================================
-        THE WATCHLIST STRIP — only ever on a route that is NOT watched
-        =====================================================================
-        A watched route's detail screen is exactly the screen it always was:
-        no strip, nothing moved, nothing to explain. This is what a route
-        somebody has just LOOKED UP gets instead — the one thing there is to
-        decide about it, in the place they are deciding it, rather than a
-        trip back to the watch screen to type the pair in a second time.
-
-        UNDER THE HEADER AND ABOVE THE PRICE, deliberately. It is a fact about
-        the ROUTE ("Orbit is not tracking this"), not about the deal, and it
-        must not compete with the Book button at the bottom of the page — the
-        one conclusion this screen is allowed to have.
-      -->
+      <!-- Watchlist strip: only when NOT watched, placed between header and
+           price so it never competes with the Book button below.
+           Why: docs/BUSINESS-LOGIC.md §36. -->
       <div v-if="unwatched" class="watch">
         <p class="watch__text">Not on your watch list — Orbit is not pricing this every morning.</p>
         <button class="watch__action" type="button" :disabled="watching" @click="watchRoute">
@@ -693,27 +524,20 @@ function goBack() {
         </button>
       </div>
 
-      <!-- The other half of the same strip: the answer to the button that was
-           just here, and ONLY that. A route that was already watched when this
-           screen opened gets no strip at all. -->
+      <!-- The other half of the strip: answers the button just pressed. A route
+           already watched on open gets no strip at all. -->
       <p v-else-if="justWatched" class="watch watch--on">
         On your watch list — Orbit prices it every morning from now on.
       </p>
 
       <p v-if="watchError" class="detail__notice" role="alert">{{ watchError }}</p>
 
-      <!--
-        A REFRESH THAT DID NOT HAPPEN, over prices that did. The fares below
-        are real and were real when they were fetched; what this says is that
-        they are not today's and that Orbit knows it. `role="status"` — the
-        screen still works, so this is not an alert.
-      -->
+      <!-- Refresh failed, not the data: fares shown are real, just not today's.
+           `role="status"`, not `alert` — the screen still works. -->
       <p v-if="refreshNotice" class="detail__notice detail__notice--quiet" role="status">{{ refreshNotice }}</p>
 
-      <!-- And the same fetch while it is still running, on a screen that
-           already has something to show. It cannot take the page over: what is
-           underneath is readable and last week's fares are worth reading while
-           this week's arrive. -->
+      <!-- Same fetch, already-populated screen: shown quietly, must not take
+           the page over — last week's fares stay readable while it runs. -->
       <p v-if="checking" class="detail__notice detail__notice--quiet" role="status">Checking current fares…</p>
 
       <div class="price">
@@ -732,16 +556,14 @@ function goBack() {
                claims, and only one of them cost a metered search. -->
           <p v-if="livePrice !== null" class="price__live">Live on Google · checked {{ liveWhen }}</p>
 
-          <!-- "Cheapest departure", spelled out, because this screen's other
-               dates are the days we LOOKED and the two must never be read for
-               each other. -->
+          <!-- Spelled out because this screen's other dates are when we LOOKED —
+               the two must never be read for each other. -->
           <p v-if="departure" class="price__when">Cheapest departure · {{ departure }}</p>
 
           <!-- Replaces the plain "Seen …" line rather than joining it. -->
           <p v-if="demoted" class="price__gone">{{ goneLabel }}</p>
-          <!-- Next to the departure line because it is a qualifier on THAT
-               fare, and only past a day old — see SEEN_AFTER_HOURS. Absent
-               rather than reassuring when the age is unknown. -->
+          <!-- Qualifies the departure line; only past a day old (SEEN_AFTER_HOURS).
+               Absent, not reassuring, when age is unknown. -->
           <p v-else-if="seen && livePrice === null" class="price__seen">Seen {{ seen }}</p>
 
           <p v-if="liveTypical" class="price__typical">{{ liveTypical }}</p>
@@ -754,9 +576,8 @@ function goBack() {
         <DealScoreGauge :score="detail.score" :confident="detail.confident" />
       </div>
 
-      <!-- "Check live price": drawn only when there is a fare to check, and
-           replaced by its own answer, which the server serves free for six
-           hours. A second tap would buy nothing. -->
+      <!-- Shown only when there's a fare to check; replaced by its answer,
+           which the server serves free for six hours — a second tap buys nothing. -->
       <div v-if="detail.cheapest" class="live">
         <button v-if="live === null" class="live__action" type="button" :disabled="checkingLive" @click="checkLivePrice">
           {{ checkingLive ? 'Asking Google…' : 'Check live price' }}
@@ -780,9 +601,8 @@ function goBack() {
         :tracking-days="detail.trackingDays"
       />
 
-      <!-- `confident` is passed for the GLYPH and not for the words: the
-           sentence already says "not enough data yet", and the tick that used to
-           sit beside it said the opposite. See AdviceCallout.vue. -->
+      <!-- `confident` is for the GLYPH only, not the words. See AdviceCallout.vue.
+           Why: docs/BUSINESS-LOGIC.md §36. -->
       <AdviceCallout
         :title="detail.advice.title"
         :body="detail.advice.body"
@@ -790,11 +610,9 @@ function goBack() {
         :confident="detail.confident"
       />
 
-      <!-- A callout that says "wait" over a glowing "book" is the page arguing
-           with itself, and the button wins. ⚠ The tone is the SERVER's — it
-           already accounts for a fare that may be gone and for a live price
-           that contradicts the cached one — so this must not add conditions of
-           its own. Aviasales is the primary hand-off (BookingLink). -->
+      <!-- ⚠ Tone is the SERVER's alone — already accounts for a maybe-gone fare
+           and a contradicting live price. Add no conditions of its own here.
+           Why: docs/BUSINESS-LOGIC.md §36. -->
       <BookingCta
         :aviasales-url="detail.booking.aviasales"
         :skyscanner-url="detail.booking.skyscanner"
@@ -867,17 +685,15 @@ function goBack() {
   color: var(--accent-ink);
 }
 
-/* Quieter than the departure line it qualifies, and the same muted ink the day
-   sheet gives the same sentence. It appears only on fares over a day old, so it
-   is a line the reader meets rarely and should notice when they do. */
+/* Quieter than the departure line it qualifies; same muted ink the day sheet
+   uses. Rare (fares over a day old), so noticeable when it appears. */
 .price__seen {
   margin-top: 3px;
   font-size: var(--text-md);
   color: var(--muted);
 }
 
-/* ⚠ A step DOWN the hierarchy, not a decoration: still legible, still the
-   price, no longer the app's most confident statement. Never struck through —
+/* ⚠ A step DOWN the hierarchy, not a decoration. Never struck through —
    Orbit does not know the fare is gone. */
 .price__value--gone {
   font-size: 32px;
@@ -930,9 +746,8 @@ function goBack() {
   margin-top: 3px;
 }
 
-/* --- "Check live price" — an OUTLINE control, because the accent belongs to
-   the watch strip and the booking hand-off. This is a question, not the
-   conclusion. */
+/* Outline control: the accent colour belongs to the watch strip and the
+   booking button, not this — a question, not the conclusion. */
 
 .live {
   margin: 12px 2px 0;
@@ -976,18 +791,14 @@ function goBack() {
   color: var(--muted);
 }
 
-/* The gauge is pushed to the far edge rather than the price block being
-   stretched, so a long caption wraps under the price instead of shoving the
-   ring off the screen. */
+/* Pushed to the far edge rather than stretching the price block, so a long
+   caption wraps under the price instead of shoving the ring off screen. */
 .price :deep(.gauge) {
   margin-left: auto;
 }
 
-/* --- The watchlist strip ------------------------------------------------
-   A hairline row rather than a card: the boarding passes on the watch screen
-   are cards, and a card here would read as a second route on a screen about
-   one. It sits between the header and the price, so it is passed on the way
-   down the page rather than being the page. */
+/* A hairline row, not a card — boarding-pass cards on the watch screen
+   would make this read as a second route rather than a strip about one. */
 
 .watch {
   display: flex;
@@ -1010,9 +821,8 @@ function goBack() {
   min-width: 0;
 }
 
-/* The accent, and the only accent-filled control on this screen apart from
-   the Book button at the very bottom — which is 400 px further down and is
-   the conclusion rather than the offer. */
+/* The only accent-filled control besides the Book button far below, which
+   is the conclusion rather than the offer. */
 .watch__action {
   flex-shrink: 0;
   padding: 9px 14px;
@@ -1058,11 +868,8 @@ function goBack() {
   border: 1px solid var(--line);
 }
 
-/* --- States ----------------------------------------------------------- */
-
-/* Orbit asking the provider, with nothing on screen yet. Centred and short:
-   it is a sentence somebody reads once, for two seconds, and it must not look
-   like an error while it does. */
+/* Nothing on screen yet. Centred and short — read once, for two seconds,
+   and must not look like an error. */
 .checking {
   margin-top: 44px;
   text-align: center;
@@ -1139,9 +946,8 @@ function goBack() {
   color: var(--ink2);
 }
 
-/* The server's own sentence about WHICH half of the pair it could not make
-   sense of. Quieter than the body above it: that one says what happened, this
-   one says why, and only somebody who wants the why reads on. */
+/* The server's own sentence about which half of the pair was the problem.
+   Quieter than the body above: that says what happened, this says why. */
 .empty__why {
   margin: 10px auto 0;
   max-width: 32ch;

@@ -13,13 +13,8 @@ use App\Models\PriceObservation;
 use Illuminate\Support\Facades\Date;
 
 /**
- * Fixtures for the read API's tests.
- *
- * The endpoints are asserted against HAND-WRITTEN prices rather than against
- * the fake provider's, so the expected score and percentages in those tests
- * can be worked out on paper and checked by a reader. The fake provider has
- * its own tests; these are about the arithmetic between the database and the
- * JSON.
+ * Fixtures for the read API's tests — HAND-WRITTEN prices, not the fake
+ * provider's, so expected scores can be checked on paper by a reader.
  */
 trait BuildsRouteData
 {
@@ -57,26 +52,10 @@ trait BuildsRouteData
     }
 
     /**
-     * Make a route OLD without making it noisy: one observation far enough back
-     * that Orbit has been watching it for longer than
-     * config('orbit.alerts.min_tracking_days'), placed where it cannot touch
-     * the score.
-     *
-     * WHY IT IS NEEDED. `trackingDays` counts from the first observation there
-     * is, and App\Domain\Pricing\DealScorer now declines to judge a route below
-     * the floor — so a fixture that writes today's price and nothing else gets
-     * "not enough data yet" back, whatever price it chose. That is the correct
-     * answer for a real route with one morning of history and a useless one for
-     * a test about the cooldown.
-     *
-     * WHY IT IS ONE ROW AND NOT A SERIES. The obvious fixture — seven flat days
-     * — hands the scorer a trend to fold in, and the moment the trend component
-     * is computable the weights renormalise over three components instead of
-     * two. Every score in these tests would move (€60 stops being a "great"
-     * deal at 65) and no reader could work out why. Placed a full
-     * config('orbit.history.chart_days') back, this row is outside the window
-     * RouteSnapshots loads, so the scorer still sees exactly one price and the
-     * arithmetic in the docblocks stays checkable on paper.
+     * Makes a route OLD without making it noisy: one observation placed past
+     * config('orbit.alerts.min_tracking_days') and outside the trend window,
+     * so DealScorer sees exactly one price and every score stays hand-checkable.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     protected function trackedSince(Route $route, int $cents): void
     {
@@ -102,13 +81,9 @@ trait BuildsRouteData
     /**
      * @param  array<string, int>  $pricesByDate  'Y-m-d' => cents
      * @param  string|null  $foundAt  when the provider found these prices, if
-     *                                the test cares. NULL BY DEFAULT, and that
-     *                                is the honest default rather than a lazy
-     *                                one: a row whose age is unknown is exactly
-     *                                what every row written before the column
-     *                                existed looks like, and every screen and
-     *                                the alert policy have a defined answer for
-     *                                it. Tests about freshness pass a value.
+     *                                the test cares; null by default.
+     *
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     protected function offer(Route $route, array $pricesByDate, ?string $foundAt = null): void
     {

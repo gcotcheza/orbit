@@ -8,20 +8,11 @@ use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * `PUT /api/settings` — the whole preferences object, every time.
+ * PUT sends the whole object; a PATCH could drop a toggle silently.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * A PUT AND NOT A PATCH, and every field is `required`. The screen flips one
- * switch at a time, so a partial update looks like the smaller request — but
- * "the field is absent" and "the field is false" are indistinguishable in
- * JSON once a boolean is optional, and the failure mode is a quiet-hours
- * toggle that can be switched on and never off. Sending the object back whole
- * makes the request say exactly what the screen believes, which is also what
- * makes the optimistic UI's revert honest.
- *
- * THE KEYS ARE THE API's, NOT THE DATABASE's — `emailAlerts`, not
- * `email_alerts`. docs/API.md is camelCase throughout because its only reader
- * is JavaScript; toColumns() below is the single place the two vocabularies
- * meet, so no controller has to know both.
+ * Keys are the API's camelCase, not the DB's snake_case (see toColumns()).
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class UpdateSettingsRequest extends FormRequest
 {
@@ -36,23 +27,15 @@ final class UpdateSettingsRequest extends FormRequest
             'weeklyDigest' => ['required', 'boolean'],
 
             'quietHours' => ['required', 'boolean'],
-            /*
-             * REQUIRED EVEN WHEN QUIET HOURS ARE OFF. The window is stored
-             * either way — switching quiet hours back on has to restore the
-             * times somebody chose, not reset them to 22:00 — so the client
-             * always sends what it is showing.
-             *
-             * `date_format:H:i` and not a regex: it rejects 24:00 and 22:60,
-             * which a naive \d{2}:\d{2} does not.
-             */
+            // REQUIRED even when off, so toggling back on restores the stored window.
+            // Why: docs/BUSINESS-LOGIC.md §36.
+
+            // date_format:H:i (not a regex) rejects 24:00 and 22:60 that \d{2}:\d{2} would miss.
             'quietStart' => ['required', 'string', 'date_format:H:i'],
             'quietEnd'   => ['required', 'string', 'date_format:H:i'],
 
-            /*
-             * AGAINST THE CONFIG'D LEVELS rather than `between:0,2`. The scale
-             * is config/orbit.php's `alerts.sensitivities`, so a fourth level
-             * is one entry there and this rule follows it.
-             */
+            // Validated against config('orbit.alerts.sensitivities') keys, not a fixed range.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             'sensitivity' => ['required', 'integer', Rule::in(self::levels())],
         ];
     }
@@ -70,8 +53,6 @@ final class UpdateSettingsRequest extends FormRequest
     }
 
     /**
-     * The validated settings, keyed by column.
-     *
      * @return array<string, bool|string|int>
      */
     public function toColumns(): array

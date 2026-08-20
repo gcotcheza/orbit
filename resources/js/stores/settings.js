@@ -1,19 +1,13 @@
-// =============================================================================
-// Alert settings
-// =============================================================================
-// The seven switches on the alerts screen (design/README.md §6), and the three
-// sensitivity levels the server describes.
+// Alert settings: the seven switches on the alerts screen (design/README.md
+// §6), and the three sensitivity levels the server describes.
 //
-// A STORE RATHER THAN COMPONENT STATE, for one concrete reason: PR11's alert
-// screens and PR12's push-permission flow both need to know whether push is
-// switched on, and a second component fetching /api/settings for itself would
-// be a second copy of these seven booleans that can disagree with this one.
+// A store, not component state — PR11's alert screens and PR12's push flow
+// both need one shared answer for whether push is on.
+// Why: docs/BUSINESS-LOGIC.md §36.
 //
-// OPTIMISTIC, AND HONEST ABOUT IT. Flipping a switch applies immediately —
-// waiting on a round trip makes a toggle feel broken — and a failed PUT puts
-// the old value back AND says why. A silent revert is worse than no optimism
-// at all: the switch appears to work, then appears to have been forgotten.
-// =============================================================================
+// Optimistic updates, honestly reverted: a failed PUT restores the old
+// value and says why — a silent revert is worse than no optimism.
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { http } from '@/lib/http'
@@ -31,11 +25,8 @@ export const useSettingsStore = defineStore('settings', () => {
     const error = ref('')
 
     /*
-     * WHICH REQUEST'S ANSWER TO BELIEVE. Two taps in quick succession put two
-     * PUTs in flight, and they can come back in either order — adopting the
-     * slower one would leave the screen showing the older of the two states
-     * while the database holds the newer. Only the most recent request is
-     * allowed to write to the store.
+     * Which request's answer to believe: two PUTs can land out of order, so
+     * only the most recent request is allowed to write to the store.
      */
     let sequence = 0
 
@@ -83,12 +74,8 @@ export const useSettingsStore = defineStore('settings', () => {
     }
 
     /**
-     * Change one or more settings.
-     *
-     * THE WHOLE OBJECT GOES BACK, because the endpoint is a PUT — see
-     * docs/API.md for why an optional boolean is a switch that can be turned
-     * on and never off. The patch is merged into what is on screen, which is
-     * also what makes the optimistic value and the request agree.
+     * Change one or more settings. The whole object goes back (PUT, not PATCH)
+     * — see docs/API.md for why an optional boolean can't be turned off.
      */
     async function change(patch) {
         if (settings.value === null) {
@@ -123,11 +110,8 @@ export const useSettingsStore = defineStore('settings', () => {
 })
 
 /**
- * One sentence somebody can act on, out of whatever went wrong.
- *
- * The 422 branch reads the server's own message rather than writing one here:
- * App\Http\Requests\UpdateSettingsRequest phrases each rule for a person, and
- * restating them in the client would be two copies to keep in step.
+ * One sentence somebody can act on. The 422 branch reads the server's own
+ * message (UpdateSettingsRequest) rather than duplicating it here.
  */
 function messageFor(failure) {
     const response = failure.response

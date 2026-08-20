@@ -14,19 +14,13 @@ use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * The seeder that creates Orbit's one account.
+ * The seeder that creates Orbit's one account. Idempotence is the point:
+ * getting it wrong silently rotates the owner's password on a deploy.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * IDEMPOTENCE IS THE POINT OF THESE TESTS. This runs on every deploy, so the
- * question that matters is not "does it create a user" — it is "what does it do
- * to the user who is already there". Getting that wrong does not fail loudly:
- * it rotates the owner's password during a release, and the only symptom is
- * being unable to sign in, at which point the new password has already scrolled
- * past in a deploy log nobody kept.
- *
- * Driven through `config('orbit.seed.*')` rather than by setting environment
- * variables, because that is what the seeder reads — config/orbit.php is the
- * one place SEED_USER_* is turned into a value, precisely so that
- * `config:cache` cannot quietly empty it.
+ * Driven through config('orbit.seed.*'), not env vars directly — that's
+ * what the seeder reads, so `config:cache` can't quietly empty it.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class SingleUserSeederTest extends TestCase
 {
@@ -78,16 +72,10 @@ final class SingleUserSeederTest extends TestCase
     }
 
     /**
-     * `.env` ships `SEED_USER_PASSWORD=` with nothing after it, and env() hands
-     * that back as an EMPTY STRING rather than as null. Reading it as "set the
-     * password to nothing" would replace a working password with an unusable
-     * hash on the next deploy, which is the exact failure this seeder exists to
-     * avoid.
-     *
-     * config/orbit.php is where that collapse happens — it is the boundary that
-     * reads the raw variable — so the file is evaluated directly here. Asserting
-     * on the already-loaded value would only re-read what setUp() just put
-     * there and prove nothing.
+     * `.env`'s empty `SEED_USER_PASSWORD=` becomes an empty string, not null —
+     * config/orbit.php is where that collapse is caught, so it's loaded raw here
+     * rather than asserting on setUp()'s already-loaded config.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function an_empty_password_variable_is_read_as_absent(): void
@@ -133,11 +121,9 @@ final class SingleUserSeederTest extends TestCase
     }
 
     /**
-     * The generated password is printed once and stored nowhere else — the
-     * column holds a bcrypt hash, so that line of console output is the only
-     * copy of it that will ever exist. A supplied one is not echoed back,
-     * because whoever supplied it already has it and a deploy log does not need
-     * a second copy.
+     * A generated password is printed once — the bcrypt hash is its only other
+     * copy. A supplied password is never echoed; the caller already has it.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function a_generated_password_is_printed_and_a_supplied_one_is_not(): void
@@ -165,9 +151,8 @@ final class SingleUserSeederTest extends TestCase
     }
 
     /**
-     * `artisan()` returns the pending command only while output expectations
-     * are still allowed; once it has run it is an exit code. Narrowing it here
-     * keeps that distinction visible instead of chaining off a union.
+     * `artisan()` returns a pending command only before it runs (then an exit
+     * code); narrowing here keeps that visible instead of chaining a union.
      */
     private function pendingSeed(): PendingCommand
     {

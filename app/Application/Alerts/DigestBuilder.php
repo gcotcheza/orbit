@@ -16,19 +16,15 @@ use App\Application\Routes\RouteSnapshots;
 /**
  * Sunday morning: everything at once, and nothing urgent.
  *
- * THE DIGEST IS THE OPPOSITE OF AN ALERT and is built that way. An alert is
- * something that crossed a line; this is where things stand — so it deliberately
- * ignores the cooldown, the sensitivity and every other rule that decides
- * whether to interrupt somebody. A route that has been suppressed all week
- * because it was announced on Monday still belongs in Sunday's mail, because
- * the mail is not an interruption and its job is to make a quiet week legible
- * rather than to repeat the loud parts of a busy one.
+ * Opposite of an alert, by design: ignores cooldown/sensitivity/every other
+ * interrupt rule, since the digest isn't an interruption — a route suppressed
+ * all week still belongs in Sunday's mail.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * IT READS AND WRITES NOTHING ELSE. Every number here comes from the same two
- * classes the screens read (App\Application\Routes\RouteSnapshots,
- * App\Application\Rules\RuleViews) plus the ledger, so the digest cannot
- * disagree with what the app shows when somebody taps through from it — which
- * is the failure a separately-computed weekly summary always eventually has.
+ * Reads and writes nothing else: every number comes from the same classes
+ * the screens read (RouteSnapshots, RuleViews) plus the ledger, so the
+ * digest can't disagree with what tapping through shows.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final readonly class DigestBuilder
 {
@@ -70,10 +66,9 @@ final readonly class DigestBuilder
 
         foreach ($this->snapshots->for($routes) as $snapshot) {
             /*
-             * A route with no observation yet has no price to report and a
-             * score of 0 that means "no opinion". The design's answer to that
-             * state is the "tracking N days" note on a screen somebody is
-             * looking at, not a line in a mail that reads like a verdict.
+             * No observation yet = no price, score 0 means "no opinion" —
+             * that's the "tracking N days" note on-screen, not a mail verdict.
+             * Why: docs/BUSINESS-LOGIC.md §36.
              */
             if ($snapshot->currentCents === null) {
                 continue;
@@ -83,10 +78,10 @@ final readonly class DigestBuilder
         }
 
         /*
-         * BEST FIRST, NOT THE WATCHLIST'S ORDER. The globe tours the owner's
-         * order because they arranged it; a mail is read top-down once and the
-         * first line should be the one worth acting on. Ties break on price, so
-         * the order is stable from one Sunday to the next.
+         * Best first, not watchlist order: mail is read top-down once, so
+         * the first line should be worth acting on. Ties break on price for
+         * a stable order week to week.
+         * Why: docs/BUSINESS-LOGIC.md §36.
          */
         usort($deals, static fn (DealSummary $a, DealSummary $b): int => ($b->score ?? 0) <=> ($a->score ?? 0)
             ?: $a->priceCents <=> $b->priceCents);
@@ -112,10 +107,10 @@ final readonly class DigestBuilder
             $matches = $this->views->of($rule, $user)->reading->matches;
 
             /*
-             * A rule with nothing to show is left out rather than listed as
-             * "0 matches". It is the ordinary state of a rule written on
-             * Saturday, and docs/API.md says the same about the create screen:
-             * say it in words on a screen, or say nothing.
+             * Rule with nothing to show is left out, not listed as "0
+             * matches" — same principle docs/API.md states for the create
+             * screen: say it in words, or say nothing.
+             * Why: docs/BUSINESS-LOGIC.md §36.
              */
             if ($matches->count() === 0) {
                 continue;
@@ -137,10 +132,10 @@ final readonly class DigestBuilder
     /**
      * What Orbit actually sent this week, straight out of the ledger.
      *
-     * FROM THE STORED PAYLOAD AND NOT RE-DERIVED. The callout is "here is what
-     * we flagged", and a fare that has since gone back up is still what was
-     * flagged — recomputing these against today's calendar would quietly turn
-     * the week's history into a second copy of the week's present.
+     * From the STORED payload, not re-derived: a fare that rose since is
+     * still what was flagged — recomputing would turn history into a copy
+     * of the present.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @return list<DealSummary>
      */

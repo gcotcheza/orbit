@@ -7,18 +7,14 @@ namespace App\Domain\Rules;
 /**
  * What a rule actually asks for, once the English has been read.
  *
- * SIX NULLABLE-OR-EMPTY FIELDS, and every one of them means "no opinion"
- * rather than "no results". An empty `origins` is all three airports, an empty
- * `vibes` is anywhere Orbit knows, a null `maxPriceCents` is any price. That
- * is what makes the create screen's chip removal work: taking a chip away
- * WIDENS the rule, and a criteria object that treated absence as a filter
- * would narrow it to nothing instead.
+ * Every nullable/empty field means "no opinion", not "no results" (empty
+ * origins = all airports, null maxPriceCents = any price) — removing a chip
+ * WIDENS the rule rather than narrowing it to nothing.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * IT IS PERSISTED AS `deal_rules.criteria`, so `from()` is reading JSON that a
- * previous version of this class wrote and has to survive a shape it does not
- * recognise. Every field is validated on the way in and silently dropped if it
- * is wrong — a rule with one unreadable field is a slightly wider rule, and a
- * rule that throws on load is a screen that cannot be opened at all.
+ * Persisted as `deal_rules.criteria`; `from()` must survive JSON an older
+ * version wrote. Unreadable fields are dropped, not thrown on.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final readonly class RuleCriteria
 {
@@ -53,9 +49,9 @@ final readonly class RuleCriteria
     }
 
     /**
-     * The shape `from()` reads and `deal_rules.criteria` stores. Also, field
-     * for field, the `criteria` object docs/API.md publishes — one definition
-     * of the rule's shape rather than one for the column and one for the JSON.
+     * Shape `from()` reads, `deal_rules.criteria` stores, and docs/API.md
+     * publishes field-for-field — one definition, not three.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @return array<string, mixed>
      */
@@ -76,11 +72,9 @@ final readonly class RuleCriteria
     }
 
     /**
-     * Nothing was understood — the sentence was empty, or it was garbage.
-     *
-     * The create screen branches on this rather than on an empty chip list,
-     * because "we read nothing out of that" and "you removed every chip" are
-     * the same criteria and a different thing to say to somebody.
+     * Nothing understood (empty sentence, or garbage). Create screen branches
+     * on this rather than an empty chip list — same criteria, different message.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     public function isEmpty(): bool
     {

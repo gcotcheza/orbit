@@ -10,22 +10,11 @@ use App\Domain\Pricing\DatedFare;
 /**
  * Which places a rule is about, and which fares it would fire on.
  *
- * PURE PHP, ZERO QUERIES — docs/PLAN.md's line for App\Domain, and the reason
- * this is two small functions rather than one method on a model. The two
- * halves are genuinely independent questions: "where would this send me" is
- * answered from the destination vocabulary alone, and "is this fare one of the
- * ones it means" is answered from the fare alone. Keeping them apart is what
- * lets App\Jobs\SweepRuleFares ask the first one about routes that have no
- * fares yet — which is the entire reason the sweep exists.
+ * Pure PHP, zero queries (docs/PLAN.md) — kept as two functions so SweepRuleFares can ask "where" before there are fares.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * TRIP LENGTH IS PARSED AND NOT MATCHED ON, and that is a deliberate hole
- * rather than an oversight. App\Application\Ports\PriceProvider answers with
- * the cheapest fare per DEPARTURE date — one-way, no return leg — so this app
- * does not currently hold the fact a "2–3 nights" filter would need. The chip
- * is still parsed, still shown and still stored, because the sentence really
- * does say it and dropping it would make the create screen misread somebody's
- * English; it starts filtering the day the provider grows return fares, and
- * nothing else has to change.
+ * Trip length is parsed but not matched on, deliberately — PriceProvider has no return-leg fact yet to filter on.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final readonly class RuleMatcher
 {
@@ -41,19 +30,8 @@ final readonly class RuleMatcher
     /**
      * The destinations a rule is asking about, best fit first.
      *
-     * TWO FILTERS AND A SORT:
-     *
-     *   - the VIBE filter is the rule's own words. No vibes asked for means
-     *     anywhere Orbit knows, which is the right answer to "anywhere under
-     *     €50" and the reason config('orbit.rules.sweep_cap') exists.
-     *   - the CLIMATE filter only runs when the rule asks for a warm vibe AND
-     *     names a window. See config/orbit.php for why it is the best month in
-     *     the window rather than every month, and why a rule with no window
-     *     skips it entirely.
-     *   - the SORT is what App\Jobs\SweepRuleFares spends its budget on, so it
-     *     has to be total and deterministic: more matching vibes first, then
-     *     warmer, then the code, so the same rule sweeps the same places on
-     *     every run rather than a different thirty each morning.
+     * Two filters (vibe, climate) then a deterministic sort — see config/orbit.php for the climate rule.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @param  list<DestinationProfile>  $destinations
      * @return list<DestinationProfile>
@@ -84,13 +62,9 @@ final readonly class RuleMatcher
      * The cheapest fare on this route that the rule would actually fire on, or
      * NULL if none of them would.
      *
-     * A departure has to clear three things: the price ceiling, the weekday,
-     * and the window. A rule with none of them set takes the cheapest fare
-     * there is, which is what "anywhere cheap" means.
+     * Clears price ceiling, weekday and window; nothing set means cheapest available.
      *
-     * `$today` IS PASSED IN rather than read from a clock, because this is
-     * pure and because the caller already knows what day it is in the owner's
-     * timezone — and "which spring" depends on that answer (MonthWindow).
+     * `$today` is passed in, not read from a clock — this stays pure, and "which spring" depends on the caller's timezone-local day.
      *
      * @param  list<DatedFare>  $fares
      */
@@ -116,10 +90,8 @@ final readonly class RuleMatcher
             }
 
             /*
-             * Strictly cheaper, so a tie keeps the EARLIER date — the fares
-             * arrive ordered by departure (PriceProvider's contract), and the
-             * sooner of two equally cheap flights is the one to show. Same
-             * rule App\Application\Routes\RouteSnapshots picks by.
+             * Strictly cheaper, so a tie keeps the earlier date — same rule RouteSnapshots picks by.
+             * Why: docs/BUSINESS-LOGIC.md §36.
              */
             if ($cheapest === null || $fare->cents < $cheapest->cents) {
                 $cheapest = $fare;

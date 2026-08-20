@@ -14,22 +14,9 @@ use App\Http\Controllers\Pwa\ManifestController;
 use App\Http\Controllers\Pwa\ServiceWorkerController;
 
 /**
- * The three routes that make Orbit installable, and the three ways they break.
- *
- * They break by being SHADOWED — routes/web.php ends in a catch-all that
- * answers almost everything with the SPA shell, and a manifest served as HTML
- * installs a bookmark while a worker served as HTML fails registration with a
- * MIME error nobody reads.
- *
- * They break by being SESSIONED — a browser revalidates /sw.js on every
- * navigation, and inside the `web` group each of those writes a `sessions` row
- * and answers with a Set-Cookie, which also stops the edge caching any of them.
- *
- * They break by being WRONG ABOUT THE BUILD — a precache list naming last
- * deploy's hashes installs nothing, silently.
- *
- * All three are invisible in a browser that already has a working install,
- * which is why they are asserted here.
+ * The three routes that make Orbit installable, and the three silent ways
+ * they can break (shadowed, sessioned, stale precache) — invisible once installed.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class PwaShellTest extends TestCase
 {
@@ -70,10 +57,9 @@ final class PwaShellTest extends TestCase
     }
 
     /**
-     * The SPA catch-all is registered before these routes are (bootstrap/
-     * app.php loads them from `then:`), so without the fallback demotion in
-     * that file every one of them would be a 200 of HTML — which is the failure
-     * that looks most like success.
+     * SPA catch-all registers before these routes (bootstrap/app.php `then:`),
+     * so without fallback demotion there every one is a 200 of HTML.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @param  class-string  $controller
      */
@@ -93,9 +79,9 @@ final class PwaShellTest extends TestCase
     }
 
     /**
-     * None of the three is in the `web` group, so none of them may start a
-     * session. A Set-Cookie here would be a `sessions` row per navigation and
-     * an uncacheable response at Cloudflare.
+     * None of the three is in the `web` group, so none may start a session —
+     * a Set-Cookie here means a `sessions` row per nav and no edge caching.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     #[DataProvider('pwaPaths')]
@@ -118,9 +104,9 @@ final class PwaShellTest extends TestCase
         // fall back to: that is a download rather than an install.
         $this->assertSame('application/manifest+json', $response->headers->get('Content-Type'));
 
-        // Asserted directive by directive: Symfony normalises and re-orders the
-        // header it sends, so comparing the whole string tests its formatting
-        // rather than our policy.
+        // Asserted directive by directive: Symfony reorders the header string, so
+        // comparing it whole would test formatting, not policy.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $this->assertTrue($response->headers->hasCacheControlDirective('public'));
         $this->assertSame('3600', $response->headers->getCacheControlDirective('max-age'));
     }
@@ -156,10 +142,9 @@ final class PwaShellTest extends TestCase
     }
 
     /**
-     * Five icons: the SVG for anything that can rasterise for itself, two PNGs
-     * for the rest, and two SEPARATE maskable renderings — one file declared
-     * `any maskable` is either clipped on Android or wastefully small
-     * everywhere else.
+     * Five icons: SVG, two PNGs, and two SEPARATE maskable renderings — one
+     * file declared `any maskable` is clipped on Android or wastefully small elsewhere.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function the_manifest_declares_icons_that_exist_on_disk(): void
@@ -237,9 +222,9 @@ final class PwaShellTest extends TestCase
     }
 
     /**
-     * The update check a browser makes on EVERY navigation. With the ETag it is
-     * an empty 304; without it, it is this file again, several times a minute,
-     * for the life of the install.
+     * The update check a browser makes on EVERY navigation — with the ETag
+     * it's an empty 304; without it, this whole file, repeatedly.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function the_service_worker_answers_a_revalidation_with_304(): void
@@ -287,9 +272,9 @@ final class PwaShellTest extends TestCase
         $response->assertOk();
         $response->assertSee('You&rsquo;re offline', false);
 
-        // No bundle, no font file, no image request: every one of those is a
-        // dependency that is unavailable in exactly the conditions this page
-        // exists for. And no script at all — the CSP forbids an inline one.
+        // No bundle, font, image, or script on this page: each is unavailable in
+        // exactly the conditions offline exists for; CSP also forbids inline script.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $response->assertDontSee('/build/', false);
         $response->assertDontSee('<script', false);
     }

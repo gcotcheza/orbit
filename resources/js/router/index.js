@@ -1,24 +1,16 @@
-// =============================================================================
 // Routes
-// =============================================================================
-// `createWebHistory`, not hashes: every screen has a real URL, which is what
-// makes a route detail shareable and what lets the PWA be launched straight
-// into one. The server plays along — routes/web.php answers every non-API path
-// with the same shell.
-//
-// `meta.layout` picks the chrome. Two values today: 'tabs' (the five-item
-// bottom bar) and 'bare' (route detail and login, which fill the screen).
-// See App.vue for why that is a string on the route rather than a swappable
-// layout COMPONENT: swapping the component would remount the tree below it, and
-// the globe's <KeepAlive> cache with it, every time the user opened a route and
-// came back.
-//
-// `meta.guestOnly` is the whole authorisation model, and it mirrors the
-// server's: routes/web.php puts POST /login behind Laravel's `guest`
-// middleware and everything else behind `auth`. It is opt-IN and it is the
-// EXCEPTION — a route without it needs a session — so a screen added later is
-// private by default and somebody has to type the flag to change that.
-// =============================================================================
+
+// createWebHistory, not hashes: every route gets a real, shareable URL (and a PWA
+// launch target); routes/web.php answers every non-API path with the same shell.
+// Why: docs/BUSINESS-LOGIC.md §36.
+
+// meta.layout ('tabs' or 'bare') is a string, not a swappable layout component —
+// swapping components would remount the tree and drop the globe's <KeepAlive> cache.
+// Why: docs/BUSINESS-LOGIC.md §36.
+
+// meta.guestOnly mirrors the server's auth split and is opt-in: a route without it
+// needs a session, so screens are private by default.
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -39,20 +31,18 @@ export const router = createRouter({
             meta: { layout: 'tabs' },
         },
         {
-            // The centre tab. It has a bottom bar like the other four: a search
-            // is something you come back from with a route, and the way back is
-            // the bar you arrived by.
+            // The centre tab, with a bottom bar like the other four: you come back from a
+            // search with a route, and the bar is the way back.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             path: '/search',
             name: 'search',
             component: () => import('@/Views/Search.vue'),
             meta: { layout: 'tabs' },
         },
         {
-            // STILL A TABBED SCREEN, and no longer a tab. Rule creation lost
-            // the centre seat to search on 2026-08-16 and kept everything else:
-            // the URL, the screen, and the bar under it. It is reached from the
-            // "+ New rule" button in the watch screen's rules section, which is
-            // where the rules it writes are listed.
+            // Still a tabbed screen, though no longer a tab: create lost the centre seat to
+            // search but kept its bar; reached from watch's "+ New rule" button.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             path: '/create',
             name: 'create',
             component: () => import('@/Views/Create.vue'),
@@ -71,9 +61,8 @@ export const router = createRouter({
             meta: { layout: 'tabs' },
         },
         {
-            // No tab bar, per design/README.md §2: the detail screen is
-            // something you came INTO from a card, and its own back control is
-            // the way out.
+            // No tab bar (design/README.md §2): you arrive here from a card, and the
+            // screen's own back control is the way out.
             path: '/route/:id',
             name: 'route-detail',
             component: () => import('@/Views/RouteDetail.vue'),
@@ -87,18 +76,16 @@ export const router = createRouter({
             meta: { layout: 'bare', guestOnly: true },
         },
         {
-            // The server hands the shell to every path it does not own, so a
-            // typo in the address bar arrives HERE rather than at a 404 page.
-            // Home is the honest answer: this app has no content at an unknown
-            // URL to apologise for.
+            // The server hands the shell to any path it doesn't own; home is the honest
+            // answer since there's no content at an unknown URL to apologise for.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             path: '/:pathMatch(.*)*',
             redirect: { name: 'home' },
         },
     ],
 
-    // Every screen is its own page, so arriving at one should not inherit the
-    // last one's scroll offset — except when the browser's own back button is
-    // what did the arriving, which is what `savedPosition` is.
+    // Each screen starts scrolled to top, except when the browser's own back button
+    // is what did the arriving — that's what `savedPosition` is.
     scrollBehavior(to, from, savedPosition) {
         return savedPosition ?? { top: 0 }
     },

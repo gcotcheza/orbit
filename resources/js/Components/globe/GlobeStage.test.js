@@ -1,24 +1,12 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The choreography, driven by a fake clock
-// =============================================================================
-// lib/geo.test.js proves the flight's arithmetic and lib/tour.test.js proves
-// its timetable. What is left — and what those two cannot see — is whether this
-// component actually CALLS them in the right order, and whether it stops when
-// it is told to. That is the part that breaks in the field: a timer that
-// survives a route change and flies two arcs at once, a paused screen that
-// keeps a GPU busy in a background tab, a sequence that never emits `advance`
-// and leaves the tour stuck on Lisbon forever.
+// This file tests ORDER and CANCELLATION only (arithmetic/timetable are
+// covered by lib/geo.test.js and lib/tour.test.js); globe.gl and the browser
+// clock are replaced with fakes so timing bugs are inspectable.
+// Why: docs/BUSINESS-LOGIC.md §36.
 //
-// So globe.gl is replaced by a scene that only remembers what it was asked to
-// do, and the browser's clock by vitest's. Every assertion below is about
-// ORDER and CANCELLATION; nothing here re-checks a number that has its own test
-// next door.
-//
-// jsdom does not implement matchMedia or ResizeObserver — both are browser APIs
-// this component legitimately uses — so they are stubbed in beforeEach rather
-// than worked around in the component.
-// =============================================================================
+// jsdom lacks matchMedia/ResizeObserver (both legitimately used by this
+// component), so they're stubbed in beforeEach rather than in the component.
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -36,9 +24,9 @@ const scene = {
 
 const createGlobeScene = vi.fn(async () => scene)
 
-// vi.mock is hoisted above every import in this file, so this factory runs
-// before the two consts above are initialised. Both references are deferred
-// inside functions for exactly that reason.
+// vi.mock is hoisted above imports, so this factory runs before the two
+// consts above exist — both references are deferred in functions because of it.
+// Why: docs/BUSINESS-LOGIC.md §36.
 vi.mock('./globeScene', () => ({
     hasWebgl: () => true,
     createGlobeScene: (...args) => createGlobeScene(...args),
@@ -77,12 +65,10 @@ function stubBrowserApis() {
 }
 
 /**
- * Mount the stage and let its asynchronous globe.gl import settle.
- *
- * The wrapper is remembered so that afterEach can unmount it. That is not
- * tidiness: this component listens on `document`, jsdom's document outlives the
- * test, and a stage left mounted goes on answering visibilitychange for every
- * test after it.
+ * Mount the stage and let its async globe.gl import settle. Wrapper is
+ * remembered for afterEach: jsdom's document outlives the test, so a stage
+ * left mounted keeps answering visibilitychange for every test after it.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 let stage = null
 
@@ -160,9 +146,9 @@ describe('the sequence', () => {
     it('shows the plane only while it is in the air, pointed where it is going', async () => {
         const wrapper = await mountStage()
 
-        // v-show, read off the element: VTU's isVisible() has opinions about
-        // SVG in a detached tree, and `display: none` is the actual thing being
-        // asserted.
+        // v-show read off style attr, not VTU's isVisible(): it has opinions
+        // about SVG in a detached tree.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         const planeStyle = () => wrapper.find('.plane').attributes('style')
 
         expect(planeStyle()).toContain('display: none')
@@ -235,9 +221,9 @@ describe('cancellation', () => {
     })
 
     it('is born asleep when the screen was hidden while the globe was loading', async () => {
-        // The import takes as long as the connection takes, and the tab can be
-        // backgrounded inside that window — at which point pause() runs before
-        // there is anything to pause.
+        // Import can be backgrounded before it settles, so pause() may run
+        // before there's anything to pause.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         stage = mount(GlobeStage, { props: { routes: [AMS_LIS], activeCode: AMS_LIS.code } })
 
         Object.defineProperty(document, 'hidden', { value: true, configurable: true })

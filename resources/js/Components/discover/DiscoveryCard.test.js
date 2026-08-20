@@ -1,18 +1,7 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The discovery card — and the badge, which is the whole feature in one span
-// =============================================================================
-// Most of what this component does is print fields. The part worth testing is
-// the part that makes a CLAIM: a card that says "verified low by Google" when
-// Google was never asked, or that reads as a warning when nothing is wrong, is
-// the difference between a feature the owner trusts and one they learn to
-// ignore.
-//
-// THE TWO BADGE STATES ARE NOT A GOOD/BAD PAIR. Unverified is the ORDINARY
-// state — no SERPAPI_KEY is the default on this box — so it must be quiet, not
-// yellow. That is a rendering fact and jsdom can only see the class/attribute;
-// the colour itself is checked by eye in the browser gate's screenshots.
-// =============================================================================
+// The discovery card and its verified/unverified badge — the part worth
+// testing since it makes a claim, not just prints fields.
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
@@ -62,10 +51,9 @@ describe('what the card says', () => {
     })
 
     /*
-     * THE HAND-OFF, AND IT IS THE REUSE THIS WHOLE FEATURE RESTS ON. A card
-     * links into `/route/DUS-AGP` — the existing lookup flow, which prices the
-     * pair and offers the watch button. Nothing here books, and nothing here
-     * watches.
+     * The card links into the existing route lookup flow rather than
+     * duplicating booking/watch behaviour here.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     it('is a link into the ordinary route screen', () => {
         expect(card().find('a').attributes('data-to')).toBe('DUS-AGP')
@@ -93,9 +81,8 @@ describe('the badge', () => {
     })
 
     /*
-     * THE SENTENCE IS THE SERVER'S. A hard-coded "Verified low by Google" in
-     * this template is a claim that goes on being made the day the check behind
-     * it is switched off.
+     * The sentence is the server's; a hard-coded string here would keep
+     * making the claim after the check behind it is switched off.
      */
     it('prints the server\'s words rather than composing its own', () => {
         const wrapper = card({ verdict: { verified: true, label: 'Checked against something else' } })
@@ -116,10 +103,9 @@ describe('the evidence line', () => {
     })
 
     /*
-     * A VERIFICATION STAGE THAT LEARNED NOTHING SAYS NOTHING. Travelpayouts'
-     * calendar coverage runs 41–87% even on watched routes, and a discovery is
-     * by definition an obscure pair — so a null window is the ordinary outcome
-     * and the honest rendering is no line at all, not "0%".
+     * A null window is the ordinary outcome for an obscure pair, so it
+     * renders no line at all — never "0%".
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     it('is absent when the window could not be measured', () => {
         expect(card({ percentile: null, savings: null }).find('.find__evidence').exists()).toBe(false)
@@ -141,10 +127,8 @@ describe('how old the price is', () => {
     })
 
     /*
-     * NULL RENDERS AS NOTHING AT ALL AND NEVER AS FRESH — the rule the whole
-     * `foundAt` field exists to enforce. A discovery should never reach the
-     * screen without one (DiscoveryPolicy discards unknown ages), and the card
-     * must not be the thing that breaks if that is ever retuned.
+     * Null renders as nothing, never as fresh — a DiscoveryPolicy contract.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     it('says nothing at all rather than guessing', () => {
         expect(card({ foundAt: null }).find('.find__seen').exists()).toBe(false)
@@ -152,18 +136,8 @@ describe('how old the price is', () => {
 })
 
 /*
- * ============================================================================
- * WHICH LANE — and why only one of the two says anything
- * ============================================================================
- * An ABSOLUTE find needs no explanation: "€29 to Málaga" is remarkable against
- * every fare in the sweep and the price is the whole sentence. A RELATIVE find
- * is by construction ORDINARY per kilometre — that is exactly what disqualified
- * it from the other lane — so without a word of context the reader is right to
- * wonder what a €60 Dublin is doing on a strip of insane fares.
- *
- * THE LINE IS A CLAIM ABOUT WHICH COMPARISON WAS MADE, not decoration, which is
- * why it is asserted here rather than left to the screenshot: the colour is a
- * browser-gate question, the SENTENCE is a correctness one.
+ * Only relative finds get an explanatory sentence — their price alone reads ordinary.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 describe('which argument the card is making', () => {
     it('says nothing extra on an absolute find', () => {
@@ -183,11 +157,8 @@ describe('which argument the card is making', () => {
     })
 
     /*
-     * THE ROUTE PAIR STAYS IN ITS OWN ELEMENT AND KEEPS ITS OWN TEXT. The lane
-     * line is a SIBLING, not text folded into the eyebrow — the e2e journey
-     * reads `.find__from` to derive which route to navigate to, and a card that
-     * appended a sentence there would break the one card type that needs it
-     * least.
+     * `.find__from` stays route-pair-only — e2e reads it to navigate.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     it('leaves the route pair alone', () => {
         const wrapper = card({ lane: 'relative' })
@@ -196,10 +167,8 @@ describe('which argument the card is making', () => {
     })
 
     /*
-     * AN UNKNOWN LANE IS TREATED AS ABSOLUTE — i.e. the card says LESS rather
-     * than more. A client reading an older or newer API than it expects must
-     * never invent the stronger claim; silence is the safe direction here, and
-     * it is the same call `foundAt: null` makes two blocks up.
+     * An unknown lane says less, not more — the safe default, matching foundAt: null.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     it('says nothing when it does not recognise the lane', () => {
         expect(card({ lane: undefined }).find('.find__lane').exists()).toBe(false)

@@ -2,21 +2,17 @@
 /*
  * The Account card's one control: change the password, from the phone.
  *
- * COLLAPSED UNTIL ASKED FOR. It is a row like every other row on this screen
- * until somebody taps Change, because three password boxes permanently open
- * under the alert switches would be the loudest thing on a screen about alerts —
- * and it is used roughly never.
+ * Collapsed until asked for — three open password boxes under the alert
+ * switches would be the loudest thing on a screen about alerts.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * THE ERRORS ARE THE SERVER'S, WORD FOR WORD. App\Http\Requests\
- * UpdatePasswordRequest phrases every rule for a person ("That is not your
- * current password"), and the field each one belongs to is the key it arrives
- * under, so they land beneath the box they are about. Restating them here would
- * be two copies of the same sentences to keep in step, and the copy that drifts
- * is always the one the person reads.
+ * Errors are the server's, word for word — UpdatePasswordRequest owns the
+ * copy; restating it here is two copies to keep in step.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * NO STRENGTH METER AND NO MODAL. The rule is twelve characters, the server is
- * the thing that enforces it, and a bar that turns amber is a second opinion
- * that can disagree with the only one that counts.
+ * No strength meter, no modal — the server enforces the rule; a second
+ * opinion that can disagree with it is worse than none.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 import { ref } from 'vue'
 import SettingRow from '@/Components/settings/SettingRow.vue'
@@ -41,10 +37,10 @@ function blank() {
 }
 
 /*
- * Opening and closing both CLEAR THE FIELDS, which is the whole reason this is
- * one function. A password left sitting in a collapsed form is a password in
- * the DOM of a phone somebody hands over to show a photo, and a half-typed
- * attempt restored on reopening is a form that looks like it remembers secrets.
+ * Opening and closing both CLEAR THE FIELDS — a password left in a collapsed
+ * form is a password in the DOM of a phone handed over to show a photo.
+ *
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 function toggle() {
   open.value = !open.value
@@ -66,7 +62,6 @@ async function submit() {
   try {
     await auth.changePassword(form.value)
 
-    // Done: collapse, forget everything typed, and say so.
     open.value = false
     form.value = blank()
     changed.value = true
@@ -78,12 +73,10 @@ async function submit() {
 }
 
 /**
- * Turn a failed request into something the form can show.
+ * Turn a failed request into something the form can show. 401 is absent on
+ * purpose — lib/http.js intercepts it and routes to login.
  *
- * A 422 goes under the fields; everything else is one line above the button,
- * because a status code is not about any particular box. The 401 case is absent
- * on purpose: `lib/http.js` intercepts it and routes to the login screen, which
- * is the honest answer to a session that ended mid-form.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 function absorb(failure) {
   const response = failure.response

@@ -15,20 +15,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 /**
  * `GET /api/destinations` — what the add-route form offers.
  *
- * THE ONE RULE THIS ENDPOINT HAS is which airports are in it, and world
- * flights made that rule matter far more than it did. The `airports` table
- * holds 3,270 rows: 184 are the curated destinations this endpoint exists to
- * offer, three are the places the owner leaves FROM, and the other 3,083 came
- * from an OurAirports snapshot nobody has an opinion about. A list that
- * included the origins would put "Amsterdam" in a dropdown whose every entry
- * becomes the far end of a route from Amsterdam; a list that included the
- * snapshot would be a 200 KB payload of places the rule engine can never
- * match.
- *
- * The `destinations` table is what tells all three apart — see the note in
- * database/migrations/..._create_airports_table.php — and this asserts the
- * endpoint keys off it rather than off `is_origin`, which was the same answer
- * when this file was written and has not been since.
+ * Keys off the `destinations` table (not `is_origin`) to separate 184 curated
+ * destinations from 3 origins and 3,083 unrelated OurAirports rows.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class DestinationsApiTest extends TestCase
 {
@@ -69,9 +58,8 @@ final class DestinationsApiTest extends TestCase
     }
 
     /**
-     * Coordinates travel with a WATCHLIST row, because the globe needs them.
-     * They have no reader here, and 184 airports' worth of them is payload the
-     * form would download and drop.
+     * Coordinates travel with a watchlist row, for the globe — unread here,
+     * they'd just be payload the form downloads and drops.
      */
     #[Test]
     public function it_does_not_carry_the_globe_coordinates(): void
@@ -120,27 +108,9 @@ final class DestinationsApiTest extends TestCase
     }
 
     /**
-     * The list the form actually gets in production, against the files it comes
-     * from: a hundred and eighty-four destinations and not the hundred and
-     * eighty-seven airports beside them.
-     *
-     * THE NUMBERS MOVED WITH WORLD FLIGHTS, and both halves of the change are
-     * deliberate rather than a bump to make a red test green:
-     *
-     *   77 -> 184 destinations   the European file's 77, plus the 107 long-haul
-     *                            places world_destinations.php adds. Every one
-     *                            of them carries vibes and twelve warmth
-     *                            ratings, because this is the tier the rule
-     *                            engine matches against.
-     *   80 -> 187 airports       the same 107, plus the three origins. This
-     *                            seeder still writes ONLY curated rows — the
-     *                            3,083 from the OurAirports snapshot are
-     *                            WorldAirportSeeder's, are not seeded here, and
-     *                            must never appear in this endpoint's answer.
-     *
-     * That last line is the drift this test now guards: `whereHas('destination')`
-     * is what keeps 3,086 airports with no opinion attached out of a dropdown
-     * that used to be the whole table minus three.
+     * 184 destinations, 187 airports — deliberate, not a red-test bump; see the
+     * European-vs-world-flights seeding breakdown.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function it_offers_every_seeded_destination_and_only_those(): void

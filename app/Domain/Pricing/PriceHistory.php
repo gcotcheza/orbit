@@ -9,10 +9,9 @@ use InvalidArgumentException;
 /**
  * Orbit's own observations of a route, oldest first.
  *
- * One point per day the poller ran. This is the data the app EARNS — nobody
- * sells it to us — and it is the only thing that can say a fare is falling
- * rather than merely low, which is the difference between "book it" and "wait
- * another week".
+ * One point per day the poller ran; this is data the app earns, not buys, and the
+ * only thing that can say a fare is falling rather than merely low.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final readonly class PriceHistory
 {
@@ -61,9 +60,9 @@ final readonly class PriceHistory
      * The tail of the history, by CALENDAR days back from the newest point
      * rather than by number of points.
      *
-     * The distinction matters the first time the poller misses a run: counting
-     * points would quietly reach further back than the caller asked for and
-     * mix a month-old price into a "last week" trend.
+     * Matters the first time the poller misses a run: counting points would quietly
+     * reach further back than asked and mix a month-old price into a "last week" trend.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     public function lastDays(int $days): self
     {
@@ -82,19 +81,16 @@ final readonly class PriceHistory
     }
 
     /**
-     * Which way, and how fast, the price is moving: the least-squares slope in
-     * cents per day divided by the mean price, i.e. a FRACTION of the fare per
-     * day. Negative is falling. NULL when there is not enough to say.
+     * Least-squares slope in cents/day, divided by the mean price — a fraction of the
+     * fare per day. Negative is falling. Null when there is not enough to say.
      *
-     * LEAST SQUARES RATHER THAN first-versus-last, which is the obvious cheap
-     * version and is wrong in the one case that matters: a fare that has slid
-     * steadily for a month and ticked up €2 yesterday would read as "rising".
-     * Every point gets a vote here, so one day of noise cannot flip the
-     * verdict the UI shows.
+     * Least squares, not first-vs-last: a fare that slid all month then ticked up €2
+     * yesterday would misread as "rising" under the naive version.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
-     * NORMALISED BY THE MEAN so the number means the same thing on a €40 route
-     * as on a €400 one — "half a percent a day" is a trend, "€2 a day" is not
-     * a trend until you know the fare.
+     * Normalised by the mean so a €40 route and a €400 route compare on the same
+     * scale — "half a percent a day" is a trend, "€2 a day" alone is not.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     public function dailyDrift(): ?float
     {

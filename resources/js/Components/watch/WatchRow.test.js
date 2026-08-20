@@ -1,25 +1,17 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The boarding pass, and the one thing it did not do
-// =============================================================================
-// The card draws itself from a `GET /api/watchlist` row and has three jobs: it
-// opens that route's detail screen, it pauses the route, and it removes it. The
-// first of those is new — the design gave the card the switch and the bin and
-// no way into /route/AMS-LIS, so a row you could see and name did nothing when
-// it was tapped.
-//
-// WHAT IS ACTUALLY UNDER TEST IS THE BOUNDARY. Navigation and the two controls
-// share one small card, and the failure worth catching is not "the link is
-// missing" — it is a link that swallowed the switch, so that pausing a route
-// also opened it, or a stop-propagation that silently stopped the toggle from
-// reaching the screen. Both are asserted below as structure (what is INSIDE the
-// link) rather than as behaviour, because that is what the fix is: the link
-// stops at the tear line and the controls are its siblings.
-//
-// `RouterLinkStub` rather than a real router, exactly as Home.test.js does for
-// the spotlight card: the assertion is the `to` this component hands the router,
-// not vue-router's ability to honour it.
-// =============================================================================
+// WatchRow: the boarding-pass card's link, switch and remove button.
+
+// Added the missing hand-off into the route's detail screen (the switch and bin existed;
+// opening the route from the card did not).
+// Why: docs/BUSINESS-LOGIC.md §36.
+
+// Tests assert the link/controls boundary as structure, not behaviour — the risk is a
+// link that swallowed the switch, or a stopPropagation that silently breaks the toggle.
+// Why: docs/BUSINESS-LOGIC.md §36.
+
+// RouterLinkStub, not a real router (as Home.test.js does for the spotlight card):
+// asserts the `to` prop this component hands the router, not vue-router itself.
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { describe, expect, it } from 'vitest'
 import { RouterLinkStub, mount } from '@vue/test-utils'
 
@@ -55,9 +47,9 @@ describe('opening the route', () => {
     })
 
     it('opens a paused route as readily as a watched one', () => {
-        // Watchlist.vue dims a paused row and leaves it in the list precisely so
-        // it can still be reached; a card that stopped being tappable when the
-        // switch went off would put its own detail screen out of reach.
+        // Paused rows stay dimmed but tappable (Watchlist.vue); losing that would hide
+        // the detail screen behind the switch going off.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         const wrapper = pass({ active: false })
 
         expect(link(wrapper).props('to')).toEqual({ name: 'route-detail', params: { id: 'AMS-LIS' } })
@@ -77,12 +69,12 @@ describe('the controls are not in the link', () => {
         const wrapper = pass()
         const open = wrapper.get('.pass__open')
 
-        // The whole point: a switch inside a link is nested interactives, and a
-        // tap that lands on it would both flip the route and navigate away from
-        // the screen that shows the result.
+        // The whole point: nested interactives — a switch inside the link — would let one tap
+        // both flip the route and navigate away.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         expect(open.find('[role="switch"]').exists()).toBe(false)
         expect(open.find('.stub__remove').exists()).toBe(false)
-        // …and there is only ever the one link on the card.
+        // There is only ever one link on the card.
         expect(wrapper.findAllComponents(RouterLinkStub)).toHaveLength(1)
     })
 
@@ -116,16 +108,9 @@ describe('the controls still work', () => {
     })
 })
 
-/*
- * ============================================================================
- * THE STUB'S ONE LINE OF PROSE
- * ============================================================================
- * A mature, watched route shows the barcode, which is set dressing. Anything
- * else the row has to SAY about what Orbit is doing with it goes in that slot —
- * and a paused route said nothing at all. The cues were an opacity of 0.58,
- * which reads as "loading" at least as readily as "off", and a switch somebody
- * has to already know the meaning of.
- */
+// The barcode is set dressing; the tracking-text slot is the only place the row says
+// what's happening — a paused route previously said nothing (just a dimmed switch).
+// Why: docs/BUSINESS-LOGIC.md §36.
 describe('what the stub says', () => {
     it('says nothing but the barcode once a route is established', () => {
         const wrapper = pass()
@@ -147,11 +132,9 @@ describe('what the stub says', () => {
         expect(wrapper.find('.stub__barcode').exists()).toBe(false)
     })
 
-    /*
-     * Both are true of a route paused on the day it was added, and only one of
-     * them matters then: "Tracking 1 day" is a promise about tomorrow morning
-     * that a paused route is not going to keep.
-     */
+    // Paused-and-day-one both apply here; "Paused" wins since "Tracking 1 day" promises a
+    // morning check a paused route won't run.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     it('says "Paused" rather than counting days a paused route will not have', () => {
         expect(pass({ active: false, trackingDays: 1 }).get('.stub__tracking').text()).toBe('Paused')
     })

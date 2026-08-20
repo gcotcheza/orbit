@@ -13,13 +13,10 @@ use App\Domain\Rules\RuleVocabulary;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
- * The chips, and taking one off.
+ * The chips, and taking one off. Protects a property the create screen can't
+ * check itself: chips and criteria are the same statement twice, round-tripped.
  *
- * WHAT THIS FILE IS REALLY PROTECTING is a property the create screen depends
- * on and cannot check for itself: chips and criteria are the same statement
- * twice, so a rule that gets SAVED can never describe a different trip from
- * the one that was on screen when the button was tapped. Every test here is a
- * round trip — criteria in, chips, criteria back.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class ParsedRuleTest extends TestCase
 {
@@ -74,10 +71,10 @@ final class ParsedRuleTest extends TestCase
     }
 
     /**
-     * The id is the kind plus the value and never a position, because the
-     * client holds removed ids across a re-parse of a sentence somebody is
-     * still editing. An index would silently start removing a different chip
-     * the moment a word earlier in the sentence changed.
+     * The id is kind+value, never a position — the client holds removed ids
+     * across a re-parse, and an index would silently remove the wrong chip.
+     *
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function a_chips_id_does_not_move_when_the_chips_around_it_do(): void
@@ -110,9 +107,10 @@ final class ParsedRuleTest extends TestCase
     }
 
     /**
-     * Removing WIDENS. A price ceiling taken off is any price, not no results
-     * — the difference between a rule that got looser and a rule that got
-     * broken.
+     * Removing WIDENS: a price ceiling taken off means any price, not no
+     * results — looser, not broken.
+     *
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function removing_the_price_chip_removes_the_ceiling(): void
@@ -136,9 +134,10 @@ final class ParsedRuleTest extends TestCase
     }
 
     /**
-     * The removed list outlives the parse it came from — the sentence is
-     * re-read on every keystroke — so an id that no longer matches anything is
-     * the ordinary case rather than a bad request.
+     * Removed ids outlive the parse they came from — re-read on every
+     * keystroke — so a stale id is the ordinary case, not a bad request.
+     *
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function an_id_for_a_chip_that_no_longer_exists_is_ignored(): void

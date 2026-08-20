@@ -11,14 +11,9 @@ use App\Application\Rules\RuleReading;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * A sentence as this app reads it: the chips, the criteria, and what it finds.
- *
- * THE WHOLE ANSWER TO `POST /api/rules/parse`, and the core of every stored
- * rule (RuleResource builds on it). One shape, two screens — the same
- * arrangement RouteSummaryResource and WatchlistRouteResource have, and for
- * the same reason: the create screen and the watch screen draw the same three
- * things, and a chip list that meant something slightly different on one of
- * them is the expensive kind of mistake.
+ * A sentence as this app reads it: chips, criteria, matches. Backs
+ * `POST /api/rules/parse` and every stored rule (RuleResource builds on it).
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class RuleReadingResource extends JsonResource
 {
@@ -33,9 +28,8 @@ final class RuleReadingResource extends JsonResource
 
         return [
             /*
-             * In the design's order — where from, how much, how long, which
-             * day, when, what for — because the screen renders them in the
-             * order they arrive and the order is a reading of the sentence.
+             * In the design's order (where, how much, how long, day, when,
+             * what for) — the screen renders chips as given, order intact.
              */
             'chips' => array_map(
                 static fn (RuleChip $chip): array => RuleChipResource::make($chip)->toArray($request),
@@ -43,10 +37,8 @@ final class RuleReadingResource extends JsonResource
             ),
 
             /*
-             * WHAT THE CHIPS ADD UP TO, published because it is what gets
-             * saved and a client that shows a summary ("from AMS, EIN or DUS
-             * under €80") should not have to reconstruct it from labels meant
-             * for a 352 px chip.
+             * What the chips add up to — published so a client summary doesn't
+             * have to reconstruct it from labels sized for a 352px chip.
              */
             'criteria' => $reading->criteria()->toArray(),
 
@@ -54,10 +46,9 @@ final class RuleReadingResource extends JsonResource
                 /* Every match, not just the sampled ones — the banner's number. */
                 'count' => $matches->count(),
                 /*
-                 * TRUE MEANS `count` IS A FLOOR AND THE BANNER MUST SAY SO.
-                 * Some of the routes this rule is about have no fare yet, so
-                 * the number can only grow — see RuleMatchSummary. The client
-                 * phrases it as "at least N so far" rather than as a total.
+                 * True means `count` is a floor the banner must say so —
+                 * some routes have no fare yet, so the number can only grow.
+                 * Why: docs/BUSINESS-LOGIC.md §36.
                  */
                 'partial' => $matches->partial(),
                 /* NULL when nothing matched: no trips is not a €0 trip. */

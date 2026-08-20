@@ -1,26 +1,15 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The service worker's update handshake
-// =============================================================================
-// WHY THIS IS A UNIT TEST AND NOT A BROWSER ONE. The browser gate drives a real
-// Chromium against a real stack, and it still cannot produce the thing this file
-// is about: a SECOND deploy arriving while a page from the first one is open.
-// That needs two different builds served from one origin, a worker that installs
-// between them, and a page that outlives both — none of which `scripts/e2e.sh`
-// can stage, because it builds the app once and tears the stack down at the end.
+// Unit test, not browser: scripts/e2e.sh can't stage two builds served from
+// one origin with a worker installing between them while a page outlives both.
+// Why: docs/BUSINESS-LOGIC.md §36.
 //
-// So what is checked here is the CONTRACT with `navigator.serviceWorker`: which
-// events mean "there is a newer build", which of them deliberately do not, and
-// what the toast's button is allowed to do. The registration is a fake, and it is
-// a fake made of real EventTargets so the listener wiring is the browser's rather
-// than the test's.
+// Tests the CONTRACT with navigator.serviceWorker (which events mean a newer
+// build); the registration is a fake made of real EventTargets.
+// Why: docs/BUSINESS-LOGIC.md §36.
 //
-// THE ONE ASSERTION THAT MATTERS MOST IS A NEGATIVE ONE: nothing reloads the
-// page unless somebody pressed the button. `controllerchange` fires on its own
-// in this app — the new worker claims the page as soon as it activates — so a
-// handler that reloaded on it would throw people off the screen they were
-// reading, minutes after a deploy they had no part in.
-// =============================================================================
+// Core assertion is negative: nothing reloads unless the button was pressed,
+// even though `controllerchange` fires on its own as the new worker activates.
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /** A worker, as far as this module is concerned: a state and a postMessage. */
@@ -56,11 +45,9 @@ class FakeRegistration extends EventTarget {
 }
 
 /**
- * A fresh copy of the module for every test.
- *
- * It holds module-level state on purpose — one registration, one "the user asked
- * for this", one "already reloading" — and a suite that shared it would be a
- * suite whose fourth test depends on its second.
+ * Fresh copy of the module per test: it holds module-level state on purpose
+ * (one registration, one "asked", one "already reloading") that must not leak.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 async function load({ controller = {} } = {}) {
     vi.resetModules()
@@ -85,9 +72,9 @@ beforeEach(() => {
 
 describe('finding out that a newer build has arrived', () => {
     it('says nothing on a page that has just been given its first worker', async () => {
-        // No controller = nothing was serving this page = this worker IS the
-        // first one. Offering to reload here would be offering to reload a page
-        // somebody has only just opened.
+        // No controller = this worker IS the first one; offering to reload
+        // would be reloading a page somebody just opened.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         const { pwa } = await load({ controller: null })
         const registration = new FakeRegistration()
 
@@ -118,9 +105,9 @@ describe('finding out that a newer build has arrived', () => {
     })
 
     it('announces a worker that was already parked when the page loaded', async () => {
-        // The textbook case: installed while the app was closed. Orbit's own
-        // worker skips waiting so it does not park — this is here because that
-        // is a property of service-worker.js and not of this file.
+        // Installed while app closed. Orbit's worker skips waiting so it
+        // doesn't actually park — tested here as a property of pwa.js regardless.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         const { pwa } = await load()
 
         pwa.watchForUpdate(new FakeRegistration({ waiting: new FakeWorker('installed') }))
@@ -193,9 +180,8 @@ describe('taking the new version, and not taking it', () => {
 })
 
 describe('looking for a deploy without being navigated', () => {
-    /* The case that started this: an installed app opened, backgrounded and
-       reopened for days without a single navigation, which is exactly when the
-       browser is least likely to check for a new worker on its own. */
+    /* Installed app backgrounded/reopened for days without a navigation —
+       exactly when the browser is least likely to check for updates itself. */
     const becomeVisible = () => {
         Object.defineProperty(document, 'hidden', { value: false, configurable: true })
         document.dispatchEvent(new Event('visibilitychange'))
@@ -223,9 +209,9 @@ describe('looking for a deploy without being navigated', () => {
     })
 
     it('does not ask again on every app switch', async () => {
-        // `visibilitychange` fires every time somebody flicks to their messages
-        // and back. A request per flick would be rude for news that changes a
-        // few times a day.
+        // `visibilitychange` fires on every app switch; a request per flick
+        // would be rude for news that changes a few times a day.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         const { pwa } = await load()
         const registration = new FakeRegistration()
 

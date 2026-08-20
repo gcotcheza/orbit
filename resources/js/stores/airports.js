@@ -1,66 +1,18 @@
-// =============================================================================
-// Everywhere else — the other 3,086 airports
-// =============================================================================
-// stores/destinations.js holds the 184 places Orbit has an OPINION about: they
-// arrive in one request when the add form opens, they are searched in the
-// browser, and every keystroke answers instantly out of memory. That design is
-// unchanged and this file does not replace it.
+// The rest of the world (3,270 airports) via `?q=` against `GET
+// /api/airports`; stores/destinations.js still covers the 184 curated ones.
+// Why: docs/BUSINESS-LOGIC.md §36.
 //
-// WHAT THIS ADDS is the rest of the world. Since the world import, `airports`
-// holds every scheduled airport on Earth and `POST /api/routes/lookup` will
-// price any pair of them — so a box that could only suggest 184 places was a
-// box that hid the feature. 3,270 rows is ~200 KB, which is not a payload to
-// send before somebody has typed anything, so this half is a `?q=` query
-// against `GET /api/airports`.
-//
-// THREE THINGS MAKE A PER-KEYSTROKE ENDPOINT BEHAVE:
-//
-//   - A DEBOUNCE, so "tokyo" is one request rather than five.
-//   - AN ABORT, so the one it replaces stops occupying a connection.
-//   - A SEQUENCE GUARD, because aborting is a request to the network stack and
-//     not a promise that nothing lands afterwards. "tok" answering after
-//     "tokyo" would repaint the panel with the older, wider answer — the classic
-//     typeahead flicker, and the reason the guard is a number rather than a
-//     boolean.
-//
-// A FAILURE IS NOT FATAL, for the same reason it is not in the curated store:
-// the suggestions are an assistance. The box still takes a three-letter code,
-// the server still validates it, and the curated list is still there and still
-// instant.
-//
-// =============================================================================
-// A COMPOSABLE, NOT A PINIA STORE — which it was, for exactly as long as there
-// was one box
-// =============================================================================
-// stores/destinations.js next door IS a store and should be: 184 rows fetched
-// once and read by everything, which is the definition of shared state. This
-// file held the same shape by analogy and it was wrong the moment the search
-// screen grew a SECOND field. `results` and `status` are the answer to the
-// query in ONE box — a singleton would have the From field repainting itself
-// with what somebody typed into To, and the debounce, the abort and the
-// sequence guard below are all per-box timers pretending to be global ones.
-//
-// SO EACH FIELD CALLS THIS AND KEEPS WHAT IT GETS. Two callers, two independent
-// searches, and nothing to reset between screens because the state dies with
-// the component that asked for it (`onScopeDispose`).
-//
-// THE FILE STAYS IN stores/ because it is still where "everywhere Orbit can
-// price" is fetched from, and because App\Http\Controllers\AirportController
-// and docs/API.md both name this path.
-// =============================================================================
+// A composable, not a Pinia store — a store would share state globally,
+// but each search field (From/To) needs its own independent query.
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { onScopeDispose, ref } from 'vue'
 import { http } from '@/lib/http'
 import { markRow, MAX_SUGGESTIONS } from '@/stores/destinations'
 
 /**
- * What a finished airport code looks like, and how a box's contents become one.
- *
- * THE UPPER-CASING IS A BOUNDARY AND NOT A KEYSTROKE. A field that shouts
- * "LISBON" back at somebody typing "Lisbon" reads as a complaint about what was
- * just typed — see AirportField.vue — so the capitals are applied here, once,
- * where the value stops being what is on screen and starts being what goes in a
- * request. Route codes are `AMS-LIS` (App\Models\Route::codeFor) and always
- * have been.
+ * A finished airport code. Upper-cased at the request boundary (here), not
+ * per keystroke in the field — see AirportField.vue.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 export const IATA = /^[A-Z]{3}$/
 
@@ -73,19 +25,15 @@ export function toCode(value) {
 }
 
 /**
- * Below this, don't ask.
- *
- * One letter matches something like a third of the table, and the ten rows
- * that come back are ten arbitrary ones — a worse answer than the curated list
- * gives for free, bought with a round trip. App\Http\Requests\SearchAirportsRequest
- * refuses it server-side too, so this is the cheap half of one rule.
+ * Below this, don't ask — a single letter matches ~1/3 of the table for ten
+ * arbitrary rows. SearchAirportsRequest enforces the same floor server-side.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 export const MIN_QUERY = 2
 
 /**
- * Long enough that a fast typist produces one request per word, short enough
- * that the panel does not feel like it is thinking. The rule parser uses 500 ms
- * for a call that costs money; this one is free and can afford to be quicker.
+ * Fast enough to feel responsive, slow enough that a fast typist produces
+ * one request per word. (The rule parser uses 500ms because it costs money.)
  */
 export const DEBOUNCE_MS = 250
 
@@ -104,11 +52,8 @@ export function useAirportSearch() {
     let timer = null
     let controller = null
 
-    /*
-     * WHICH REQUEST IS THE CURRENT ONE. Incremented on every call — including
-     * the ones that only cancel — so a reply from a query somebody has already
-     * typed past is discarded rather than rendered.
-     */
+    // Which request is the current one — incremented on every call
+    // (including cancels) so a stale reply is discarded rather than rendered.
     let sequence = 0
 
     /**
@@ -122,12 +67,8 @@ export function useAirportSearch() {
         cancel()
 
         if (query.length < MIN_QUERY) {
-            /*
-             * NOT `failed`, and not the previous query's rows either. A box
-             * being emptied has no answer, and showing the last one while
-             * somebody deletes their way back to a single letter is the panel
-             * arguing with the field.
-             */
+            // Not `failed`, and not the previous query's rows either — an
+            // emptied box has no answer; showing stale results would argue with the field.
             results.value = []
             status.value = 'idle'
 
@@ -152,14 +93,8 @@ export function useAirportSearch() {
                     status.value = 'ready'
                 })
                 .catch((failure) => {
-                    /*
-                     * An abort rejects here exactly like a 500 does, and it is
-                     * not a failure — it is this store's own doing. The
-                     * sequence guard tells them apart without having to know
-                     * what axios calls a cancellation this year: anything that
-                     * is not the current request has nothing to say about the
-                     * current state.
-                     */
+                    // An abort rejects here just like a 500 does, and isn't a
+                    // failure — it's this store's own doing; the sequence guard tells them apart.
                     if (mine !== sequence) {
                         return
                     }
@@ -173,11 +108,8 @@ export function useAirportSearch() {
     }
 
     /**
-     * Forget the query and whatever it found.
-     *
-     * Called when a suggestion is taken — at that point the box holds a
-     * three-letter code, the panel is closed, and a request for "BIO" would be
-     * one nobody is going to look at.
+     * Forget the query and whatever it found — called once a suggestion is
+     * taken, when a stray in-flight request would answer nobody is watching.
      */
     function clear() {
         cancel()
@@ -201,52 +133,31 @@ export function useAirportSearch() {
         }
     }
 
-    /*
-     * A BOX THAT HAS GONE AWAY IS NOT WAITING FOR AN ANSWER. Leaving the search
-     * screen mid-debounce would otherwise fire the request 250 ms later and
-     * resolve it into refs nothing renders — harmless, and still a request made
-     * on behalf of a screen that no longer exists.
-     *
-     * `failSilently` because this is legitimately called outside a component in
-     * its own unit test, where there is no scope to dispose and nothing to warn
-     * about.
-     */
+    // A disposed box isn't waiting for an answer — without this, a stray
+    // debounced request could still fire into nothing. `failSilently`: also
+    // called from a unit test outside any component scope.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     onScopeDispose(cancel, true)
 
     return { results, status, search, clear }
 }
 
-// -----------------------------------------------------------------------------
-// The join
-// -----------------------------------------------------------------------------
-
 /**
- * The two lists, shown as one.
+ * The two lists, shown as one: curated results always first (only they
+ * match the rule engine and have hand-picked names/cities).
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * CURATED FIRST, ALWAYS, and it is not favouritism. Those 184 rows are the ones
- * a person wrote down: the city is the city somebody would say ("Sydney", not
- * "Sydney (Mascot)"), the airport has the name it is called by, and they are
- * the only rows the rule engine can ever match — so somebody typing "lisb" who
- * meant Lisbon must get Lisbon, not one of the four other airports with those
- * letters in them. Within each half the order is the one that half already
- * decided: the client's ranking for the curated rows, the server's for the
- * rest.
+ * Deduped by code — the world endpoint searches the whole table, which
+ * includes the curated rows too (e.g. AMS would otherwise appear twice).
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * DEDUPED BY CODE, because the world endpoint searches the WHOLE airports
- * table and the curated rows are in it. Amsterdam typed into the box would
- * otherwise offer AMS twice, from two tiers, with two spellings of the same
- * airport's name.
+ * `world: true` is the only thing added; means "Orbit prices this with no
+ * curated opinion" (docs/BUSINESS-LOGIC.md §1) — draws one divider, not a badge.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * `world: true` IS THE ONLY THING ADDED, and the form uses it to draw one
- * quiet divider rather than a badge per row. What it means is "Orbit will
- * price this and has no opinion about it" — see docs/BUSINESS-LOGIC.md §1.
- *
- * `exclude` IS THE OTHER END OF THE PAIR, and it is filtered here rather than in
- * the component because it has to happen BEFORE the cut to `limit`. Dropping a
- * row from eight afterwards leaves seven suggestions on a panel that had room
- * for eight — the excluded airport silently costs somebody a result. What it
- * means is the precise version of "never suggest a route from a place to
- * itself": the From box will not offer what To holds, and vice versa.
+ * `exclude` is filtered here (not in the component) because it must happen
+ * BEFORE the `limit` cut, or a dropped row silently shrinks the panel.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
  * @param {Array<object>} curated already ranked and marked by searchDestinations
  * @param {Array<object>} world `GET /api/airports`'s rows, in the server's order

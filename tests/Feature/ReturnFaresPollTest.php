@@ -29,18 +29,12 @@ use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
 
 /**
  * The round-trip foundation, end to end: the switch, the fake, the job, the
- * table and the command.
+ * table and the command (the adapter itself is unit-tested separately).
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * tests/Unit/Infrastructure/TravelpayoutsReturnProviderTest is about what the
- * real adapter makes of a recorded answer. This is about everything either side
- * of it — that `ORBIT_RETURNS_PROVIDER` reaches the container, that a poll
- * writes and prunes `return_fares` the way the migration says it does, and that
- * `orbit:poll-returns` fans out over the watchlist.
- *
- * ⚠ THE TIME IS ASSERTED NEXT DOOR, in tests/Feature/ScheduleTest, with the rest
- * of the clock. `the_returns_poll_is_on_the_schedule` below only asserts that
- * the entry EXISTS — it is the descendant of a guard that once asserted the
- * opposite, and it carries the story of why that reversed.
+ * WARNING: the schedule TIME is asserted in ScheduleTest, not here — this
+ * only guards that the `orbit:poll-returns` entry still exists.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class ReturnFaresPollTest extends TestCase
 {
@@ -61,16 +55,12 @@ final class ReturnFaresPollTest extends TestCase
         parent::tearDown();
     }
 
-    // ------------------------------------------------------------------- the switch
-
     #[Test]
     public function the_default_is_the_fake_provider(): void
     {
-        /*
-         * SHIPPING THE ADAPTER AND SWITCHING PRODUCTION TO IT ARE TWO SEPARATE
-         * DECISIONS, and only the first one is in this branch — the same
-         * assertion the one-way adapter's PR carried.
-         */
+        // Shipping the adapter and switching production to it are two
+        // separate decisions — only the first is in this branch (same as the
+        // one-way PR).
         $this->assertSame('fake', config('orbit.providers.returns'));
         $this->assertInstanceOf(FakeReturnProvider::class, $this->app->make(ReturnTripProvider::class));
     }
@@ -112,12 +102,9 @@ final class ReturnFaresPollTest extends TestCase
     #[Test]
     public function the_two_fare_switches_are_independent(): void
     {
-        /*
-         * THE REASON THERE ARE TWO KEYS. Round-trip coverage is far thinner than
-         * one-way coverage, so a box must be able to run real one-way fares —
-         * which every deal score and alert depends on — while returns are still
-         * coming from the fake.
-         */
+        // Two separate provider keys — a box can run real one-way fares
+        // (which every score/alert depends on) while returns still come
+        // from the fake.
         config([
             'orbit.providers.price'     => 'travelpayouts',
             'orbit.travelpayouts.token' => 'test-token',
@@ -126,8 +113,6 @@ final class ReturnFaresPollTest extends TestCase
 
         $this->assertInstanceOf(FakeReturnProvider::class, $this->app->make(ReturnTripProvider::class));
     }
-
-    // -------------------------------------------------------------------- the fake
 
     #[Test]
     public function the_fake_is_deterministic(): void
@@ -144,13 +129,9 @@ final class ReturnFaresPollTest extends TestCase
     {
         $trips = $this->fakeTrips();
 
-        /*
-         * THE ONE PLACE THIS FAKE DEPARTS FROM ITS ONE-WAY SIBLING, which
-         * answers for every day of the window and so has never made the app face
-         * a hole. Real round-trip coverage was 7.7% to 33.5% of near-window
-         * departure dates, so a dense fake would build every future screen on an
-         * assumption production breaks on day one.
-         */
+        // Deliberately sparse, unlike the one-way fake (which answers every
+        // day): real round-trip coverage was 7.7%-33.5% of window dates.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $dates = array_unique(array_map(fn (ReturnTrip $t): string => $t->departureDate->format('Y-m-d'), $trips));
 
         $this->assertLessThan(182, count($dates), 'A dense fake would hide every empty-state path.');
@@ -196,11 +177,8 @@ final class ReturnFaresPollTest extends TestCase
     #[Test]
     public function the_fake_stamps_a_find_time_so_the_freshness_path_is_exercised(): void
     {
-        /*
-         * NULL WOULD BE LESS CODE AND WOULD RENDER AS NOTHING AT ALL, so every
-         * sandbox run and every screenshot would silently take the one path
-         * where the age of a fare is invisible.
-         */
+        // Null would be less code but would render as nothing at all —
+        // every sandbox run and screenshot would silently take the invisible-age path.
         foreach ($this->fakeTrips() as $trip) {
             $this->assertNotNull($trip->foundAt);
         }
@@ -209,12 +187,9 @@ final class ReturnFaresPollTest extends TestCase
     #[Test]
     public function a_return_costs_more_than_a_one_way_and_less_than_two_of_them(): void
     {
-        /*
-         * THE MEASURED RELATION, WHICH IS THE WHOLE PREMISE OF THIS MILESTONE:
-         * a return was 1.45x to 1.74x the cheapest one-way on the three routes
-         * recorded on 2026-08-16. A fake outside that range would make every
-         * future screen tell a story production contradicts.
-         */
+        // The measured relation (this milestone's premise): a return was
+        // 1.45x-1.74x the cheapest one-way on the routes recorded 2026-08-16.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $trips = $this->fakeTrips();
         $oneWay = $this->app->make(PriceProvider::class)->cheapestPerDay(
             'AMS',
@@ -236,8 +211,6 @@ final class ReturnFaresPollTest extends TestCase
         $this->assertGreaterThan($cheapestOneWay, $cheapestReturn);
         $this->assertLessThan($cheapestOneWay * 2, $cheapestReturn);
     }
-
-    // --------------------------------------------------------------------- the job
 
     #[Test]
     public function a_poll_writes_the_rows_the_provider_named(): void
@@ -278,11 +251,8 @@ final class ReturnFaresPollTest extends TestCase
 
         $this->assertSame('2026-08-10 20:11:25', $withAge->found_at?->format('Y-m-d H:i:s'));
 
-        /*
-         * NEVER `fetched_at` AS A STAND-IN. That substitution is precisely the
-         * false claim the column exists to stop making, and it matters more here
-         * than on the one-way table: this cache is seven days deep.
-         */
+        // Never `fetched_at` as a stand-in — that's the false claim this
+        // column exists to stop, and it matters more here (a 7-day-deep cache).
         $this->assertNull($withoutAge->found_at);
     }
 
@@ -302,12 +272,9 @@ final class ReturnFaresPollTest extends TestCase
         $fare = ReturnFare::query()->firstOrFail();
         $this->assertSame(13400, $fare->price_cents);
 
-        /*
-         * AND THE AGE CAN GO BACKWARDS AS WELL AS FORWARDS. The cache is not
-         * monotonic, so `found_at` is in the update list — leaving it out would
-         * freeze the first age a row ever had and turn the column into a lie in
-         * the reassuring direction.
-         */
+        // The age can go backwards too — the cache isn't monotonic, so
+        // `found_at` is in the update list; omitting it would freeze the
+        // first age forever.
         $this->assertSame('2026-08-15 09:00:00', $fare->found_at?->format('Y-m-d H:i:s'));
     }
 
@@ -316,11 +283,8 @@ final class ReturnFaresPollTest extends TestCase
     {
         $route = $this->watchedRoute();
 
-        /*
-         * THE GRAIN OF THE TABLE, AND THE REASON THE UNIQUE KEY IS THREE COLUMNS
-         * RATHER THAN TWO. A departure date is not a row here — a (date, length)
-         * pair is.
-         */
+        // The table's grain: a (date, length) pair is a row, not just a
+        // date — hence the three-column unique key.
         $this->bindProvider([
             ['2026-09-04', 2, 11000],
             ['2026-09-04', 3, 11500],
@@ -341,11 +305,8 @@ final class ReturnFaresPollTest extends TestCase
         $this->bindProvider([['2026-09-04', 7, 15900]]);
         PollReturnFares::dispatchSync($route->id);
 
-        /*
-         * A THIN ROUTE IS THE ORDINARY CASE HERE, not a failure — EIN-BCN
-         * returned 23 entries across a whole year. Yesterday's rows are a better
-         * answer than none.
-         */
+        // A thin route is ordinary here, not a failure (EIN-BCN: 23 entries
+        // across a year) — yesterday's rows beat none.
         $this->bindProvider([]);
         PollReturnFares::dispatchSync($route->id);
 
@@ -361,8 +322,6 @@ final class ReturnFaresPollTest extends TestCase
 
         $this->assertSame(0, ReturnFare::query()->count());
     }
-
-    // ------------------------------------------------------------------ the prunes
 
     #[Test]
     public function departures_that_have_gone_by_are_deleted(): void
@@ -385,12 +344,8 @@ final class ReturnFaresPollTest extends TestCase
     {
         $route = $this->watchedRoute();
 
-        /*
-         * A ROW NOTHING WILL EVER REPRICE is the same lie as a withdrawn fare,
-         * only permanent. The provider answers roughly a year deep and the
-         * horizon is 334 days, so this clause bites on an ordinary run here
-         * where its one-way counterpart deletes nothing.
-         */
+        // A row nothing will ever reprice is a permanent lie — bites here
+        // (provider depth ~1yr vs 334-day horizon) where the one-way twin deletes nothing.
         $beyond = Date::now()->addDays(400)->toDateString();
         $this->seedFare($route, $beyond, 7);
 
@@ -405,11 +360,8 @@ final class ReturnFaresPollTest extends TestCase
     {
         $route = $this->watchedRoute();
 
-        /*
-         * FETCHED FOUR DAYS AGO, against a three-day staleness rule. An upsert
-         * only ever writes the pairs named this morning, so without this a pair
-         * that had a fare last week and has none now would keep it forever.
-         */
+        // Fetched 4 days ago vs. a 3-day staleness rule — an upsert only
+        // writes today's pairs, so a pair with no fresh fare would otherwise linger forever.
         $this->seedFare($route, '2026-09-20', 7, fetchedAt: '2026-08-12 04:40:00');
         $this->seedFare($route, '2026-09-21', 7, fetchedAt: '2026-08-15 04:40:00');
 
@@ -447,8 +399,6 @@ final class ReturnFaresPollTest extends TestCase
 
         $this->assertNotNull(ReturnFare::query()->where('route_id', $theirs->id)->first());
     }
-
-    // ----------------------------------------------------------------- the command
 
     #[Test]
     public function the_command_queues_one_job_per_watched_route(): void
@@ -489,24 +439,10 @@ final class ReturnFaresPollTest extends TestCase
     #[Test]
     public function the_returns_poll_is_on_the_schedule(): void
     {
-        /*
-         * THIS TEST USED TO ASSERT THE OPPOSITE, and the reversal is worth the
-         * paragraph. `return_fares` shipped with no readers and no schedule
-         * entry, on the argument that morning provider calls filling a table
-         * nothing draws are a standing cost for no benefit — the PR that added
-         * the first reader was to add the entry.
-         *
-         * There is still no reader. What changed is that the poll was being run
-         * daily anyway by a cron OUTSIDE this repository, because the history is
-         * only worth anything if it accumulates in real time: the calls were
-         * being spent either way, and the only thing the outside runner added
-         * was somewhere for the accumulation to stop unnoticed. The clock moved
-         * into the deployed stack.
-         *
-         * tests/Feature/ScheduleTest is where the time, the timezone and the
-         * collision arithmetic are asserted; this is the guard that the returns
-         * milestone does not silently lose its entry again.
-         */
+        // This test used to assert the OPPOSITE — the daily poll (once run
+        // by an outside cron) moved into this repo's own schedule. Time and
+        // timezone details live in ScheduleTest; this only guards the entry exists.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $commands = array_map(
             static fn (Event $event): string => (string) $event->command,
             app(Schedule::class)->events(),
@@ -518,18 +454,13 @@ final class ReturnFaresPollTest extends TestCase
         );
     }
 
-    // ------------------------------------------------------------------- the config
-
     #[Test]
     public function returns_are_maintained_exactly_as_deep_as_the_one_way_calendar(): void
     {
-        /*
-         * THE DRIFT GUARD, and the same one `selfstats.cross_section_days`
-         * carries. The two numbers are different decisions that happen to agree
-         * — a person paging an eleven-month heatmap and a person asking for "a
-         * week away before next summer" are the same person on the same screen —
-         * so a box that widens one has to think about the other.
-         */
+        // The drift guard `selfstats.cross_section_days` also carries: two
+        // different decisions that happen to agree, so widening one means
+        // reconsidering the other.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $this->assertSame(
             (int) config('orbit.poll.horizon_days'),
             (int) config('orbit.returns.window_days'),
@@ -551,15 +482,10 @@ final class ReturnFaresPollTest extends TestCase
         }
     }
 
-    // ------------------------------------------------------------------- plumbing
-
     /**
-     * Bind a provider that answers with exactly these trips.
-     *
-     * THE FAKE CANNOT PRODUCE THESE CASES: its coverage is hash-driven, so "a
-     * row four days stale on a date nothing quotes any more" is not a shape it
-     * can make. Same arrangement tests/Feature/PollersTest uses for the one-way
-     * poller, with the price named rather than derived.
+     * Bind a provider that answers with exactly these trips — the fake's
+     * hash-driven coverage can't produce arbitrary cases (same arrangement
+     * as PollersTest's one-way poller, price named not derived).
      *
      * @param  list<array{string, int, int}|array{string, int, int, string|null}>  $trips
      */
@@ -628,16 +554,11 @@ final class ReturnFaresPollTest extends TestCase
     /**
      * A row that is already in the table when the poll runs.
      *
-     * ⚠ `insert` AND A BARE 'Y-m-d', WHICH IS EXACTLY WHAT THE JOB'S UPSERT
-     * WRITES — and this is not a style preference, it is the trap
-     * App\Jobs\PollRoutePrices documents, met again. `create()` runs the value
-     * through the model's `immutable_date` cast on the way IN, which stores
-     * '2026-08-16 00:00:00'. Postgres coerces that straight back to its `date`
-     * column and never notices; SQLite, which this suite runs on, stores the
-     * string it is given — so every `where('departure_date', '2026-08-16')`
-     * below would miss a row that is really there, and the prune tests would
-     * read as "the job deleted it" when the job had done nothing of the kind.
-     * One format, written one way, on both sides of the assertion.
+     * WARNING: uses `insert` + a bare 'Y-m-d' — matches exactly what the
+     * job's upsert writes. `create()`'s date cast round-trips differently on
+     * SQLite (this suite's DB) than Postgres, silently breaking every
+     * `where('departure_date', ...)` below.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     private function seedFare(Route $route, string $departure, int $nights, ?string $fetchedAt = null): void
     {

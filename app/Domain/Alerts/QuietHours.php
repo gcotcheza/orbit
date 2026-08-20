@@ -9,28 +9,20 @@ use InvalidArgumentException;
 /**
  * "No pings after ten at night" — as arithmetic on a wall clock.
  *
- * MINUTES SINCE LOCAL MIDNIGHT, AND NOTHING ELSE. This class holds no date, no
- * timezone and no clock: the window the owner set is a fact about a wall clock
- * (`user_settings.quiet_start`/`quiet_end` store exactly that, in the owner's
- * zone — see the migration), and turning "is 23:40 inside 22:00–08:00" into a
- * question about an instant is what makes quiet hours drift an hour twice a
- * year. App\Application\Alerts\DeliveryWindow does the conversion, once.
+ * Minutes since local midnight, nothing else — no date/timezone/clock here.
+ * App\Application\Alerts\DeliveryWindow does the instant conversion, once.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * THE WINDOW USUALLY CROSSES MIDNIGHT, which is the whole difficulty and the
- * reason this is a class rather than two comparisons at the call site. The
- * default is 22:00 to 08:00, so the "inside" test is `>= start OR < end` rather
- * than `>= start AND < end`, and a naive implementation is not merely wrong at
- * 03:00 — it is wrong in the direction of sending mail, at three in the
- * morning, to the one person this app has.
+ * The window usually crosses midnight (default 22:00-08:00), so "inside" is
+ * `>= start OR < end`, not `AND` — getting this wrong means mailing at 3am.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * THE END IS EXCLUSIVE. 08:00 is not quiet: it is the moment the held mail goes
- * out, and a window that still covered its own end would defer that mail by
- * another full day.
+ * The end is exclusive: 08:00 is when held mail goes out, not still quiet.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * A ZERO-LENGTH WINDOW (start === end) COVERS NOTHING. "From 22:00 to 22:00" is
- * somebody who has not finished setting it up rather than a request never to be
- * contacted again, and reading it as twenty-four hours of silence would make
- * the app look broken in a way nothing on the screen explains.
+ * A zero-length window (start === end) covers nothing — "22:00 to 22:00" is
+ * an unfinished setup, not a request for permanent silence.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final readonly class QuietHours
 {
@@ -98,13 +90,9 @@ final readonly class QuietHours
     }
 
     /**
-     * `HH:MM` or `HH:MM:SS` to minutes since midnight.
-     *
-     * BOTH PRECISIONS, because the column is a `time` and the two engines this
-     * app runs on disagree about it: Postgres hands back `22:00:00` and SQLite
-     * hands back whatever string was written. App\Models\UserSettings trims to
-     * five characters for the same reason; accepting either here means a caller
-     * that forgot to trim gets the right answer rather than a plausible one.
+     * `HH:MM` or `HH:MM:SS` to minutes since midnight. Both precisions:
+     * Postgres returns `22:00:00`, SQLite returns whatever was written.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     private static function minuteOfDay(string $clock): int
     {
@@ -123,9 +111,9 @@ final readonly class QuietHours
     }
 
     /**
-     * 24:00 is midnight and so is 00:00 — a caller that computed a minute by
-     * adding to one it already had should not be able to produce a time this
-     * class has no opinion about.
+     * 24:00 and 00:00 are both midnight — a caller adding to a minute it
+     * already had must never produce a time this class has no opinion about.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     private static function normalise(int $minuteOfDay): int
     {

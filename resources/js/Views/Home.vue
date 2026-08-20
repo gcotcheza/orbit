@@ -1,30 +1,21 @@
 <script setup>
 /*
- * =============================================================================
- * Home — the Orbit globe (design/README.md §1)
- * =============================================================================
+ * Home — the Orbit globe (design/README.md §1).
+ *
  * The signature screen: a photoreal Earth that tours the watchlist, a card for
  * whichever route the camera is on, and a rail to jump to another one.
  *
- * `name` IS LOAD-BEARING and must stay 'Home': App.vue's <KeepAlive> matches on
- * it, and everything below — a WebGL context, ~2.5 MB of Earth texture and an
- * eleven-second camera sequence — is precisely what must not be rebuilt every
- * time somebody looks at the calendar and comes back. GlobeStage.vue pauses
- * itself while this screen is cached; see its onDeactivated.
+ * `name` must stay 'Home' — App.vue's <KeepAlive> matches on it to avoid rebuilding the WebGL scene.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * ONE REQUEST, EVERY ROUTE. `GET /api/watchlist` carries the arcs, the card and
- * the rail in a single payload (docs/API.md), so the tour never waits on the
- * network between routes.
+ * One request, every route — GET /api/watchlist carries arcs, card and rail
+ * together (docs/API.md), so the tour never waits on the network.
  *
- * THE LIST IS THE SHARED ONE. This screen fetched the endpoint for itself until
- * the DRY pass, on the grounds that nothing else here needed it; the watch
- * screen writes to the same list, so a route paused there used to stay in this
- * screen's tour until the next reload. That is the moment stores/watchlist.js
- * earned its keep, and this file is now one of its three readers.
+ * The list is shared (stores/watchlist.js), not fetched here — a paused route must not linger in this screen's tour.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * THE TOUR IS KEYED BY ROUTE CODE, not by index: a reload that returns the
- * routes in a new order (the owner reordered them on another device) leaves the
- * camera where it was rather than cutting to whatever is now third.
+ * Keyed by route code, not index, so a reorder from another device doesn't
+ * cut the camera to a different route.
  */
 import { computed, onActivated, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -46,11 +37,8 @@ const failed = computed(() => status.value === 'failed')
 const activeCode = ref(null)
 
 /*
- * Probed once, before anything tries to draw: a browser without WebGL renders
- * the JavaScript perfectly and the globe not at all, which looks like a broken
- * app rather than an unsupported one. It is a ref because the stage can also
- * discover this the hard way — a chunk that will not load, a context lost under
- * memory pressure — and hand the screen the same answer later.
+ * Probed once — WebGL-less renders fine except the globe, which looks broken
+ * rather than unsupported. A ref because GlobeStage can discover this later too.
  */
 const globeAvailable = ref(hasWebgl())
 
@@ -62,12 +50,10 @@ const activeRoute = computed(
 )
 
 /**
- * "Good morning", by the PHONE's clock.
+ * "Good morning", by the phone's clock.
  *
- * Deliberately the device's local time rather than the owner's configured
- * Europe/Amsterdam: this is a greeting, and it is talking to whoever is
- * holding the phone. Everything with a DATE on it — history, the calendar —
- * uses the server's timezone instead (docs/API.md).
+ * Deliberately local time, not the owner's configured timezone — a greeting talks to whoever holds the phone.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 function currentGreeting() {
   const hour = new Date().getHours()
@@ -79,16 +65,14 @@ function currentGreeting() {
   return hour < 18 ? 'Good afternoon' : 'Good evening'
 }
 
-// Read before the first render, not in onMounted: the greeting is the largest
-// text on the screen, and starting it empty means the first frame has a hole
-// where the heading goes.
+// Read before the first render, not in onMounted — the greeting is the
+// largest text on the screen, so starting empty leaves a hole in frame one.
 const greeting = ref(currentGreeting())
 
 /*
- * The store says what went wrong and to whom (a 401 is handled in lib/http.js,
- * which sends the whole app to the login screen). What is left for this screen
- * is where the camera starts — and, when the list could not be reached, saying
- * so quietly with a way to try again rather than showing an empty planet.
+ * A 401 is handled in lib/http.js (redirects to login); this screen only
+ * decides where the camera starts and how to show "could not be reached".
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 async function load() {
   await watchlist.refresh()
@@ -105,9 +89,8 @@ function advance() {
 
 onMounted(load)
 
-// This screen is cached rather than rebuilt, so it can be hours old when the
-// user comes back to it — and "Good morning" at six in the evening is the kind
-// of small wrongness that makes an app feel unattended.
+// This screen is cached, not rebuilt, so it can be hours old — a stale
+// "Good morning" at 6pm is a small wrongness that makes the app feel unattended.
 onActivated(() => {
   greeting.value = currentGreeting()
 })
@@ -125,16 +108,9 @@ onActivated(() => {
       </div>
 
       <!--
-        design/README.md §1 notes the prototype pointed this at an onboarding
-        screen that does not exist. Alerts is the nearest real destination: it is
-        where this app's per-person settings live.
-
-        AND IT LANDS ON THE ACCOUNT, which is what the glyph promises. This is a
-        drawing of a PERSON, and it was dropping people at the top of a screen
-        headed "Alerts", with email channels, sensitivity and quiet hours between
-        them and anything about themselves — the account card is the fifth
-        section down and off the fold on a phone (the UX pass, screenshot
-        06-j1-after-tapping-profile).
+        Alerts is the nearest real destination for this icon; the hash lands on
+        #account rather than the top of that screen (a past UX finding).
+        Why: docs/BUSINESS-LOGIC.md §36.
       -->
       <RouterLink
         class="home__profile"
@@ -148,9 +124,8 @@ onActivated(() => {
       </RouterLink>
     </header>
 
-    <!-- Loading: the shape of the screen, held still. No spinner — the globe
-         takes a moment to fetch its textures and a spinner would be replaced by
-         a second thing that also moves. -->
+    <!-- Loading: the screen's shape, held still — no spinner, since the globe
+         itself is already the thing that moves once it arrives. -->
     <div v-if="loading" class="home__skeleton" role="status">
       <div class="home__skeleton-globe"></div>
       <div class="home__skeleton-card"></div>
@@ -164,20 +139,8 @@ onActivated(() => {
     </div>
 
     <!--
-      DAY ONE, AND IT IS THE ONLY VERSION OF THIS SCREEN MOST PEOPLE SEE FIRST.
-      It was a small card floating in six hundred pixels of nothing: the
-      signature screen of a flight tracker, on the morning somebody installed
-      it, showing no flight and no tracker. The globe is what this app IS, so
-      it is drawn — empty, no arcs, no tour, just the planet — and the card sits
-      on it exactly the way the spotlight card does once there is something to
-      spotlight. Nothing here pretends to data: an unpopulated Earth is the
-      honest picture of an empty watchlist, and it is the picture of what the
-      screen becomes.
-
-      GlobeStage with no routes builds the scene and plays nothing — `play()`
-      returns early without an active route — so this costs the textures and no
-      camera work. It still reports a missing GPU the same way, which is why
-      the fallback below is shared with the ordinary state.
+      Day one: the empty globe still draws (no placeholder card); GlobeStage with no routes costs textures but no camera work.
+      Why: docs/BUSINESS-LOGIC.md §36.
     -->
     <div v-else-if="activeRoutes.length === 0" class="home__day1">
       <GlobeStage
@@ -192,9 +155,7 @@ onActivated(() => {
         <h2 class="home__notice-title">Nothing orbiting yet</h2>
         <p class="home__quiet">Add a route and the globe starts touring it — Orbit prices it every morning.</p>
 
-        <!-- A BUTTON, not a link inside a sentence. This is the one thing to
-             do on this screen and it was four words of body copy with an
-             underline on two of them. -->
+        <!-- A button, not a link inside a sentence — the one thing to do on this screen. -->
         <RouterLink class="home__cta" :to="{ name: 'watch' }">Add your first route</RouterLink>
       </div>
     </div>
@@ -215,9 +176,8 @@ onActivated(() => {
         <RouteRail :routes="activeRoutes" :active-code="activeRoute.code" @select="activeCode = $event" />
       </template>
 
-      <!-- No GPU, no globe. The screen is the same information without the
-           film: every watched route, as the card the spotlight would have
-           shown, each one a link into its detail. -->
+      <!-- No GPU, no globe — same information without the film: every watched
+           route as the card the spotlight would have shown. -->
       <div v-else class="home__flat">
         <p class="home__quiet">Your browser cannot draw the globe, so here is the whole watchlist instead.</p>
 
@@ -285,9 +245,8 @@ onActivated(() => {
 }
 
 .home__spotlight {
-  /* The overlap that ties the card to the globe (design/README.md §1). From
-     the token because GlobeStage.vue's caption has to clear exactly this much
-     — see the comment on .stage__caption for the defect that taught us. */
+  /* The overlap that ties card to globe (design/README.md §1) — GlobeStage.vue's
+     caption must clear exactly this token; see .stage__caption there for why. */
   position: relative;
   z-index: 4;
   margin: calc(-1 * var(--spotlight-overlap)) var(--gutter) 0;
@@ -299,8 +258,6 @@ onActivated(() => {
   gap: 12px;
   padding: 14px var(--gutter) 0;
 }
-
-/* --- The three quiet states ---------------------------------------------- */
 
 .home__skeleton {
   padding: 0 var(--gutter);
@@ -325,10 +282,8 @@ onActivated(() => {
   box-shadow: var(--shadow);
 }
 
-/* The empty globe carries no arcs and no route caption, so the two overlays
-   that would be talking about nothing are hidden rather than left to say "0
-   routes orbiting" over an empty planet. Scoped to this state only — the real
-   screen needs both. */
+/* No arcs or caption on an empty globe, so these overlays are hidden here
+   rather than saying "0 routes orbiting" — scoped to this state only. */
 .home__day1-globe :deep(.stage__chip),
 .home__day1-globe :deep(.stage__caption) {
   display: none;
@@ -343,13 +298,11 @@ onActivated(() => {
   box-shadow: var(--shadow);
 }
 
-/* The card rides up over the globe's lower edge, which is the same overlap the
-   spotlight card uses (design/README.md §1) and from the same token — so the
-   day-1 screen is laid out like the screen it turns into.
+/* Rides up over the globe's lower edge, matching the spotlight card's overlap.
+   Why: docs/BUSINESS-LOGIC.md §36.
 
-   AFTER `.home__notice`, and that is load-bearing: the rule above sets `margin`
-   as a shorthand, so a `margin-top` written before it would be overwritten by
-   the 24px it re-declares. */
+   MUST STAY AFTER .home__notice: its shorthand `margin` would overwrite a
+   margin-top declared before it. */
 .home__notice--over {
   position: relative;
   z-index: 4;

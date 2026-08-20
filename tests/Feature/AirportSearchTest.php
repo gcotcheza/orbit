@@ -18,17 +18,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 /**
  * `GET /api/airports?q=` — the other half of the add-route typeahead.
  *
- * `GET /api/destinations` sends the 184 curated places whole and the browser
- * searches them; this searches all 3,270 and sends ten. The two exist
- * for reasons that are written down in their controllers — what is asserted
- * here is the behaviour that makes them one panel: the same four fields, the
- * same ranking, and a short query refused rather than answered with ten
- * arbitrary rows.
+ * `GET /api/destinations` sends 184 curated places whole; this searches
+ * all 3,270 and sends ten — same four fields, same ranking, one panel.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * THE SEEDED TESTS AT THE BOTTOM ARE THE ONES THAT MATTER MOST. Everything
- * above them runs on a handful of factory rows and proves the SQL; those two
- * run against the real 3,270-row snapshot and prove that typing "Tokyo" into
- * the box on a real box finds Tokyo.
+ * The seeded tests at the bottom matter most — everything above proves
+ * the SQL on factory rows; those two prove it against the real snapshot.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class AirportSearchTest extends TestCase
 {
@@ -43,8 +39,6 @@ final class AirportSearchTest extends TestCase
         $this->owner = User::factory()->create();
     }
 
-    // -- Who may ask ---------------------------------------------------------
-
     #[Test]
     public function a_guest_is_refused_with_json(): void
     {
@@ -52,8 +46,6 @@ final class AirportSearchTest extends TestCase
             ->assertUnauthorized()
             ->assertJsonPath('message', 'Unauthenticated.');
     }
-
-    // -- What may be asked ---------------------------------------------------
 
     #[Test]
     public function one_character_is_not_a_search(): void
@@ -69,8 +61,6 @@ final class AirportSearchTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('errors.q.0', 'Say what to look for.');
     }
-
-    // -- What comes back -----------------------------------------------------
 
     #[Test]
     public function it_answers_with_the_four_fields_a_suggestion_row_prints(): void
@@ -110,10 +100,9 @@ final class AirportSearchTest extends TestCase
     }
 
     /**
-     * The same order resources/js/stores/destinations.js ranks the curated list
-     * with — the code beats the place, the place beats the country, a prefix
-     * beats a substring. The two lists are shown as one panel, so a row that
-     * sorted differently on either side of the join would read as a shuffle.
+     * The same order resources/js/stores/destinations.js ranks the curated
+     * list with (code > place > country > substring) — one panel, one order.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function the_code_beats_the_city_and_the_city_beats_the_country(): void
@@ -123,11 +112,8 @@ final class AirportSearchTest extends TestCase
         $this->airport('DPS', 'Ngurah Rai', 'Bali', 'Indonesia', 'ID');
         $this->airport('WDH', 'Hosea Kutako', 'Windhoek', 'Namibia', 'NA');
 
-        /*
-         * All four ranks, in one query: the exact code, the city that starts
-         * with it, the country that starts with it, and the city that merely
-         * contains it.
-         */
+        // All four ranks in one query: exact code, city-starts-with, country-
+        // starts-with, and city-contains.
         $this->assertSame(['IND', 'IDR', 'DPS', 'WDH'], $this->codes($this->search('ind')));
 
         /* No exact code: alphabetical by city within the rank, which is total. */
@@ -148,9 +134,9 @@ final class AirportSearchTest extends TestCase
     }
 
     /**
-     * A box somebody typed `%` into must not match all 3,270 rows, and `_`
-     * must not match any single character. Both are LIKE wildcards and both
-     * are escaped — the one injection-shaped thing a search endpoint has.
+     * `%`/`_` are LIKE wildcards, both escaped — the one injection-shaped
+     * thing a search endpoint has; `%` must not match all 3,270 rows.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function a_like_wildcard_is_a_character_somebody_typed(): void
@@ -164,12 +150,9 @@ final class AirportSearchTest extends TestCase
     }
 
     /**
-     * The one place this endpoint deliberately differs from
-     * `GET /api/destinations`, whose whole job is to never offer Amsterdam.
-     * This one answers "which airport is that", and DUS-AMS is a pair
-     * App\Http\Requests\RoutePairRequest accepts — so hiding it here would put
-     * the typeahead at odds with the API it exists to help somebody use. The
-     * FORM drops the currently selected origin, which is the precise rule.
+     * Deliberately differs from `GET /api/destinations` — Amsterdam is a
+     * valid origin here since RoutePairRequest accepts DUS-AMS.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function an_origin_is_an_airport_like_any_other(): void
@@ -190,9 +173,9 @@ final class AirportSearchTest extends TestCase
     }
 
     /**
-     * Sixty a minute, keyed on the account. It stands in front of a client bug
-     * rather than in front of a cost — see the `airport-search` limiter in
-     * App\Providers\AppServiceProvider.
+     * Sixty a minute, keyed on the account — guards against a client bug,
+     * not a cost. See the `airport-search` limiter in AppServiceProvider.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function the_sixty_first_search_in_a_minute_is_refused(): void
@@ -206,20 +189,14 @@ final class AirportSearchTest extends TestCase
         $this->search('new')->assertStatus(429);
     }
 
-    // -- Against the real snapshot -------------------------------------------
-
     #[Test]
     public function the_world_is_searchable_once_it_is_seeded(): void
     {
         $this->seedTheWorld();
 
-        /*
-         * TOKYO IS HANEDA AND NOT ALSO NARITA, which is a fact about the
-         * snapshot rather than about this endpoint: OurAirports files NRT under
-         * its own municipality, Narita, and this searches what the data says.
-         * Somebody who wants Narita types Narita — or NRT, which is three
-         * letters and exact.
-         */
+        // TOKYO IS HANEDA, NOT NARITA — a fact about the OurAirports snapshot
+        // (NRT files under its own municipality), not this endpoint.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $this->assertSame(['HND'], $this->codes($this->search('tokyo')));
         $this->assertSame(['NRT'], $this->codes($this->search('narita')));
 
@@ -248,8 +225,6 @@ final class AirportSearchTest extends TestCase
         $this->assertCount(10, $response->json('data'));
         $this->assertSame(10, $response->json('meta.count'));
     }
-
-    // -- Helpers -------------------------------------------------------------
 
     /**
      * @return TestResponse<JsonResponse>

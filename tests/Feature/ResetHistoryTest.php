@@ -24,12 +24,10 @@ use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * `orbit:reset-history` — the one-day command.
+ * `orbit:reset-history` — the one-day command. The tests that matter are the
+ * two negatives: no run without `--confirm`, nothing owner-decided touched.
  *
- * The tests that matter here are the two negatives: that it does NOT run
- * without `--confirm`, and that it does not touch anything the owner decided.
- * A command that empties three tables is only ever run in a hurry, on the
- * production box, next to a switch that has just been flipped.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class ResetHistoryTest extends TestCase
 {
@@ -71,9 +69,9 @@ final class ResetHistoryTest extends TestCase
         $this->history();
 
         /*
-         * THE NUMBERS ARE THE SAFETY FEATURE. Running it once without the flag
-         * is how somebody finds out they are on the box with five thousand rows
-         * rather than the one with none.
+         * The numbers are the safety feature — a dry run is how somebody
+         * learns they're on the box with five thousand rows, not zero.
+         * Why: docs/BUSINESS-LOGIC.md §36.
          */
         $this->runCommand('orbit:reset-history')
             ->expectsOutputToContain('3 rows')
@@ -97,9 +95,10 @@ final class ResetHistoryTest extends TestCase
     }
 
     /**
-     * EVERYTHING THE OWNER DECIDED SURVIVES. This is what makes the command
-     * safe to run on a live box and what makes it different from
-     * `migrate:fresh --seed`.
+     * Everything the owner decided survives — what makes this safe on a live
+     * box, unlike `migrate:fresh --seed`.
+     *
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function it_leaves_the_watchlist_the_rules_and_the_alert_ledger_alone(): void
@@ -138,9 +137,9 @@ final class ResetHistoryTest extends TestCase
         $this->assertSame(1, User::query()->count());
 
         /*
-         * The ledger especially: it is what the 24-hour cooldown reads
-         * (App\Domain\Alerts\AlertPolicy), so wiping it would let the first real
-         * poll re-announce every deal Orbit had already mailed about.
+         * The ledger especially: the 24-hour cooldown (AlertPolicy) reads it,
+         * so wiping it would re-announce every deal already mailed.
+         * Why: docs/BUSINESS-LOGIC.md §36.
          */
         $this->assertSame(1, Alert::query()->count());
     }
@@ -181,9 +180,10 @@ final class ResetHistoryTest extends TestCase
     }
 
     /**
-     * One route with three observations, two calendar cells and a statistics
-     * row — the three tables the command owns, with a different count each so
-     * that a mixed-up delete shows up as a wrong number rather than as zero.
+     * One route, three tables, a different count each — a mixed-up delete
+     * shows up as a wrong number, not as zero.
+     *
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     private function history(): Route
     {

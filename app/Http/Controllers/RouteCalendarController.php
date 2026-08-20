@@ -18,12 +18,9 @@ use App\Http\Resources\RouteCalendarResource;
 /**
  * "When is it cheap?" — one month of one route (design/README.md §3).
  *
- * A MONTH AT A TIME rather than the whole 90-day window in one response,
- * because the screen is a month grid and paging is how it moves. The window is
- * about three months long, so `month` outside it is a valid request with an
- * empty answer — a month with no fares comes back with `days: []` and null
- * bounds rather than a 404, which is what lets the screen page forward past
- * the horizon and show an empty grid instead of an error.
+ * A month outside the ~3-month window is valid and returns an empty answer
+ * (`days: []`, null bounds) instead of 404, so paging past it stays clean.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class RouteCalendarController extends Controller
 {
@@ -32,12 +29,9 @@ final class RouteCalendarController extends Controller
         // See RouteController for why this is abort() and not firstOrFail().
         $route = Route::query()->where('code', $code)->first() ?? abort(404, 'Unknown route.');
 
-        /*
-         * VALIDATED AS A SHAPE, not merely parsed. `Y-m` straight into
-         * Carbon's parser accepts a great deal that is not a month ("now",
-         * "+3 days"), and the value ends up in a BETWEEN against the database.
-         * The regex is the whole guard: four digits, a dash, 01-12.
-         */
+        // Validated as a shape (regex), not parsed — Carbon's parser accepts non-months
+        // like "now"/"+3 days", and this value feeds a BETWEEN against the database.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $validated = $request->validate([
             'month' => ['sometimes', 'string', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
         ]);
@@ -47,8 +41,7 @@ final class RouteCalendarController extends Controller
         /** @var string $month */
         $month = $validated['month'] ?? Date::now($timezone)->format('Y-m');
 
-        // The regex above is the guard; by here `$month` is four digits, a
-        // dash and 01-12, which parse() cannot make anything else out of.
+        // $month is already regex-validated above, so parse() can't misinterpret it.
         $start = CarbonImmutable::parse($month.'-01', $timezone)->startOfMonth();
         $end = $start->endOfMonth();
 
@@ -69,31 +62,15 @@ final class RouteCalendarController extends Controller
             (float) config('orbit.calendar.pricey_at'),
         );
 
-        /*
-         * WHERE THE TWO HAND-OFFS GO, AS TEMPLATES RATHER THAN AS 62 URLS.
-         *
-         * The day sheet books the day the user tapped, so a link is per-DATE
-         * and the client is the only party that knows which date that is.
-         * Sending one URL per day per site would repeat the same prefixes down
-         * the whole month; sending nothing would mean the client hard-coding two
-         * hosts, two path shapes, the lower-casing, the upper-casing and the
-         * affiliate marker — all of which App\Application\Routes\BookingLink and
-         * config('orbit.booking') own.
-         *
-         * TWO OF THEM NOW, AND THE ORDER IN THE OBJECT IS NOT THE POINT —
-         * `aviasales` is the primary because it is the search Orbit's own prices
-         * come out of, and the sheet draws it as the loud button. See
-         * BookingLink for the €29-against-€68 that made this a bug rather than a
-         * preference.
-         *
-         * THE HOLE IS NAMED AFTER ITS DATE FORMAT, `{ddmm}` and `{yymmdd}`,
-         * rather than being a bare `{date}` in both. The two sites want the
-         * parts of a date in different orders and different lengths, and a
-         * single token would leave the client guessing which URL wanted which —
-         * i.e. knowing something about Skyscanner and Aviasales specifically.
-         * Named tokens keep that knowledge here and leave the client with pure
-         * date formatting. See docs/API.md.
-         */
+        // Booking links are templates, not one URL per day; BookingLink/config('orbit.booking')
+        // own the hosts, paths and casing so the client only formats dates.
+        // Why: docs/BUSINESS-LOGIC.md §36.
+
+        // aviasales is primary since Orbit's own prices come from it (see the €29-vs-€68 bug).
+        // Why: docs/BUSINESS-LOGIC.md §36.
+
+        // Named tokens {ddmm}/{yymmdd}, not a bare {date}: the two sites want different date shapes.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         return RouteCalendarResource::make($calendar)
             ->additional(['meta' => [
                 'code'    => $route->code,

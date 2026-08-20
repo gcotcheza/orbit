@@ -1,54 +1,10 @@
 <script setup>
 /*
- * One route Orbit went and found on its own.
- *
- * THE SIBLING OF Components/globe/SpotlightCard.vue AND DELIBERATELY NOT A
- * COPY OF IT. That card summarises a WATCHED route: a deal score, a verdict
- * pill, a fortnight of sparkline, a percentage below usual — every one of which
- * exists because Orbit has been polling the route for weeks. A discovery has
- * none of that and never will: it is a route nobody watches, usually one Orbit
- * has never priced, and the whole card has to stand on evidence gathered in a
- * single run.
- *
- * So the layout rhymes — big city name, big price, a quiet line underneath —
- * and the CONTENT is different in the one way that matters: this card shows its
- * working. Where the spotlight card says "33% below usual" on the strength of
- * months of history, this one says what it cost, when the price was seen, and
- * whether anybody other than Travelpayouts agrees.
- *
- * =============================================================================
- * THE BADGE IS THE POINT OF THE WHOLE FEATURE, SO IT IS THE FUSSIEST PART
- * =============================================================================
- * There are two states and they are NOT a good/bad pair:
- *
- *   VERIFIED    Google was asked and its own market agrees this route and date
- *               are cheap right now. Rare, earned, and the only state allowed
- *               to look like a claim.
- *   UNVERIFIED  Everything else — no SerpAPI key (the default on this box), no
- *               quota, a run past its cap, or a route Google had no opinion
- *               about. It is the ORDINARY state and it must not read as a
- *               warning: nothing is wrong, Orbit simply did not get a second
- *               opinion and is saying so.
- *
- * Hence the unverified badge is `--muted` on `--card2` and not the warn tint.
- * A yellow "unverified" on nine cards out of ten would train the owner to read
- * the whole strip as suspect, which is the opposite of what the honesty is for.
- *
- * THE LABEL COMES FROM THE SERVER (`verdict.label`), exactly as VerdictPill's
- * does and for the same reason: it is a claim about a third party, and a
- * hard-coded "Verified low by Google" in a template is a sentence that goes on
- * being said the day the check behind it is switched off. This component styles
- * by `verdict.verified`; it does not compose the words.
- *
- * =============================================================================
- * IT IS A LINK, AND WHERE IT GOES IS THE REUSE
- * =============================================================================
- * A real <a> into `/route/AMS-AGP` — long-pressable, openable in a new tab,
- * announced as a link. That screen prices the pair through `POST /api/routes/
- * lookup` if Orbit has nothing recent, creates the route row, and offers the
- * watch button (docs/API.md, "look before you watch"). So tapping a discovery
- * costs nothing until somebody is interested, and this feature added no booking
- * link, no watch action and no second detail screen of its own.
+ * Sibling of SpotlightCard.vue, deliberately not a copy — a discovery has no history so
+ * this card shows its working instead of a percentage. Badge label/verified come from the
+ * server (verdict.label/verified), never composed client-side; unverified is the ordinary,
+ * unmuted-not-warned state. It's a real <a> to /route/{code} — no booking/watch link of its own.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -64,54 +20,26 @@ const price = computed(() => euro(props.discovery.price))
 const departure = computed(() => departureLabel(props.discovery.departureDate))
 
 /*
- * HOW OLD THE PRICE IS, AND IT IS ALWAYS DRAWN WHEN IT IS KNOWN — where the
- * route detail only prints it past a threshold.
- *
- * A discovery is the least verified thing in the app: it comes out of a
- * seven-day-deep cache of other people's searches, and the run that found it
- * accepted anything up to three days old (`orbit.discovery.max_found_age_days`).
- * On the detail screen an age is a caveat on a number Orbit polls every
- * morning; here it is part of the number. Null renders as nothing at all rather
- * than as fresh — the rule this whole field exists to enforce.
+ * Age is always drawn when known (route detail only shows it past a threshold) — a
+ * discovery is the least verified thing in the app, so age is part of the number here, not
+ * just a caveat. Null renders as nothing, never as "fresh".
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 const seen = computed(() => seenLabel(props.discovery.foundAt))
 
 /*
- * WHICH ARGUMENT THIS CARD IS MAKING, AND WHY ONLY ONE OF THEM SAYS SO.
- *
- * An ABSOLUTE find needs no eyebrow beyond the route: "€18 to Vilnius" is
- * remarkable against every fare in the sweep, and the price is the whole
- * sentence. A RELATIVE find is by construction ORDINARY per kilometre — that is
- * what disqualified it from the other lane — so a reader looking at "€60,
- * Dublin" is entitled to wonder what it is doing on a strip of insane fares.
- * The line answers exactly that and claims nothing more.
- *
- * "FOR THIS ROUTE" IS THE LOAD-BEARING HALF. The evidence line underneath
- * already says how deep in its own window the fare sits; this says which
- * comparison was made at all. Without it the card would be quietly making the
- * absolute lane's claim on the relative lane's evidence.
- *
- * COMPARED AGAINST THE SERVER'S STRING, not a boolean the client invents. The
- * lane is a column, an enum and an API field, and a component deciding for
- * itself what counts as relative would be a fourth opinion.
+ * Only a relative find gets the "for this route" line — an absolute find's price is already
+ * the whole sentence, while a relative find is ordinary per km and needs the comparison
+ * stated. Compared against the server's lane string, not a client-invented boolean.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 const isRelative = computed(() => props.discovery.lane === 'relative')
 
 /**
- * The one-line case for this card, or null if there is no case to make.
- *
- * BUILT FROM WHAT THE SERVER MEASURED, and it says nothing when the server
- * measured nothing: `percentile` and `savings` are both null when the
- * verification stage could not fetch the route's own window, which is the
- * ordinary outcome on an obscure pair (Travelpayouts' calendar coverage runs
- * 41–87% even on watched routes). A card with no line here is honest rather
- * than broken.
- *
- * "CHEAPEST" RATHER THAN "0TH PERCENTILE", because a percentile is a word for a
- * report and this is a sentence under a price. The threshold for a discovery to
- * exist at all is the cheapest tenth, so every card that has this line is
- * saying something strong — and the €-figure beside it is what makes it
- * concrete.
+ * One-line case for this card, or null when the server measured nothing (percentile/savings
+ * null on an unfetchable window — a card with no line is honest, not broken). "Cheapest",
+ * not "0th percentile" — a sentence under a price, not a report.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 const evidence = computed(() => {
     const { percentile, savings } = props.discovery
@@ -135,12 +63,10 @@ const evidence = computed(() => {
   >
     <div class="find__head">
       <div class="find__where">
-        <!-- `.find__from` KEEPS THE ROUTE PAIR AND NOTHING ELSE. The lane tag is
-             a SIBLING rather than text appended here, for two reasons: an
-             absolute card stays byte-identical to what shipped, and the e2e
-             journey reads this element's text to derive the route it should
-             navigate to (`e2e/specs/search.spec.js`). Folding a sentence into it
-             would break that split on the one card type that needs it least. -->
+        <!-- .find__from stays the route pair only — e2e/specs/search.spec.js reads this
+             element's text to derive the route to navigate to. The lane tag is a sibling,
+             not appended text.
+             Why: docs/BUSINESS-LOGIC.md §36. -->
         <p class="find__from">{{ discovery.origin.iata }} → {{ discovery.destination.iata }}</p>
         <p v-if="isRelative" class="find__lane">Rare price for this route</p>
         <h3 class="find__city">{{ discovery.destination.city }}</h3>
@@ -156,9 +82,8 @@ const evidence = computed(() => {
     <p v-if="evidence" class="find__evidence">{{ evidence }}</p>
 
     <div class="find__foot">
-      <!-- `data-verified` RATHER THAN A CLASS BINDING, so the two states are two
-           attribute selectors in the stylesheet below and this template ships no
-           colour logic — the same call VerdictPill makes. -->
+      <!-- data-verified, not a class binding: the two states are attribute selectors below
+           and this template ships no colour logic — same call as VerdictPill. -->
       <span class="find__badge" :data-verified="discovery.verdict.verified">
         <svg
           v-if="discovery.verdict.verified"
@@ -210,23 +135,10 @@ const evidence = computed(() => {
   color: var(--accent-ink);
 }
 
-/* THE SECOND LANE'S ONE PIECE OF COLOUR, AND IT IS DELIBERATELY THE QUIETEST
-   TONE IN THE PALETTE.
-
-   `--info` is the app's "here is a fact" pair — the fourth tone, next to good,
-   warn and neutral — and it is the right one precisely because it is NOT the
-   good tone: a relative find is not a better find, it is a DIFFERENT KIND of
-   find, and tinting it green would rank it against the absolute cards sitting
-   above it in the same list. It is also not `--warn`, for the reason the
-   unverified badge is not: nothing here is wrong.
-
-   BOTH THEMES CARRY IT (resources/css/tokens.css defines --info-bg / --info-ink
-   under :root and under [data-theme='light']), so this rule needs no theme
-   branch and hard-codes no colour — the app's one absolute styling rule.
-
-   NO LETTER-SPACING, WHERE THE ROUTE PAIR ABOVE HAS 0.13em. That tracking is
-   what makes three letter-pairs read as a label; applied to a five-word sentence
-   it reads as a headline, and this line must stay small copy. */
+/* --info (not --good, not --warn): a relative find is a different kind, not a better or
+   worse one. Both themes carry the token (resources/css/tokens.css), so no theme branch
+   needed. No letter-spacing here, unlike .find__from's 0.13em label tracking.
+   Why: docs/BUSINESS-LOGIC.md §36. */
 .find__lane {
   display: inline-block;
   margin-top: 4px;
@@ -314,7 +226,7 @@ const evidence = computed(() => {
   color: var(--good-ink);
 }
 
-/* THE ORDINARY STATE, AND IT IS NOT A WARNING — see the script's long note.
+/* The ordinary state, not a warning (see docs/BUSINESS-LOGIC.md §36).
    Muted on the card's own second surface: present, legible, unalarming. */
 .find__badge[data-verified='false'] {
   background: var(--card2);

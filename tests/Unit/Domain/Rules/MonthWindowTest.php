@@ -10,12 +10,9 @@ use App\Domain\Rules\MonthWindow;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
- * "Mar – May", and what it means on a given morning.
- *
- * THE WRAPPING CASE IS WHY THIS FILE EXISTS. Winter is 12 to 2, so every
- * method here has to mean the right thing when `to` is smaller than `from` —
- * and a `for` loop over months that assumed otherwise would not fail, it would
- * hang.
+ * "Mar – May", and what it means on a given morning. The wrapping case
+ * (winter is 12→2, `to` < `from`) is why this file exists — untested, it hangs.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class MonthWindowTest extends TestCase
 {
@@ -28,11 +25,8 @@ final class MonthWindowTest extends TestCase
     }
 
     /**
-     * A window that definitely exists.
-     *
-     * `MonthWindow::of()` answers NULL for a month outside the year — which is
-     * its own test above — so every other case here would otherwise be written
-     * through `?->` and assert nothing when the constructor silently changed.
+     * Asserts non-null so a broken `MonthWindow::of()` fails loudly here,
+     * instead of every case below silently no-op'ing through `?->`.
      */
     private function window(int $from, int $to): MonthWindow
     {
@@ -70,9 +64,8 @@ final class MonthWindowTest extends TestCase
     }
 
     /**
-     * Asked in the middle of the window, the answer is the window we are
-     * standing in — rolling forward to next March would hide every fare
-     * currently on offer.
+     * Mid-window resolves to the window we're standing in — rolling forward
+     * to next year would hide fares currently on offer.
      */
     #[Test]
     public function a_window_already_running_resolves_to_this_year(): void
@@ -102,9 +95,8 @@ final class MonthWindowTest extends TestCase
     }
 
     /**
-     * December to February asked in January is the winter around us, so it
-     * STARTED last year. A window that quietly began next December would make
-     * a January rule match nothing for eleven months.
+     * Dec-Feb asked in January is the winter around us, so it STARTED last
+     * year — else a January rule would match nothing for eleven months.
      */
     #[Test]
     public function a_wrapping_window_resolves_across_new_year(): void

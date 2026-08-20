@@ -11,67 +11,18 @@ use Illuminate\Support\Facades\Date;
 use App\Application\Ports\ReturnTripProvider;
 
 /**
- * Round-trip fares, until there are real ones.
- *
- * NOT A TEST DOUBLE — the same standing FakePriceProvider has. `orbit.providers
- * .returns` defaults to `fake`, so this is the adapter a box runs until somebody
- * sets `ORBIT_RETURNS_PROVIDER=travelpayouts`, and it is what the later
- * return-trip screens and the browser sandbox will be built and demonstrated
- * against. It therefore has to look like a plausible airline, not like `return
- * 42`.
- *
- * =============================================================================
- * IT IS DELIBERATELY SPARSE, WHICH IS THE ONE PLACE IT DEPARTS FROM ITS ONE-WAY
- * SIBLING
- * =============================================================================
- * FakePriceProvider answers for EVERY day of the window, and that has a known
- * cost: tests/Feature/TravelpayoutsPollTest says out loud that "the whole app
- * has never once been exercised against a calendar with holes in it, and the
- * holes are what a poll is going to get from Tuesday onwards". Round-trip data
- * is far holier than one-way data — the share of near-window departure dates
- * carrying any round-trip fare at all was 27.5% (AMS-LIS), 14.8% (AMS-JFK),
- * 33.5% (AMS-BKK) and 7.7% (EIN-BCN) on 2026-08-16 — so a dense fake here would
- * not be an optimistic simplification, it would build every screen on top of an
- * assumption production breaks on day one.
- *
- * So a (departure date, stay length) cell is priced only when its hash falls
- * under `COVERAGE_IN_HUNDREDTHS`. Over the 181-day near window and the sixteen
- * stay lengths below that yields on the order of a hundred fares per route,
- * which is the same order as the 119, 56 and 23 entries the three recorded
- * routes actually returned. Most departure dates get one stay length or none —
- * which is what the live cache looks like.
- *
- * THE STAY LENGTHS IT OFFERS ARE THE CONFIGURED BANDS AND NOTHING ELSE.
- * `orbit.returns.durations` is what the app will ask questions along, so a fake
- * that priced 0 to 60 nights uniformly would spend 90% of its rows on lengths
- * no screen will ever query and still leave the bands thin. The real cache is
- * not band-shaped, but it is not uniform either — its mass sits on short stays
- * for short-haul and on one to four weeks for long-haul, which is roughly where
- * the bands are.
- *
- * PRICED AS TWO LEGS WITH A RETURN DISCOUNT. The out and back legs are taken
- * from FakeFareModel at their own departure dates — so a fortnight spanning the
- * seasonal peak costs more than one either side of it, and the Friday-out
- * Sunday-back premium falls out on its own — and the pair is then discounted.
- * `RETURN_DISCOUNT` is set from the measured ratio of cheapest return to
- * cheapest one-way: 1.68x (AMS-LIS), 1.45x (AMS-JFK), 1.74x (AMS-BKK), i.e. a
- * return costs well under two one-ways.
- *
- * SHARING FakeFareModel WITH THE OTHER TWO FAKES IS THE POINT. If round-trip
- * prices came from their own generator, the day a screen shows a one-way fare
- * next to a return one they would tell contradictory stories about the same
- * route — and the bug would look like a bug in whichever was on the right.
+ * Round-trip fake, not a test double — same standing as FakePriceProvider (default adapter
+ * until ORBIT_RETURNS_PROVIDER=travelpayouts). Deliberately sparse (COVERAGE_IN_HUNDREDTHS,
+ * measured against real coverage) rather than dense like the one-way fake; priced as two
+ * FakeFareModel legs with RETURN_DISCOUNT, sharing the model so one-way/return numbers agree.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final readonly class FakeReturnProvider implements ReturnTripProvider
 {
     /**
-     * How many of a hundred (departure date, stay length) cells carry a fare.
-     *
-     * FIVE, FROM THE MEASUREMENTS ABOVE rather than from taste: 181 days x 16
-     * stay lengths x 5% is about 145 fares per route, against the 119 (AMS-LIS),
-     * 56 (AMS-JFK) and 23 (EIN-BCN) real entries recorded inside the same
-     * window. Raising it makes every future return-trip screen look better than
-     * production ever will.
+     * Cells (of a hundred) that carry a fare: 5, measured against real coverage (181d x 16
+     * stays x 5% ≈ 145/route vs 119/56/23 real entries) — raising it flatters future screens.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     private const COVERAGE_IN_HUNDREDTHS = 5;
 
@@ -97,11 +48,10 @@ final readonly class FakeReturnProvider implements ReturnTripProvider
             return [];
         }
 
-        /*
-         * "As of now" through the Date facade rather than `new
-         * DateTimeImmutable`, because that is the clock `Date::setTestNow()`
-         * moves — and a fake that ignored it would price every replayed morning
-         * identically. A real adapter reads a wall clock it cannot move.
+        /**
+         * Date::now(), not `new DateTimeImmutable` — that's the clock Date::setTestNow()
+         * moves; a fake that ignored it would price every replayed morning identically.
+         * Why: docs/BUSINESS-LOGIC.md §36.
          */
         $observedAt = Date::now()->toDateTimeImmutable();
 
@@ -115,11 +65,10 @@ final readonly class FakeReturnProvider implements ReturnTripProvider
                     continue;
                 }
 
-                /*
-                 * THE HOLE, AND IT IS STABLE. crc32 of the route, the date and
-                 * the stay length — so the same cell is empty on this box, in
-                 * CI and after `docker compose down -v`, which is what lets a
-                 * feature test assert that a particular pair has no fare.
+                /**
+                 * The hole is stable: crc32(route, date, stay) is the same empty cell on this
+                 * box, in CI and after docker compose down -v — a test can assert "no fare".
+                 * Why: docs/BUSINESS-LOGIC.md §36.
                  */
                 if (crc32($routeCode.':returns:'.$day->format('Ymd').':'.$stay) % 100 >= self::COVERAGE_IN_HUNDREDTHS) {
                     continue;
@@ -128,18 +77,11 @@ final readonly class FakeReturnProvider implements ReturnTripProvider
                 $out = $this->model->priceCents($routeCode, $day, $observedAt);
                 $back = $this->model->priceCents($routeCode, $day->modify("+{$stay} days"), $observedAt);
 
-                /*
-                 * FOUND NOW, BECAUSE THIS ONE REALLY DID JUST INVENT IT. Null
-                 * would mean "we do not know how old this is" and would render
-                 * as no line at all, so every screenshot and every sandbox run
-                 * would silently exercise the one path where the freshness
-                 * feature is invisible. Stamping the clock keeps the fake a
-                 * plausible provider rather than a hole in the coverage.
-                 *
-                 * IT IS ALSO THE ONE THING THE FAKE FLATTERS. Real round-trip
-                 * fares come out of a seven-day-deep cache and are routinely
-                 * days old (TravelpayoutsReturnProvider, point 9); these are
-                 * always fresh.
+                /**
+                 * Stamped as found now (not null): null would hide the freshness feature from
+                 * every screenshot/sandbox run. This is the one thing the fake flatters — real
+                 * returns are routinely days old (TravelpayoutsReturnProvider, point 9).
+                 * Why: docs/BUSINESS-LOGIC.md §36.
                  */
                 $trips[] = new ReturnTrip(
                     $day,
@@ -154,13 +96,9 @@ final readonly class FakeReturnProvider implements ReturnTripProvider
     }
 
     /**
-     * Every stay length the configured bands cover, ascending and without
-     * duplicates.
-     *
-     * READ FROM CONFIG RATHER THAN LISTED HERE so that a box which retunes
-     * `orbit.returns.durations` gets a fake that still has fares in the bands it
-     * asks about. A hard-coded list would go quietly empty the day somebody
-     * added a "three weeks" band.
+     * Every stay length the configured bands cover, ascending, deduped — read from config so
+     * a retuned orbit.returns.durations still has fares in the bands it asks about.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @return list<int>
      */

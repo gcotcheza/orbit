@@ -10,17 +10,14 @@ use App\Domain\Pricing\DatedFare;
 /**
  * One month of the price heatmap, with each day already judged.
  *
- * THE VERDICT IS COMPUTED HERE, NOT IN THE BROWSER. design/README.md §3 fixes
- * the rule — cheap at or below the month's low plus 28% of its range, pricey
- * at or above 66% — and it is also the rule a future "cheap day" alert would
- * have to use. Two implementations of it would eventually disagree, and the
- * one that disagreed silently would be the one on the phone.
+ * Verdict computed here, not in the browser — design/README.md §3's rule is
+ * also what a future "cheap day" alert would need; two implementations would
+ * eventually disagree.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * THE RANGE IS THE MONTH'S OWN low and high, not the route's yearly
- * statistics: the screen's question is "which day of THIS month is cheap",
- * and a June in which every fare is dear should still colour its cheapest
- * Tuesday green. The route-level judgement is the deal score, on the other
- * two screens.
+ * Range is the month's own low/high, not the route's yearly stats — a dear
+ * June should still colour its cheapest Tuesday green.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final readonly class MonthCalendar
 {
@@ -59,10 +56,9 @@ final readonly class MonthCalendar
 
         foreach ($fares as $fare) {
             /*
-             * A MONTH WITH ONE PRICE has a zero range, and every day of it is
-             * both the cheapest and the dearest. "mid" is the only honest
-             * colour for a month that says nothing, and it also keeps the
-             * division below off zero.
+             * A month with one price has zero range — "mid" is the only
+             * honest colour, and it keeps the division below off zero.
+             * Why: docs/BUSINESS-LOGIC.md §36.
              */
             $position = $range > 0 ? ($fare->cents - $low) / $range : 0.5;
 
@@ -75,13 +71,9 @@ final readonly class MonthCalendar
                     default                => self::MID,
                 },
                 /*
-                 * CARRIED THROUGH UNTOUCHED, and deliberately NOT folded into
-                 * the verdict. How old a price is and whether it is cheap for
-                 * this month are two independent facts, and a four-day-old €40
-                 * is still the cheapest cell in the grid — it is just a cell the
-                 * sheet has to say "seen four days ago" under. Colouring on age
-                 * would hide the answer to the question the screen exists to
-                 * ask.
+                 * Carried through untouched, deliberately not folded into the
+                 * verdict — age and cheapness are independent facts.
+                 * Why: docs/BUSINESS-LOGIC.md §36.
                  */
                 'foundAt' => $fare->foundAt,
             ];

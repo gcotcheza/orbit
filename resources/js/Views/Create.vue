@@ -1,36 +1,8 @@
 <script setup>
 /*
- * The natural-language rule creator (design/README.md §4).
- *
- * ONE TEXTAREA AND A CONVERSATION. The owner types a trip in English, Orbit
- * reads it back as removable chips, says how many trips match right now, and
- * saves it. The chips are the whole interaction: they are how somebody finds
- * out what was understood, and how they correct it without having to learn
- * which words this app knows.
- *
- * ---------------------------------------------------------------------------
- * THE THINGS THAT ARE NOT OBVIOUS
- *
- * 1. THE BOX IS SEEDED WITH THE DESIGN'S OWN SENTENCE. An empty textarea with
- *    no chips under it is a screen that teaches nothing — the whole feature is
- *    invisible until you guess what to type. The seeded sentence parses to the
- *    six chips in the design's screenshot, so the first thing anybody sees is
- *    the app doing the thing it does.
- *
- * 2. REMOVING A CHIP RE-PARSES THE SAME SENTENCE, it does not edit the text.
- *    The server takes the ids to leave out and folds the rest
- *    (App\Domain\Rules\ParsedRule), so the words stay exactly as they were
- *    typed and Reset is simply the empty removal list again. Editing the
- *    textarea to drop a chip would be the app rewriting somebody's sentence.
- *
- * 3. THE REMOVED LIST SURVIVES A RE-PARSE. Every keystroke re-reads the
- *    sentence 500 ms later, and chip ids are stable across those parses (the
- *    kind plus the value, never a position), so a chip removed before a typo
- *    was fixed stays removed after.
- *
- * 4. STALE ANSWERS ARE DROPPED IN THE STORE, not here — two parses are
- *    routinely in flight and they can land in either order.
- * ---------------------------------------------------------------------------
+ * The natural-language rule creator (design/README.md §4). Chips are
+ * removable and re-parse the sentence; they never rewrite the text.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -39,11 +11,8 @@ import MatchBanner from '@/Components/rules/MatchBanner.vue'
 import RuleChip from '@/Components/rules/RuleChip.vue'
 import { useRulesStore } from '@/stores/rules'
 
-/*
- * The design's own example, and the app's only piece of onboarding. It is here
- * rather than in the store because it is copy: it belongs with the screen that
- * shows it, next to the heading it sits under.
- */
+/* The design's own onboarding example — kept here, not in the store,
+   because it is copy that belongs with the screen that shows it. */
 const SEED = 'cheap weekend somewhere sunny in spring, leaving Friday from any NL airport, under €80'
 
 /** design/README.md §4 — long enough to read while typing, short enough to feel live. */
@@ -69,12 +38,8 @@ onBeforeUnmount(() => {
   rules.clearReading()
 })
 
-/*
- * Re-read on a debounce whenever the sentence OR the removals change. One
- * watcher for both, because they are one question — "what does this rule say
- * now" — and two would race each other on the keystroke that follows a
- * removal.
- */
+/* One watcher for both text and removed: two separate watchers would
+   race each other on the keystroke that follows a removal. */
 watch([text, removed], () => {
   clearTimeout(timer)
   timer = setTimeout(() => rules.parse(text.value, removed.value), DEBOUNCE_MS)
@@ -117,7 +82,6 @@ async function save() {
 
 <template>
   <div class="screen">
-    <!-- The created state: what was saved, and where to find it. -->
     <template v-if="created">
       <header class="screen__head">
         <h1 class="screen__title">Rule created</h1>
@@ -342,8 +306,6 @@ async function save() {
   opacity: 0.4;
   cursor: not-allowed;
 }
-
-/* -- The created state --------------------------------------------------- */
 
 .done {
   margin-top: 16px;

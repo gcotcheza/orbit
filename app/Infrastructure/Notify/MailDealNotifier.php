@@ -20,28 +20,9 @@ use App\Application\Alerts\RouteDealNotice;
 use App\Application\Alerts\RuleMatchNotice;
 
 /**
- * The mail adapter behind App\Application\Ports\DealNotifier.
- *
- * TRANSPORT-AGNOSTIC ON PURPOSE. It builds a Laravel notification and hands it
- * over; whether that leaves as a line in `storage/logs` or as an API call to
- * Resend is `MAIL_MAILER` and nothing else. docs/PLAN.md ships with the log
- * transport until ghiecode.io is verified as a sending domain, and the switch
- * on that day is one variable in `.env` — no class here changes, and neither
- * does anything that calls this.
- *
- * THE SETTINGS GATE LIVES HERE, and that is the design decision this file
- * exists to make. `email_alerts` is a fact about MAIL and `push_alerts` will be
- * a fact about push; putting either in the evaluation would mean the day a
- * second channel arrives, the code that decides WHAT to say has to learn who is
- * listening. Here, a push adapter is a second class implementing the same
- * one-method port, reading its own switch, sending its own payload — and the
- * evaluation does not change at all.
- *
- * A REFUSED NOTICE IS SILENT AND LEAVES ITS LEDGER ROWS UNDELIVERED, which is
- * the honest record: Orbit decided there was a deal (`triggered_at`) and no
- * channel took it (`delivered_at` stays null). `GET /api/alerts` can therefore
- * still show what the app would have said, which is exactly what somebody who
- * has just switched the mails back on wants to see.
+ * The mail adapter behind App\Application\Ports\DealNotifier. Transport is
+ * config-driven (MAIL_MAILER); the per-channel settings gate lives here.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final readonly class MailDealNotifier implements DealNotifier
 {
@@ -61,12 +42,10 @@ final readonly class MailDealNotifier implements DealNotifier
         $notification = self::notificationFor($notice, $alertIds);
 
         /*
-         * QUIET HOURS, AS A QUEUE DELAY. The notification is `ShouldQueue`
-         * precisely so this line means something — see App\Notifications\
-         * AlertNotification. The instant was settled once by
-         * App\Application\Alerts\DeliveryWindow; this adapter does not
-         * re-interpret it, because a second reading of "until 08:00 Amsterdam"
-         * is a second chance to lose an hour.
+         * Quiet hours as a queue delay: the notification is ShouldQueue so
+         * this line means something. The instant was already settled by
+         * App\Application\Alerts\DeliveryWindow.
+         * Why: docs/BUSINESS-LOGIC.md §36.
          */
         if ($notBefore !== null) {
             $notification->delay($notBefore);
@@ -76,10 +55,8 @@ final readonly class MailDealNotifier implements DealNotifier
     }
 
     /**
-     * WHICH SWITCH APPLIES TO WHICH MAIL. The digest is a separate subscription
-     * from the deal alerts — design/README.md §6 draws them as two rows — and
-     * somebody who wants the Sunday summary without being pinged mid-week is
-     * making a reasonable request that these two lines honour.
+     * The digest is a separate subscription from the deal alerts (design/
+     * README.md §6): wanting the summary without mid-week pings is valid.
      */
     private function wants(User $user, AlertType $type): bool
     {
@@ -91,11 +68,9 @@ final readonly class MailDealNotifier implements DealNotifier
     }
 
     /**
-     * THE ONE PLACE A NOTICE BECOMES A MAIL. An unknown notice throws rather
-     * than being dropped, for the reason App\Providers\AppServiceProvider
-     * throws on an unknown provider name: an alert that silently goes nowhere
-     * is the worst failure this app has, because everything keeps looking like
-     * it works.
+     * Unknown notice types throw rather than fail silently — a silently
+     * undelivered alert is this app's worst failure mode (see AppServiceProvider).
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @param  list<int>  $alertIds
      */

@@ -20,22 +20,8 @@ use App\Infrastructure\Pricing\FakeStatsProvider;
 use App\Infrastructure\Pricing\SelfStatsProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
-/**
- * What a route usually costs, computed from Orbit's own fares.
- *
- * IT IS A FEATURE TEST BECAUSE THE PROVIDER READS TABLES. Everything asserted
- * below is really unit-scale — a fixture of prices in, five numbers out — but
- * the "outside world" this adapter answers from is the database, so there is
- * no version of it that runs without one.
- *
- * EVERY EXPECTED NUMBER HERE WAS WORKED OUT ON PAPER, not copied from a run.
- * The fixtures are eight calendar fares at €10 … €80 and four mornings at
- * €20 … €50, chosen so that both five-number summaries and every blend of
- * them land on round figures a reader can check:
- *
- *   window   (n=8, nearest-rank)  min 1000  p25 2000  med 4000  p75 6000  max 8000
- *   mornings (n=4, nearest-rank)  min 2000  p25 2000  med 3000  p75 4000  max 5000
- */
+// Feature test (not unit) because the provider reads tables; all expected numbers below are hand-computed from the fixed WINDOW/MORNINGS fixtures, not copied from a run.
+// Why: docs/BUSINESS-LOGIC.md §36.
 final class SelfStatsProviderTest extends TestCase
 {
     use RefreshDatabase;
@@ -61,8 +47,6 @@ final class SelfStatsProviderTest extends TestCase
         parent::tearDown();
     }
 
-    // ------------------------------------------------------- the cross-section
-
     #[Test]
     public function one_poll_is_enough_because_a_window_is_already_a_distribution(): void
     {
@@ -85,22 +69,8 @@ final class SelfStatsProviderTest extends TestCase
         $this->assertNotNull($this->provider()->statsFor('ams', 'lis'));
     }
 
-    /**
-     * THE CROSS-SECTION IS THE NEAR WINDOW, NOT THE WHOLE CALENDAR, which is
-     * what `orbit.selfstats.cross_section_days` buys.
-     *
-     * `calendar_fares` runs eleven months deep now (`orbit.poll.horizon_days`),
-     * and the far end of it is sparse in a way that is not random: the
-     * provider's cache thins with distance, so what survives out there is
-     * disproportionately Christmas, Easter and the school holidays. Pooled in,
-     * those peak fares lift the upper knots — the €300 below moves the median,
-     * the p75 and the max — and every route on the watchlist quietly scores as a
-     * better deal than it is, against the 60%-weighted input of the score.
-     *
-     * The eight near fares are the fixture every other test in this file uses,
-     * so the expected numbers are the same ones: the far fare has to change
-     * nothing at all.
-     */
+    // Cross-section uses the near window (`orbit.selfstats.cross_section_days`), not the full 11-month calendar: sparse far-future fares skew toward peak season and would inflate the score.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     #[Test]
     public function fares_beyond_the_near_window_are_not_part_of_what_a_route_usually_costs(): void
     {
@@ -147,16 +117,8 @@ final class SelfStatsProviderTest extends TestCase
         $this->assertSame([2000, 2000, 2000, 2000, 2000], $this->knots($stats), 'The last day of the window is in, the first day past it is out.');
     }
 
-    /**
-     * THE DRIFT GUARD, and the reason config/orbit.php writes 181 out twice.
-     *
-     * The two keys are different decisions — one is a budget for what to fetch
-     * daily, the other a claim about which departures are comparable — but the
-     * fare being scored IS the minimum of the near window (App\Jobs\
-     * PollRoutePrices), so scoring it against a pool drawn from any other span
-     * compares a best against a typical over a different set of days. If a box
-     * narrows one of these, this failure is where it finds out about the other.
-     */
+    // Drift guard: `orbit.poll.window_days` and `orbit.selfstats.cross_section_days` must stay equal, or the pool (typical) and the poll (best fare, PollRoutePrices) are scored over different spans.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     #[Test]
     public function the_statistical_pool_and_the_near_poll_window_are_the_same_span(): void
     {
@@ -165,8 +127,6 @@ final class SelfStatsProviderTest extends TestCase
             (int) config('orbit.selfstats.cross_section_days'),
         );
     }
-
-    // ------------------------------------------------------------- the blend
 
     #[Test]
     public function a_history_that_has_barely_started_barely_moves_the_answer(): void
@@ -234,9 +194,7 @@ final class SelfStatsProviderTest extends TestCase
         $this->calendar($route, self::WINDOW);
         $this->mornings($route, self::MORNINGS);
 
-        /* A €999 fare from the winter before last — a fact about a market that
-         * has moved on, and the kind of outlier that would drag a max, and with
-         * it the top of every percentile, for a year. */
+        // A €999 fare from two winters ago: an outlier old enough to drag every percentile for a year if not excluded by the lookback.
         PriceObservation::query()->create([
             'route_id'    => $route->id,
             'observed_on' => Date::now()->startOfDay()->subDays(400)->toDateString(),
@@ -257,8 +215,6 @@ final class SelfStatsProviderTest extends TestCase
         $this->assertSame(99900, $reaching->maxCents);
     }
 
-    // -------------------------------------------------------------- the edges
-
     #[Test]
     public function a_route_nobody_has_ever_priced_has_no_usual_price(): void
     {
@@ -273,11 +229,8 @@ final class SelfStatsProviderTest extends TestCase
         $this->assertNull($this->provider()->statsFor('AMS', 'LIS'));
     }
 
-    /**
-     * Travelpayouts serves cached fares and a route can simply stop having
-     * any. The history is real and is all that is left, so it answers alone
-     * rather than being blended toward a window that no longer exists.
-     */
+    // A route that lost provider coverage falls back to history alone rather than blending toward a window that no longer exists.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     #[Test]
     public function a_route_the_provider_has_stopped_covering_falls_back_to_its_history(): void
     {
@@ -290,11 +243,8 @@ final class SelfStatsProviderTest extends TestCase
         $this->assertSame([2000, 2000, 3000, 4000, 5000], $this->knots($stats));
     }
 
-    /**
-     * One morning is a degenerate summary — every knot the same price — which
-     * App\Domain\Pricing\PriceStats answers 0.5 for and the scorer reads as
-     * "exactly usual". It must not throw, and it must not pretend to a spread.
-     */
+    // A single morning is a degenerate summary (every knot equal); PriceStats scores it 0.5 ("exactly usual") and must not throw or fake a spread.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     #[Test]
     public function a_single_morning_and_nothing_else_is_not_a_crash(): void
     {
@@ -306,8 +256,6 @@ final class SelfStatsProviderTest extends TestCase
         $this->assertNotNull($stats);
         $this->assertSame([4400, 4400, 4400, 4400, 4400], $this->knots($stats));
     }
-
-    // ------------------------------------------------------------- the wiring
 
     #[Test]
     public function the_default_is_still_the_fake_provider(): void
@@ -324,11 +272,7 @@ final class SelfStatsProviderTest extends TestCase
         $this->assertInstanceOf(SelfStatsProvider::class, $this->app->make(PriceStatsProvider::class));
     }
 
-    /**
-     * The blend's two numbers are the whole of its behaviour, and a key
-     * renamed in one file and not the other would leave the adapter running on
-     * a silent default.
-     */
+    // A config key renamed in one file and not the other would leave the adapter running on a silent default; this pins both to the values reaching it.
     #[Test]
     public function the_configured_maturity_and_lookback_reach_the_adapter(): void
     {
@@ -344,14 +288,8 @@ final class SelfStatsProviderTest extends TestCase
         $this->assertSame(111, (new ReflectionProperty($provider, 'historyDays'))->getValue($provider));
     }
 
-    // --------------------------------------------------- through the real job
-
-    /**
-     * THE MONDAY-MORNING CASE, and the one that has to work on the day the
-     * switch is thrown: a route polled once has 182 calendar cells and a single
-     * observation, and the weekly refresh must turn that into a usable row
-     * rather than into nothing.
-     */
+    // The Monday-morning case: a route polled once (182 cells, 1 observation) must refresh into a usable stats row, not nothing, the day the feature switches on.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     #[Test]
     public function a_refresh_straight_after_the_first_poll_writes_sane_statistics(): void
     {
@@ -369,12 +307,8 @@ final class SelfStatsProviderTest extends TestCase
         $this->assertLessThanOrEqual($stats->p75_cents, $stats->median_cents);
         $this->assertLessThanOrEqual($stats->max_cents, $stats->p75_cents);
 
-        /*
-         * AND THEY ARE THE FARES THAT WERE POLLED, not a plausible-looking
-         * summary of something else. With one observation against a maturity
-         * of thirty the window carries 29/30 of the answer, so both ends sit
-         * inside the window's own range.
-         */
+        // With 1 observation against maturity 30, the window carries 29/30 of the weight, so both min/max sit inside the polled window's own range.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $window = CalendarFare::query()->where('route_id', $route->id);
 
         $this->assertGreaterThanOrEqual((int) (clone $window)->min('price_cents'), $stats->min_cents);
@@ -382,11 +316,8 @@ final class SelfStatsProviderTest extends TestCase
         $this->assertSame('2026-08-17 05:40:00', $stats->refreshed_at->format('Y-m-d H:i:s'));
     }
 
-    /**
-     * The port's null is a real answer and App\Jobs\RefreshRouteStats already
-     * treats it as one: no row, rather than a row of zeroes that would score
-     * every fare on the route as astronomically expensive.
-     */
+    // Null is a real answer: RefreshRouteStats writes no row rather than a row of zeroes, which would score every fare on the route as astronomically expensive.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     #[Test]
     public function a_refresh_of_a_route_with_no_fares_writes_nothing(): void
     {
@@ -398,8 +329,6 @@ final class SelfStatsProviderTest extends TestCase
 
         $this->assertSame(0, RouteStats::query()->where('route_id', $route->id)->count());
     }
-
-    // ----------------------------------------------------------------- helpers
 
     private function provider(int $maturityObservations = 30, int $historyDays = 365): SelfStatsProvider
     {

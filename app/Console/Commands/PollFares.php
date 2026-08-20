@@ -12,34 +12,18 @@ use Illuminate\Support\Facades\Date;
 /**
  * The daily fare poll — fan-out only.
  *
- * WHY A COMMAND RATHER THAN `Schedule::job()` PER ROUTE. routes/console.php is
- * loaded on EVERY artisan invocation, including `migrate` on an empty
- * database, so a schedule that enumerated routes there would put a query in
- * the boot path of every command and fail on the first deploy. The schedule
- * names one command; the command knows what the watchlist currently holds.
+ * A command, not Schedule::job() per route, so route enumeration isn't in every
+ * artisan invocation's boot path; also runnable by hand.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * It is also, therefore, the thing a person can run by hand when a price looks
- * stale — which `Schedule::job()` never gives you.
+ * `--far` decides poll depth here: the near 6 months poll daily, the far 5 (of an
+ * 11-month horizon) refresh weekly via this flag.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * `--far` IS THE SECOND SPEED, AND THE DEPTH IS DECIDED HERE. Orbit maintains
- * eleven months of calendar (`orbit.poll.horizon_days`) and polls the near six
- * of them (`orbit.poll.window_days`) every morning; the far five are refreshed
- * by one scheduled run a week, which is this command with the flag on. See
- * routes/console.php for the two entries and config/orbit.php's `poll` section
- * for the request budget that puts them in different clock hours.
- *
- * THE FLAG RATHER THAN A DAY-OF-WEEK TEST INSIDE App\Jobs\PollRoutePrices, and
- * that choice is worth the sentence:
- *
- *   - the job stays a plain "poll this many days ahead", so a payload sitting on
- *     the queue means the same thing whenever a worker gets to it — a Saturday
- *     job retried on Sunday still fetches the eleven months it promised;
- *   - the same job is dispatched synchronously by App\Application\Routes\
- *     FareFreshness while somebody waits, and a gate inside it would silently
- *     make one morning a week cost twelve provider calls in a person's request;
- *   - and `crontab`-shaped truth belongs in the schedule, where "the far months
- *     are refreshed on Saturdays" is one readable line rather than a condition
- *     buried in a job.
+ * A flag, not a day-of-week test inside PollRoutePrices, keeps the job's payload
+ * meaning fixed on retry, keeps FareFreshness's sync dispatch cheap, and keeps the
+ * schedule readable as one line.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class PollFares extends Command
 {
@@ -59,22 +43,15 @@ final class PollFares extends Command
             return self::SUCCESS;
         }
 
-        /*
-         * STAGGERED, because six routes is six provider calls and the real
-         * APIs count them per minute. The delay is on the QUEUE, so the
-         * command still returns immediately and the scheduler's minute is not
-         * held open for twenty of them.
-         */
+        // Staggered on the queue (not blocking here) so real APIs' per-minute limits aren't
+        // hit and the scheduler's minute isn't held open.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $stagger = (int) config('orbit.poll.stagger_minutes');
         $inline = (bool) $this->option('now');
 
-        /*
-         * PASSED TO EVERY JOB, INCLUDING THE ORDINARY ONE. The near window is
-         * also PollRoutePrices' default, so `$window` and no argument at all
-         * behave identically today — but a fan-out that says out loud how deep
-         * it is asking is one that cannot be misread from a Horizon payload, and
-         * the far run is only distinguishable from the daily one by this number.
-         */
+        // Passed to every job, including the ordinary one, even though it matches
+        // PollRoutePrices' default — an explicit window can't be misread from a Horizon payload.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $window = (int) config($this->option('far') ? 'orbit.poll.horizon_days' : 'orbit.poll.window_days');
 
         foreach ($routes->values() as $index => $route) {

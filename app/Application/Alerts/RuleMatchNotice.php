@@ -11,28 +11,21 @@ use App\Domain\Alerts\AlertType;
 /**
  * What one standing rule found this morning — everything of it, in one mail.
  *
- * ONE MAIL PER RULE PER RUN, AND THAT IS THE POINT OF THIS CLASS. "Somewhere
- * sunny under €80" is a sentence about a category, and on the morning a sale
- * starts it matches eleven routes at once. Eleven mails would be the single
- * fastest way to teach somebody to filter this app into a folder they never
- * open, which would cost them the one route in the eleven they would have
- * booked. So the run collects every NEW match — new meaning past the cooldown,
- * judged per route — and hands them over together.
+ * One mail per rule per run — eleven simultaneous matches as eleven mails is
+ * how you teach somebody to filter this app into a folder they never open.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * THE CHIPS COME FROM App\Application\Rules\RuleViews, rebuilt from the stored
- * criteria and never by re-parsing the text. The mail quotes what the rule
- * ACTUALLY asks for after the owner removed the chips they disagreed with; a
- * mail built from the sentence alone would tell somebody their rule includes a
- * departure airport they took off it.
+ * Chips come from RuleViews, rebuilt from stored criteria, never re-parsed —
+ * the mail quotes what the rule actually asks for now, chips included.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final readonly class RuleMatchNotice implements AlertNotice
 {
     /**
-     * The cheapest of them, which every line of copy here leads with.
+     * The cheapest of them, which every line of copy here leads with. A property,
+     * not `$deals[0]` at four sites — it also states the no-empty-notice invariant.
      *
-     * A PROPERTY RATHER THAN `$deals[0]` AT FOUR CALL SITES, because it also
-     * states the invariant: a notice with no matches is not news and cannot be
-     * built, so nothing downstream has to answer what an empty one would say.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     public DealSummary $cheapest;
 
@@ -60,10 +53,10 @@ final readonly class RuleMatchNotice implements AlertNotice
     }
 
     /**
-     * THE RULE IS NAMED IN THE SUBJECT because the owner may have several, and
-     * "4 new matches" with no idea which question they answer is a mail that
-     * has to be opened to find out whether it was worth opening. Trimmed hard:
-     * the informative half is at the front, where a phone still shows it.
+     * The rule is named in the subject — "4 new matches" with no idea which rule
+     * is a mail that has to be opened just to find out if it's worth opening.
+     *
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     public function subject(): string
     {

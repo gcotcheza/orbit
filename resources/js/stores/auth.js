@@ -1,15 +1,11 @@
-// =============================================================================
-// Who is signed in
-// =============================================================================
-// One user, one session, one source of truth. The router's guard reads this,
-// the login screen writes it, and nothing else in the app needs to know how
-// authentication works.
+// One user, one session, one source of truth: router guard reads it, login
+// screen writes it, nothing else needs to know how auth works.
+// Why: docs/BUSINESS-LOGIC.md §36.
 //
-// `resolved` is the flag that matters: on a cold boot the client does not yet
-// KNOW whether it is signed in, and that third state is not the same as being a
-// guest. Routing on it before /api/me has answered would flash the login screen
-// at somebody who is already signed in, on every single launch.
-// =============================================================================
+// `resolved` matters: cold boot means "don't know yet", a third state
+// distinct from guest. Routing before /api/me answers would flash the
+// login screen at an already-signed-in user on every launch.
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { ensureCsrfCookie, http } from '@/lib/http'
@@ -28,12 +24,10 @@ export const useAuthStore = defineStore('auth', () => {
             const { data } = await http.get('/api/me')
             user.value = data.data
         } catch (error) {
-            // Anything that is NOT a 401 — a 500, a dropped connection, a
-            // deploy mid-request — is treated as "not signed in" so the app
-            // still draws something, but it is reported: silently showing the
-            // login screen to somebody whose session is fine is the kind of
-            // fault that gets described as "it logged me out again" and never
-            // reproduced.
+            // Non-401 errors (500, dropped connection, mid-deploy) are
+            // treated as "not signed in" so the app still draws, but logged —
+            // silent failures here read as phantom "logged me out" bugs.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             if (error.response?.status !== 401) {
                 console.error('Could not determine the session state.', error)
             }
@@ -69,22 +63,21 @@ export const useAuthStore = defineStore('auth', () => {
     /**
      * Change the password of the account that is signed in.
      *
-     * HERE RATHER THAN IN THE COMPONENT because this is the third thing that
-     * knows how authentication works, and the other two are in this file. The
-     * screen that calls it (Components/settings/ChangePassword.vue) should have
-     * to know a URL and a session no more than the login screen does.
+     * Here, not in the component: this is the third thing that knows how
+     * auth works, and the other two are in this file — ChangePassword.vue
+     * shouldn't need to know a URL or a session either.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
-     * IT THROWS, like `login`, and for the same reason: the 422 is written per
-     * rule by App\Http\Requests\UpdatePasswordRequest and is meant to be read by
-     * a person under the box it belongs to. Swallowing it here would leave the
-     * form with a boolean where the server sent a sentence.
+     * Throws, like `login`: the 422 is a per-rule sentence written by
+     * UpdatePasswordRequest for a person to read, not a boolean to swallow.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
-     * NOTHING IN THIS STORE CHANGES ON SUCCESS. The session is rotated by the
-     * server and the browser follows the new cookies; `user` describes who is
-     * signed in, and that is the one thing a password change does not alter.
+     * Nothing in this store changes on success: session is rotated
+     * server-side via cookies; `user` (who's signed in) doesn't change.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
-     * No `ensureCsrfCookie()` — unlike `login`, the caller is a page that has
-     * been making authenticated requests, so it already holds a current token.
+     * No `ensureCsrfCookie()` — unlike `login`, the caller already holds a
+     * current token from making authenticated requests.
      */
     async function changePassword(fields) {
         await http.put('/api/profile/password', fields)
@@ -94,9 +87,9 @@ export const useAuthStore = defineStore('auth', () => {
         try {
             await http.post('/logout')
         } finally {
-            // Whatever the server said, this client is done with the session.
-            // A logout that fails and leaves the app looking signed in is worse
-            // than one that fails quietly.
+            // Client clears its session regardless of server response — a
+            // logout that fails and still looks signed in is worse.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             user.value = null
         }
     }

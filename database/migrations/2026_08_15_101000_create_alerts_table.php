@@ -8,43 +8,11 @@ use Illuminate\Database\Migrations\Migration;
 
 /**
  * Everything Orbit has ever decided to tell the owner — the alert ledger.
- *
- * IT IS THE COOLDOWN, and that is its first job. App\Domain\Alerts\AlertPolicy
- * refuses to mention the same route twice inside
- * config('orbit.alerts.cooldown_hours') unless the price has fallen a further
- * few percent, and both halves of that sentence are read from here: `triggered_at`
- * says when, `price_cents` says how much. A cooldown held in memory or in the
- * cache would forget itself on the first deploy and mail the owner about every
- * route they have ever watched.
- *
- * IT IS ALSO THE HISTORY, which is why `payload` exists. `GET /api/alerts` and
- * the Sunday digest both read rows that may be months old, and a row that only
- * pointed at a route would answer "AMS-OPO, €44" with today's numbers rather
- * than the ones the mail actually quoted. The payload is what was SAID, frozen:
- * the price, the usual price, the percentage under it, the departure date, and
- * — for a rule — the chips the rule was reduced to that morning.
- *
- * TRIGGERED AND DELIVERED ARE TWO COLUMNS, not one, because quiet hours make
- * them genuinely different moments: a deal found at 06:55 inside a 22:00–08:00
- * window is decided now and delivered at 08:00. The cooldown runs from the
- * DECISION — otherwise the quiet window would silently stretch it by however
- * long somebody was asleep — and `delivered_at` stays null until a channel
- * confirms (App\Infrastructure\Notify\MarkAlertsDelivered), so a row with a
- * trigger and no delivery is either mail in flight or mail switched off. Both
- * are things worth being able to see.
- *
- * BOTH FOREIGN KEYS ARE NULLABLE AND NEITHER CASCADES.
- *   - `route_id` is null on the weekly digest, which is about no route in
- *     particular.
- *   - `deal_rule_id` is null on everything but a rule match — and it is
- *     `nullOnDelete` because docs/API.md promises that deleting a rule leaves
- *     the routes and fares it surfaced alone. Erasing the history of what a
- *     deleted rule once found would be the same mistake: the mail was sent, and
- *     a ledger that rewrote itself when a question was withdrawn would be a
- *     record of nothing.
- *
- * NO UNIQUE KEY ON (user, route, type, day). Two alerts about one route on one
- * day is exactly what the 5%-drop rule is for.
+ * Backs AlertPolicy's cooldown and the alert history (see per-column notes).
+ * FKs are nullable/nullOnDelete — deleting a rule must not erase its alert
+ * history. No unique key on (user, route, type, day): the 5%-drop rule can
+ * fire twice in one day, on purpose.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 return new class extends Migration
 {
@@ -56,36 +24,22 @@ return new class extends Migration
             $table->foreignId('route_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('deal_rule_id')->nullable()->constrained()->nullOnDelete();
 
-            /*
-             * route_deal | rule_match | weekly_digest — App\Domain\Alerts\
-             * AlertType, which App\Models\Alert casts this column to. A string
-             * and not a native enum type for the reason `user_settings.
-             * sensitivity` is an int: adding a kind (a push-only nudge, a price
-             * -drop-only alert) must not need a migration on a table that by
-             * then holds a year of history.
-             */
+            // route_deal | rule_match | weekly_digest (App\Domain\Alerts\AlertType). String, not a native enum: adding a kind must not need a migration on a table holding a year of history.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             $table->string('type', 32);
 
-            /*
-             * The deal score at the moment of the decision, 0-100. NULL on a
-             * rule match and on the digest, because neither has one: a rule's
-             * threshold is its own maximum price and the digest is not a
-             * judgement at all. A zero here would read as "scored terribly".
-             */
+            // Score at the moment of decision, 0-100; NULL on a rule match or digest (neither has one) — a zero would read as "scored terribly".
+            // Why: docs/BUSINESS-LOGIC.md §36.
             $table->unsignedSmallInteger('score')->nullable();
 
             /* Cents, like every other price in this app. NULL on the digest. */
             $table->unsignedInteger('price_cents')->nullable();
 
-            /* Everything the mail showed. See the note above. */
+            /* Everything the mail showed, frozen — a months-old row must answer with the numbers actually sent, not today's. */
             $table->json('payload');
 
-            /*
-             * `mail` today. It is a column rather than an assumption because
-             * docs/PLAN.md has web push after the PWA shell, and the day a
-             * second channel exists "did this deal already go out" becomes a
-             * question with a per-channel answer.
-             */
+            // `mail` today; a column, not an assumption — PLAN.md has web push after the PWA shell, and multi-channel needs a per-channel "did this go out" answer.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             $table->string('channel', 32);
 
             $table->timestamp('triggered_at');
@@ -98,12 +52,8 @@ return new class extends Migration
              */
             $table->index(['user_id', 'route_id', 'type', 'triggered_at']);
 
-            /*
-             * AND THE LEDGER'S OWN. `GET /api/alerts` and the digest's
-             * "this week" callout both want one account's rows newest first,
-             * with no route in the question — a query the index above cannot
-             * serve past its first column, because `route_id` sits between.
-             */
+            // The ledger's own index: `GET /api/alerts` and the digest want one account's rows newest-first with no route in the question — the cooldown index above can't serve that past its first column.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             $table->index(['user_id', 'triggered_at']);
         });
     }

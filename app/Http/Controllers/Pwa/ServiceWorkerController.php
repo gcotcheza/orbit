@@ -13,36 +13,16 @@ use Illuminate\Support\Facades\File;
 /**
  * `GET /sw.js` — the service worker script.
  *
- * ---------------------------------------------------------------------------
- * WHY A ROUTE AND NOT A FILE IN public/
+ * Route, not a static file: (1) precache list needs the current build's
+ * content-hashed assets from Vite's manifest at request time; (2) MUST
+ * revalidate (no-cache) or the worker can never be updated once installed;
+ * (3) sends Service-Worker-Allowed for when the script moves off root.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * Three things a static file cannot do here.
- *
- * 1. THE PRECACHE LIST. It names the current build's content-hashed assets,
- *    which change every deploy. Generating it at request time from the Vite
- *    manifest means the worker and the page can never disagree about what the
- *    build produced; a committed file with hashes in it is wrong the moment
- *    somebody runs `npm run build`.
- *
- * 2. THE CACHE HEADERS. A service worker MUST revalidate — one cached for a
- *    year is an app that can never be updated, and there is no second lever to
- *    pull once it is on somebody's home screen. docker/web/nginx.conf could
- *    carry a location block for it; here the policy sits next to the reason
- *    for it, which is why that file deliberately leaves this path to PHP.
- *
- * 3. THE SCOPE HEADER. `Service-Worker-Allowed: /` is redundant while the
- *    script is served from the root and stops being redundant the day it moves.
- *    Sending it costs nothing and removes a class of silent breakage.
- *
- * The response is a few kilobytes and carries an ETag, so the revalidation a
- * browser performs on every navigation is a 304 with an empty body.
- * ---------------------------------------------------------------------------
- *
- * IT IS PUBLIC (no auth), and it has to be: the worker is registered from the
- * login screen as well as from the app — they are the same shell — and a
- * 302-to-login served as `application/javascript` would install a login page as
- * a worker. Nothing in the script is a secret: it is a caching policy and a list
- * of asset filenames the HTML already links to.
+ * Public (no auth), and must be: the worker registers from the login screen
+ * too (same shell), so a 302-to-login served as JS would install a login
+ * page as a worker. Nothing here is secret.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class ServiceWorkerController extends Controller
 {
@@ -54,9 +34,8 @@ final class ServiceWorkerController extends Controller
             ['__SW_VERSION__', '__SW_PRECACHE__'],
             [
                 $assets->version(),
-                // JSON_UNESCAPED_SLASHES so the paths in the file read as
-                // paths; a worker full of `\/build\/` is legal JS and
-                // unreadable at the moment anyone needs to read it.
+                // JSON_UNESCAPED_SLASHES: paths read as paths — `\/build\/`
+                // is legal JS but unreadable exactly when someone needs it.
                 (string) json_encode($assets->precacheUrls(), JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
             ],
             (string) File::get(resource_path(self::SOURCE)),
@@ -66,15 +45,10 @@ final class ServiceWorkerController extends Controller
             'Content-Type' => 'application/javascript; charset=utf-8',
 
             /*
-             * NO LONG-LIVED CACHE. `no-cache` means "you may store it, but ask
-             * me before using it" — which, with the ETag below, makes the
-             * per-navigation update check a 304.
-             *
-             * It is also what stops Cloudflare holding it: `.js` is in the
-             * edge's default cacheable extension list, and an origin
-             * Cache-Control of `no-cache` is what opts out. A worker cached at
-             * the edge would mean deploying a new one and having the phone keep
-             * the old app for hours.
+             * `no-cache`: store but revalidate (304 via ETag below). Also
+             * opts out of Cloudflare's default `.js` edge caching — without
+             * it, a stale worker could serve for hours after deploy.
+             * Why: docs/BUSINESS-LOGIC.md §36.
              */
             'Cache-Control' => 'no-cache, must-revalidate',
 

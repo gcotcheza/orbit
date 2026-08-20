@@ -1,20 +1,16 @@
 <script setup>
 /*
- * "Price, last 60 days" (design/README.md §2) — hand-drawn SVG, no chart
- * library. The whole picture is one line, one area, one dashed reference and a
- * dot, and a dependency for that would be more code than this file.
+ * "Price, last 60 days" (design/README.md §2) — hand-drawn SVG; a chart
+ * library would be more code than this file.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * PLOTTED BY DATE, NOT BY INDEX. `history` holds up to 60 daily OBSERVATIONS —
- * the days we looked, not the days you fly — and the days we did not poll are
- * simply absent (docs/API.md). Spacing the points evenly would draw a
- * four-day gap as one day and quietly flatten every trend across an outage.
- * The x axis is real elapsed days.
+ * Plotted by date, not index — gaps in polling (docs/API.md) are real gaps
+ * on the x axis, not flattened away.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * THE REFERENCE LINE IS INSIDE THE Y RANGE ON PURPOSE. `median` joins the
- * values the scale is fitted to, so "usual €95" cannot end up drawn off the
- * top of a card whose fares are all €44. When there are no statistics it is
- * null and no line is drawn — the design's instruction is to draw the chart
- * without a reference rather than with one at zero.
+ * Reference line is kept inside the Y range on purpose — "usual €95" never
+ * draws off the top of a cheap card; null median draws no line at all.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 import { computed, useId } from 'vue'
 import { euro } from '@/lib/format'
@@ -42,10 +38,8 @@ const HONEST_AFTER_DAYS = 14
 const gradientId = useId()
 
 /**
- * `YYYY-MM-DD` → a day number, for measuring gaps.
- *
- * UTC parts rather than `new Date(iso)`, which resolves through the viewer's
- * timezone and would shift every observation a day for anyone west of London.
+ * `YYYY-MM-DD` → a day number, for measuring gaps. UTC parts, not
+ * `new Date(iso)`, which would shift observations by timezone.
  */
 function dayNumber(iso) {
   const [year, month, day] = iso.split('-').map(Number)
@@ -56,9 +50,9 @@ function dayNumber(iso) {
 const chart = computed(() => {
   const points = props.history
 
-  // One point is a dot, not a trend, and zero points are not a chart. Both
-  // cases are covered by the tracking note below, which is the honest thing to
-  // show in their place.
+  // One point is a dot, zero points are not a chart — both fall through to
+  // the tracking note below.
+  // Why: docs/BUSINESS-LOGIC.md §36.
   if (points.length < 2) {
     return null
   }
@@ -76,9 +70,9 @@ const chart = computed(() => {
   const range = Math.max(...values) - low
 
   const x = (iso) => ((dayNumber(iso) - firstDay) / daySpan) * WIDTH
-  // A flat month has no range to scale against; it is drawn down the middle
-  // rather than along the floor, which is what dividing by a fallback of 1
-  // would give.
+  // A flat month has no range to scale against — drawn down the middle, not
+  // along the floor (which dividing by a fallback of 1 would give).
+  // Why: docs/BUSINESS-LOGIC.md §36.
   const y = (value) => (range === 0 ? PAD_TOP + PLOT / 2 : BASE - ((value - low) / range) * PLOT)
 
   const line = points
@@ -137,9 +131,9 @@ const note = computed(() => {
 </template>
 
 <style scoped>
-/* One tone in, four colours out. The card sets the custom property and every
-   painted part below reads it, so switching a route from "falling" to "wait"
-   is one class on one element. */
+/* One tone in, four colours out — the card sets --tone and every painted
+   part reads it, so switching tone is one class on one element.
+   Why: docs/BUSINESS-LOGIC.md §36. */
 .chart-card--good {
   --tone: var(--good);
 }
@@ -224,9 +218,9 @@ const note = computed(() => {
   animation: chart-area 1.1s ease both 0.3s;
 }
 
-/* `pathLength="1"` on the path normalises its length, so one dash of 1 covers
-   the whole line whatever its real geometry and the draw-on is a single
-   offset from 1 to 0 — no measuring in JavaScript. */
+/* `pathLength="1"` normalises the path's length, so a dash of 1 covers it
+   whatever the real geometry — draw-on is one offset, no JS measuring.
+   Why: docs/BUSINESS-LOGIC.md §36. */
 .chart__line {
   fill: none;
   stroke: var(--tone);
@@ -242,9 +236,9 @@ const note = computed(() => {
   stroke: var(--tone);
   stroke-width: 2.5;
 
-  /* An SVG element's transform origin is the user-space ORIGIN by default, so
-     without these two the pop below scales the dot out of the top-left corner
-     of the chart instead of out of itself. */
+  /* SVG's transform origin defaults to the user-space origin — without these
+     two, the pop animation scales from the chart's corner, not the dot.
+     Why: docs/BUSINESS-LOGIC.md §36. */
   transform-box: fill-box;
   transform-origin: center;
   animation: chart-pop 0.4s ease both 1.1s;

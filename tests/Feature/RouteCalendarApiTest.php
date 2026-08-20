@@ -15,10 +15,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 /**
  * GET /api/routes/{code}/calendar — the heatmap, a month at a time.
  *
- * The verdict boundaries are design/README.md §3 and are worked out on paper
- * here: with a month running €40 to €100 the range is €60, so "cheap" is
- * anything at or under €40 + 28% of €60 = €56.80 and "pricey" anything at or
- * over €40 + 66% = €79.60.
+ * Verdict boundaries: design/README.md §3's 28%/66% thresholds worked out for this test's €40-100 month.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class RouteCalendarApiTest extends TestCase
 {
@@ -86,15 +84,13 @@ final class RouteCalendarApiTest extends TestCase
     }
 
     /**
-     * The day sheet books the day that was TAPPED, and only the client knows
-     * which day that is — so the links go out as templates with holes in them
-     * rather than as 62 URLs or as nothing.
+     * Only the client knows which day was tapped, so booking links go out as
+     * templates with holes, not as 62 URLs or nothing.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
-     * TWO OF THEM, AND THE HOLES ARE NAMED AFTER THEIR DATE FORMATS. The two
-     * sites want the parts of a date in different orders and lengths, so a bare
-     * `{date}` in both would force the client to know which URL belonged to
-     * which site (docs/API.md). Aviasales is the primary — it is the search
-     * Orbit's own prices come out of.
+     * Two templates, holes named after their date formats — the two booking
+     * sites want date parts in different orders (docs/API.md).
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function the_meta_carries_both_booking_templates_for_the_tapped_day(): void
@@ -115,9 +111,8 @@ final class RouteCalendarApiTest extends TestCase
     }
 
     /**
-     * They are facts about the ROUTE, not about the fares: the sheet cannot
-     * open on an empty month, but a client that reads the templates once per
-     * response must not have to branch on whether this one had any days in it.
+     * Facts about the route, not the fares — a client reading the templates
+     * once per response must not have to branch on an empty month.
      */
     #[Test]
     public function the_booking_templates_survive_an_empty_month(): void
@@ -137,18 +132,13 @@ final class RouteCalendarApiTest extends TestCase
     }
 
     /**
-     * HOW OLD EACH PRICE IS, PER DAY.
+     * How old each price is, per day — the provider mixes fares found an hour
+     * ago with ones found last week, so freshness is per-day, not per-month.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
-     * The provider serves a cache of other people's searches, so one grid
-     * legitimately mixes a fare found an hour ago with one found last week —
-     * which is why this is on the day and not on the month. The day sheet
-     * prints it as "Seen 3 hours ago".
-     *
-     * AND NULL WHERE ORBIT DOES NOT KNOW, which is a row written before the
-     * column existed. It must arrive as null rather than as the fetch time: the
-     * screen draws no line at all for it, and substituting `fetched_at` would
-     * manufacture exactly the "this price is current" claim the field exists to
-     * prevent.
+     * Null where Orbit doesn't know (a pre-column row) — never substitutes
+     * `fetched_at`, which would manufacture a false "current" claim.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function each_day_says_when_its_price_was_found(): void
@@ -225,9 +215,8 @@ final class RouteCalendarApiTest extends TestCase
     }
 
     /**
-     * A month whose fares are all the same price has no range to place them
-     * in; every day is "mid" rather than every day being both the cheapest and
-     * the dearest.
+     * A flat month has no range to place fares in — every day is "mid" rather
+     * than both cheapest and dearest.
      */
     #[Test]
     public function a_flat_month_is_all_middle(): void

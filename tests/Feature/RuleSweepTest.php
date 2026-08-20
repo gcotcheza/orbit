@@ -21,12 +21,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 /**
  * Going and finding out what a rule is worth.
  *
- * THE PROBLEM UNDER TEST is the one that makes a new rule look broken: it
- * names routes nobody watches, the daily poll only visits the watchlist, so
- * without this job the rule matches nothing on the day it was written. The
- * assertions below are mostly about the budget — a rule with no vibe is 231
- * provider calls, and the cap is the difference between a feature and an
- * outage at Travelpayouts.
+ * A new rule names routes nobody watches; without this job it matches
+ * nothing on day one. Mostly about budget — a vibe-less rule is 231 calls.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class RuleSweepTest extends TestCase
 {
@@ -54,12 +51,9 @@ final class RuleSweepTest extends TestCase
     /**
      * Run the sweep here and now, with its dependencies from the container.
      *
-     * NOT `dispatchSync()`. Under `Queue::fake()` even a synchronous dispatch
-     * is recorded rather than executed, so a test written that way asserts
-     * that a job it never ran pushed nothing — which passes for the wrong
-     * reason and would keep passing if `handle()` were deleted. Calling
-     * `handle()` is what puts the job's own behaviour under test while leaving
-     * the fake free to catch the polls it queues.
+     * Not `dispatchSync()` — under `Queue::fake()` that's recorded, not run,
+     * so the test would pass even if `handle()` were deleted.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     private function sweep(int $ruleId): void
     {
@@ -107,10 +101,9 @@ final class RuleSweepTest extends TestCase
     }
 
     /**
-     * The budget is for provider calls, so it is spent on routes that need
-     * one. A rule overlapping the watchlist would otherwise never reach its
-     * own tail — every morning's cap would go on pairs the 06:10 poll had
-     * already priced an hour earlier.
+     * Budget is for provider calls, spent on routes that need one — else a
+     * rule overlapping the watchlist never reaches its own tail.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function routes_already_priced_this_morning_are_skipped_before_the_cap_applies(): void
@@ -184,17 +177,10 @@ final class RuleSweepTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    // -- The horizon ---------------------------------------------------------
-
     /**
-     * A SWEEP IS SHALLOWER THAN A POLL, and that is a budget rather than an
-     * opinion about rules.
-     *
-     * Travelpayouts charges a request per CALENDAR MONTH, so sweeping a capped
-     * thirty routes across the watchlist's six-month window is 30 × 7 = 210
-     * requests for one rule — past the provider's ~200 an hour on its own,
-     * before the 06:10 poll half an hour earlier is counted. The sweep asks for
-     * the near three months instead: 30 × 4 = 120, which leaves room for it.
+     * A sweep is shallower than a poll — a budget decision. Six months for
+     * 30 routes would be 210 Travelpayouts requests, past the ~200/hr cap.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function a_sweep_polls_a_shorter_horizon_than_the_watchlist_gets(): void
@@ -244,14 +230,9 @@ final class RuleSweepTest extends TestCase
     }
 
     /**
-     * THE HONEST LIMIT OF THE SHORTER HORIZON, asserted rather than promised.
-     *
-     * A rule whose date window names a month past the sweep horizon still
-     * matches on any route Orbit already holds fares for, because
-     * App\Application\Rules\RuleMatches reads `calendar_fares` and a WATCHED
-     * route's calendar runs the full six months. What it does not get is
-     * speculative fares that far out for pairs nobody watches — those arrive as
-     * the calendar rolls toward the month.
+     * Honest limit, asserted not promised: a far month still matches on an
+     * already-watched route's fares, just not on unwatched speculative ones.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function a_far_month_still_matches_on_a_route_the_watchlist_already_holds_fares_for(): void
@@ -280,17 +261,13 @@ final class RuleSweepTest extends TestCase
     /**
      * The whole point, end to end with nothing faked below the port.
      *
-     * A rule is written about a pair Orbit has never priced — no route row, no
-     * fares, nothing to match — and after the sweep it has a trip to show. The
-     * fake provider is the adapter production runs today
-     * (config('orbit.providers.price')), so this is the real path rather than
-     * a rehearsal of it.
+     * A never-priced pair gets a trip to show after the sweep, using the
+     * same fake provider production runs today (`orbit.providers.price`).
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
-     * NO `Queue::fake()` HERE, deliberately: the runner's connection is `sync`,
-     * so creating the rule runs the sweep and its polls inline and this test
-     * gets to watch the whole chain. In production the same chain runs on
-     * redis a minute later, which is what every other test in this file fakes
-     * in order to assert.
+     * No `Queue::fake()` here, deliberately: the runner's `sync` connection
+     * runs the whole chain inline, unlike every other test in this file.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function a_rule_about_a_pair_nobody_has_priced_finds_it_after_the_sweep(): void
@@ -314,8 +291,6 @@ final class RuleSweepTest extends TestCase
             ->assertJsonPath('data.0.matches.count', 1)
             ->assertJsonPath('data.0.matches.sample.0.code', 'AMS-FAO');
     }
-
-    // -- The command ---------------------------------------------------------
 
     #[Test]
     public function the_command_queues_one_sweep_per_active_rule(): void

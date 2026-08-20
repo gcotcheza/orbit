@@ -1,22 +1,7 @@
-// =============================================================================
-// The flight arithmetic, checked
-// =============================================================================
-//   npm run test:js        (and scripts/check.sh, which runs it)
+// Flight-arithmetic checks: values anyone can check by pointing, plus the
+// antimeridian, which no on-screen glance would catch.
 //
-// These are the assertions that would otherwise be made by watching a globe
-// spin and deciding it looked about right. Two kinds of case:
-//
-//   1. VALUES ANYONE CAN CHECK BY POINTING — due east is 90°, the middle of a
-//      path is halfway along it, an altitude curve starts at 0.42. If the
-//      formula is transcribed wrong these break, and they break in a way that
-//      says which end is wrong.
-//   2. THE ANTIMERIDIAN, which is the one thing in here that a European test
-//      set can never exercise and the one thing that silently ruins the flight
-//      the day somebody watches AMS→NRT.
-//
-// The real airport coordinates are the ones docs/API.md ships in its own
-// example payload, so a route flown here is a route the screen actually gets.
-// =============================================================================
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { describe, expect, it } from 'vitest'
 import {
     FLIGHT_SEGMENTS,
@@ -42,17 +27,16 @@ describe('bearing', () => {
     })
 
     it('points Amsterdam at Lisbon, south-west', () => {
-        // 220.93° — south-west, as the map says. The value is quoted rather
-        // than recomputed here on purpose: a test that runs the same formula
-        // twice proves only that the machine is deterministic.
+        // 220.93° — quoted, not recomputed: a test that reruns the same
+        // formula only proves the machine is deterministic.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         expect(bearing(AMS, LIS)).toBeCloseTo(220.93, 2)
     })
 
     it('is not simply the reverse bearing plus 180', () => {
-        // Meridians converge, so a great circle arrives on a different heading
-        // from the one it left on. A bearing computed once from the endpoints
-        // and reused for the whole flight would be out by this much at the end
-        // — which is why flightPose() recomputes it per segment.
+        // Meridians converge — a bearing computed once and reused for the
+        // whole flight would drift; flightPose() recomputes it per segment.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         expect(bearing(LIS, AMS)).toBeCloseTo(30.92, 2)
     })
 
@@ -75,10 +59,9 @@ describe('greatCirclePoints', () => {
     })
 
     it('bulges polewards of the straight lat/lng line, as a great circle does', () => {
-        // Halfway between AMS and LIS by simple averaging is 45.54°N; the
-        // actual shortest path over a sphere runs about a fifth of a degree
-        // north of that. Small here, and it is the same effect that makes a
-        // transatlantic route pass over Greenland.
+        // Simple averaging gives 45.54°N; the sphere's shortest path runs a
+        // touch further north — same effect that routes over Greenland.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         const middle = pathMidpoint(greatCirclePoints(AMS, LIS))
 
         expect(middle.lat).toBeCloseTo(45.75, 2)
@@ -94,9 +77,9 @@ describe('greatCirclePoints', () => {
     })
 
     it('degrades to the two endpoints when there is no path to interpolate', () => {
-        // Same airport twice — which the watchlist cannot produce, but a
-        // rounding error in a future data source could. The answer is a very
-        // short flight, not a division by a sine of zero.
+        // Same airport twice: the watchlist can't produce it, but a future
+        // rounding error could. Answer is a short flight, not div-by-zero.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         expect(greatCirclePoints(AMS, { ...AMS })).toHaveLength(2)
     })
 })
@@ -164,9 +147,9 @@ describe('flightPose', () => {
     })
 
     it('holds the camera still outside the flight rather than extrapolating', () => {
-        // requestAnimationFrame does not promise to fire on the last millisecond
-        // of a duration, so the final frame's raw `t` is routinely a hair over
-        // 1. Clamping here means the caller does not have to remember to.
+        // rAF doesn't fire exactly at the duration's end, so raw `t` often
+        // overshoots 1 — clamped here so callers don't have to remember to.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         expect(flightPose(path, 1.4)).toEqual(flightPose(path, 1))
         expect(flightPose(path, -0.2)).toEqual(flightPose(path, 0))
     })

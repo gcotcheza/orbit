@@ -18,23 +18,17 @@ use App\Domain\Rules\DestinationProfile;
 /**
  * What a rule matches right now.
  *
- * FOUR QUERIES FOR ANY RULE, and the same reasoning as
- * App\Application\Routes\RouteSnapshots: the destinations, the routes, their
- * fares, and this account's watchlist, each fetched once for the whole answer.
- * A per-route lookup would be one per curated destination — a hundred and
- * eighty-four of them today — for a rule that says "anywhere cheap".
+ * Four queries for any rule (destinations, routes, fares, watchlist),
+ * fetched once — a per-route lookup would be 184 queries for "anywhere".
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * TWO OF THE FOUR ARE MEMOISED FOR THE LIFE OF THE INSTANCE — the destination
- * vocabulary and the watchlist — because `GET /api/rules` asks this class once
- * per rule and neither answer can change between two rules in one response.
- * The container resolves this per request, so the cache is a request and not a
- * process: nothing here has to be invalidated, because nothing here outlives
- * the answer it was gathered for.
+ * Destinations and watchlist are memoised per instance — the container
+ * resolves this per request, so the cache is request-scoped, never stale.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * IT DOES NOT CREATE ANYTHING. A rule naming a route Orbit has never priced
- * simply has fewer matches until App\Jobs\SweepRuleFares has been round —
- * this is the read, and making it fetch fares would put a provider call behind
- * a keystroke on the create screen.
+ * Does not create anything — an unpriced route just has fewer matches
+ * until App\Jobs\SweepRuleFares runs; this is the read, not the fetch.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class RuleMatches
 {
@@ -48,17 +42,9 @@ final class RuleMatches
 
     public function for(RuleCriteria $criteria, User $user): RuleMatchSummary
     {
-        /*
-         * A RULE THAT ASKS FOR NOTHING FINDS NOTHING, which is the opposite of
-         * what the fields mean everywhere else in this class — an empty
-         * `vibes` is anywhere, an empty `origins` is all three. It is not an
-         * exception to that rule so much as an admission that there is no rule
-         * yet: this is what an empty textarea produces, and answering "6 trips
-         * match this right now" under a box nobody has typed in is a claim
-         * about a sentence that does not exist. App\Http\Controllers\
-         * RuleController refuses to store one for the same reason, so no saved
-         * rule can ever reach this branch.
-         */
+        // A rule that asks for nothing finds nothing (unlike empty vibes/origins
+        // elsewhere, which mean "anywhere"/"all three") — there is no rule yet.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         if ($criteria->isEmpty()) {
             return RuleMatchSummary::none();
         }
@@ -78,12 +64,9 @@ final class RuleMatches
             ->get();
 
         if ($routes->isEmpty()) {
-            /*
-             * EVERY CANDIDATE IS STILL PENDING, which is not the same answer as
-             * "nothing matches" and is the ordinary state of a rule about
-             * places Orbit has never been asked to price. A route with no row
-             * at all is as unpriced as one with a row and no fares.
-             */
+            // Every candidate is still pending — not the same as "nothing matches".
+            // A route with no row is as unpriced as one with a row and no fares.
+            // Why: docs/BUSINESS-LOGIC.md §36.
             return RuleMatchSummary::none(count($codes));
         }
 
@@ -103,14 +86,9 @@ final class RuleMatches
                 static fn (CalendarFare $fare): DatedFare => new DatedFare(
                     $fare->departure_date->toDateTimeImmutable(),
                     $fare->price_cents,
-                    /*
-                     * CARRIED SO THE ALERT PIPELINE CAN REFUSE A STALE ONE.
-                     * A rule match names a specific departure and puts a
-                     * booking link under it, so its fare's age matters exactly
-                     * as much as a watched route's — more, if anything, because
-                     * these come from the speculative sweep over routes nobody
-                     * watches. App\Domain\Alerts\AlertPolicy::isStale().
-                     */
+                    // Carried so the alert pipeline can refuse a stale fare (its age
+                    // matters as much as a watched route's — speculative sweep data).
+                    // Why: docs/BUSINESS-LOGIC.md §36.
                     $fare->found_at?->toDateTimeImmutable(),
                 ),
                 ($fares->get($route->id) ?? collect())->all(),
@@ -123,33 +101,24 @@ final class RuleMatches
             }
         }
 
-        /*
-         * Cheapest first, and the CODE as the tiebreak rather than the id: two
-         * routes at €38 should come back in the same order on every request,
-         * and an insertion order is not an order anybody can predict.
-         */
+        // Cheapest first, code as tiebreak (not id): two routes at €38 must sort
+        // the same way on every request; insertion order isn't predictable.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         usort($matches, static fn (RuleMatch $a, RuleMatch $b): int => $a->cheapest->cents <=> $b->cheapest->cents
             ?: strcmp($a->route->code, $b->route->code));
 
-        /*
-         * HOW MUCH OF THE QUESTION IS STILL UNANSWERED.
-         *
-         * `$fares` is keyed by route id and only holds the routes that have at
-         * least one departure in the window, so its count is exactly the
-         * candidates Orbit has a price for; everything else in `$codes` is a
-         * route it has never priced, or has no route row for at all. A
-         * candidate that IS priced and matches nothing is not pending — the
-         * answer for it is in, and the answer is no.
-         */
+        // How much of the question is unanswered: `$fares`' count is exactly what
+        // Orbit has priced; a priced candidate matching nothing isn't pending.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $pending = count($codes) - $fares->count();
 
         return RuleMatchSummary::of($matches, (int) config('orbit.rules.sample'), $pending);
     }
 
     /**
-     * Every route code this rule is about, whether or not Orbit has ever
-     * priced it. Also what App\Jobs\SweepRuleFares spends its budget on, which
-     * is why it is public and why the order is the matcher's ranking.
+     * Every route code this rule is about, priced or not — also what
+     * App\Jobs\SweepRuleFares spends its budget on (hence public, matcher order).
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @return list<string>
      */
@@ -189,11 +158,9 @@ final class RuleMatches
     /**
      * The route ids this account is already watching.
      *
-     * MEMOISED PER USER AND NOT JUST PER INSTANCE. One account is all this app
-     * has and one request is all this object lives for, so a bare cache would
-     * work today and be wrong the first time anything asks about two people —
-     * silently, by telling the second one they are watching the first one's
-     * routes. Keying it costs an array lookup.
+     * Memoised per user, not just per instance — a bare cache works today but
+     * would silently cross-contaminate the moment two users share one request.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @return array<int, true>
      */

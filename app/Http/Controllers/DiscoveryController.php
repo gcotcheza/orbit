@@ -11,55 +11,42 @@ use Illuminate\Support\Facades\Date;
 use App\Http\Resources\DiscoveryResource;
 
 /**
- * The current set of discoveries — "the insanely cheap routes you never thought
- * to watch".
+ * The current set of discoveries — "the insanely cheap routes you never
+ * thought to watch".
  *
- * A PURE READ OF A PRECOMPUTED TABLE, and that is the whole design. Everything
- * expensive about this feature — three origin sweeps, five window fetches, up
- * to five metered Google searches — happens at 05:20 in App\Jobs\DiscoverDeals.
- * This endpoint is on the search screen's load path, which a person taps
- * several times a day, and a version that swept on demand would put forty
- * provider requests behind a tab.
+ * Pure read of a precomputed table; all the expensive work (sweeps, window
+ * fetches, Google searches) happens at 05:20 in App\Jobs\DiscoverDeals.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * NO PARAMETERS AT ALL, which makes it the simplest endpoint in this API. There
- * is nothing to page (the table's steady state is about ten rows, bounded by
- * `orbit.discovery.max_rows`), nothing to filter (a discovery the reader did
- * not want is one they scroll past) and nothing to sort (the order IS the
- * ranking — see App\Models\Discovery::scopeLive). A `?limit=` here would be a
- * knob on a list that is already as short as it will ever be.
+ * No parameters: nothing to page (~10 rows, orbit.discovery.max_rows bounded),
+ * filter, or sort (order IS the ranking — see Discovery::scopeLive).
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * AN EMPTY ANSWER IS A REAL ANSWER AND THE COMMONEST ONE. A box with no sweep
- * provider configured, a week where nothing cleared the thresholds, or the
- * thirty-six hours after a failed run all produce `data: []`. Every threshold in
- * `orbit.discovery` is a floor rather than a quota, precisely so that this can
- * happen — and the client draws an honest empty state rather than the least
- * mediocre thing available.
+ * Empty `data: []` is a real, common answer — every orbit.discovery threshold
+ * is a floor, not a quota, precisely so this can happen.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * BEHIND `auth:sanctum` LIKE EVERY OTHER READ. The rows are not private in any
- * interesting sense — they are three public airports and a fare — but this API
- * has one authentication rule and a first exception to it is not worth a screen
- * nobody can see without signing in anyway.
+ * Behind auth:sanctum like every other read; rows aren't sensitive, but this
+ * API has one auth rule and no exception worth carving out.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class DiscoveryController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
         /*
-         * THE OWNER'S CLOCK, not UTC's — the same resolution App\Jobs\
-         * DiscoverDeals uses to write these rows. The `live` scope compares a
-         * departure DATE against today, and a reader at 00:30 Amsterdam time is
-         * still on yesterday's date in UTC: the endpoint would hide a discovery
-         * for today's departure that the job considers perfectly current.
+         * Owner's clock, not UTC — matches App\Jobs\DiscoverDeals. `live`
+         * compares departure DATE to today; UTC would hide today's discovery
+         * for a reader still on yesterday's date locally.
+         * Why: docs/BUSINESS-LOGIC.md §36.
          */
         $now = Date::now((string) config('orbit.timezone'))->toImmutable();
 
         $discoveries = Discovery::query()
             /*
-             * EAGER, BECAUSE EVERY CARD PRINTS BOTH ENDS. The resource reads
-             * `destination->city` and `destination->country` for the headline
-             * and the origin's code for the "from AMS" line, so a lazy load
-             * would be two queries per row on a list whose whole job is to
-             * render in one paint.
+             * Eager-load: resource reads both origin and destination per row,
+             * so lazy loading would be an N+1 on a list meant to render in one paint.
+             * Why: docs/BUSINESS-LOGIC.md §36.
              */
             ->with(['origin', 'destination'])
             ->live($now)
@@ -70,16 +57,13 @@ final class DiscoveryController extends Controller
                 'count' => $discoveries->count(),
 
                 /*
-                 * WHEN THIS SET WAS FOUND, so the strip can say "found this
-                 * morning" rather than implying the fares were checked when the
-                 * screen opened. Null on an empty set, which is the honest
-                 * answer to "when did you last find something" when the answer
-                 * is "we did not".
+                 * "Found this morning", not "checked when opened"; null on an
+                 * empty set is the honest "we did not find anything" answer.
+                 * Why: docs/BUSINESS-LOGIC.md §36.
                  *
-                 * A TIMESTAMP IN THE OWNER'S TIMEZONE, like the only other one
-                 * in this API (`meta.fares.fetchedAt` on the route detail) —
-                 * every other date here is a bare `YYYY-MM-DD` because it names
-                 * a day, and this one names a moment.
+                 * Owner-timezone timestamp, like meta.fares.fetchedAt — every
+                 * other date here is a bare YYYY-MM-DD (a day, not a moment).
+                 * Why: docs/BUSINESS-LOGIC.md §36.
                  */
                 'discoveredAt' => $discoveries
                     ->max('discovered_at')

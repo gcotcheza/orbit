@@ -7,20 +7,10 @@ namespace App\Application\Alerts;
 use App\Domain\Alerts\AlertType;
 
 /**
- * The Sunday morning mail: where every watched route stands, what the rules are
- * finding, and what Orbit already flagged this week.
+ * The Sunday morning mail: what every watched route, rule and week-of-alerts
+ * looks like — the one alert mail that is not an interruption.
  *
- * THE ONE MAIL THAT IS NOT AN INTERRUPTION. Everything else in this app fires
- * because something crossed a line; this one arrives whether or not it did, and
- * its job is the opposite — to make a week with no alerts legible ("nothing
- * crossed your threshold, here is where things are") rather than silent. That
- * is why it repeats routes the cooldown has been suppressing all week: the
- * cooldown is about not interrupting, and this is not an interruption.
- *
- * IT REFUSES TO BE EMPTY. `isEmpty()` is what App\Jobs\SendWeeklyDigest checks
- * before it writes a ledger row or sends anything: an account with no watched
- * routes, no rules and no alerts this week gets no mail at all. A weekly "you
- * have nothing" is a weekly reminder to unsubscribe.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final readonly class DigestNotice implements AlertNotice
 {
@@ -28,8 +18,7 @@ final readonly class DigestNotice implements AlertNotice
      * @param  list<DealSummary>  $routes  every watched route, cheapest first
      * @param  list<RuleDigest>  $rules  each active rule with its best matches
      * @param  list<DealSummary>  $week  what Orbit alerted on in the last
-     *                                   config('orbit.alerts.digest_days') days,
-     *                                   read back out of the ledger
+     *                                   config('orbit.alerts.digest_days') days, from the ledger
      */
     public function __construct(
         public array $routes,
@@ -42,6 +31,12 @@ final readonly class DigestNotice implements AlertNotice
         return AlertType::WeeklyDigest;
     }
 
+    /**
+     * Whether App\Jobs\SendWeeklyDigest should skip mailing/logging this week
+     * entirely — a weekly "you have nothing" is a reason to unsubscribe.
+     *
+     * Why: docs/BUSINESS-LOGIC.md §36.
+     */
     public function isEmpty(): bool
     {
         return $this->routes === [] && $this->rules === [] && $this->week === [];
@@ -75,9 +70,10 @@ final readonly class DigestNotice implements AlertNotice
     }
 
     /**
-     * A WEEK WITH ALERTS IN IT SAYS SO FIRST. "3 deals worth a look" is a
-     * different mail from "here is your week", and somebody deciding in a
-     * notification shade whether to open it is deciding between those two.
+     * The subject leads with the alert count when there is one — that is the
+     * decision the reader is making in a notification shade.
+     *
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     public function subject(): string
     {
@@ -97,13 +93,10 @@ final readonly class DigestNotice implements AlertNotice
     }
 
     /**
-     * What the ledger stores for a digest.
+     * What the ledger stores for a digest: counts, not copies — the deals
+     * already have their own ledger rows from when they fired.
      *
-     * COUNTS AND NOT COPIES. The deals themselves already have rows of their
-     * own from the mornings they fired, and duplicating them here would make
-     * `GET /api/alerts` show the same fare twice with two different dates on
-     * it. What is worth remembering about a digest is that it went out and how
-     * much was in it.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @return array<string, mixed>
      */

@@ -21,14 +21,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 /**
  * The three writes behind the watchlist screen (design/README.md §5): the
  * toggle, the remove action and the add-route form.
- *
- * THE QUEUE IS FAKED FOR THE WHOLE FILE. `POST /api/watchlist` dispatches a
- * poll and a stats refresh, and under the test runner's `sync` connection those
- * would run inside the request against the fake provider — so the assertions
- * about a brand-new route's `confident: false` would be testing the seeder's
- * behaviour rather than the endpoint's. Faking the queue is also what
- * production does structurally: the jobs go to redis and the response is
- * written before either has started.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class WatchlistWritesTest extends TestCase
 {
@@ -53,8 +46,6 @@ final class WatchlistWritesTest extends TestCase
         parent::tearDown();
     }
 
-    // -- Nobody signed in ----------------------------------------------------
-
     #[Test]
     public function a_guest_cannot_write_to_the_watchlist(): void
     {
@@ -73,8 +64,6 @@ final class WatchlistWritesTest extends TestCase
 
         $this->assertSame(1, WatchlistItem::query()->count());
     }
-
-    // -- The toggle ----------------------------------------------------------
 
     #[Test]
     public function pausing_and_resuming_a_route_round_trips(): void
@@ -173,9 +162,8 @@ final class WatchlistWritesTest extends TestCase
     }
 
     /**
-     * The router's `[A-Z]{3}-[A-Z]{3}` constraint, from the read API. A
-     * malformed code is a routing miss, so it never reaches the controller —
-     * and under `/api/` it comes back as JSON rather than as the SPA shell.
+     * Router's `[A-Z]{3}-[A-Z]{3}` constraint rejects malformed codes before the
+     * controller; under `/api/` that is a JSON 404, not the SPA shell.
      */
     #[Test]
     public function a_malformed_code_never_reaches_the_controller(): void
@@ -188,8 +176,6 @@ final class WatchlistWritesTest extends TestCase
             ->deleteJson('/api/watchlist/AMSLIS')
             ->assertNotFound();
     }
-
-    // -- Removing ------------------------------------------------------------
 
     #[Test]
     public function removing_a_route_keeps_the_route_and_every_observation(): void
@@ -217,8 +203,6 @@ final class WatchlistWritesTest extends TestCase
             ->assertNotFound()
             ->assertJsonPath('message', 'Not watching that route.');
     }
-
-    // -- Adding --------------------------------------------------------------
 
     #[Test]
     public function adding_a_route_creates_it_watches_it_and_queues_the_first_poll(): void
@@ -323,16 +307,9 @@ final class WatchlistWritesTest extends TestCase
     }
 
     /**
-     * THE ORIGIN USED TO BE ONE OF THREE, and this test used to assert the
-     * refusal. It was inverted on 2026-08-16, with the search screen: a fare
-     * from Barcelona is not a flight the owner can take FROM HOME, and that was
-     * never the question — "what does BCN-LIS cost while I am already in
-     * Barcelona" is, and `Rule::in(config('orbit.origins'))` was the only thing
-     * making it unaskable. See App\Http\Requests\RoutePairRequest.
-     *
-     * WHAT STAYS HOME-ONLY IS THE RULE ENGINE, which never came through this
-     * request at all — tests/Feature/RulesApiTest and the sweep's own tests are
-     * where that is pinned, and none of them moved.
+     * Origins are no longer restricted to the three home airports here (inverted
+     * 2026-08-16); the rule engine's home-only restriction is unaffected.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function a_route_may_start_anywhere_orbit_knows_an_airport(): void
@@ -347,14 +324,12 @@ final class WatchlistWritesTest extends TestCase
 
         $this->assertSame(1, Route::query()->where('code', 'BCN-LIS')->count());
 
-        /* And it is watched like any other route, polled every morning. */
         Queue::assertPushed(PollRoutePrices::class);
     }
 
     /**
-     * The airport table is still the floor at both ends. `is_origin` is a flag
-     * the seeder sets and the rule engine reads; it has never been what this
-     * endpoint validates against, and it is not one now.
+     * `is_origin` is a rule-engine flag, not a constraint this endpoint checks.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     #[Test]
     public function an_origin_that_is_not_an_airport_at_all_is_still_refused(): void
