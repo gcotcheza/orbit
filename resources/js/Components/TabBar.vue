@@ -3,7 +3,7 @@
 
 <template>
   <nav class="tab-bar" aria-label="Primary">
-    <!-- Icons are written out, not v-for'd — only 4 of 5 share a shape (docs/BUSINESS-LOGIC.md §36). -->
+    <!-- Icons are written out, not v-for'd — only 4 of 5 share a shape. -->
     <RouterLink class="tab" :to="{ name: 'home' }">
       <svg class="tab__icon" width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
         <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1.6" />
@@ -21,18 +21,18 @@
       <span class="tab__label">Calendar</span>
     </RouterLink>
 
-    <!-- Centre item goes to /search, not rule creation, since 2026-08-16 (docs/BUSINESS-LOGIC.md §36). -->
-    <!-- No aria-label — a stale one broke e2e tab() lookup by name (docs/BUSINESS-LOGIC.md §36). -->
+    <!-- Centre item goes to /search, not rule creation, since 2026-08-16. No aria-label:
+         a stale one broke the e2e tab() lookup by name (docs/BUSINESS-LOGIC.md §36). -->
     <RouterLink class="tab tab--search" :to="{ name: 'search' }">
       <span class="tab__button">
-        <!-- Stroked from the style block, not a presentation attribute — var() isn't portable there.
-             The handle is a separate path so it alone can carry stroke-linecap. -->
+        <!-- Stroked from the style block, not a presentation attribute — var() is not portable
+             there. The handle is a separate path so it alone can carry stroke-linecap. -->
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
           <circle cx="9.5" cy="9.5" r="5.5" stroke-width="2" />
           <path d="m13.7 13.7 3.8 3.8" stroke-width="2.2" stroke-linecap="round" />
         </svg>
       </span>
-      <!-- Labelled like its neighbours — the only unlabelled item the app had (docs/BUSINESS-LOGIC.md §36). -->
+      <!-- Labelled like its neighbours — the only unlabelled item the app had. -->
       <span class="tab__label">Search</span>
     </RouterLink>
 

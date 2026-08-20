@@ -7,8 +7,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
 /**
- * What a place is LIKE — the non-geography half of a destination, kept separate from `airports` because vibes are an editorial judgement, not a
- * geographic fact. Powers the PR10 natural-language rule engine (docs/BUSINESS-LOGIC.md §36).
+ * What a place is LIKE — the non-geography half of a destination, kept out of `airports` because
+ * vibes are an editorial judgement (docs/BUSINESS-LOGIC.md §36).
  */
 return new class extends Migration
 {

@@ -3,7 +3,7 @@
 // createWebHistory, not hashes: every route gets a real, shareable URL (and a PWA launch target);
 // routes/web.php answers every non-API path with the same shell (docs/BUSINESS-LOGIC.md §36).
 
-// meta.layout ('tabs' or 'bare') is a string, not a swappable layout component — swapping components would remount the
+// routes/web.php answers every non-API path with the same shell (docs/BUSINESS-LOGIC.md §36).
 // tree and drop the globe's <KeepAlive> cache (docs/BUSINESS-LOGIC.md §36).
 
 // meta.guestOnly mirrors the server's auth split and is opt-in: a route without it needs a session,
@@ -36,8 +36,8 @@ export const router = createRouter({
             meta: { layout: 'tabs' },
         },
         {
-            // Still a tabbed screen, though no longer a tab: create lost the centre seat to search but kept its bar; reached from
-            // watch's "+ New rule" button (docs/BUSINESS-LOGIC.md §36).
+            // Still a tabbed screen though no longer a tab: create lost the centre seat to search
+            // but kept its bar, and is reached from watch's "+ New rule".
             path: '/create',
             name: 'create',
             component: () => import('@/Views/Create.vue'),
@@ -71,8 +71,8 @@ export const router = createRouter({
             meta: { layout: 'bare', guestOnly: true },
         },
         {
-            // The server hands the shell to any path it doesn't own; home is the honest answer since there's no content at an
-            // unknown URL to apologise for (docs/BUSINESS-LOGIC.md §36).
+            // The server hands the shell to any path it does not own; home is the honest answer,
+            // since there is no content at an unknown URL to apologise for.
             path: '/:pathMatch(.*)*',
             redirect: { name: 'home' },
         },

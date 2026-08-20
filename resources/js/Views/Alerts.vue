@@ -204,7 +204,7 @@ async function signOut() {
          settings surface the tab bar reaches (docs/BUSINESS-LOGIC.md §10). -->
     <h2 id="account" ref="accountHeading" class="section">Account</h2>
     <section class="card">
-      <!-- Name/email read-only: they're the seeder's, no edit endpoint exists (docs/BUSINESS-LOGIC.md §10). -->
+      <!-- Name and email are read-only: they are the seeder's, and no edit endpoint exists. -->
       <div class="account card__row">
         <p class="account__name">{{ user?.name }}</p>
         <p class="account__email">{{ user?.email }}</p>

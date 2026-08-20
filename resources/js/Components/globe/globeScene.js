@@ -1,5 +1,5 @@
-// All globe.gl/Three.js code lives in this file, kept out of Vue's reactivity (GlobeStage.vue calls its verbs; lib/geo.js supplies the numbers). Textures are served locally, not from a CDN (CSP), and
-// every colour is read from tokens.css via token() rather than hard-coded (docs/BUSINESS-LOGIC.md §36).
+// All globe.gl/Three.js code lives here, out of Vue's reactivity. Textures are served locally, not
+// from a CDN (CSP), and every colour is read from tokens.css (docs/BUSINESS-LOGIC.md §36).
 
 // The Earth, as photographed. `night` is a candidate user setting, vendored here so switching to it
 // is one argument, not one download (docs/BUSINESS-LOGIC.md §36).
@@ -83,8 +83,8 @@ export async function createGlobeScene(element, { onContextLost } = {}) {
     canvas.addEventListener('webglcontextlost', handleContextLost)
 
     const scene = {
-        // Element's box is the single source of size (set once in GlobeStage.vue's CSS); a zero box is skipped since a 0/0 aspect ratio produces an unrecoverable NaN camera matrix.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // The element's box is the single source of size; a zero box is skipped, since a 0/0 aspect
+        // ratio produces an unrecoverable NaN camera matrix.
         resize() {
             const { clientWidth, clientHeight } = element
 
@@ -130,8 +130,8 @@ export async function createGlobeScene(element, { onContextLost } = {}) {
             globe.pointOfView(pov, ms)
         },
 
-        // Called when the tab is hidden or the screen is KeepAlive-cached; globe.gl runs its own tweens outside requestAnimationFrame's throttling, so this stops them explicitly.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Called when the tab is hidden or KeepAlive-cached: globe.gl runs its own tweens outside
+        // requestAnimationFrame's throttling, so this stops them.
         pause() {
             globe.pauseAnimation()
         },
@@ -175,8 +175,8 @@ function arcFor(route, { active, still = false }) {
     }
 }
 
-// globe.gl requires a function of progress to express a fade, the only reason this file parses a hex colour; the colour still comes from tokens.css, only the alpha is ours.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// globe.gl needs a function of progress to express a fade, the only reason this file parses a hex
+// colour; the colour is still tokens.css's, only the alpha is ours.
 function fadingRing(hex) {
     const { r, g, b } = toRgb(hex)
 

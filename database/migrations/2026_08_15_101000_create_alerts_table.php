@@ -7,8 +7,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
 /**
- * Everything Orbit has ever decided to tell the owner — the alert ledger. Backs AlertPolicy's cooldown and the alert history (see per-column notes). FKs are nullable/nullOnDelete — deleting a rule must
- * not erase its alert history. No unique key on (user, route, type, day): the 5%-drop rule can fire twice in one day, on purpose (docs/BUSINESS-LOGIC.md §10).
+ * Everything Orbit has ever decided to tell the owner. FKs are nullOnDelete, and there is
+ * deliberately no unique key on (user, route, type, day) (docs/BUSINESS-LOGIC.md §10).
  */
 return new class extends Migration
 {
@@ -20,8 +20,8 @@ return new class extends Migration
             $table->foreignId('route_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('deal_rule_id')->nullable()->constrained()->nullOnDelete();
 
-            // route_deal | rule_match | weekly_digest (App\Domain\Alerts\AlertType). String, not a native enum: adding a kind must not need a migration on a table holding a year of history.
-            // Why: docs/BUSINESS-LOGIC.md §10.
+            // route_deal | rule_match | weekly_digest. A string, not a native enum: adding a kind
+            // must not need a migration on a year of history.
             $table->string('type', 32);
 
             // Score at the moment of decision, 0-100; NULL on a rule match or digest (neither has
@@ -31,11 +31,11 @@ return new class extends Migration
             /* Cents, like every other price in this app. NULL on the digest. */
             $table->unsignedInteger('price_cents')->nullable();
 
-            /* Everything the mail showed, frozen — a months-old row must answer with the numbers actually sent, not today's. */
+            /* Everything the mail showed, frozen — a months-old row answers with what was sent. */
             $table->json('payload');
 
-            // `mail` today; a column, not an assumption — PLAN.md has web push after the PWA shell, and multi-channel needs a per-channel "did this go out" answer.
-            // Why: docs/BUSINESS-LOGIC.md §10.
+            // `mail` today; a column, not an assumption — multi-channel needs a per-channel "did
+            // this go out" answer.
             $table->string('channel', 32);
 
             $table->timestamp('triggered_at');
@@ -48,8 +48,8 @@ return new class extends Migration
              */
             $table->index(['user_id', 'route_id', 'type', 'triggered_at']);
 
-            // The ledger's own index: `GET /api/alerts` and the digest want one account's rows newest-first with no route in the question — the cooldown index above can't serve that past its first column.
-            // Why: docs/BUSINESS-LOGIC.md §10.
+            // The ledger's own index: one account's rows newest-first with no route in the
+            // question, which the cooldown index cannot serve.
             $table->index(['user_id', 'triggered_at']);
         });
     }
