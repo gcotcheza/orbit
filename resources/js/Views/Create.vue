@@ -28,7 +28,11 @@ const created = ref(null)
 
 let timer = null
 
-const parsing = computed(() => parseStatus.value === 'parsing')
+/* Pending from the edit, not from the request: a × disabled mid-tap eats the
+   tap. Why: docs/BUSINESS-LOGIC.md §11. */
+const pending = ref(false)
+
+const parsing = computed(() => pending.value || parseStatus.value === 'parsing')
 const canCreate = computed(() => understood.value && !saving.value && !parsing.value)
 
 onMounted(() => rules.parse(text.value, removed.value))
@@ -42,7 +46,11 @@ onBeforeUnmount(() => {
    race each other on the keystroke that follows a removal. */
 watch([text, removed], () => {
   clearTimeout(timer)
-  timer = setTimeout(() => rules.parse(text.value, removed.value), DEBOUNCE_MS)
+  pending.value = true
+  timer = setTimeout(() => {
+    pending.value = false
+    rules.parse(text.value, removed.value)
+  }, DEBOUNCE_MS)
 }, { deep: true })
 
 function removeChip(id) {

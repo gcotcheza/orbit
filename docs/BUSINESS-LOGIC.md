@@ -874,7 +874,11 @@ no observation are skipped (not scored 0), rules with 0 matches are omitted
 rather than shown as "0 matches", and `week()` reads the stored payload rather
 than re-deriving it. An unknown alert-notice type throws rather than being
 dropped — an alert that silently goes nowhere is the worst failure this app
-has, because everything still looks like it's working.
+has, because everything still looks like it's working. The profile button's
+`#account` entrance scrolls only once the settings have settled (`ready` or
+`failed`) — `idle` and `loading` are both "the four cards above it have not
+rendered", and scrolling then lands the reader in the middle of quiet hours a
+moment later.
 
 ---
 
@@ -944,6 +948,15 @@ re-reading edited text, so taking "From EIN" off leaves every other chip exactly
 where it was and Reset is the same parse again. Unknown removed-ids are ignored,
 because the client holds its removed list across re-parses of a sentence
 somebody is still typing.
+
+**The create screen's chips go inert from the keystroke, not from the request.**
+`Create.vue` re-parses on a 500 ms debounce, so between an edit and the answer
+the chips on screen describe a sentence that is no longer in the textarea. They
+are disabled for that whole window rather than only while the POST is in
+flight: otherwise the × is live when the finger goes down and disabled when it
+comes up, and the browser fires no `click` at all — a removal that visibly does
+nothing. It also stops "Create rule" being offered against a reading the text
+has already moved past.
 
 **A stored rule's chips are rebuilt from its criteria, never from its text**
 (`RuleViews`). Re-parsing `raw_text` would put back every chip the owner
