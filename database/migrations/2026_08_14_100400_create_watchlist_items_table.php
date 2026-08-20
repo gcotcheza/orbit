@@ -7,21 +7,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
 /**
- * The routes the owner asked to be told about.
- *
- * USER-SCOPED EVEN THOUGH THERE IS ONE USER. The column costs nothing today
- * and is the difference between "add a second account" being a migration and
- * being a rewrite of every query in the app. Scribly learned this the
- * expensive way (see the multi-user retrofit); Orbit starts with the column.
- *
- * `active` IS A PAUSE, NOT A DELETE. The design's toggle (§5) turns a row off
- * without removing it: polling and alerts stop, but the history already
- * gathered stays, so turning the route back on in March does not throw away
- * February. The API returns paused rows with `active: false` rather than
- * hiding them, which is what lets the watchlist screen draw the toggle at all.
- *
- * `position` is what "the user's watchlist order" means; without it the list
- * would re-order itself on any query whose sort the database is free to choose.
+ * The routes the owner asked to be told about: user-scoped even with one user, `active` is a
+ * PAUSE rather than a delete, and `position` is the owner's order (docs/BUSINESS-LOGIC.md §1).
  */
 return new class extends Migration
 {

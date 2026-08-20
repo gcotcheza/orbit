@@ -7,20 +7,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
 /**
- * What a route usually costs — the statistics provider's answer, cached.
- *
- * ONE ROW PER ROUTE, refreshed weekly by App\Jobs\RefreshRouteStats. It is
- * stored rather than fetched on demand because it is a paid, rate-limited call
- * whose answer moves over months, and every screen in the app needs it: the
- * spotlight's "% below usual", the detail chart's dashed reference line, and
- * 75 of the deal score's 100 points.
- *
- * FIVE COLUMNS IN THE ORDER THEY SORT, and App\Domain\Pricing\PriceStats
- * refuses to be constructed out of order — a p25 above the median would make
- * the score reward expensive fares, silently, forever.
- *
- * `refreshed_at` is what tells a reader whether a "usual price" is from this
- * month or from whenever the provider last answered.
+ * What a route usually costs, cached: one row per route, refreshed weekly. FIVE COLUMNS IN THE
+ * ORDER THEY SORT, and PriceStats refuses to be built out of order (docs/BUSINESS-LOGIC.md §6).
  */
 return new class extends Migration
 {
