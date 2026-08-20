@@ -28,26 +28,30 @@
 #
 # Requires the stack to be up (`docker compose up -d`) for the PHP steps; the
 # node step brings its own container and does not.
-# Refuses to run against a stack started from another directory (see the guard below).
 # =============================================================================
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# Refuses to gate a stack that was brought up from another directory: on the VPS a
-# bare `docker compose` from a worktree resolves to production (`name: orbit`).
+# Refuses to gate a stack brought up from another directory: on the VPS a bare
+# `docker compose` from a worktree resolves to production (`name: orbit`).
 here=$(pwd -P)
-first=$(docker compose ps -aq 2>/dev/null | head -n 1 || true)
-if [ -n "$first" ]; then
-    started_from=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$first" 2>/dev/null || true)
-    project=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$first" 2>/dev/null || true)
-    if [ -n "$started_from" ] && [ "$started_from" != "$here" ]; then
-        printf 'check.sh: compose project %s was started from %s, not from %s.\n' "$project" "$started_from" "$here" >&2
-        printf 'Refusing to run the gate against it. Use a sandbox project on the SAME command line:\n' >&2
-        printf '  COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh\n' >&2
-        exit 2
-    fi
-fi
+for id in $(docker compose ps -aq 2>/dev/null || true); do
+    from=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$id" 2>/dev/null || true)
+    if [ -z "$from" ]; then continue; fi
+    from=$(readlink -f -- "$from" 2>/dev/null || printf '%s' "$from")
+    if [ "$from" = "$here" ]; then continue; fi
+    project=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$id" 2>/dev/null || true)
+    {
+        printf 'check.sh: compose project %s has a container started from\n' "${project:-?}"
+        printf '  %s, not from %s.\n' "$from" "$here"
+        printf 'Refusing to run the gate against it. Bring a sandbox stack up from THIS directory\n'
+        printf 'and name it on the same command line (web is left out: it publishes 127.0.0.1:3085):\n'
+        printf '  COMPOSE_PROJECT_NAME=orbit-<name> docker compose up -d postgres redis app\n'
+        printf '  COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh\n'
+    } >&2
+    exit 2
+done
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 

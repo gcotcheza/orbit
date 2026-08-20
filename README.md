@@ -151,9 +151,12 @@ docker compose up -d
 ./scripts/check.sh
 ```
 
-From a worktree on the server, pass a sandbox project on the same command line
-(`COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh`); the gate refuses
-to target a stack that was started from another directory.
+On the server, a worktree must use a sandbox project brought up from that
+same directory and named on the same command line —
+`COMPOSE_PROJECT_NAME=orbit-<name> docker compose up -d postgres redis app`,
+then `COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh` (`web` is left
+out because it publishes `127.0.0.1:3085`, which production owns); the gate
+refuses to run against a stack started from another directory.
 
 **The compose-project trap.** `docker-compose.yml` pins `name: orbit` and
 publishes `127.0.0.1:3085`; the browser sandbox pins `orbit-e2e` on
