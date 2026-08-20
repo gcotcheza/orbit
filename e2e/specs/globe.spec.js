@@ -301,25 +301,26 @@ test('the profile button lands on the account, not on the top of the alerts scre
     const account = page.locator('#account')
     const viewport = page.viewportSize()
 
+    // The settings render ABOVE the account card, so the arrival that matters is
+    // the one after they are there. Why: docs/E2E.md.
+    await expect(page.getByRole('heading', { name: 'Channels' })).toBeVisible()
+
     /*
-     * Polled, because it has to be true AFTER the settings land rather than
-     * merely at some point on the way — which is the whole defect. `>= 0` is the
-     * other half: scrolled past and off the top is as wrong as never reached.
+     * Scrolled AND on screen, in one poll: `scrollY > 0` says everything above
+     * it really is above it rather than the account happening to fit on an
+     * unscrolled page, and `>= 0` says it was not scrolled off the top.
      */
     await expect
         .poll(
             async () => {
                 const box = await account.boundingBox()
+                const scrolled = await page.evaluate(() => window.scrollY)
 
-                return box.y >= 0 && box.y < viewport.height
+                return scrolled > 0 && box.y >= 0 && box.y < viewport.height
             },
             { message: 'the account section never came to rest on screen' },
         )
         .toBe(true)
-
-    // Everything above it really is above it — i.e. the screen is scrolled,
-    // rather than the account happening to fit on an unscrolled page.
-    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
 
     await shot(page, 'alerts-from-profile')
 

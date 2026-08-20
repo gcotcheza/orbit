@@ -329,6 +329,16 @@ Two selector traps this app has already hit:
 - **Live class selectors.** `.chip:not(.chip--active)` re-evaluates after the
   click and then resolves to a *different* element. Capture the text first and
   re-find by it.
+- **A wait that is already over.** `toHaveCount(0)` on a screen that has not
+  fetched anything yet passes in 5 ms, and `toHaveCount(8)` passes on the
+  *previous* sentence's eight chips 400 ms before the debounce for yours has
+  even fired — so the labels read afterwards are the old reading's, and the tap
+  that follows lands in whatever the app does when the real answer arrives.
+  Wait for a state only the thing under test can produce: the seeded reading
+  first, then zero, then yours. Same rule for scroll positions — poll for
+  `scrollY > 0` *together with* the element's box, after an element that only
+  the completed fetch can render, or a short half-loaded page satisfies the
+  assertion at `scrollY === 0`.
 
 ---
 
