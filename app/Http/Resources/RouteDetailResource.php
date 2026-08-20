@@ -13,11 +13,8 @@ use App\Application\Routes\BookingLink;
 use App\Application\Routes\RouteSnapshot;
 
 /**
- * Everything the route detail screen draws (design/README.md §2).
- *
- * The live check is passed in because the ADVICE depends on it: a callout that
- * says "lock it in" over a fare Google cannot find is the client composing a
- * claim this server never made. docs/BUSINESS-LOGIC.md §17.
+ * Everything the route detail screen draws (design/README.md §2). The live check is passed in
+ * because the ADVICE depends on it (docs/BUSINESS-LOGIC.md §17).
  */
 final class RouteDetailResource extends RouteSummaryResource
 {

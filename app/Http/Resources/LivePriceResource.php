@@ -9,11 +9,8 @@ use App\Models\LivePriceCheck;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * What Google said when somebody pressed "Check live price" — `meta.liveCheck`
- * on the route detail (docs/API.md).
- *
- * ⚠ A null `lowest` is "asked, no opinion" and never reassurance: it is never
- * filled in from Orbit's own price. docs/BUSINESS-LOGIC.md §17.
+ * What Google said when somebody pressed "Check live price" (docs/API.md). ⚠ A null `lowest`
+ * is "asked, no opinion", never Orbit's own price (docs/BUSINESS-LOGIC.md §17).
  */
 final class LivePriceResource extends JsonResource
 {

@@ -12,10 +12,8 @@ use App\Domain\Discovery\GoogleVerdict;
 use Illuminate\Http\Client\Factory as Http;
 
 /**
- * A second opinion on one fare, from Google Flights via SerpAPI.
- *
- * ⚠ NOT a PriceProvider and must never become one: the budget is 250 searches a
- * MONTH. Guardrails, quota and answer states: docs/BUSINESS-LOGIC.md §17.
+ * A second opinion on one fare, from Google Flights via SerpAPI. ⚠ NOT a PriceProvider and
+ * must never become one: the budget is 250 searches a MONTH (docs/BUSINESS-LOGIC.md §17).
  */
 final readonly class GoogleFlightsCheck
 {

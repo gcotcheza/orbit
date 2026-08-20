@@ -12,14 +12,8 @@ use App\Infrastructure\Pricing\FakeFareModel;
 use App\Application\Ports\OriginSweepProvider;
 
 /**
- * Fake origin sweep (no real token yet); samples the real `airports` table so the default
- * (`orbit.providers.sweep=fake`) discovery screen looks real.
- *
- * Priced via the shared FakeFareModel with a subset marked down, so a fake discovery matches its own calendar and the
- * funnel has something to find.
- *
- * WARNING: only sweeps up to MAX_SWEEP_KM (short/medium haul) — FakeFareModel is distance-blind, so sweeping the full
- * table ranks by distance alone and surfaces fake long-haul "bargains" (docs/BUSINESS-LOGIC.md §16).
+ * Fake origin sweep, sampling the real `airports` table. WARNING: only up to MAX_SWEEP_KM —
+ * FakeFareModel is distance-blind, so a full sweep ranks by distance (docs/BUSINESS-LOGIC.md §16).
  */
 final readonly class FakeSweepProvider implements OriginSweepProvider
 {
@@ -42,14 +36,14 @@ final readonly class FakeSweepProvider implements OriginSweepProvider
     private const SALE_IN_HUNDREDTHS = 22;
 
     /**
-     * Marked-down fare multiplier — 0.45 keeps sale prices believable (avoids sub-€10 fares) while still clearing the
-     * discovery threshold (docs/BUSINESS-LOGIC.md §16).
+     * Marked-down fare multiplier — 0.45 keeps sale prices believable while still clearing
+     * the discovery threshold.
      */
     private const SALE_MULTIPLIER = 0.45;
 
     /**
-     * Departure date horizon, in days — matches what `period_type=year` answers with, so a fake discovery could plausibly
-     * have been searched (docs/BUSINESS-LOGIC.md §16).
+     * Departure date horizon, in days — matches what `period_type=year` answers with, so a
+     * fake discovery could plausibly have been searched.
      */
     private const HORIZON_DAYS = 350;
 
@@ -60,13 +54,13 @@ final readonly class FakeSweepProvider implements OriginSweepProvider
      */
     public function cheapestFromOrigin(string $originIata): array
     {
-        // `Date::now()` rather than `new DateTimeImmutable()` — this is the clock `Date::setTestNow()` moves; a real adapter
-        // can't be frozen (docs/BUSINESS-LOGIC.md §16).
+        // `Date::now()` rather than `new DateTimeImmutable()` — this is the clock
+        // `Date::setTestNow()` moves; a real adapter cannot be frozen.
         $now = Date::now();
         $observedAt = $now->toDateTimeImmutable();
 
-        // Selects only the columns needed — hydrating 3,270 full models per origin inside a queued job would be wasteful
-        // (docs/BUSINESS-LOGIC.md §16).
+        // Selects only the columns needed — hydrating 3,270 full models per origin inside a
+        // queued job would be wasteful.
         $origin = Airport::query()->where('iata', $originIata)->first(['iata', 'lat', 'lng']);
 
         if ($origin === null) {
@@ -90,16 +84,16 @@ final readonly class FakeSweepProvider implements OriginSweepProvider
                 continue;
             }
 
-            // Deterministic hash of origin+destination, stable across DB resets — feature tests rely on it to assert a route
-            // is/isn't found (docs/BUSINESS-LOGIC.md §16).
+            // Deterministic hash of origin+destination, stable across DB resets — feature tests
+            // rely on it to assert a route is or is not found.
             if (crc32($originIata.':sweep:'.$destination) % 100 >= self::COVERAGE_IN_HUNDREDTHS) {
                 continue;
             }
 
             $routeCode = $originIata.'-'.$destination;
 
-            // Stable pseudo-random departure date across the horizon (mirrors real search dates); `+1` keeps it off today
-            // (unactionable) (docs/BUSINESS-LOGIC.md §16).
+            // Stable pseudo-random departure date across the horizon; `+1` keeps it off today,
+            // which would be unactionable.
             $offset = (int) (crc32($routeCode.':sweep-date') % self::HORIZON_DAYS) + 1;
             $departure = $now->copy()->startOfDay()->addDays($offset)->toDateTimeImmutable();
 
@@ -111,8 +105,8 @@ final readonly class FakeSweepProvider implements OriginSweepProvider
                 $cents = (int) round($cents * self::SALE_MULTIPLIER);
             }
 
-            // Ages spread across ~7 days (not all "just now") so DiscoveryPolicy's freshness rule is actually exercised
-            // (docs/BUSINESS-LOGIC.md §16).
+            // Ages spread across about seven days, so DiscoveryPolicy's freshness rule is
+            // actually exercised.
             $ageHours = (int) (crc32($routeCode.':sweep-age') % 168);
 
             $fares[] = new SweptFare(

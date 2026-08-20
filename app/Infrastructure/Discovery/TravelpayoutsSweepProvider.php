@@ -15,20 +15,8 @@ use App\Application\Ports\OriginSweepProvider;
 use Illuminate\Contracts\Cache\Repository as Cache;
 
 /**
- * "What is cheap from Amsterdam, to anywhere" — from `/v2/prices/latest` with
- * the destination left off (the whole trick; undocumented as a feature).
- *
- * `one_way=true`, the opposite of the returns adapter's `false` -- every
- * other price in this app is one-way, so getting this wrong wouldn't fail,
- * it would quietly halve every discovery's apparent value. `limit` must be
- * sent (default 30 would silently sweep 5% of the world). `found_at` on this
- * endpoint has no trailing `Z` -- same UTC instant as the other endpoints,
- * different notation; copying the wrong parser would leave the discovery
- * screen permanently and silently empty (unknown age reads as too old).
- * `distance` is deliberately not read (once wrong by 37x vs. Haversine).
- * City-only codes with no airport row are passed through unchanged, not
- * dropped, so the caller decides what to do with them.
- * Why: docs/BUSINESS-LOGIC.md §16.
+ * "What is cheap from Amsterdam, to anywhere" — `/v2/prices/latest` with the destination left
+ * off. `one_way=true`, `limit` sent, `distance` never read (docs/BUSINESS-LOGIC.md §16).
  */
 final readonly class TravelpayoutsSweepProvider implements OriginSweepProvider
 {
@@ -218,8 +206,8 @@ final readonly class TravelpayoutsSweepProvider implements OriginSweepProvider
     }
 
     /**
-     * When this price was found, per the provider, or null if it won't say. Two formats, both UTC; pinned rather than left to the loose `new
-     * DateTimeImmutable($s)` parser, which would fabricate a confident answer (docs/BUSINESS-LOGIC.md §16).
+     * When this price was found, per the provider, or null. Two UTC formats, pinned rather than
+     * left to the loose parser, which would fabricate a confident answer.
      *
      * @param  array<mixed>  $entry
      */
