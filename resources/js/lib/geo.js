@@ -28,7 +28,6 @@ export function easeInOutQuad(t) {
  * Initial bearing (deg clockwise from north) — a BEARING, not the on-screen line angle. It
  * changes along a great circle, so the choreography recomputes it per frame.
  */
- */
 export function bearing(from, to) {
     const fromLat = from.lat * RAD
     const toLat = to.lat * RAD
