@@ -10,32 +10,14 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Contracts\Validation\Validator;
 
 /**
- * `POST /api/watchlist` — start watching a city pair.
- *
- * THE PAIR ITSELF IS RoutePairRequest, which this shares with the lookup
- * endpoint: the two codes, what they may be, and the four sentences that come
- * back when they are not. What is added here is the one rule that is about the
- * WATCHLIST rather than about the route — a pair already on it — which is
- * exactly the rule a lookup must not have.
- *
- * A WATCHED ROUTE MAY NOW START ANYWHERE, and that is a poll every morning for
- * a pair the owner cannot necessarily fly. It is deliberate and it is the
- * owner's to decide: watching is an explicit act on a route somebody has just
- * been shown the price of, the watchlist is six rows long, and a list that
- * refused BCN-PMI would refuse the one route somebody actually wanted to
- * follow. What is NOT widened is the rule engine, which watches on its own —
- * see the note on `origins` in config/orbit.php.
+ * `POST /api/watchlist` — the pair itself is RoutePairRequest; what is added here is the one
+ * rule about the WATCHLIST, which a lookup must not have (docs/BUSINESS-LOGIC.md §36).
  */
 final class AddWatchedRouteRequest extends RoutePairRequest
 {
     /**
-     * The pair is not already on this account's watchlist.
-     *
-     * AN `after` CALLBACK RATHER THAN A `unique` RULE, because what has to be
-     * unique is not a column: it is the (user, route) pair, reached through a
-     * route that is looked up by the code the two fields spell. It runs only
-     * once the fields themselves are valid — telling somebody they are already
-     * watching `AM-LIS` would be answering a question they did not ask.
+     * The pair is not already on this account's watchlist. An `after` callback rather than a
+     * `unique` rule: what must be unique is the (user, route) pair, not a column.
      *
      * @return array<int, callable>
      */

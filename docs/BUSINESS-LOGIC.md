@@ -2284,6 +2284,9 @@ by anyone.
 - **`POST /rules/parse` is a POST that writes nothing, deliberately** — a GET would put the owner's free-text rule sentence in every access log and browser history between the phone and the server. It's the only throttled route in this file besides login, since the create screen calls it on every keystroke's 500ms debounce.
 - **`PATCH /rules/{id}` keys on a numeric database id, not a natural key** — a rule has no code to look up by (two rules can be the identical sentence with different chips removed), so this is the one place in the API keyed on a raw id.
 
+- **A watched route may now start anywhere** (2026-08-16), and that is a poll every morning for a pair the owner cannot necessarily fly. It is deliberate and the owner's to decide: watching is an explicit act on a route somebody has just been shown the price of, the watchlist is six rows long, and a list that refused BCN-PMI would refuse the one route somebody actually wanted to follow. What is **not** widened is the rule engine, which watches on its own — `config('orbit.origins')` still bounds the nightly sweep's budget.
+- **`airports.iata` is the real key and the surrogate id is a convenience**: the code is what the URL carries (`/route/AMS-LIS`), what the provider APIs speak, and what the design prints on the boarding-pass rows. It is unique so a second "AMS" cannot be created by a careless seeder run and quietly split a route's history in two. `lat`/`lng` are **doubles, not decimals** — they are read straight into the globe's camera and great-circle maths, where they are floats anyway, and a decimal column would only mean Eloquent handing the client a string JavaScript has to parse back.
+
 ### Auth and security
 
 - **`LoginController` has no registration, reset or verification** — Orbit has exactly one seeded user, and a route that doesn't exist can't be misconfigured.

@@ -6,7 +6,7 @@ namespace App\Domain\Rules;
 
 /**
  * A sentence, read: the chips design/README.md §4 draws and the criteria they add up to.
- * `without()` re-derives criteria from the chips left, never re-parsing (docs/BUSINESS-LOGIC.md §11).
+ * `without()` re-derives criteria from the chips left (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class ParsedRule
 {
