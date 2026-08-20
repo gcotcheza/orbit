@@ -239,8 +239,8 @@ final class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * The real fare adapter. Handed scalars rather than reading config() itself, so config:cache and test overrides behave
-     * as expected. Missing token throws from the constructor, here, at resolution (docs/BUSINESS-LOGIC.md §36).
+     * The real fare adapter, handed scalars rather than reading config() itself. A missing token
+     * throws from the constructor, here, at resolution (docs/BUSINESS-LOGIC.md §36).
      */
     private function travelpayoutsPrices(): PriceProvider
     {
@@ -263,8 +263,8 @@ final class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * The real round-trip adapter. Shares `orbit.travelpayouts` connection settings; `max_nights`/`limit` are this endpoint's own, in `orbit.returns`.
-     * Missing token throws from the constructor, at resolution (docs/BUSINESS-LOGIC.md §36).
+     * The real round-trip adapter, sharing `orbit.travelpayouts` connection settings; `max_nights`
+     * and `limit` are this endpoint's own (docs/BUSINESS-LOGIC.md §36).
      */
     private function travelpayoutsReturns(): ReturnTripProvider
     {
@@ -290,8 +290,8 @@ final class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * The real origin-sweep adapter. Shares `orbit.travelpayouts` connection settings; `limit` deliberately reads
-     * `orbit.returns` too (same endpoint, not a mistake). Missing token throws at resolution (docs/BUSINESS-LOGIC.md §36).
+     * The real origin-sweep adapter. `limit` deliberately reads `orbit.returns` too — the same
+     * endpoint, not a mistake. A missing token throws at resolution (docs/BUSINESS-LOGIC.md §36).
      */
     private function travelpayoutsSweep(): OriginSweepProvider
     {
@@ -316,8 +316,8 @@ final class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * The statistics Orbit computes for itself. Scalars out of config, like every adapter here — lets a test set the
-     * immature end of the blend directly rather than seeding a year of history (docs/BUSINESS-LOGIC.md §36).
+     * The statistics Orbit computes for itself. Scalars out of config, so a test can set the
+     * immature end of the blend directly (docs/BUSINESS-LOGIC.md §36).
      */
     private function selfStats(): PriceStatsProvider
     {
@@ -332,8 +332,8 @@ final class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * The Claude-backed parser. Transporter is supplied, not discovered: the SDK's own `timeout` is advisory and never read, so only the PSR-18 client's
-     * timeout stops a hung request. `http_errors => false` so the SDK's own typed exception wins over a raw Guzzle throw (docs/BUSINESS-LOGIC.md §36).
+     * The Claude-backed parser. The transporter is supplied, not discovered: the SDK's own
+     * `timeout` is advisory and never read (docs/BUSINESS-LOGIC.md §36).
      */
     private function anthropicParser(RuleTextParser $fallback): RuleTextParser
     {
@@ -363,21 +363,21 @@ final class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         /*
-         * NotificationSent fires once a channel returns — the only honest moment for `delivered_at` (see MarkAlertsDelivered).
-         * Registered explicitly: no app/Listeners dir exists for discovery (docs/BUSINESS-LOGIC.md §36).
+         * NotificationSent fires once a channel returns — the only honest moment for
+         * `delivered_at`. Registered explicitly, since no app/Listeners dir exists.
          */
         Event::listen(NotificationSent::class, MarkAlertsDelivered::class);
 
         /*
-         * Keyed on email AND ip (either alone leaves the other attack free). 5/min: this app has one account, so this route is
-         * the whole brute-force surface. Email lower-cased — case is not a bucket (docs/BUSINESS-LOGIC.md §36).
+         * Keyed on email AND ip: either alone leaves the other attack free. 5/min, because one
+         * account makes this the whole brute-force surface.
          */
         RateLimiter::for('login', fn (Request $request): Limit => Limit::perMinute(5)
             ->by(mb_strtolower((string) $request->input('email')).'|'.$request->ip()));
 
         /*
-         * Same 5/min as login, on purpose: `current_password` makes this the cheapest way to brute-force an unattended
-         * session. Keyed on account not ip — caller is always authenticated here (docs/BUSINESS-LOGIC.md §36).
+         * Same 5/min as login: `current_password` makes this the cheapest way to brute-force an
+         * unattended session. Keyed on account.
          */
         RateLimiter::for('password-change', fn (Request $request): Limit => Limit::perMinute(5)
             ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
@@ -390,15 +390,15 @@ final class AppServiceProvider extends ServiceProvider
             ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
 
         /*
-         * 60/min, deliberately generous — guards a CLIENT BUG (debounce failing), not a cost; a limiter a person can trip is
-         * worse than what it prevents. No third party or real cost behind this one (docs/BUSINESS-LOGIC.md §36).
+         * 60/min, deliberately generous: it guards a client bug (a failing debounce), not a cost,
+         * and a limiter a person can trip is worse.
          */
         RateLimiter::for('airport-search', fn (Request $request): Limit => Limit::perMinute(60)
             ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
 
         /*
-         * The one endpoint where a tap spends the fare budget directly. BOTH limits matter: 6/min stops a burst, 20/hour stops a stuck loop from draining the
-         * ~200/hour token allowance the daily poll+sweep already uses most of. Keyed on account (docs/BUSINESS-LOGIC.md §36).
+         * The one endpoint where a tap spends the fare budget. BOTH limits matter: 6/min stops a
+         * burst, 20/hour stops a stuck loop.
          */
         RateLimiter::for('route-lookup', static function (Request $request): array {
             $key = (string) ($request->user()?->getAuthIdentifier() ?? $request->ip());
@@ -423,8 +423,8 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         /*
-         * DO NOT remove: closes bearer-token auth at the guard. Sanctum falls through to `personal_access_tokens`, a table
-         * this app never migrates — left open, a Bearer header turns a 401 into a 500 (docs/BUSINESS-LOGIC.md §36).
+         * DO NOT remove: closes bearer-token auth at the guard. Sanctum falls through to
+         * `personal_access_tokens`, a table this app never migrates (docs/BUSINESS-LOGIC.md §36).
          */
         Sanctum::getAccessTokenFromRequestUsing(fn (): ?string => null);
     }
