@@ -29,10 +29,8 @@ export const useDiscoveriesStore = defineStore('discoveries', () => {
     const discoveredAt = ref(null)
 
     /*
-     * idle | loading | ready | failed
-     *
-     * Starts at 'idle', unlike stores/watchlist.js — this strip is optional, so nothing renders until asked.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * idle | loading | ready | failed Starts at 'idle', unlike stores/watchlist.js — this strip is
+     * optional, so nothing renders until asked (docs/BUSINESS-LOGIC.md §36).
      */
     const status = ref('idle')
 
@@ -58,8 +56,7 @@ export const useDiscoveriesStore = defineStore('discoveries', () => {
             discoveredAt.value = data.meta?.discoveredAt ?? null
             status.value = 'ready'
         } catch (failure) {
-            // A 401 is nobody's problem here — lib/http.js sends the whole app
-            // to the login screen.
+            // A 401 is nobody's problem here — lib/http.js sends the whole app to the login screen.
             status.value = 'failed'
             console.error('Could not load discoveries.', failure)
         }

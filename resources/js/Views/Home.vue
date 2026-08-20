@@ -37,8 +37,8 @@ const failed = computed(() => status.value === 'failed')
 const activeCode = ref(null)
 
 /*
- * Probed once — WebGL-less renders fine except the globe, which looks broken
- * rather than unsupported. A ref because GlobeStage can discover this later too.
+ * Probed once — WebGL-less renders fine except the globe, which looks broken rather than
+ * unsupported. A ref because GlobeStage can discover this later too.
  */
 const globeAvailable = ref(hasWebgl())
 
@@ -50,10 +50,8 @@ const activeRoute = computed(
 )
 
 /**
- * "Good morning", by the phone's clock.
- *
- * Deliberately local time, not the owner's configured timezone — a greeting talks to whoever holds the phone.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * "Good morning", by the phone's clock. Deliberately local time, not the owner's configured
+ * timezone — a greeting talks to whoever holds the phone (docs/BUSINESS-LOGIC.md §36).
  */
 function currentGreeting() {
   const hour = new Date().getHours()
@@ -65,14 +63,13 @@ function currentGreeting() {
   return hour < 18 ? 'Good afternoon' : 'Good evening'
 }
 
-// Read before the first render, not in onMounted — the greeting is the
-// largest text on the screen, so starting empty leaves a hole in frame one.
+// Read before the first render, not in onMounted — the greeting is the largest text on the screen,
+// so starting empty leaves a hole in frame one.
 const greeting = ref(currentGreeting())
 
 /*
- * A 401 is handled in lib/http.js (redirects to login); this screen only
- * decides where the camera starts and how to show "could not be reached".
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * A 401 is handled in lib/http.js (redirects to login); this screen only decides where the camera
+ * starts and how to show "could not be reached" (docs/BUSINESS-LOGIC.md §36).
  */
 async function load() {
   await watchlist.refresh()
@@ -89,8 +86,8 @@ function advance() {
 
 onMounted(load)
 
-// This screen is cached, not rebuilt, so it can be hours old — a stale
-// "Good morning" at 6pm is a small wrongness that makes the app feel unattended.
+// This screen is cached, not rebuilt, so it can be hours old — a stale "Good morning" at 6pm is a
+// small wrongness that makes the app feel unattended.
 onActivated(() => {
   greeting.value = currentGreeting()
 })

@@ -161,9 +161,8 @@ watch(
 }
 
 /*
- * Opacity, not --muted (same as .rail__price below): a fixed grey is either
- * invisible or a stray color on the accent-filled active chip.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Opacity, not --muted (same as .rail__price below): a fixed grey is either invisible or a stray
+ * color on the accent-filled active chip (docs/BUSINESS-LOGIC.md §36).
  */
 .rail__city {
   font-family: var(--font-body);

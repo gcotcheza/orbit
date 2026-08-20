@@ -22,8 +22,8 @@ const props = defineProps({
   trackingDays: { type: Number, default: 0 },
 })
 
-// The design's canvas. The plot area is inset top and bottom so the line's
-// 2 px stroke and the end dot's radius are never clipped by the viewBox.
+// The design's canvas. The plot area is inset top and bottom so the line's 2 px stroke and the end
+// dot's radius are never clipped by the viewBox.
 const WIDTH = 300
 const HEIGHT = 140
 const PAD_TOP = 16
@@ -31,15 +31,15 @@ const PAD_BOTTOM = 22
 const BASE = HEIGHT - PAD_BOTTOM
 const PLOT = HEIGHT - PAD_TOP - PAD_BOTTOM
 
-// The design's threshold for "we have not been watching this long enough to
-// draw conclusions from" (docs/PLAN.md).
+// The design's threshold for "we have not been watching this long enough to draw conclusions from"
+// (docs/PLAN.md).
 const HONEST_AFTER_DAYS = 14
 
 const gradientId = useId()
 
 /**
- * `YYYY-MM-DD` → a day number, for measuring gaps. UTC parts, not
- * `new Date(iso)`, which would shift observations by timezone.
+ * `YYYY-MM-DD` → a day number, for measuring gaps. UTC parts, not `new Date(iso)`, which would
+ * shift observations by timezone.
  */
 function dayNumber(iso) {
   const [year, month, day] = iso.split('-').map(Number)
@@ -50,9 +50,8 @@ function dayNumber(iso) {
 const chart = computed(() => {
   const points = props.history
 
-  // One point is a dot, zero points are not a chart — both fall through to
-  // the tracking note below.
-  // Why: docs/BUSINESS-LOGIC.md §36.
+  // One point is a dot, zero points are not a chart — both fall through to the tracking note below
+  // (docs/BUSINESS-LOGIC.md §36).
   if (points.length < 2) {
     return null
   }
@@ -70,9 +69,8 @@ const chart = computed(() => {
   const range = Math.max(...values) - low
 
   const x = (iso) => ((dayNumber(iso) - firstDay) / daySpan) * WIDTH
-  // A flat month has no range to scale against — drawn down the middle, not
-  // along the floor (which dividing by a fallback of 1 would give).
-  // Why: docs/BUSINESS-LOGIC.md §36.
+  // A flat month has no range to scale against — drawn down the middle, not along the floor (which
+  // dividing by a fallback of 1 would give) (docs/BUSINESS-LOGIC.md §36).
   const y = (value) => (range === 0 ? PAD_TOP + PLOT / 2 : BASE - ((value - low) / range) * PLOT)
 
   const line = points

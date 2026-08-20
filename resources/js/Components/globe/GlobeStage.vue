@@ -39,11 +39,11 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
-  // The dwell is over: the parent owns which route is next, because it also
-  // owns the spotlight card and the rail that have to agree with it.
+  // The dwell is over: the parent owns which route is next, because it also owns the spotlight card
+  // and the rail that have to agree with it.
   'advance',
-  // There is no globe and there is not going to be one — WebGL is missing, the
-  // chunk failed to load, or the context was lost. The parent draws a list.
+  // There is no globe and there is not going to be one — WebGL is missing, the chunk failed to
+  // load, or the context was lost. The parent draws a list.
   'unavailable',
 ])
 
@@ -159,8 +159,8 @@ function play({ instant = false } = {}) {
 
   if (reducedMotion.value) {
     scene.showAllRoutes(props.routes, route.code)
-    // A cut, not a move, and no auto-advance: a screen that rearranges itself
-    // every eleven seconds is exactly what was being asked to stop.
+    // A cut, not a move, and no auto-advance: a screen that rearranges itself every eleven seconds
+    // is exactly what was being asked to stop.
     scene.pointOfView({ ...pathMidpoint(path), altitude: TIMING.fitAltitude }, 0)
 
     return
@@ -299,8 +299,8 @@ function resume() {
 
   paused = false
   scene?.resume()
-  // Restart the film rather than resume it mid-flight: the user has just
-  // arrived, and the interesting part is the take-off.
+  // Restart the film rather than resume it mid-flight: the user has just arrived, and the
+  // interesting part is the take-off.
   play({ instant: true })
 }
 
@@ -321,9 +321,8 @@ onMounted(async () => {
   try {
     scene = await createGlobeScene(viewport.value, { onContextLost: () => emit('unavailable') })
   } catch (error) {
-    // The chunk carries Three.js and is the biggest thing this app downloads;
-    // on a bad connection it is the most likely thing to fail. Report it and
-    // let the screen draw its list.
+    // The chunk carries Three.js and is the biggest thing this app downloads; on a bad connection
+    // it is the most likely thing to fail. Report it and let the screen draw its list.
     console.error('The globe could not be built.', error)
     emit('unavailable')
 
@@ -331,8 +330,7 @@ onMounted(async () => {
   }
 
   if (disposed) {
-    // Unmounted while the import was in flight. Nothing above ran, so nothing
-    // above cleaned up.
+    // Unmounted while the import was in flight. Nothing above ran, so nothing above cleaned up.
     scene.destroy()
     scene = null
 

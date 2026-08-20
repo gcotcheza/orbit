@@ -20,11 +20,8 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     /** Every watched route, exactly as `GET /api/watchlist` sends them. */
     const routes = ref([])
 
-    // loading | ready | failed
-    //
-    // Starts at 'loading', not 'idle' — every screen fetches in onMounted
-    // (after first render), so 'idle' would flash for one frame.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // loading | ready | failed Starts at 'loading', not 'idle' — every screen fetches in onMounted
+    // (after first render), so 'idle' would flash for one frame (docs/BUSINESS-LOGIC.md §36).
     const status = ref('loading')
 
     /** One sentence about the last failed WRITE, for the screen to show. */
@@ -41,8 +38,8 @@ export const useWatchlistStore = defineStore('watchlist', () => {
      */
     async function refresh() {
         status.value = 'loading'
-        // A sentence about a write that failed against the previous list has
-        // nothing to say about this one.
+        // A sentence about a write that failed against the previous list has nothing to say about
+        // this one.
         error.value = ''
 
         try {
@@ -51,16 +48,16 @@ export const useWatchlistStore = defineStore('watchlist', () => {
             routes.value = data.data
             status.value = 'ready'
         } catch (failure) {
-            // A 401 is nobody's problem here — lib/http.js sends the whole app
-            // to the login screen. Anything else is the screen's to say.
+            // A 401 is nobody's problem here — lib/http.js sends the whole app to the login screen.
+            // Anything else is the screen's to say.
             status.value = 'failed'
             console.error('Could not load the watchlist.', failure)
         }
     }
 
     /**
-     * Pause or resume a route — the switch moves now; the server's answer
-     * replaces the row, or reverts it if the request fails.
+     * Pause or resume a route — the switch moves now; the server's answer replaces the row, or
+     * reverts it if the request fails.
      */
     async function toggle(route, active) {
         const previous = route.active
@@ -81,8 +78,8 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     }
 
     /**
-     * Stop watching — the row leaves immediately and returns to the same
-     * position on failure; order is the owner's, not the API's to shuffle.
+     * Stop watching — the row leaves immediately and returns to the same position on failure; order
+     * is the owner's, not the API's to shuffle.
      */
     async function remove(route) {
         const index = routes.value.indexOf(route)
@@ -120,8 +117,8 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     }
 
     /**
-     * Take in a row that some OTHER endpoint just created — promoting a rule match makes the same write `add` does, but
-     * from stores/rules.js (docs/BUSINESS-LOGIC.md §36).
+     * Take in a row that some OTHER endpoint just created — promoting a rule match makes the same
+     * write `add` does, but from stores/rules.js (docs/BUSINESS-LOGIC.md §36).
      */
     function adopt(route) {
         routes.value.push(route)

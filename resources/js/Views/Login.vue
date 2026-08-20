@@ -39,8 +39,8 @@ function messageFor(failure) {
     case 429:
       return 'Too many attempts. Wait a minute, then try again.'
     case 419:
-      // The session behind the page expired while the form sat open. Reloading
-      // fetches a fresh token, which is genuinely the fix.
+      // The session behind the page expired while the form sat open. Reloading fetches a fresh
+      // token, which is genuinely the fix.
       return 'This page went stale. Reload it and sign in again.'
     default:
       return 'Something went wrong signing in.'

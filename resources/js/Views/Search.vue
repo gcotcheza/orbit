@@ -370,8 +370,7 @@ function messageFor(failure) {
 
   switch (response.status) {
     case 422:
-      // The server's own sentences, per field — see
-      // App\Http\Requests\AddWatchedRouteRequest.
+      // The server's own sentences, per field — see App\Http\Requests\AddWatchedRouteRequest.
       return Object.values(response.data?.errors ?? {})[0]?.[0] ?? 'Orbit would not accept that route.'
     case 419:
       return 'This page went stale. Reload it and try again.'

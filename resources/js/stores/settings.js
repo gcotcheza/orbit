@@ -25,8 +25,8 @@ export const useSettingsStore = defineStore('settings', () => {
     const error = ref('')
 
     /*
-     * Which request's answer to believe: two PUTs can land out of order, so
-     * only the most recent request is allowed to write to the store.
+     * Which request's answer to believe: two PUTs can land out of order, so only the most recent
+     * request is allowed to write to the store.
      */
     let sequence = 0
 
@@ -43,8 +43,8 @@ export const useSettingsStore = defineStore('settings', () => {
     }
 
     /**
-     * Load once per visit to the screen. Safe to call again — it will not
-     * stack requests, and a failure can be retried by calling it.
+     * Load once per visit to the screen. Safe to call again — it will not stack requests, and a
+     * failure can be retried by calling it.
      */
     async function load() {
         if (status.value === 'loading') {
@@ -74,8 +74,8 @@ export const useSettingsStore = defineStore('settings', () => {
     }
 
     /**
-     * Change one or more settings. The whole object goes back (PUT, not PATCH)
-     * — see docs/API.md for why an optional boolean can't be turned off.
+     * Change one or more settings. The whole object goes back (PUT, not PATCH) — see docs/API.md
+     * for why an optional boolean can't be turned off.
      */
     async function change(patch) {
         if (settings.value === null) {
@@ -110,8 +110,8 @@ export const useSettingsStore = defineStore('settings', () => {
 })
 
 /**
- * One sentence somebody can act on. The 422 branch reads the server's own
- * message (UpdateSettingsRequest) rather than duplicating it here.
+ * One sentence somebody can act on. The 422 branch reads the server's own message
+ * (UpdateSettingsRequest) rather than duplicating it here.
  */
 function messageFor(failure) {
     const response = failure.response

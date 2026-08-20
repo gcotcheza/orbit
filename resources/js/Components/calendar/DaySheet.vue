@@ -113,8 +113,8 @@ const skyscannerUrl = computed(() => withDateTokens(props.booking?.skyscanner, p
  */
 const seen = computed(() => seenLabel(props.fare.foundAt))
 
-// Escape closes it, the same as tapping the backdrop. A sheet that can only be
-// dismissed by pointing at it is a sheet a keyboard cannot get out of.
+// Escape closes it, the same as tapping the backdrop. A sheet that can only be dismissed by
+// pointing at it is a sheet a keyboard cannot get out of.
 function onKeydown(event) {
   if (event.key === 'Escape') {
     emit('close')

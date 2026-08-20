@@ -33,6 +33,6 @@ app.use(router)
 
 app.mount('#app')
 
-// Last, and deliberately after mount: the PWA is an enhancement, and nothing
-// the user is looking at should wait on it. See resources/js/lib/pwa.js.
+// Last, and deliberately after mount: the PWA is an enhancement, and nothing the user is looking at
+// should wait on it. See resources/js/lib/pwa.js.
 registerServiceWorker()

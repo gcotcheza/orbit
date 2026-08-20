@@ -80,8 +80,7 @@ export const useDestinationsStore = defineStore('destinations', () => {
     return { destinations, status, load }
 })
 
-// -----------------------------------------------------------------------------
-// The search
+// ----------------------------------------------------------------------------- The search
 // -----------------------------------------------------------------------------
 
 /** How many suggestions a phone can show without becoming a page. */
@@ -120,8 +119,7 @@ export function fold(value) {
 const RANKS = [
     (folded, query) => folded.iata.startsWith(query),
     (folded, query) => folded.city.startsWith(query),
-    // "palmas" should find Las Palmas: a word inside the name, not just the
-    // first one.
+    // "palmas" should find Las Palmas: a word inside the name, not just the first one.
     (folded, query) => folded.city.split(' ').some((word) => word.startsWith(query)),
     (folded, query) => folded.country.startsWith(query),
     (folded, query) => folded.city.includes(query),
@@ -226,9 +224,8 @@ export function markRow(row, query) {
 export const MAX_TYPO_DISTANCE = 2
 
 /**
- * Shorter than this and a "did you mean" is a coin toss: "bar" is within two
- * edits of Bari, Basel, Barcelona and a dozen more, and the ranked search
- * already answers short queries well.
+ * Shorter than this and a "did you mean" is a coin toss: "bar" is within two edits of Bari, Basel,
+ * Barcelona and a dozen more, and the ranked search already answers short queries well.
  */
 const MIN_TYPO_LENGTH = 4
 
@@ -279,10 +276,8 @@ export function editDistance(one, other, max = MAX_TYPO_DISTANCE) {
 }
 
 /**
- * The one destination somebody probably meant, or null.
- *
- * Nearest wins; ties keep the server's alphabetical order, because `<` rather
- * than `<=` leaves the first one in place.
+ * The one destination somebody probably meant, or null. Nearest wins; ties keep the server's
+ * alphabetical order, because `<` rather than `<=` leaves the first one in place.
  *
  * @param {Array<object>} destinations `GET /api/destinations`'s rows
  * @param {string} query what is in the box

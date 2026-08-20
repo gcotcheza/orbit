@@ -20,8 +20,8 @@ import { WEEKDAYS, buildMonthGrid, dayLabel } from './month'
 const props = defineProps({
   month: { type: String, required: true },
   days: { type: Array, default: () => [] },
-  // Null for a month with no fares at all — every cell is then neutral, so
-  // there is nothing to interpolate across.
+  // Null for a month with no fares at all — every cell is then neutral, so there is nothing to
+  // interpolate across.
   min: { type: Number, default: null },
   max: { type: Number, default: null },
 })

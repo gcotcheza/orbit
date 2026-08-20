@@ -130,8 +130,8 @@ function elapsedMs(iso, now) {
 
     const then = new Date(iso).getTime()
 
-    // `new Date('nonsense')` is NaN rather than a throw, and NaN arithmetic
-    // propagates silently into "NaN hours ago".
+    // `new Date('nonsense')` is NaN rather than a throw, and NaN arithmetic propagates silently
+    // into "NaN hours ago".
     return Number.isNaN(then) ? null : now - then
 }
 

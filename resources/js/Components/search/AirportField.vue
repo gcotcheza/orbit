@@ -20,16 +20,14 @@ const props = defineProps({
   placeholder: { type: String, default: 'City or code' },
 
   /**
-   * What a screen reader calls the box, when the label above it isn't the whole
-   * story (e.g. From, sitting under three home-airport pills). Empty by default.
-   * Why: docs/BUSINESS-LOGIC.md §36.
+   * What a screen reader calls the box, when the label above it isn't the whole story (e.g. From,
+   * sitting under three home-airport pills). Empty by default (docs/BUSINESS-LOGIC.md §36).
    */
   ariaLabel: { type: String, default: '' },
 
   /**
-   * What the ✕ that empties the box is called, or '' for a box that has none —
-   * one prop rather than a boolean+name pair, since an unnamed clear announces as "button".
-   * Why: docs/BUSINESS-LOGIC.md §36.
+   * What the ✕ that empties the box is called, or '' for a box that has none — one prop rather than
+   * a boolean+name pair, since an unnamed clear announces as "button" (docs/BUSINESS-LOGIC.md §36).
    */
   clearLabel: { type: String, default: '' },
 
@@ -37,14 +35,13 @@ const props = defineProps({
   listLabel: { type: String, required: true },
 
   /**
-   * Whether this field's panel is the one showing. The form owns it — see the
-   * note above.
+   * Whether this field's panel is the one showing. The form owns it — see the note above.
    */
   open: { type: Boolean, default: false },
 
   /**
-   * The other end of the pair, upper-cased, or ''. Never suggested: a route
-   * from a place to itself is not a route.
+   * The other end of the pair, upper-cased, or ''. Never suggested: a route from a place to itself
+   * is not a route.
    */
   exclude: { type: String, default: '' },
 })
@@ -52,9 +49,8 @@ const props = defineProps({
 const value = defineModel({ type: String, required: true })
 
 /**
- * `open`/`close` are requests to the form, which decides; nothing is emitted on
- * an empty Enter — the keypress falls through to the browser's own submit.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `open`/`close` are requests to the form, which decides; nothing is emitted on an empty Enter —
+ * the keypress falls through to the browser's own submit (docs/BUSINESS-LOGIC.md §36).
  */
 const emit = defineEmits(['open', 'close'])
 
@@ -95,23 +91,20 @@ const didYouMean = computed(() => {
 })
 
 /**
- * Whether the box holds something — trimmed, so a stray space doesn't count for
- * either the suggestion panel or the ✕.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Whether the box holds something — trimmed, so a stray space doesn't count for either the
+ * suggestion panel or the ✕ (docs/BUSINESS-LOGIC.md §36).
  */
 const filled = computed(() => value.value.trim() !== '')
 
 /*
- * Not merely `open`: an empty box has nothing to suggest, and showing on focus
- * alone would cover the buttons before anything was asked.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Not merely `open`: an empty box has nothing to suggest, and showing on focus alone would cover
+ * the buttons before anything was asked (docs/BUSINESS-LOGIC.md §36).
  */
 const showing = computed(() => props.open && filled.value)
 
 /**
- * What the panel says when empty, in priority order: still searching, curated
- * list failed (code-only mode), or genuinely nothing found.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * What the panel says when empty, in priority order: still searching, curated list failed
+ * (code-only mode), or genuinely nothing found (docs/BUSINESS-LOGIC.md §36).
  */
 const emptyText = computed(() => {
   if (worldStatus.value === 'searching') {
@@ -124,9 +117,8 @@ const emptyText = computed(() => {
 })
 
 /*
- * The box shows what was typed; `code` (toCode()) is the upper-cased form the
- * form actually submits — the box no longer shouts back every keystroke.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The box shows what was typed; `code` (toCode()) is the upper-cased form the form actually submits
+ * — the box no longer shouts back every keystroke (docs/BUSINESS-LOGIC.md §36).
  */
 const code = computed(() => toCode(value.value))
 
@@ -143,18 +135,16 @@ const isKnownCode = computed(() =>
 )
 
 /*
- * One fetch, however many boxes: the store dedupes concurrent load() calls via
- * its in-flight promise.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One fetch, however many boxes: the store dedupes concurrent load() calls via its in-flight
+ * promise (docs/BUSINESS-LOGIC.md §36).
  */
 onMounted(() => {
   store.load()
 })
 
 /*
- * Stripped as typed (not on submit): letters in any alphabet, spaces, and
- * city-name punctuation survive; digits do not — no place name contains one.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Stripped as typed (not on submit): letters in any alphabet, spaces, and city-name punctuation
+ * survive; digits do not — no place name contains one (docs/BUSINESS-LOGIC.md §36).
  */
 /*
  * v-model + a pre-flush watcher, not :value/@input — a hand-rolled binding can
@@ -181,18 +171,16 @@ watch(value, (typed) => {
 })
 
 /*
- * A new query un-highlights everything — keeping an index highlighted across a
- * changing list is how Enter picks a city nobody saw.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * A new query un-highlights everything — keeping an index highlighted across a changing list is how
+ * Enter picks a city nobody saw (docs/BUSINESS-LOGIC.md §36).
  */
 watch(suggestions, () => {
   active.value = -1
 })
 
 /**
- * Fires only on typing, not on writes: the panel opens here rather than in a
- * value watcher, so `choose()` and the form's field-swap don't reopen it.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Fires only on typing, not on writes: the panel opens here rather than in a value watcher, so
+ * `choose()` and the form's field-swap don't reopen it (docs/BUSINESS-LOGIC.md §36).
  */
 function onType() {
   emit('open')
@@ -204,17 +192,15 @@ function choose(suggestion) {
   emit('close')
 
   /*
-   * Cancels, on nextTick, the search this write's own watcher just queued —
-   * a synchronous clear() would run before the pre-flush watcher and cancel nothing.
-   * Why: docs/BUSINESS-LOGIC.md §36.
+   * Cancels, on nextTick, the search this write's own watcher just queued — a synchronous clear()
+   * would run before the pre-flush watcher and cancel nothing (docs/BUSINESS-LOGIC.md §36).
    */
   nextTick(() => world.clear())
 }
 
 /**
- * A box that already holds a known code submits on Enter without a second
- * press; anything else takes the highlighted (or first) suggestion.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * A box that already holds a known code submits on Enter without a second press; anything else
+ * takes the highlighted (or first) suggestion (docs/BUSINESS-LOGIC.md §36).
  *
  * @param {KeyboardEvent} event
  */
@@ -224,9 +210,8 @@ function onEnter(event) {
   }
 
   /*
-   * The only keyboard path to the did-you-mean guess: it isn't in `suggestions`,
-   * so arrow keys never reach it — Enter answers the question instead.
-   * Why: docs/BUSINESS-LOGIC.md §36.
+   * The only keyboard path to the did-you-mean guess: it isn't in `suggestions`, so arrow keys
+   * never reach it — Enter answers the question instead (docs/BUSINESS-LOGIC.md §36).
    */
   if (suggestions.value.length === 0) {
     if (didYouMean.value === null) {
@@ -258,9 +243,8 @@ function move(step) {
   }
 
   /*
-   * The ring has one extra stop beyond the rows — "nothing highlighted" — so
-   * arrowing past the last row returns focus to the box instead of wrapping to the top.
-   * Why: docs/BUSINESS-LOGIC.md §36.
+   * The ring has one extra stop beyond the rows — "nothing highlighted" — so arrowing past the last
+   * row returns focus to the box instead of wrapping to the top (docs/BUSINESS-LOGIC.md §36).
    */
   const slot = active.value + 1
   active.value = (slot + step + count + 1) % (count + 1) - 1
@@ -269,15 +253,14 @@ function move(step) {
 }
 
 /*
- * The highlighted row is never focused (aria-activedescendant names it instead),
- * so the browser won't auto-scroll it — this does that manually.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The highlighted row is never focused (aria-activedescendant names it instead), so the browser
+ * won't auto-scroll it — this does that manually (docs/BUSINESS-LOGIC.md §36).
  */
 function scrollActiveIntoView() {
   nextTick(() => {
     /*
-     * Looked up by id, not child index — the divider is a child too, so
-     * `children[active]` would be off by one past it; optional call guards jsdom, which has no scrollIntoView.
+     * Looked up by id, not child index — the divider is a child too, so `children[active]` would be
+     * off by one past it; optional call guards jsdom, which has no scrollIntoView.
      */
     listbox.value
       ?.querySelector(`#${props.id}-option-${active.value}`)
@@ -522,8 +505,8 @@ defineExpose({ clear })
 }
 
 /*
- * One highlight source (`active`) for mouse and keyboard — a separate :hover
- * rule could show two rows chosen at once.
+ * One highlight source (`active`) for mouse and keyboard — a separate :hover rule could show two
+ * rows chosen at once.
  */
 .option--active {
   color: var(--ink);

@@ -23,19 +23,16 @@ import DealScoreGauge from '@/Components/route/DealScoreGauge.vue'
 import PriceHistoryChart from '@/Components/route/PriceHistoryChart.vue'
 import { departureLabel, euro, hoursSince, seenLabel } from '@/lib/format'
 
-// Case-normalised here (a display concern) so a bad shape is rejected
-// locally instead of by a round trip that can only come back 404.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Case-normalised here (a display concern) so a bad shape is rejected locally instead of by a round
+// trip that can only come back 404 (docs/BUSINESS-LOGIC.md §36).
 const CODE_PATTERN = /^[A-Z]{3}-[A-Z]{3}$/
 
-// 25s: several times a healthy fetch's own 2-3s, still short of anyone's
-// patience. Giving up loses nothing — the writes behind it are upserts.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// 25s: several times a healthy fetch's own 2-3s, still short of anyone's patience. Giving up loses
+// nothing — the writes behind it are upserts (docs/BUSINESS-LOGIC.md §36).
 const LOOKUP_TIMEOUT_MS = 25_000
 
-// 24h, matching the poll's own daily period — under it is an ordinary
-// watched route; past it, a fare that survived a morning it should not have.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// 24h, matching the poll's own daily period — under it is an ordinary watched route; past it, a
+// fare that survived a morning it should not have (docs/BUSINESS-LOGIC.md §36).
 const SEEN_AFTER_HOURS = 24
 
 /* Ends the WAIT, not the work: the server stores what it paid for either way. */
@@ -108,8 +105,8 @@ const lastChecked = computed(() => {
   }).format(new Date(Date.UTC(year, month - 1, day)))
 })
 
-// Statistics are null until the provider has some; the chart draws no
-// reference line rather than one at zero.
+// Statistics are null until the provider has some; the chart draws no reference line rather than
+// one at zero.
 const median = computed(() => detail.value?.stats?.median ?? null)
 
 /** `cheapest.date` is a DEPARTURE date (day you fly), never derived from
@@ -216,8 +213,8 @@ const caption = computed(() => {
   return `${Math.abs(price.pctBelow)}% ${direction} its usual ${euro(price.usual)}`
 })
 
-// The last request wins, not the last response: navigating detail → detail
-// keeps this component mounted and only changes the prop.
+// The last request wins, not the last response: navigating detail → detail keeps this component
+// mounted and only changes the prop.
 let request = 0
 
 async function load() {
@@ -251,9 +248,8 @@ async function load() {
     adopt(data)
     loading.value = false
 
-    // Refresh only when STALE AND UNWATCHED: a watched route's poll will fix
-    // stale fares; an unwatched one has nothing else that ever will.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Refresh only when STALE AND UNWATCHED: a watched route's poll will fix stale fares; an
+    // unwatched one has nothing else that ever will (docs/BUSINESS-LOGIC.md §36).
     if (!meta.value?.fares?.fresh && unwatched.value) {
       await lookUp(mine)
     }
@@ -262,9 +258,8 @@ async function load() {
       return
     }
 
-    // 404 means no route row yet, not a dead end: try pricing it via lookup.
-    // An invalid pair is refused there instead, with its own message.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // 404 means no route row yet, not a dead end: try pricing it via lookup. An invalid pair is
+    // refused there instead, with its own message (docs/BUSINESS-LOGIC.md §36).
     if (error.response?.status === 404) {
       loading.value = false
 
@@ -349,8 +344,8 @@ function describeLookupFailure(error) {
 }
 
 /**
- * ⚠ One tap spends one SerpAPI search out of 250 a MONTH. Nothing here is
- * automatic: no watcher, no mounted hook, no retry — it is a tap or it is not.
+ * ⚠ One tap spends one SerpAPI search out of 250 a MONTH. Nothing here is automatic: no watcher, no
+ * mounted hook, no retry — it is a tap or it is not.
  */
 async function checkLivePrice() {
   if (checkingLive.value || !detail.value?.cheapest) {
@@ -430,8 +425,8 @@ async function watchRoute() {
   try {
     await watchlist.add(detail.value.origin.iata, detail.value.destination.iata)
 
-    // The server's answer is the row, and the store has it. What changes HERE
-    // is only which of the two states this strip is in.
+    // The server's answer is the row, and the store has it. What changes HERE is only which of the
+    // two states this strip is in.
     meta.value = { ...meta.value, watched: true }
     justWatched.value = true
   } catch (failure) {

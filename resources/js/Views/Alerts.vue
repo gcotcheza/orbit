@@ -1,7 +1,7 @@
 <script setup>
 /*
- * Alerts (design/README.md §6) — how and when Orbit reaches the owner:
- * channels, sensitivity, timing, plus the app's theme/sign-out controls.
+ * Alerts (design/README.md §6) — how and when Orbit reaches the owner: channels, sensitivity,
+ * timing, plus the app's theme/sign-out controls.
  */
 import { computed, nextTick, onMounted, useTemplateRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -49,8 +49,8 @@ const quietNote = computed(() => {
 onMounted(settingsStore.load)
 
 /*
- * Scroll to #account only once settings settle (ready/failed), not via router
- * `scrollBehavior` — mid-fetch it fires before layout above it is final.
+ * Scroll to #account only once settings settle (ready/failed), not via router `scrollBehavior` —
+ * mid-fetch it fires before layout above it is final.
  */
 const route = useRoute()
 const accountHeading = useTemplateRef('accountHeading')
@@ -74,9 +74,8 @@ function save(patch) {
 }
 
 /*
- * Empty string from a cleared time input isn't valid (server 422s); ignore it
- * and keep the previous value instead of saving.
- * Why: docs/BUSINESS-LOGIC.md §10.
+ * Empty string from a cleared time input isn't valid (server 422s); ignore it and keep the previous
+ * value instead of saving (docs/BUSINESS-LOGIC.md §10).
  */
 function saveTime(field, value) {
   if (value !== '') {

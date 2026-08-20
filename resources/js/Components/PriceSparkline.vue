@@ -29,8 +29,8 @@ const props = defineProps({
 // which is what makes a 2 px line read at this size.
 const VIEW_WIDTH = 64
 const VIEW_HEIGHT = 22
-// Room for the stroke's own width at the extremes, so a fortnight's low does
-// not get its bottom half clipped by the viewBox.
+// Room for the stroke's own width at the extremes, so a fortnight's low does not get its bottom
+// half clipped by the viewBox.
 const PADDING = 3
 
 const points = computed(() => {
@@ -43,15 +43,15 @@ const points = computed(() => {
   const middle = VIEW_HEIGHT / 2
 
   if (values.length === 1) {
-    // One observation is not a trend. A flat line through the middle says
-    // "here is a price" without inventing a direction for it.
+    // One observation is not a trend. A flat line through the middle says "here is a price" without
+    // inventing a direction for it.
     return `0,${middle} ${VIEW_WIDTH},${middle}`
   }
 
   const low = Math.min(...values)
   const high = Math.max(...values)
-  // A fortnight at exactly one price is a real answer (docs/API.md's fake
-  // provider produces them), and it must not divide by zero.
+  // A fortnight at exactly one price is a real answer (docs/API.md's fake provider produces them),
+  // and it must not divide by zero.
   const span = high - low || 1
 
   return values

@@ -79,9 +79,8 @@ defineProps({
   aviasalesUrl: { type: String, required: true },
 
   /*
-   * The second opinion. Null-tolerant rather than required: a response from an
-   * older build carries no second link, and the honest answer to that is one
-   * hand-off rather than none.
+   * The second opinion. Null-tolerant rather than required: a response from an older build carries
+   * no second link, and the honest answer to that is one hand-off rather than none.
    */
   skyscannerUrl: { type: String, default: null },
 

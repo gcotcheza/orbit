@@ -30,8 +30,7 @@ const flightNumber = computed(() => flightNumberFor(props.route.code))
 const flagStyle = computed(() => ({ background: flagFor(props.route.destination.countryCode) }))
 
 /*
- * `stubNote` puts "Paused" ahead of the tracking note, deliberately.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `stubNote` puts "Paused" ahead of the tracking note, deliberately (docs/BUSINESS-LOGIC.md §36).
  */
 const stubNote = computed(() => {
   if (!props.route.active) {

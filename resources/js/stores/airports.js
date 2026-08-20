@@ -10,8 +10,8 @@ import { http } from '@/lib/http'
 import { markRow, MAX_SUGGESTIONS } from '@/stores/destinations'
 
 /**
- * A finished airport code. Upper-cased at the request boundary (here), not per keystroke in the field — see
- * AirportField.vue (docs/BUSINESS-LOGIC.md §36).
+ * A finished airport code. Upper-cased at the request boundary (here), not per keystroke in the
+ * field — see AirportField.vue (docs/BUSINESS-LOGIC.md §36).
  */
 export const IATA = /^[A-Z]{3}$/
 
@@ -24,14 +24,14 @@ export function toCode(value) {
 }
 
 /**
- * Below this, don't ask — a single letter matches ~1/3 of the table for ten arbitrary rows. SearchAirportsRequest
- * enforces the same floor server-side (docs/BUSINESS-LOGIC.md §36).
+ * Below this, don't ask — a single letter matches ~1/3 of the table for ten arbitrary rows.
+ * SearchAirportsRequest enforces the same floor server-side (docs/BUSINESS-LOGIC.md §36).
  */
 export const MIN_QUERY = 2
 
 /**
- * Fast enough to feel responsive, slow enough that a fast typist produces
- * one request per word. (The rule parser uses 500ms because it costs money.)
+ * Fast enough to feel responsive, slow enough that a fast typist produces one request per word.
+ * (The rule parser uses 500ms because it costs money.)
  */
 export const DEBOUNCE_MS = 250
 
@@ -50,8 +50,8 @@ export function useAirportSearch() {
     let timer = null
     let controller = null
 
-    // Which request is the current one — incremented on every call
-    // (including cancels) so a stale reply is discarded rather than rendered.
+    // Which request is the current one — incremented on every call (including cancels) so a stale
+    // reply is discarded rather than rendered.
     let sequence = 0
 
     /**
@@ -65,8 +65,8 @@ export function useAirportSearch() {
         cancel()
 
         if (query.length < MIN_QUERY) {
-            // Not `failed`, and not the previous query's rows either — an
-            // emptied box has no answer; showing stale results would argue with the field.
+            // Not `failed`, and not the previous query's rows either — an emptied box has no
+            // answer; showing stale results would argue with the field.
             results.value = []
             status.value = 'idle'
 
@@ -91,8 +91,8 @@ export function useAirportSearch() {
                     status.value = 'ready'
                 })
                 .catch((failure) => {
-                    // An abort rejects here just like a 500 does, and isn't a
-                    // failure — it's this store's own doing; the sequence guard tells them apart.
+                    // An abort rejects here just like a 500 does, and isn't a failure — it's this
+                    // store's own doing; the sequence guard tells them apart.
                     if (mine !== sequence) {
                         return
                     }
@@ -106,8 +106,8 @@ export function useAirportSearch() {
     }
 
     /**
-     * Forget the query and whatever it found — called once a suggestion is
-     * taken, when a stray in-flight request would answer nobody is watching.
+     * Forget the query and whatever it found — called once a suggestion is taken, when a stray
+     * in-flight request would answer nobody is watching.
      */
     function clear() {
         cancel()

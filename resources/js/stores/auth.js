@@ -48,8 +48,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     /**
-     * Sign in. Throws on a bad password (422) or a tripped throttle (429) —
-     * the login screen renders the message rather than the store swallowing it.
+     * Sign in. Throws on a bad password (422) or a tripped throttle (429) — the login screen
+     * renders the message rather than the store swallowing it.
      */
     async function login(credentials) {
         await ensureCsrfCookie()
@@ -83,8 +83,8 @@ export const useAuthStore = defineStore('auth', () => {
         try {
             await http.post('/logout')
         } finally {
-            // Client clears its session regardless of server response — a logout that fails and still looks signed in is worse
-            // (docs/BUSINESS-LOGIC.md §36).
+            // Client clears its session regardless of server response — a logout that fails and
+            // still looks signed in is worse (docs/BUSINESS-LOGIC.md §36).
             user.value = null
         }
     }

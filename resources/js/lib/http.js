@@ -5,14 +5,14 @@
 import axios from 'axios'
 
 export const http = axios.create({
-    // withXSRFToken re-reads the XSRF-TOKEN cookie per-request (login rotates it); a meta tag captured once at page load would go stale.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // withXSRFToken re-reads the XSRF-TOKEN cookie per-request (login rotates it); a meta tag
+    // captured once at page load would go stale (docs/BUSINESS-LOGIC.md §36).
     withCredentials: true,
     withXSRFToken: true,
 
     headers: {
-        // Both make Laravel answer JSON instead of a redirect/HTML error page: Accept drives expectsJson(), X-Requested-With is what ajax() checks.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Both make Laravel answer JSON instead of a redirect/HTML error page: Accept drives
+        // expectsJson(), X-Requested-With is what ajax() checks (docs/BUSINESS-LOGIC.md §36).
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
     },
@@ -34,15 +34,15 @@ http.interceptors.response.use(null, async (error) => {
             import('@/router'),
         ])
 
-        // $patch, not an action: the app is being TOLD it's signed out already, not deciding to be — `resolved` stays true since the answer is already known.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // $patch, not an action: the app is being TOLD it's signed out already, not deciding to be
+        // — `resolved` stays true since the answer is already known (docs/BUSINESS-LOGIC.md §36).
         useAuthStore().$patch({ user: null })
 
         const from = router.currentRoute.value
 
         if (from.name !== 'login') {
-            // replace(), not push(): the page whose session just died has no
-            // business in the back stack.
+            // replace(), not push(): the page whose session just died has no business in the back
+            // stack.
             router.replace({
                 name: 'login',
                 query: from.fullPath === '/' ? {} : { redirect: from.fullPath },
@@ -50,8 +50,8 @@ http.interceptors.response.use(null, async (error) => {
         }
     }
 
-    // Rejected either way. The call site still gets its error — this handler
-    // decides where the USER goes, not what the caller sees.
+    // Rejected either way. The call site still gets its error — this handler decides where the USER
+    // goes, not what the caller sees.
     return Promise.reject(error)
 })
 

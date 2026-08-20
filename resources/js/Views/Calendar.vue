@@ -154,9 +154,8 @@ async function loadRoutes() {
   // The first chip, and the month its cheapest day is in.
   select(routes.value[0]?.code ?? null)
 
-  // Nothing to ask the calendar endpoint about — either the list is empty or
-  // it could not be fetched — so the load that would have cleared this flag is
-  // never made.
+  // Nothing to ask the calendar endpoint about — either the list is empty or it could not be
+  // fetched — so the load that would have cleared this flag is never made.
   if (code.value === null) {
     loading.value = false
   }
@@ -184,8 +183,8 @@ async function loadMonth() {
     }
 
     payload.value = data.data
-    // Inside the same guard as `payload`, so a late response cannot leave the
-    // sheet booking one route's days against another route's link.
+    // Inside the same guard as `payload`, so a late response cannot leave the sheet booking one
+    // route's days against another route's link.
     booking.value = data.meta?.booking ?? null
   } catch (error) {
     if (mine !== request) {
@@ -203,8 +202,8 @@ async function loadMonth() {
   }
 }
 
-// Fires on the code the watchlist load sets, so the first month is fetched by
-// the same path every later one is.
+// Fires on the code the watchlist load sets, so the first month is fetched by the same path every
+// later one is.
 watch([code, month], loadMonth)
 
 onMounted(loadRoutes)

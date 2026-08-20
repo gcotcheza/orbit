@@ -30,18 +30,15 @@ export function parseMonth(key) {
 }
 
 /**
- * The two numbers back into `YYYY-MM`, which is the shape the API's `month`
- * query parameter takes.
+ * The two numbers back into `YYYY-MM`, which is the shape the API's `month` query parameter takes.
  */
 export function monthKey(year, month) {
     return `${year}-${String(month).padStart(2, '0')}`
 }
 
 /**
- * The month `delta` months away from `key`. Negative goes back.
- *
- * `Date.UTC` normalises December + 1 into January of the next year, so the
- * year-boundary case needs no arithmetic of its own here.
+ * The month `delta` months away from `key`. Negative goes back. `Date.UTC` normalises December + 1
+ * into January of the next year, so the year-boundary case needs no arithmetic of its own here.
  */
 export function addMonths(key, delta) {
     const { year, month } = parseMonth(key)
@@ -73,8 +70,8 @@ export function monthLabel(key) {
 }
 
 /**
- * `2026-06-11` → `June 11` (the "cheapest this month" banner) or
- * `June 11, 2026` (the day sheet, which is read on its own).
+ * `2026-06-11` → `June 11` (the "cheapest this month" banner) or `June 11, 2026` (the day sheet,
+ * which is read on its own).
  */
 export function dayLabel(iso, { withYear = false } = {}) {
     const { year, month, day } = parseDay(iso)
@@ -88,11 +85,8 @@ export function dayLabel(iso, { withYear = false } = {}) {
 }
 
 /**
- * How many empty cells the month opens with, 0 (starts on a Monday) to 6
- * (starts on a Sunday).
- *
- * `getUTCDay()` is Sunday-first (0–6) and the design's grid is Monday-first,
- * hence the rotation.
+ * How many empty cells the month opens with, 0 (starts on a Monday) to 6 (starts on a Sunday).
+ * `getUTCDay()` is Sunday-first (0–6) and the design's grid is Monday-first, hence the rotation.
  */
 function leadingBlanks(year, month) {
     const firstDay = new Date(Date.UTC(year, month - 1, 1)).getUTCDay()

@@ -98,8 +98,8 @@ export function registerServiceWorker() {
 
     const register = () => {
         navigator.serviceWorker.register('/sw.js').then(watchForUpdate).catch((error) => {
-            // Nowhere to report this to, and nothing the user could do about
-            // it. The app works without a worker; it just starts colder.
+            // Nowhere to report this to, and nothing the user could do about it. The app works
+            // without a worker; it just starts colder.
             console.warn('Service worker registration failed', error)
         })
     }
@@ -201,8 +201,8 @@ function checkOnReturn(registration) {
 
         lastChecked = Date.now()
 
-        // Nothing waits on this and nothing recovers from it: a failed check is
-        // an offer that is not made yet, and the next one is one app switch away.
+        // Nothing waits on this and nothing recovers from it: a failed check is an offer that is
+        // not made yet, and the next one is one app switch away.
         registration.update().catch(() => {})
     })
 }

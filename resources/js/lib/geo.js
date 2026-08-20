@@ -13,16 +13,16 @@ const RAD = Math.PI / 180
 export const FLIGHT_SEGMENTS = 72
 
 /**
- * Camera altitude at eased progress `e` (design/README.md §1). Descends DEEPER than the
- * take-off altitude (0.20 end vs 0.42 start) so landing reads as arriving, not just stopping.
+ * Camera altitude at eased progress `e` (design/README.md §1). Descends DEEPER than the take-off
+ * altitude (0.20 end vs 0.42 start) so landing reads as arriving, not just stopping.
  */
 export function flightAltitude(e) {
     return 0.42 - 0.22 * e + 0.4 * Math.sin(Math.PI * e)
 }
 
 /**
- * Ease-in-out quad: real aircraft don't start at cruise speed. Symmetric curve, so
- * progress and 1-progress accelerate/brake by the same amount.
+ * Ease-in-out quad: real aircraft don't start at cruise speed. Symmetric curve, so progress and
+ * 1-progress accelerate/brake by the same amount.
  */
 export function easeInOutQuad(t) {
     return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2
@@ -126,8 +126,7 @@ function shortestLngDelta(fromLng, toLng) {
 }
 
 /**
- * A longitude folded back into (-180, 180], which is the range globe.gl and the
- * API both speak.
+ * A longitude folded back into (-180, 180], which is the range globe.gl and the API both speak.
  */
 function normaliseLng(lng) {
     return shortestLngDelta(0, lng)
@@ -145,8 +144,8 @@ function toVector({ lat, lng }) {
 }
 
 function toPoint([x, y, z]) {
-    // Interpolated vectors drift off the unit sphere by rounding error; asin() of a magnitude
-    // over 1 is NaN, and one NaN frame is a camera that never comes back.
+    // Interpolated vectors drift off the unit sphere by rounding error; asin() of a magnitude over
+    // 1 is NaN, and one NaN frame is a camera that never comes back.
     const length = Math.hypot(x, y, z) || 1
 
     return {

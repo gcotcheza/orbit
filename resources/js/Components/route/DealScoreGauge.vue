@@ -19,9 +19,8 @@ const CIRCUMFERENCE = 157
 
 const props = defineProps({
   score: { type: Number, required: true },
-  // `false` means the score is a placeholder: no fares and no statistics yet
-  // (docs/API.md). Branch on THIS, never on `score === 0` — zero is also a
-  // real, terrible score.
+  // `false` means the score is a placeholder: no fares and no statistics yet (docs/API.md). Branch
+  // on THIS, never on `score === 0` — zero is also a real, terrible score.
   confident: { type: Boolean, default: false },
 })
 
@@ -37,8 +36,8 @@ const tone = computed(() => {
   return props.score >= 45 ? 'warn' : 'bad'
 })
 
-// An unknown score draws no arc at all rather than an arc of zero length in a
-// damning red. Nothing is known; nothing is claimed.
+// An unknown score draws no arc at all rather than an arc of zero length in a damning red. Nothing
+// is known; nothing is claimed.
 const offset = computed(() => (props.confident ? (CIRCUMFERENCE * (100 - props.score)) / 100 : CIRCUMFERENCE))
 
 const label = computed(() => (props.confident ? `Deal score ${props.score} out of 100` : 'Deal score not known yet'))

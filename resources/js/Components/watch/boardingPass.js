@@ -21,8 +21,8 @@ function tricolourV(left, middle, right) {
 }
 
 /**
- * A Nordic cross: vertical bar offset to the hoist, horizontal bar centred.
- * Two solid-colour layers over a field, which is exactly what the flag is.
+ * A Nordic cross: vertical bar offset to the hoist, horizontal bar centred. Two solid-colour layers
+ * over a field, which is exactly what the flag is.
  */
 function nordic(field, cross) {
     return [
@@ -69,8 +69,8 @@ const FLAGS = {
     IT: tricolourV('#1a8a4b', '#f4f4f4', '#d62b3a'),
     MT: 'linear-gradient(90deg, #f4f4f4 0 50%, #cf142b 50% 100%)',
     PT: [
-        // The armillary sphere, as the design's prototype drew it: one dot on
-        // the seam between the two fields.
+        // The armillary sphere, as the design's prototype drew it: one dot on the seam between the
+        // two fields.
         'radial-gradient(circle at 42% 50%, #ffd24a 0 17%, transparent 18%)',
         'linear-gradient(90deg, #1b6b3a 0 42%, #d4202c 42% 100%)',
     ].join(', '),
