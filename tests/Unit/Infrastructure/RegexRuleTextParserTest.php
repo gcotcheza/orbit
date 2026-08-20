@@ -15,10 +15,10 @@ use App\Infrastructure\Nlp\RegexRuleTextParser;
  * Reading English without a key.
  *
  * The first test is the contract — design/README.md §4's example sentence must produce its six chips exactly; this app
- * ships that sentence pre-typed (docs/BUSINESS-LOGIC.md §11).
+ * ships that sentence pre-typed.
  *
  * Loads the real config/orbit.php, not a test vocabulary — the claim is that production's words can read it, not just
- * some regex can (docs/BUSINESS-LOGIC.md §11).
+ * some regex can.
  *
  * A plain PHPUnit TestCase, no database — the whole reason App\Domain\Rules\RuleVocabulary exists
  * (docs/BUSINESS-LOGIC.md §11).

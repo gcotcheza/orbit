@@ -11,7 +11,6 @@ use App\Http\Controllers\Controller;
  * `GET /manifest.webmanifest` — what "Add to Home Screen" reads.
  *
  * A route, not a static file — nginx has no mime type for .webmanifest.
- * Why: docs/BUSINESS-LOGIC.md §35.
  *
  * Most keys here are inert on iOS (this app's only real target); declared anyway for Android/desktop.
  * Why: docs/BUSINESS-LOGIC.md §35.

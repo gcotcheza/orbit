@@ -15,13 +15,13 @@ use App\Http\Resources\DiscoveryResource;
  * thought to watch".
  *
  * Pure read of a precomputed table; all the expensive work (sweeps, window fetches, Google searches) happens at 05:20
- * in App\Jobs\DiscoverDeals (docs/BUSINESS-LOGIC.md §16).
+ * in App\Jobs\DiscoverDeals.
  *
  * No parameters: nothing to page (~10 rows, orbit.discovery.max_rows bounded), filter, or sort (order IS the ranking —
- * see Discovery::scopeLive) (docs/BUSINESS-LOGIC.md §16).
+ * see Discovery::scopeLive).
  *
  * Empty `data: []` is a real, common answer — every orbit.discovery threshold is a floor, not a quota, precisely so
- * this can happen (docs/BUSINESS-LOGIC.md §16).
+ * this can happen.
  *
  * Behind auth:sanctum like every other read; rows aren't sensitive, but this API has one auth rule and no exception
  * worth carving out (docs/BUSINESS-LOGIC.md §16).
@@ -51,7 +51,7 @@ final class DiscoveryController extends Controller
 
                 /*
                  * "Found this morning", not "checked when opened"; null on an empty set is the honest "we did not find anything"
-                 * answer (docs/BUSINESS-LOGIC.md §16).
+                 * answer.
                  *
                  * Owner-timezone timestamp, like meta.fares.fetchedAt — every other date here is a bare YYYY-MM-DD (a day, not a
                  * moment) (docs/BUSINESS-LOGIC.md §16).

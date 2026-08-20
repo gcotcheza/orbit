@@ -8,10 +8,10 @@ namespace App\Domain\Discovery;
  * What Google Flights says about a route and date, as a value Orbit can act on.
  *
  * Built from SerpAPI's `price_insights` — the only opinion in the funnel that doesn't descend from the same
- * Travelpayouts cache everything else does (docs/BUSINESS-LOGIC.md §16).
+ * Travelpayouts cache everything else does.
  *
  * ⚠ Deliberately NOT "candidate price < Google's typical low" — that would confirm everything, including a measured 6x
- * discrepancy (docs/BUSINESS-LOGIC.md §16).
+ * discrepancy.
  *
  * `lowest` is carried even though the rule doesn't need it — it's the most useful card fact for a reader deciding
  * whether to trust a fare (docs/BUSINESS-LOGIC.md §16).
@@ -35,7 +35,7 @@ final readonly class GoogleVerdict
      * Does Google's market agree that this route and date are cheap right now?
      *
      * ⚠ Read the class docblock before changing this — the absent candidate price in the signature is the decision, not an
-     * oversight (docs/BUSINESS-LOGIC.md §16).
+     * oversight.
      *
      * A verdict with nothing in it confirms nothing — no `price_insights` is a real "no opinion" answer, common on thin
      * routes, not permission (docs/BUSINESS-LOGIC.md §16).

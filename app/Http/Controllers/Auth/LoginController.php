@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Session login. That is the whole auth surface — no registration, reset, verification, or "remember me" toggle; Orbit
- * has exactly one user (docs/BUSINESS-LOGIC.md §36).
+ * has exactly one user.
  *
  * Both actions answer JSON, never a redirect, so the SPA's fetch never reads a followed redirect's 200 as a login that
  * didn't happen (docs/BUSINESS-LOGIC.md §36).

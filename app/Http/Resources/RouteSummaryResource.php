@@ -13,7 +13,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * what Orbit thinks of that.
  *
  * One shape, three screens (spotlight card, watchlist row, detail header) build on this so `price` can't mean
- * something different on one of them (docs/BUSINESS-LOGIC.md §36).
+ * something different on one of them.
  *
  * Nulls in `price` are real answers ("not known yet"), not zeroes; a screen that renders them as €0 or 0% is stating
  * something false (docs/BUSINESS-LOGIC.md §36).

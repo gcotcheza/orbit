@@ -29,7 +29,7 @@ use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
 
 /**
  * The round-trip foundation, end to end: the switch, the fake, the job, the table and the command (the adapter itself
- * is unit-tested separately) (docs/BUSINESS-LOGIC.md §15).
+ * is unit-tested separately).
  *
  * WARNING: the schedule TIME is asserted in ScheduleTest, not here — this only guards that the `orbit:poll-returns`
  * entry still exists (docs/BUSINESS-LOGIC.md §15).
@@ -551,7 +551,7 @@ final class ReturnFaresPollTest extends TestCase
      * A row that is already in the table when the poll runs.
      *
      * WARNING: uses `insert` + a bare 'Y-m-d' — matches exactly what the job's upsert writes. `create()`'s date cast round-trips differently on SQLite (this
-     * suite's DB) than Postgres, silently breaking every `where('departure_date', ...)` below (docs/BUSINESS-LOGIC.md §15).
+     * suite's DB) than Postgres, silently breaking every `where('departure_date', ...)` below.
      */
     private function seedFare(Route $route, string $departure, int $nights, ?string $fetchedAt = null): void
     {

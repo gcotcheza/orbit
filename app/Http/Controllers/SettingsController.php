@@ -15,7 +15,7 @@ use App\Http\Resources\UserSettingsResource;
  * How and when Orbit reaches the owner (design/README.md §6).
  *
  * Both actions answer the same body — the response is the truth the screen adopts, which is what makes the optimistic
- * switches safe (docs/BUSINESS-LOGIC.md §36).
+ * switches safe.
  *
  * The row is created on first read (UserSettings::for), not by a seeder, so an account that never opened this screen
  * still has settings to read (docs/BUSINESS-LOGIC.md §36).
@@ -43,7 +43,7 @@ final class SettingsController extends Controller
 
     /**
      * ALWAYS 200, PINNED — a JsonResource answers 201 when wasRecentlyCreated, which is wrong here: the row appearing on
-     * first read isn't a thing the client made (docs/BUSINESS-LOGIC.md §36).
+     * first read isn't a thing the client made.
      */
     private function present(UserSettings $settings): JsonResponse
     {
@@ -57,7 +57,7 @@ final class SettingsController extends Controller
      * The three levels of the segmented control, described.
      *
      * Sent with every response rather than baked into the screen — a hardcoded "80+" in a template would silently drift
-     * from config's `score.tiers` (docs/BUSINESS-LOGIC.md §36).
+     * from config's `score.tiers`.
      *
      * @return list<array{level: int, name: string, minimumScore: int, blurb: string}>
      */

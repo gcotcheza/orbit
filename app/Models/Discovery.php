@@ -15,10 +15,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * One route Orbit went and found on its own.
  *
  * The row behind App\Domain\Discovery\DealCandidate once verified; only the card's claim and its evidence survive, not
- * the raw sweep entry (docs/BUSINESS-LOGIC.md §16).
+ * the raw sweep entry.
  *
  * Deliberately has no `route_id` — a discovery is an unwatched, often unpriced pair, named by airport key and `code`
- * until someone taps it (docs/BUSINESS-LOGIC.md §16).
+ * until someone taps it.
  *
  * Deliberately has no user_id, unlike `alerts`/`watchlist_items` — a discovery is a fact about the world, not an
  * account's relationship to it (docs/BUSINESS-LOGIC.md §16).
@@ -49,7 +49,7 @@ final class Discovery extends Model
 {
     /**
      * Laravel would pluralise this to `discoverys` — overridden because the table name must agree with the migration, the
-     * prune, and three tests (docs/BUSINESS-LOGIC.md §16).
+     * prune, and three tests.
      */
     protected $table = 'discoveries';
 
@@ -73,7 +73,7 @@ final class Discovery extends Model
      * The current set: still live, cheapest per kilometre first.
      *
      * A scope, not a controller query — these clauses are both the API's read and the prune's definition of "current";
-     * diverging spellings desync them (docs/BUSINESS-LOGIC.md §16).
+     * diverging spellings desync them.
      *
      * Ordered by €/km, not price — sorted by price this list is just the nearest airports; the reader sorts on instinct
      * from the price shown (docs/BUSINESS-LOGIC.md §16).

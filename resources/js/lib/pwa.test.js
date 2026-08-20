@@ -207,7 +207,7 @@ describe('looking for a deploy without being navigated', () => {
 
     it('does not ask again on every app switch', async () => {
         // `visibilitychange` fires on every app switch; a request per flick would be rude for news that changes a few times a
-        // day (docs/BUSINESS-LOGIC.md §35).
+        // day.
         const { pwa } = await load()
         const registration = new FakeRegistration()
 

@@ -19,7 +19,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
  * `GET /api/airports?q=` — the other half of the add-route typeahead.
  *
  * `GET /api/destinations` sends 184 curated places whole; this searches all 3,270 and sends ten — same four fields,
- * same ranking, one panel (docs/BUSINESS-LOGIC.md §36).
+ * same ranking, one panel.
  *
  * The seeded tests at the bottom matter most — everything above proves the SQL on factory rows; those two prove it
  * against the real snapshot (docs/BUSINESS-LOGIC.md §36).

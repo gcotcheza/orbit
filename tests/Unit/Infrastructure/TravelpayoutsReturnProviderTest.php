@@ -451,7 +451,7 @@ final class TravelpayoutsReturnProviderTest extends TestCase
 
     /**
      * The cheapest fare in a set — fails rather than asserts non-empty, since `min([])` is a PHPStan-level-8 TypeError
-     * risk `assertNotEmpty` wouldn't catch (docs/BUSINESS-LOGIC.md §15).
+     * risk `assertNotEmpty` wouldn't catch.
      *
      * @param  list<ReturnTrip>  $trips
      */

@@ -8,7 +8,7 @@ use DateTimeImmutable;
 
 /**
  * Every number the discovery funnel applies, as one pure value — same config-injection pattern as ScoringPolicy/AlertPolicy (config read once in
- * AppServiceProvider, never called directly from App\Domain) (docs/BUSINESS-LOGIC.md §16).
+ * AppServiceProvider, never called directly from App\Domain).
  *
  * All defaults are measured off the 2026-08-16 sweep (1,177 rows, 1,086 matched to known airports); the four cheap rules run in cost order — arithmetic
  * first, requests only on the shortlist that survives (docs/BUSINESS-LOGIC.md §16).
@@ -36,7 +36,7 @@ final readonly class DiscoveryPolicy
 
         /**
          * Max swept-price age, in days — one day more generous than `alerts.max_fare_age_days`, because this only labels a
-         * card and never alerts (v1 discovery does not alert — docs/BUSINESS-LOGIC.md §16) (docs/BUSINESS-LOGIC.md §16).
+         * card and never alerts (v1 discovery does not alert).
          */
         public int $maxFoundAgeDays,
 

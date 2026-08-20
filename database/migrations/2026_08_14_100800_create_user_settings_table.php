@@ -10,12 +10,12 @@ use Illuminate\Database\Migrations\Migration;
  * How and when the owner wants to be told (design/README.md §6).
  *
  * A separate table, not columns on `users`: keeps the framework's hot-path table narrow, and preferences (which will
- * grow) are read on a schedule, not per request (docs/BUSINESS-LOGIC.md §36).
+ * grow) are read on a schedule, not per request.
  *
- * One row per account, enforced by a unique on `user_id` (a HasOne), not by convention (docs/BUSINESS-LOGIC.md §36).
+ * One row per account, enforced by a unique on `user_id` (a HasOne), not by convention.
  *
  * The defaults in this file are the only copy: UserSettings::for() creates the row with no attributes and re-reads it,
- * so there's no second list to drift (docs/BUSINESS-LOGIC.md §36).
+ * so there's no second list to drift.
  *
  * `sensitivity` is an int, not an enum column, since the score it maps to (config/orbit.php) is a tuning decision that
  * shouldn't need a migration (docs/BUSINESS-LOGIC.md §36).

@@ -13,7 +13,7 @@ use App\Application\Ports\PriceProvider;
  * Fares, until there are real ones.
  *
  * Not a test double: docs/PLAN.md ships Orbit before the Travelpayouts key exists, so this is production's adapter
- * until `ORBIT_PRICE_PROVIDER` swaps it (docs/BUSINESS-LOGIC.md §2).
+ * until `ORBIT_PRICE_PROVIDER` swaps it.
  *
  * The prices come from FakeFareModel — see that file for the shape of the
  * simulation and for why it is deterministic.

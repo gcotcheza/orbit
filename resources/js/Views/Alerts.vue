@@ -51,7 +51,6 @@ onMounted(settingsStore.load)
 /*
  * Scroll to #account only once settings settle (ready/failed), not via router
  * `scrollBehavior` — mid-fetch it fires before layout above it is final.
- * Why: docs/BUSINESS-LOGIC.md §10.
  */
 const route = useRoute()
 const accountHeading = useTemplateRef('accountHeading')

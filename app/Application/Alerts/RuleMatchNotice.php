@@ -12,7 +12,7 @@ use App\Domain\Alerts\AlertType;
  * What one standing rule found this morning — everything of it, in one mail.
  *
  * One mail per rule per run — eleven simultaneous matches as eleven mails is how you teach somebody to filter this app
- * into a folder they never open (docs/BUSINESS-LOGIC.md §10).
+ * into a folder they never open.
  *
  * Chips come from RuleViews, rebuilt from stored criteria, never re-parsed — the mail quotes what the rule actually
  * asks for now, chips included (docs/BUSINESS-LOGIC.md §10).

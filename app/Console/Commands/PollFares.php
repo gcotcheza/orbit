@@ -13,10 +13,10 @@ use Illuminate\Support\Facades\Date;
  * The daily fare poll — fan-out only.
  *
  * A command, not Schedule::job() per route, so route enumeration isn't in every artisan invocation's boot path; also
- * runnable by hand (docs/BUSINESS-LOGIC.md §4).
+ * runnable by hand.
  *
  * `--far` decides poll depth here: the near 6 months poll daily, the far 5 (of an 11-month horizon) refresh weekly via
- * this flag (docs/BUSINESS-LOGIC.md §4).
+ * this flag.
  *
  * A flag, not a day-of-week test inside PollRoutePrices, keeps the job's payload meaning fixed on retry, keeps
  * FareFreshness's sync dispatch cheap, and keeps the schedule readable as one line (docs/BUSINESS-LOGIC.md §4).

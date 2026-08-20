@@ -19,10 +19,10 @@ use App\Domain\Rules\DestinationProfile;
  * What a rule matches right now.
  *
  * Four queries for any rule (destinations, routes, fares, watchlist), fetched once — a per-route lookup would be 184
- * queries for "anywhere" (docs/BUSINESS-LOGIC.md §11).
+ * queries for "anywhere".
  *
  * Destinations and watchlist are memoised per instance — the container resolves this per request, so the cache is
- * request-scoped, never stale (docs/BUSINESS-LOGIC.md §11).
+ * request-scoped, never stale.
  *
  * Does not create anything — an unpriced route just has fewer matches until App\Jobs\SweepRuleFares runs; this is the
  * read, not the fetch (docs/BUSINESS-LOGIC.md §11).

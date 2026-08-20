@@ -9,7 +9,7 @@ namespace App\Domain\Alerts;
  * the same value, WHY.
  *
  * The reason is the point, not the boolean: "nothing sent this morning" has several very different causes, and a bare
- * false collapses them into one (docs/BUSINESS-LOGIC.md §10).
+ * false collapses them into one.
  *
  * Enum, not a class with a reason field: the case IS the reason, `fires()` is the only derived fact, and there's
  * nothing else to carry (docs/BUSINESS-LOGIC.md §10).
@@ -35,8 +35,7 @@ enum AlertDecision: string
      * The fare behind this alert was found too long ago to be worth waking
      * somebody up about — config('orbit.alerts.max_fare_age_days'), `near_departure_weeks`.
      *
-     * NOT "the price went up" (Orbit can't know that): this is declining to claim freshness, not claiming staleness
-     * (docs/BUSINESS-LOGIC.md §10).
+     * NOT "the price went up" (Orbit can't know that): this is declining to claim freshness, not claiming staleness.
      *
      * Distinct from `cooling-down` (about us) and `below-threshold` (fare is ordinary): this is about EVIDENCE, and can hold even for the best deal in the
      * app's history — exactly when the distinction matters most (docs/BUSINESS-LOGIC.md §10).

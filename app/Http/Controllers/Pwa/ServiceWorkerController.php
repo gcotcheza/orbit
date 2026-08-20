@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\File;
  * `GET /sw.js` — the service worker script.
  *
  * Route, not a static file: (1) precache list needs the current build's content-hashed assets from Vite's manifest at request time; (2) MUST revalidate (no-cache) or the worker can never be updated once
- * installed; (3) sends Service-Worker-Allowed for when the script moves off root (docs/BUSINESS-LOGIC.md §35).
+ * installed; (3) sends Service-Worker-Allowed for when the script moves off root.
  *
  * Public (no auth), and must be: the worker registers from the login screen too (same shell), so a 302-to-login served
  * as JS would install a login page as a worker. Nothing here is secret (docs/BUSINESS-LOGIC.md §35).
@@ -41,7 +41,7 @@ final class ServiceWorkerController extends Controller
 
             /*
              * `no-cache`: store but revalidate (304 via ETag below). Also opts out of Cloudflare's default `.js` edge caching —
-             * without it, a stale worker could serve for hours after deploy (docs/BUSINESS-LOGIC.md §35).
+             * without it, a stale worker could serve for hours after deploy.
              */
             'Cache-Control' => 'no-cache, must-revalidate',
 

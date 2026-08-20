@@ -13,10 +13,10 @@ use App\Application\Ports\OriginSweepProvider;
 
 /**
  * Fake origin sweep (no real token yet); samples the real `airports` table so the default
- * (`orbit.providers.sweep=fake`) discovery screen looks real (docs/BUSINESS-LOGIC.md §16).
+ * (`orbit.providers.sweep=fake`) discovery screen looks real.
  *
  * Priced via the shared FakeFareModel with a subset marked down, so a fake discovery matches its own calendar and the
- * funnel has something to find (docs/BUSINESS-LOGIC.md §16).
+ * funnel has something to find.
  *
  * WARNING: only sweeps up to MAX_SWEEP_KM (short/medium haul) — FakeFareModel is distance-blind, so sweeping the full
  * table ranks by distance alone and surfaces fake long-haul "bargains" (docs/BUSINESS-LOGIC.md §16).

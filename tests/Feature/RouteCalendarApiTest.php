@@ -16,7 +16,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
  * GET /api/routes/{code}/calendar — the heatmap, a month at a time.
  *
  * Verdict boundaries: design/README.md §3's 28%/66% thresholds worked out for this test's €40-100 month.
- * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class RouteCalendarApiTest extends TestCase
 {
@@ -85,7 +84,7 @@ final class RouteCalendarApiTest extends TestCase
 
     /**
      * Only the client knows which day was tapped, so booking links go out as templates with holes, not as 62 URLs or
-     * nothing (docs/BUSINESS-LOGIC.md §36).
+     * nothing.
      *
      * Two templates, holes named after their date formats — the two booking sites want date parts in different orders
      * (docs/API.md) (docs/BUSINESS-LOGIC.md §36).
@@ -131,7 +130,7 @@ final class RouteCalendarApiTest extends TestCase
 
     /**
      * How old each price is, per day — the provider mixes fares found an hour ago with ones found last week, so freshness
-     * is per-day, not per-month (docs/BUSINESS-LOGIC.md §36).
+     * is per-day, not per-month.
      *
      * Null where Orbit doesn't know (a pre-column row) — never substitutes `fetched_at`, which would manufacture a false
      * "current" claim (docs/BUSINESS-LOGIC.md §36).

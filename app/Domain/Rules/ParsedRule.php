@@ -9,7 +9,6 @@ namespace App\Domain\Rules;
  * add up to.
  *
  * One direction only: criteria in, chips out, criteria back — nothing builds chips by hand.
- * Why: docs/BUSINESS-LOGIC.md §11.
  *
  * `without()` re-derives criteria from the remaining chips rather than re-parsing text.
  * Why: docs/BUSINESS-LOGIC.md §11.

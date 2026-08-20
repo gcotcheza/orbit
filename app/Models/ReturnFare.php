@@ -13,10 +13,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * The cheapest round-trip found for one (departure date, stay length).
  *
  * Row behind App\Domain\Pricing\ReturnTrip; sibling of CalendarFare (one-way). Never compare the two directly — a
- * long-haul one-way reads ~2/3 of the return (docs/BUSINESS-LOGIC.md §15).
+ * long-haul one-way reads ~2/3 of the return.
  *
  * `return_date` is NOT a column — derived from `nights` via `returnDate()`, to avoid one fact stored (and drifting)
- * twice (docs/BUSINESS-LOGIC.md §15).
+ * twice.
  *
  * `fetched_at` (Orbit asked) vs `found_at` (price was found) are not interchangeable; the gap is wider here than on
  * the one-way table (docs/BUSINESS-LOGIC.md §15).

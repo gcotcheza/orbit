@@ -16,7 +16,7 @@ interface ReturnTripProvider
 {
     /**
      * The cheapest round-trip per (departure date, stay length), for departures in [$from, $to]. Band filters the response, it does not narrow the fetch —
-     * `trip_duration` is silently ignored by the API (verified byte-identical with/without it) (docs/BUSINESS-LOGIC.md §15).
+     * `trip_duration` is silently ignored by the API (verified byte-identical with/without it).
      *
      * Null keeps all stay lengths, the poll's own use — banding is left to whoever reads the table later.
      * Why: docs/BUSINESS-LOGIC.md §15.

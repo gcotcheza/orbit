@@ -33,10 +33,10 @@ use App\Infrastructure\Verify\GoogleFlightsCheck;
  * "Show me the insanely cheap routes I am NOT watching."
  *
  * Two-stage funnel: a cheap sweep+score narrows ~1,177 fares to a shortlist; only verification (own-route window + optional Google) lets a candidate
- * reach the screen — a raw sweep rank has been wrong before (docs/BUSINESS-LOGIC.md §16).
+ * reach the screen — a raw sweep rank has been wrong before.
  *
- * Writes rows only; never alerts (docs/BUSINESS-LOGIC.md §16) — a discovery is the least verified data in the app and
- * must not interrupt (docs/BUSINESS-LOGIC.md §16).
+ * Writes rows only; never alerts — a discovery is the least verified data in the app and
+ * must not interrupt.
  *
  * One job, not a fan-out: the shortlist is a ranking across all three sweeps, and splitting it would need a rendezvous
  * or shrink the budget (docs/BUSINESS-LOGIC.md §16).
@@ -334,7 +334,7 @@ final class DiscoverDeals implements ShouldQueue
      * Write down what this route usually costs.
      *
      * The only state that outlives a run — see the discovery_baselines migration for why it's its own table, and
-     * RelativeLanePolicy:: $minBaselineDays for why the count travels with the median (docs/BUSINESS-LOGIC.md §16).
+     * RelativeLanePolicy::$minBaselineDays for why the count travels with the median (docs/BUSINESS-LOGIC.md §16).
      *
      * @param  list<int>  $window
      */

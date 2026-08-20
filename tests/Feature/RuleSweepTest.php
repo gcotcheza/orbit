@@ -257,7 +257,7 @@ final class RuleSweepTest extends TestCase
      * The whole point, end to end with nothing faked below the port.
      *
      * A never-priced pair gets a trip to show after the sweep, using the same fake provider production runs today
-     * (`orbit.providers.price`) (docs/BUSINESS-LOGIC.md §11).
+     * (`orbit.providers.price`).
      *
      * No `Queue::fake()` here, deliberately: the runner's `sync` connection runs the whole chain inline, unlike every
      * other test in this file (docs/BUSINESS-LOGIC.md §11).

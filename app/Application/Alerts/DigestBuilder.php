@@ -17,7 +17,7 @@ use App\Application\Routes\RouteSnapshots;
  * Sunday morning: everything at once, and nothing urgent.
  *
  * Opposite of an alert, by design: ignores cooldown/sensitivity/every other interrupt rule, since the digest isn't an
- * interruption — a route suppressed all week still belongs in Sunday's mail (docs/BUSINESS-LOGIC.md §10).
+ * interruption — a route suppressed all week still belongs in Sunday's mail.
  *
  * Reads and writes nothing else: every number comes from the same classes the screens read (RouteSnapshots, RuleViews)
  * plus the ledger, so the digest can't disagree with what tapping through shows (docs/BUSINESS-LOGIC.md §10).

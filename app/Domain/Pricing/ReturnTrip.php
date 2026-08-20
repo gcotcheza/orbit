@@ -29,7 +29,7 @@ final readonly class ReturnTrip
 
     /**
      * The day you would fly home. Derived, never stored (see the class-level design note). Midnight-anchored like `departure_date` (a DATE column) so it
-     * compares equal to the same calendar day written elsewhere (docs/BUSINESS-LOGIC.md §15).
+     * compares equal to the same calendar day written elsewhere.
      */
     public function returnDate(): DateTimeImmutable
     {

@@ -11,10 +11,10 @@ use Illuminate\Database\Migrations\Migration;
  * never thought to watch".
  *
  * The one fare table here deliberately NOT history — a discovery is about a MOMENT, so DiscoverDeals prunes aggressively (~10 rows steady state); a real
- * table, not cache, since an endpoint reads it on the launch path (docs/BUSINESS-LOGIC.md §16).
+ * table, not cache, since an endpoint reads it on the launch path.
  *
  * No `route_id`, by design — a discovery is a route nobody's watching, so airports are FK'd but the route is a stored
- * `code` string; the ordinary lookup flow creates the real route only when tapped (docs/BUSINESS-LOGIC.md §16).
+ * `code` string; the ordinary lookup flow creates the real route only when tapped.
  *
  * Three different timestamps — `found_at` (price age), `discovered_at` (sort key), `departure_date` (flight date); see §3 on not mixing them.
  * `expires_at` is stored so the read stays an index range scan, not arithmetic (docs/BUSINESS-LOGIC.md §16).

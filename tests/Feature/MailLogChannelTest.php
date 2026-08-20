@@ -17,7 +17,6 @@ use Illuminate\Notifications\Messages\MailMessage;
  * The staged rollout can be read.
  *
  * Verifies the dedicated mail log channel actually catches what the old single/info setup silently dropped.
- * Why: docs/BUSINESS-LOGIC.md §10.
  *
  * Uses a throwaway plain-ASCII notification so assertions aren't about MIME header encoding.
  * Why: docs/BUSINESS-LOGIC.md §10.

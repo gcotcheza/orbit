@@ -38,7 +38,7 @@ export const DEFAULT_MOTION = 'balanced'
 
 /**
  * Timetable for one route, oldest first; `at` is ms from sequence start. Last entry `advance` hands off to the next
- * route — non-touring callers ignore it (docs/BUSINESS-LOGIC.md §36).
+ * route — non-touring callers ignore it.
  *
  * @param {{ instant?: boolean, motion?: keyof DWELL_MS }} options
  */

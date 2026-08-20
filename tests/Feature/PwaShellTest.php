@@ -57,7 +57,7 @@ final class PwaShellTest extends TestCase
 
     /**
      * SPA catch-all registers before these routes (bootstrap/app.php `then:`), so without fallback demotion there every
-     * one is a 200 of HTML (docs/BUSINESS-LOGIC.md §35).
+     * one is a 200 of HTML.
      *
      * @param  class-string  $controller
      */
@@ -78,7 +78,7 @@ final class PwaShellTest extends TestCase
 
     /**
      * None of the three is in the `web` group, so none may start a session — a Set-Cookie here means a `sessions` row per
-     * nav and no edge caching (docs/BUSINESS-LOGIC.md §35).
+     * nav and no edge caching.
      */
     #[Test]
     #[DataProvider('pwaPaths')]

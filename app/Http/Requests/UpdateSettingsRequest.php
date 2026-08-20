@@ -9,7 +9,6 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * PUT sends the whole object; a PATCH could drop a toggle silently.
- * Why: docs/BUSINESS-LOGIC.md §36.
  *
  * Keys are the API's camelCase, not the DB's snake_case (see toColumns()).
  * Why: docs/BUSINESS-LOGIC.md §36.

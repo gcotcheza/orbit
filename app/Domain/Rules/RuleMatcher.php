@@ -11,7 +11,6 @@ use App\Domain\Pricing\DatedFare;
  * Which places a rule is about, and which fares it would fire on.
  *
  * Pure PHP, zero queries (docs/PLAN.md) — kept as two functions so SweepRuleFares can ask "where" before there are fares.
- * Why: docs/BUSINESS-LOGIC.md §11.
  *
  * Trip length is parsed but not matched on, deliberately — PriceProvider has no return-leg fact yet to filter on.
  * Why: docs/BUSINESS-LOGIC.md §11.

@@ -278,7 +278,6 @@ function scrollActiveIntoView() {
     /*
      * Looked up by id, not child index — the divider is a child too, so
      * `children[active]` would be off by one past it; optional call guards jsdom, which has no scrollIntoView.
-     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     listbox.value
       ?.querySelector(`#${props.id}-option-${active.value}`)
@@ -525,7 +524,6 @@ defineExpose({ clear })
 /*
  * One highlight source (`active`) for mouse and keyboard — a separate :hover
  * rule could show two rows chosen at once.
- * Why: docs/BUSINESS-LOGIC.md §36.
  */
 .option--active {
   color: var(--ink);

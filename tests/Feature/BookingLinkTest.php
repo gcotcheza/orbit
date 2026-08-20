@@ -39,7 +39,7 @@ final class BookingLinkTest extends TestCase
 
     /**
      * `AMS1509OPO1` = Amsterdam to Porto, 15 Sep: day first, two digits each, upper case, one adult economy — verified
-     * against Travelpayouts' docs (docs/BUSINESS-LOGIC.md §36).
+     * against Travelpayouts' docs.
      */
     #[Test]
     public function the_aviasales_link_is_origin_then_day_then_month_then_destination(): void
@@ -101,8 +101,7 @@ final class BookingLinkTest extends TestCase
     }
 
     /**
-     * `travelpayouts.marker` sat unused since it was added; it rides on the Aviasales hand-off only, never Skyscanner
-     * (docs/BUSINESS-LOGIC.md §36).
+     * `travelpayouts.marker` sat unused since it was added; it rides on the Aviasales hand-off only, never Skyscanner.
      */
     #[Test]
     public function the_marker_is_on_the_aviasales_link_and_on_no_other(): void

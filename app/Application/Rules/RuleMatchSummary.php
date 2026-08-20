@@ -11,10 +11,10 @@ use App\Domain\Pricing\DatedFare;
  * the handful the screen can actually show.
  *
  * The count is of everything; the sample is what fits on a phone — capping the count itself would hide a rule that
- * needs tightening (docs/BUSINESS-LOGIC.md §11).
+ * needs tightening.
  *
  * Empty is a real answer, not an error: a rule created seconds ago, before App\Jobs\SweepRuleFares has priced any of
- * its routes, has no matches yet (docs/BUSINESS-LOGIC.md §11).
+ * its routes, has no matches yet.
  *
  * A count can also be only a floor (`pending`): the sweep prices candidates over time, so "2 trips" before save and
  * "32" a minute after were both correct (docs/BUSINESS-LOGIC.md §11).

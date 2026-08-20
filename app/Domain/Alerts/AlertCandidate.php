@@ -12,10 +12,8 @@ use DateTimeImmutable;
  * that score was computed from.
  *
  * Two named constructors, one private — a watched route carries score and maturity; a rule match (already price-tested) carries neither.
- * Why: docs/BUSINESS-LOGIC.md §10.
  *
  * The two score/maturity nulls travel together — a rule's threshold is the owner's own number, not one Orbit inferred from history.
- * Why: docs/BUSINESS-LOGIC.md §10.
  *
  * The price is on both, since the cooldown is about the price, not the score.
  *

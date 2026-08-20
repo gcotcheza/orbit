@@ -134,7 +134,6 @@ export function useAirportSearch() {
     // A disposed box isn't waiting for an answer — without this, a stray
     // debounced request could still fire into nothing. `failSilently`: also
     // called from a unit test outside any component scope.
-    // Why: docs/BUSINESS-LOGIC.md §36.
     onScopeDispose(cancel, true)
 
     return { results, status, search, clear }

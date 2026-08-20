@@ -21,7 +21,7 @@ use App\Application\Alerts\RuleMatchNotice;
  * What the three Orbit mails actually look like when they are rendered.
  *
  * Tested despite being "judged by looking" because failures here are silent: wrong theme path, media queries stripped, or a banner pointing at localhost
- * — all render valid HTML with the wrong thing, no error (docs/BUSINESS-LOGIC.md §10).
+ * — all render valid HTML with the wrong thing, no error.
  *
  * Copy assertions aren't decoration — a redesign is exactly the change likely to drop config-quoted copy nobody
  * notices is missing (docs/BUSINESS-LOGIC.md §10).

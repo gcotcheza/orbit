@@ -327,7 +327,6 @@ final class WatchlistWritesTest extends TestCase
 
     /**
      * `is_origin` is a rule-engine flag, not a constraint this endpoint checks.
-     * Why: docs/BUSINESS-LOGIC.md §1.
      */
     #[Test]
     public function an_origin_that_is_not_an_airport_at_all_is_still_refused(): void

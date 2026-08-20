@@ -13,13 +13,13 @@ use Illuminate\Support\Facades\Date;
  * The round-trip fare poll — fan-out only.
  *
  * Scheduled daily 04:40 Europe/Amsterdam in routes/console.php (reasoning + collision arithmetic there). Budget: ONE
- * request per watched route per run (docs/BUSINESS-LOGIC.md §15).
+ * request per watched route per run.
  *
  * `--now` is still how the table gets filled by hand, on a box, when somebody
  * wants today's fares without waiting for tomorrow's run.
  *
  * Command, not `Schedule::job()` per route: routes/console.php loads on every artisan invocation (incl. `migrate` on an empty DB) — enumerating routes
- * there would query in every command's boot path and fail on first deploy (docs/BUSINESS-LOGIC.md §15).
+ * there would query in every command's boot path and fail on first deploy.
  */
 final class PollReturns extends Command
 {

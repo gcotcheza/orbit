@@ -71,7 +71,7 @@ final class BuildAssetsTest extends TestCase
 
     /**
      * Stylesheet is both its own entry and a `css` entry on the script (fonts hang off both); must dedupe or the worker
-     * double-fetches on install (docs/BUSINESS-LOGIC.md §35).
+     * double-fetches on install.
      */
     #[Test]
     public function nothing_is_listed_twice(): void

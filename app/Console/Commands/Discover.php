@@ -13,10 +13,9 @@ use Illuminate\Support\Facades\Date;
  * Go and find the cheap routes nobody is watching.
  *
  * Scheduled daily at 05:20 (routes/console.php) because discovery has a reader on day one: GET /api/discoveries and
- * the search screen (docs/BUSINESS-LOGIC.md §13).
+ * the search screen.
  *
- * Safe to schedule, unlike the polls — nothing here can send mail; the worst case is a disappointing card
- * (docs/BUSINESS-LOGIC.md §16) (docs/BUSINESS-LOGIC.md §13).
+ * Safe to schedule, unlike the polls — nothing here can send mail; the worst case is a disappointing card.
  *
  * One job, not a fan-out: discovery is a RANKING across all three origins and cannot be split per route. See
  * App\Jobs\DiscoverDeals (docs/BUSINESS-LOGIC.md §16).

@@ -64,7 +64,7 @@ final class AirportController extends Controller
 
     /**
      * Best match first: the code, then the city, then the airport's own name, then the country, then anything that merely contains what was typed. Order
-     * matches destinations.js's curated-list ranking — shown as one merged list (docs/BUSINESS-LOGIC.md §36).
+     * matches destinations.js's curated-list ranking — shown as one merged list.
      *
      * Every value in the CASE expression is a bound `?`; the literal-string return type proves no typed input reaches
      * orderByRaw() as text (docs/BUSINESS-LOGIC.md §36).

@@ -10,7 +10,7 @@ use App\Domain\Rules\RuleVocabulary;
  * What the model is asked, and the shape it must answer in.
  *
  * Separate from the adapter — the prompt is what gets retuned; VERSION bumps with wording so a log line can say which
- * prompt produced a bad rule (docs/BUSINESS-LOGIC.md §11).
+ * prompt produced a bad rule.
  *
  * Schema built from the vocabulary, not written out — the model is structurally unable to answer with an airport or
  * vibe that doesn't exist (docs/BUSINESS-LOGIC.md §11).
@@ -55,10 +55,10 @@ final readonly class RulePrompt
      * The schema the answer is constrained to.
      *
      * Nullables are `anyOf`, not a type array — `"type": ["integer", "null"]` is the kind of thing that works or fails at
-     * request time depending on the day (docs/BUSINESS-LOGIC.md §11).
+     * request time depending on the day.
      *
      * `additionalProperties: false` everywhere — a schema permitting extra keys lets the model answer a question nobody
-     * asked (docs/BUSINESS-LOGIC.md §11).
+     * asked.
      *
      * @return array<string, mixed>
      */

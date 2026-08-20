@@ -8,10 +8,10 @@ use Illuminate\Database\Migrations\Migration;
 
 /**
  * When the FARE was found, as distinct from when Orbit fetched it — the two are not the same fact; conflating them is
- * the bug this column fixes (docs/BUSINESS-LOGIC.md §2).
+ * the bug this column fixes.
  *
  * Nullable, and existing rows stay null — there is no honest value to backfill, and `fetched_at` is NOT a substitute
- * for it (docs/BUSINESS-LOGIC.md §2).
+ * for it.
  *
  * Not indexed: nothing filters or sorts on it; the staleness sweep keys on `fetched_at` instead
  * (docs/BUSINESS-LOGIC.md §2).

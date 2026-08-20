@@ -10,13 +10,12 @@ use InvalidArgumentException;
  * "No pings after ten at night" — as arithmetic on a wall clock.
  *
  * Minutes since local midnight, nothing else — no date/timezone/clock here. App\Application\Alerts\DeliveryWindow does
- * the instant conversion, once (docs/BUSINESS-LOGIC.md §10).
+ * the instant conversion, once.
  *
  * The window usually crosses midnight (default 22:00-08:00), so "inside" is `>= start OR < end`, not `AND` — getting
- * this wrong means mailing at 3am (docs/BUSINESS-LOGIC.md §10).
+ * this wrong means mailing at 3am.
  *
  * The end is exclusive: 08:00 is when held mail goes out, not still quiet.
- * Why: docs/BUSINESS-LOGIC.md §10.
  *
  * A zero-length window (start === end) covers nothing — "22:00 to 22:00" is an unfinished setup, not a request for
  * permanent silence (docs/BUSINESS-LOGIC.md §10).
@@ -88,7 +87,7 @@ final readonly class QuietHours
 
     /**
      * `HH:MM` or `HH:MM:SS` to minutes since midnight. Both precisions: Postgres returns `22:00:00`, SQLite returns
-     * whatever was written (docs/BUSINESS-LOGIC.md §10).
+     * whatever was written.
      */
     private static function minuteOfDay(string $clock): int
     {

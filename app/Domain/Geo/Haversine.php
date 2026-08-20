@@ -15,7 +15,7 @@ final readonly class Haversine
 
     /**
      * The great-circle distance between two points, in kilometres. Degrees in — same as `airports.lat/lng` and geo.js's
-     * own boundary; radians exist only inside this method (docs/BUSINESS-LOGIC.md §16).
+     * own boundary; radians exist only inside this method.
      *
      * Identical points answer 0, not NaN — a rounding-error `asin()` input would otherwise sort a route to the top of discovery as an infinite €/km.
      * Why: docs/BUSINESS-LOGIC.md §16.

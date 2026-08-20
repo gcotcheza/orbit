@@ -8,7 +8,7 @@ namespace App\Domain\Rules;
  * What a rule actually asks for, once the English has been read.
  *
  * Every nullable/empty field means "no opinion", not "no results" (empty origins = all airports, null maxPriceCents =
- * any price) — removing a chip WIDENS the rule rather than narrowing it to nothing (docs/BUSINESS-LOGIC.md §11).
+ * any price) — removing a chip WIDENS the rule rather than narrowing it to nothing.
  *
  * Persisted as `deal_rules.criteria`; `from()` must survive JSON an older version wrote. Unreadable fields are
  * dropped, not thrown on (docs/BUSINESS-LOGIC.md §11).
@@ -47,7 +47,7 @@ final readonly class RuleCriteria
 
     /**
      * Shape `from()` reads, `deal_rules.criteria` stores, and docs/API.md publishes field-for-field — one definition, not
-     * three (docs/BUSINESS-LOGIC.md §11).
+     * three.
      *
      * @return array<string, mixed>
      */

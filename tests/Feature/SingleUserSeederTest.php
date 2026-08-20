@@ -15,10 +15,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The seeder that creates Orbit's one account. Idempotence is the point: getting it wrong silently rotates the owner's
- * password on a deploy (docs/BUSINESS-LOGIC.md §36).
+ * password on a deploy.
  *
  * Driven through config('orbit.seed.*'), not env vars directly — that's what the seeder reads, so `config:cache` can't
- * quietly empty it (docs/BUSINESS-LOGIC.md §36).
+ * quietly empty it.
  */
 final class SingleUserSeederTest extends TestCase
 {

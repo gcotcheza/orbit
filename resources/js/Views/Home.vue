@@ -294,7 +294,6 @@ onActivated(() => {
 }
 
 /* Rides up over the globe's lower edge, matching the spotlight card's overlap.
-   Why: docs/BUSINESS-LOGIC.md §36.
 
    MUST STAY AFTER .home__notice: its shorthand `margin` would overwrite a
    margin-top declared before it. */

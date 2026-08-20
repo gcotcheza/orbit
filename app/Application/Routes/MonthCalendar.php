@@ -11,7 +11,7 @@ use App\Domain\Pricing\DatedFare;
  * One month of the price heatmap, with each day already judged.
  *
  * Verdict computed here, not in the browser — design/README.md §3's rule is also what a future "cheap day" alert would
- * need; two implementations would eventually disagree (docs/BUSINESS-LOGIC.md §36).
+ * need; two implementations would eventually disagree.
  *
  * Range is the month's own low/high, not the route's yearly stats — a dear June should still colour its cheapest
  * Tuesday green (docs/BUSINESS-LOGIC.md §36).

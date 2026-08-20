@@ -11,10 +11,10 @@ use PHPUnit\Framework\Attributes\Test;
 
 /**
  * `build:retain` — the half of `emptyOutDir: false` that stops the disk filling: keep files a phone might still need,
- * delete what nothing can (docs/BUSINESS-LOGIC.md §36).
+ * delete what nothing can.
  *
  * Runs against a temp dir, not public/build, so a prune bug can't delete the assets the rest of the suite is served
- * from (docs/BUSINESS-LOGIC.md §36).
+ * from.
  */
 final class RetainBuildsTest extends TestCase
 {
@@ -97,8 +97,7 @@ final class RetainBuildsTest extends TestCase
     }
 
     /**
-     * DO NOT refresh `recorded_at` on a no-op run, or a daily run would make the oldest build look like the newest
-     * (docs/BUSINESS-LOGIC.md §36).
+     * DO NOT refresh `recorded_at` on a no-op run, or a daily run would make the oldest build look like the newest.
      */
     #[Test]
     public function running_twice_without_a_build_changes_nothing(): void

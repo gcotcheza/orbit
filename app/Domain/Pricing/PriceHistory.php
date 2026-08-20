@@ -83,7 +83,7 @@ final readonly class PriceHistory
      * fare per day. Negative is falling. Null when there is not enough to say.
      *
      * Least squares, not first-vs-last: a fare that slid all month then ticked up €2 yesterday would misread as "rising"
-     * under the naive version (docs/BUSINESS-LOGIC.md §7).
+     * under the naive version.
      *
      * Normalised by the mean so a €40 route and a €400 route compare on the same scale — "half a percent a day" is a
      * trend, "€2 a day" alone is not (docs/BUSINESS-LOGIC.md §7).

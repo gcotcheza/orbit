@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
  * memory.
  *
  * The only thing in Discovery that persists across runs (a `discoveries` row is ephemeral, 36 hours then gone); every
- * window the lane fetches leaves one behind (docs/BUSINESS-LOGIC.md §16).
+ * window the lane fetches leaves one behind.
  *
  * Not a cache of `calendar_fares`: stays one number per route, not a `routes`-keyed window. See the migration for what
  * breaks if it grows into one (docs/BUSINESS-LOGIC.md §16).

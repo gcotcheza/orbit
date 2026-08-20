@@ -53,7 +53,7 @@ final class ScheduleTest extends TestCase
 
     /**
      * The second speed, and the hour is the point of it: months 7-11 cost 12 calls/route vs. 7 daily, so this runs in the
-     * empty 04:00 hour, not 06:00 (docs/BUSINESS-LOGIC.md §13).
+     * empty 04:00 hour, not 06:00.
      *
      * Does not replace that day's poll — the daily entry still runs four hours later, both writing the same near-window
      * observation (docs/BUSINESS-LOGIC.md §13).

@@ -8,13 +8,13 @@ use App\Domain\Discovery\SweptFare;
 
 /**
  * Where "what is cheap from here, to ANYWHERE" comes from — unlike the other fare ports, this one has no destination
- * in its signature ("surprise me") (docs/BUSINESS-LOGIC.md §16).
+ * in its signature ("surprise me").
  *
  * One request per origin covers every destination (measured ~1,177 candidate fares for 3 requests vs. 1,177
- * route-by-route); exactly one entry per destination, no duplicates, in every answer (docs/BUSINESS-LOGIC.md §16).
+ * route-by-route); exactly one entry per destination, no duplicates, in every answer.
  *
  * DO NOT treat these as verified: unchecked finds, some up to a week stale (`SweptFare::$foundAt`); DiscoveryPolicy/DiscoverDeals do verification.
- * `asOf` is deliberately absent too — no real API answers about the past (docs/BUSINESS-LOGIC.md §16).
+ * `asOf` is deliberately absent too — no real API answers about the past.
  */
 interface OriginSweepProvider
 {

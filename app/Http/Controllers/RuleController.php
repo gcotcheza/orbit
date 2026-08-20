@@ -22,7 +22,6 @@ use Illuminate\Validation\ValidationException;
  * one (design/README.md §4 and the rules section of §5).
  *
  * Every answer is the row's own shape, matching WatchlistItemController's contract.
- * Why: docs/BUSINESS-LOGIC.md §11.
  *
  * Creating a rule queues a sweep and does not wait for it — day-1 honesty.
  * Why: docs/BUSINESS-LOGIC.md §11.

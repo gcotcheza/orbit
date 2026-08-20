@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\File;
 
 /**
  * `php artisan build:retain` — keep the last few builds' assets on disk, delete the rest via a per-build ledger (mtime
- * can't identify a build) (docs/BUSINESS-LOGIC.md §36).
+ * can't identify a build).
  *
  * Default `--keep=3`: balances phone cache staleness against build count.
  * Why: docs/BUSINESS-LOGIC.md §36.
@@ -127,7 +127,7 @@ final class RetainBuilds extends Command
      * Write the snapshot for this build, unless one already exists.
      *
      * Not overwritten on rerun: `recorded_at` orders the ledger, so refreshing would bump this run ahead of a genuinely
-     * newer build (docs/BUSINESS-LOGIC.md §36).
+     * newer build.
      *
      * @param  list<string>  $files
      * @return bool whether a new snapshot was written
@@ -203,7 +203,7 @@ final class RetainBuilds extends Command
      * Delete everything in `assets/` that no retained snapshot names.
      *
      * Scoped to `assets/` only — `public/build` also holds manifest.json and the ledger; walking the whole tree risks
-     * deleting our own bookkeeping (docs/BUSINESS-LOGIC.md §36).
+     * deleting our own bookkeeping.
      *
      * A kept file also keeps its `.map` (Vite omits maps from the manifest).
      * Why: docs/BUSINESS-LOGIC.md §36.

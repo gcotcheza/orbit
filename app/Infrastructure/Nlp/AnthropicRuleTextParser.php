@@ -25,13 +25,12 @@ use Anthropic\Core\Exceptions\APIException;
  * Reading the sentence by asking Claude.
  *
  * 1. Evidence first, then the instruction — untrusted text can never become part of our instruction; this is the
- * prompt-injection defence (docs/BUSINESS-LOGIC.md §11).
+ * prompt-injection defence.
  *
- * 2. Schema enforced server-side — the first text block IS the JSON; nothing here hunts for a `{`
- * (docs/BUSINESS-LOGIC.md §11).
+ * 2. Schema enforced server-side — the first text block IS the JSON; nothing here hunts for a `{`.
  *
  * 3. `stop_reason` checked before `content` is read — a refusal is a 200 with empty content, so indexing content[0]
- * first crashes on that case (docs/BUSINESS-LOGIC.md §11).
+ * first crashes on that case.
  *
  * 4. No temperature/top_p/top_k — removed on current models, and a
  * request carrying one is rejected outright rather than ignored.
