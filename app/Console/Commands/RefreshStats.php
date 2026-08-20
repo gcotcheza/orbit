@@ -9,13 +9,8 @@ use App\Jobs\RefreshRouteStats;
 use Illuminate\Console\Command;
 
 /**
- * The weekly "what does this route usually cost" refresh — fan-out only.
- *
- * INCLUDES PAUSED ROUTES, unlike orbit:poll-fares. Statistics are what make a
- * deal score possible on the day a route is un-paused; polling a paused route
- * daily would be spending money on somebody who asked us to stop, but letting
- * its usual price go stale for months would make the moment they come back the
- * one moment the score is wrong.
+ * The weekly "what does this route usually cost" refresh — fan-out only. INCLUDES PAUSED
+ * ROUTES: stale statistics would make un-pausing the one moment the score is wrong.
  */
 final class RefreshStats extends Command
 {

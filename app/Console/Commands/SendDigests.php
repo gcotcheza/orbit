@@ -9,13 +9,8 @@ use App\Jobs\SendWeeklyDigest;
 use Illuminate\Console\Command;
 
 /**
- * The Sunday digest — fan-out only, same shape as orbit:alerts.
- *
- * WHETHER AN ACCOUNT ACTUALLY GETS ONE IS THE JOB'S QUESTION, not this
- * command's: the digest is switched off per account and is skipped entirely
- * when there is nothing to say, and both of those are facts about one account's
- * data rather than about the schedule. This command's whole job is "for each
- * account, ask".
+ * The Sunday digest — fan-out only, same shape as orbit:alerts. Whether an account actually
+ * gets one is the job's question, not this command's.
  */
 final class SendDigests extends Command
 {

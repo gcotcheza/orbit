@@ -10,18 +10,8 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Date;
 
 /**
- * Go and find the cheap routes nobody is watching.
- *
- * Scheduled daily at 05:20 (routes/console.php) because discovery has a reader on day one: GET /api/discoveries and
- * the search screen.
- *
- * Safe to schedule, unlike the polls — nothing here can send mail; the worst case is a disappointing card.
- *
- * One job, not a fan-out: discovery is a RANKING across all three origins and cannot be split per route. See
- * App\Jobs\DiscoverDeals (docs/BUSINESS-LOGIC.md §16).
- *
- * A command, not schedule-file code, because routes/console.php loads on every artisan invocation, including against
- * an empty database (docs/BUSINESS-LOGIC.md §13).
+ * Go and find the cheap routes nobody is watching. Daily at 05:20; one job, not a fan-out,
+ * and a command rather than schedule-file code (docs/BUSINESS-LOGIC.md §16).
  */
 final class Discover extends Command
 {
@@ -64,8 +54,8 @@ final class Discover extends Command
 
         if ($discoveries->isEmpty()) {
             /*
-             * An empty answer is a real answer: no deals means an empty screen, not the least-mediocre thing available. See
-             * App\Domain\Discovery\DiscoveryPolicy (docs/BUSINESS-LOGIC.md §16).
+             * An empty answer is a real answer: no deals means an empty screen, not the
+             * least-mediocre thing available (docs/BUSINESS-LOGIC.md §16).
              */
             $this->components->warn('Nothing cleared the thresholds — no discoveries today.');
 

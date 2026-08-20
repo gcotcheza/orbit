@@ -5,21 +5,16 @@ declare(strict_types=1);
 namespace App\Domain\Rules;
 
 /**
- * What a rule actually asks for, once the English has been read.
- *
- * Every nullable/empty field means "no opinion", not "no results" (empty origins = all airports, null maxPriceCents =
- * any price) — removing a chip WIDENS the rule rather than narrowing it to nothing.
- *
- * Persisted as `deal_rules.criteria`; `from()` must survive JSON an older version wrote. Unreadable fields are
- * dropped, not thrown on (docs/BUSINESS-LOGIC.md §11).
+ * What a rule actually asks for, once the English has been read. Every nullable/empty field
+ * means "no opinion", and `from()` must survive older JSON (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class RuleCriteria
 {
     /**
-     * @param  list<string>  $origins  IATA codes, subset of config('orbit.origins'); empty means all of them
+     * @param  list<string>  $origins  IATA codes; empty means all of them
      * @param  array{int, int}|null  $tripLengthNights  [min, max]
      * @param  list<int>  $departDows  ISO weekday numbers, 1 (Monday) to 7; empty means any day
-     * @param  list<string>  $vibes  from the closed vocabulary in config('orbit.nlp.vibe_words'); empty means anywhere
+     * @param  list<string>  $vibes  from the closed vocabulary; empty means anywhere
      */
     public function __construct(
         public array $origins = [],
@@ -46,8 +41,8 @@ final readonly class RuleCriteria
     }
 
     /**
-     * Shape `from()` reads, `deal_rules.criteria` stores, and docs/API.md publishes field-for-field — one definition, not
-     * three.
+     * The shape `from()` reads, `deal_rules.criteria` stores and docs/API.md publishes
+     * field-for-field — one definition, not three.
      *
      * @return array<string, mixed>
      */
@@ -68,8 +63,8 @@ final readonly class RuleCriteria
     }
 
     /**
-     * Nothing understood (empty sentence, or garbage). Create screen branches on this rather than an empty chip list —
-     * same criteria, different message (docs/BUSINESS-LOGIC.md §11).
+     * Nothing understood (empty sentence, or garbage). The create screen branches on this
+     * rather than an empty chip list — same criteria, different message.
      */
     public function isEmpty(): bool
     {
