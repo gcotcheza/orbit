@@ -1,16 +1,7 @@
 <script setup>
 /*
- * The seven-column month (design/README.md §3).
- *
- * THE GRID IS BUILT FROM THE CALENDAR, NOT FROM THE RESPONSE. `days` omits
- * every date we have no fare for (docs/API.md), so `buildMonthGrid` generates
- * the month's real dates — leading blanks and all — and each cell looks its own
- * fare up by date. Laying the array out in order would slide every date after
- * the first gap onto the wrong weekday.
- *
- * A day WITH a fare is a button, because it opens the sheet. A day without one
- * is a div: it is not an action, and rendering it as a disabled button would
- * still put it in the accessibility tree as one.
+ * The seven-column month (design/README.md §3). THE GRID IS BUILT FROM THE CALENDAR, NOT FROM
+ * THE RESPONSE. A day with a fare is a button; a day without one is a div, not a disabled one.
  */
 import { computed } from 'vue'
 import { euro } from '@/lib/format'

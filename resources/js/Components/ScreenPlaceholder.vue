@@ -1,15 +1,7 @@
 <script setup>
 /*
- * A screen that is honest about not existing yet.
- *
- * Five of Orbit's six screens are built in PRs 6-11 (docs/PLAN.md). Until then
- * their routes are real, reachable and in the tab bar — which is what lets the
- * navigation, the tab bar's active state and the auth guard be exercised now —
- * and this is what they render: the title the screen will have, and one line
- * saying when it arrives. Not a blank div, which is indistinguishable from a
- * bug, and not a fake version of the screen, which is worse.
- *
- * It is deleted, view by view, as each screen lands.
+ * A screen that is honest about not existing yet: the title it will have and one line saying
+ * when it arrives. Not a blank div, which is indistinguishable from a bug.
  */
 defineProps({
   title: { type: String, required: true },

@@ -1,23 +1,7 @@
 <script setup>
 /*
- * The iOS-style switch: 46×27 track, 21 px knob, on = --good.
- *
- * design/README.md §5 and §6 draw the SAME switch on the watchlist rows and on
- * every alerts row, so it is one component. Its geometry is the design's, to
- * the pixel — the knob's 3 px inset and 22 px travel are what make the two
- * ends look symmetrical, and they stop being symmetrical the moment somebody
- * rounds the track to 48.
- *
- * IT LIVES IN `Components/` RATHER THAN IN A SCREEN'S FOLDER because three
- * unrelated screens draw it — alerts, the watchlist's boarding passes and the
- * deal rules. It was written under `Components/settings/` while those screens
- * were being built in parallel branches, and moved up here on the DRY pass.
- *
- * A <button role="switch">, NOT a checkbox. It carries no label of its own —
- * the row beside it is the label — so it takes an explicit `label` for
- * assistive technology, and `aria-checked` is what announces the state. A
- * styled checkbox would give the same pixels and would also give a focus
- * outline that lands on an invisible input.
+ * The iOS-style switch: 46×27 track, 21px knob, on = --good, geometry the design's to the
+ * pixel. A <button role="switch">, not a checkbox, and it takes an explicit `label`.
  */
 defineProps({
   modelValue: { type: Boolean, required: true },

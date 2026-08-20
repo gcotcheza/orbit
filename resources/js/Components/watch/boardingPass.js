@@ -1,12 +1,5 @@
-// Flag swatch and flight number are derived here, not sent by the server —
-// neither is real data, and both must be pure (same input, same output) so a
-// boarding pass doesn't visibly change between renders.
-// Why: docs/BUSINESS-LOGIC.md §36.
-
-// CSS gradients, not images/emoji: an image per country is 28 requests for
-// 22×15px, and Windows renders flag emoji as grey letters. Approximated at
-// that size; unlisted countries fall back to a neutral slate swatch.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Flag swatch and flight number are derived here, not sent by the server, and must be pure.
+// CSS gradients, not images or emoji, with a neutral fallback (docs/BUSINESS-LOGIC.md §36).
 
 const NEUTRAL = 'linear-gradient(135deg, #8b93ad, #5d6883)'
 
@@ -127,8 +120,8 @@ export function flagFor(countryCode) {
 }
 
 /**
- * The `FW###` in the boarding pass eyebrow, derived from the route code. No real flight — set dressing for the card. Derived, not random, so AMS-LIS shows the same number on every render/device/reload
- * (a changing number would give the fiction away). Hash is the design prototype's own 31-multiplier sum (docs/BUSINESS-LOGIC.md §36).
+ * The `FW###` in the boarding pass eyebrow, derived from the route code — set dressing, but
+ * derived rather than random, or a changing number gives the fiction away.
  *
  * @param {string} code "AMS-LIS"
  * @returns {string} "FW304"

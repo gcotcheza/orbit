@@ -1,14 +1,7 @@
 <script setup>
 /*
- * Previous / next month.
- *
- * WHY THERE IS NO MONTH LABEL IN HERE. The screen's subtitle already reads
- * "Cheapest fare per day · June 2026" (design/README.md §3), and a navigator
- * that repeated it would put the same six characters on the screen twice. The
- * arrows sit up on the title row instead, and say where they GO in their
- * accessible names — which is the one place the label is genuinely missing.
- *
- * The bounds are the parent's: only it knows the poll window.
+ * Previous / next month, with no month label: the screen's subtitle already carries it. The
+ * arrows say where they GO in their accessible names, and the bounds are the parent's.
  */
 import { computed } from 'vue'
 import { addMonths, monthLabel } from './month'

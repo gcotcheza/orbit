@@ -1,21 +1,7 @@
 <script setup>
 /*
- * One saved rule on the watch screen (design/README.md §5's rules section).
- *
- * DELIBERATELY QUIET. The boarding passes above it are the stars of that
- * screen — they are the routes the owner actually chose — and a rule is a
- * standing question rather than a thing being watched. So: a hairline border
- * instead of a card, no shadow, the chips as one muted line rather than the
- * create screen's removable pills, and the matches only when asked for.
- *
- * THE CHIPS ARE READ-ONLY HERE. Editing a rule means going back to the create
- * screen where the sentence is; a × on this row would be an edit with no
- * textarea to explain what it did.
- *
- * REMOVE CONFIRMS INLINE rather than in a dialog. A rule is cheap to lose and
- * cheap to retype, so a modal would cost more attention than the mistake does
- * — but it is still one tap away from gone, and the second tap is a different
- * word in a different colour.
+ * One saved rule on the watch screen (design/README.md §5). DELIBERATELY QUIET — a rule is a
+ * standing question, not a thing being watched. Chips read-only; remove confirms inline.
  */
 import { computed, ref } from 'vue'
 import ToggleSwitch from '@/Components/ToggleSwitch.vue'
@@ -28,11 +14,8 @@ const props = defineProps({
   busy: { type: Boolean, default: false },
 
   /**
-   * The code of the match currently being added to the watchlist, if any.
-   *
-   * THE PARENT'S STATE AND NOT THIS ROW'S, because the parent owns the
-   * request. A local flag here would have to be cleared on an event this
-   * component never sees, and the honest version of that is a prop.
+   * The code of the match currently being added to the watchlist, if any — THE PARENT'S STATE,
+   * because the parent owns the request and this row never sees the event that clears it.
    */
   watching: { type: String, default: '' },
 })
