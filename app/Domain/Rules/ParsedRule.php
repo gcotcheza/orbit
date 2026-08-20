@@ -93,7 +93,7 @@ final readonly class ParsedRule
     }
 
     /**
-     * What the surviving chips add up to. The type guards are not decoration: `\$chip->value`
+     * What the surviving chips add up to. The type guards are not decoration: `$chip->value`
      * is `mixed`, and this is the one place that must know which of six shapes it is.
      */
     public function criteria(): RuleCriteria
