@@ -10,15 +10,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 
 /**
- * Who is signed in.
- *
- * The SPA boots into an empty `#app` and has to decide, before it draws
- * anything, whether to show the globe or the login screen. This is that
- * decision: one round trip whose 200 and whose 401 are both answers.
- *
- * It reads the session the request already carries and asks nothing of the
- * database beyond the user the guard resolved, so it is cheap enough to be on
- * the critical path of every launch.
+ * Who is signed in: one round trip whose 200 and whose 401 are both answers, so the SPA can
+ * decide between the globe and the login screen before it draws anything.
  */
 final class CurrentUserController extends Controller
 {

@@ -18,13 +18,8 @@ use App\Application\Ports\RuleTextParser;
 use Illuminate\Validation\ValidationException;
 
 /**
- * The owner's standing rules: listing them, writing one, pausing one, dropping
- * one (design/README.md §4 and the rules section of §5).
- *
- * Every answer is the row's own shape, matching WatchlistItemController's contract.
- *
- * Creating a rule queues a sweep and does not wait for it — day-1 honesty.
- * Why: docs/BUSINESS-LOGIC.md §11.
+ * The owner's standing rules: listing, writing, pausing, dropping. Creating a rule queues a
+ * sweep and does not wait for it — day-1 honesty (docs/BUSINESS-LOGIC.md §11).
  */
 final class RuleController extends Controller
 {
@@ -59,8 +54,8 @@ final class RuleController extends Controller
         $criteria = $parser->parse($text)->without($request->removed())->criteria();
 
         /*
-         * A rule with empty criteria matches every fare everywhere — refused as a firehose, not merely for empty text
-         * (docs/BUSINESS-LOGIC.md §11).
+         * A rule with empty criteria matches every fare everywhere — refused as a firehose,
+         * not merely for empty text (docs/BUSINESS-LOGIC.md §11).
          */
         if ($criteria->isEmpty()) {
             throw ValidationException::withMessages([
@@ -108,9 +103,8 @@ final class RuleController extends Controller
     }
 
     /**
-     * Drop a rule. 204 — there is nothing left to describe.
-     *
-     * The routes it surfaced survive, and so do their fares — deleting the question doesn't unask what it found.
+     * Drop a rule. 204 — there is nothing left to describe. The routes it surfaced survive,
+     * and so do their fares: deleting the question does not unask what it found.
      */
     public function destroy(Request $request, int $id): JsonResponse
     {

@@ -9,10 +9,8 @@ use Illuminate\Contracts\Auth\Guard;
 use Illuminate\Session\Middleware\AuthenticateSession as FrameworkAuthenticateSession;
 
 /**
- * Laravel's session-eviction middleware, pinned to the session guard.
- *
- * DO NOT register the framework's version directly: `auth:sanctum` rewrites the default guard mid-request, silently logging out the wrong session on password change.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Laravel's session-eviction middleware, pinned to the session guard. DO NOT register the
+ * framework's own: `auth:sanctum` rewrites the guard mid-request (docs/BUSINESS-LOGIC.md §36).
  */
 final class AuthenticateSession extends FrameworkAuthenticateSession
 {
@@ -24,8 +22,8 @@ final class AuthenticateSession extends FrameworkAuthenticateSession
     }
 
     /**
-     * Store the hash under this middleware's own key as well as the framework's. Copied, not recomputed, from `password_hash_sanctum` to `password_hash_web`
-     * — whatever format the framework used stays intact in both keys (docs/BUSINESS-LOGIC.md §36).
+     * Store the hash under this middleware's own key as well as the framework's. Copied, not
+     * recomputed, so whatever format the framework used stays intact in both.
      *
      * @param  Request  $request
      */

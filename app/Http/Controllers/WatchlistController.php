@@ -14,18 +14,8 @@ use App\Application\Routes\RouteSnapshots;
 use App\Http\Resources\WatchlistRouteResource;
 
 /**
- * Everything the owner is watching — the app's busiest endpoint.
- *
- * IT FEEDS THREE SCREENS, not one. The globe home draws its arcs, its route
- * rail and its spotlight card entirely from this response (which is why the
- * airports carry lat/lng), the watchlist screen draws its rows from it, and
- * both do so without a second request per route. That is the reason the list
- * carries the full summary rather than ids to follow up on.
- *
- * ORDER IS THE OWNER'S, from `watchlist_items.position` — see the relation on
- * App\Models\User. The globe's auto-tour steps through this array in order, so
- * a list that re-sorted itself between two loads would make the tour visit
- * routes in a different order each time the app was opened.
+ * Everything the owner is watching — it feeds three screens, which is why the list carries
+ * full summaries. ORDER IS THE OWNER'S, from `watchlist_items.position`.
  */
 final class WatchlistController extends Controller
 {

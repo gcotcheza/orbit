@@ -7,11 +7,8 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * `PATCH /api/rules/{id}` — pause a rule or start it again.
- *
- * `active` IS REQUIRED, exactly like UpdateWatchedRouteRequest's: once a
- * boolean is optional, "absent" and "false" are the same request, and the
- * failure mode is a switch that can be turned on and never off.
+ * `PATCH /api/rules/{id}` — pause a rule or start it again. `active` IS REQUIRED: once a
+ * boolean is optional, "absent" and "false" are the same request.
  */
 final class UpdateRuleRequest extends FormRequest
 {

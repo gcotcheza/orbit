@@ -7,14 +7,8 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * `PUT /api/profile/password` — the owner changing their own password.
- *
- * DO NOT drop `current_password` — a session proves device possession, not the
- * secret. Deliberately a change endpoint only (no reset/recovery path exists
- * anywhere in this app); 12-char minimum with no composition rules; no breach
- * check (keeps tests offline). Field names are snake_case: two of the three are
- * Laravel's own convention (`confirmed`, `current_password`), not ours to rename.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `PUT /api/profile/password`. DO NOT drop `current_password` — a session proves device
+ * possession, not the secret. 12-char minimum, no breach check (docs/BUSINESS-LOGIC.md §36).
  */
 final class UpdatePasswordRequest extends FormRequest
 {
@@ -24,19 +18,19 @@ final class UpdatePasswordRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // `current_password:web` names the guard explicitly — the default guard at validation time is whatever middleware last set, not necessarily the session guard.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // `current_password:web` names the guard explicitly — the default at validation time
+            // is whatever middleware last set.
             'current_password' => ['required', 'string', 'current_password:web'],
 
-            // `different:current_password` is what makes this a CHANGE — without it, resubmitting the same password reports success but rotates nothing.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // `different:current_password` is what makes this a CHANGE: without it, resubmitting
+            // the same password reports success and rotates nothing.
             'password' => ['required', 'string', 'confirmed', 'different:current_password', 'min:12'],
         ];
     }
 
     /**
-     * Sentences, because that is what appears under the box. Shown verbatim (ChangePassword.vue renders the 422 message
-     * as-is) — each must name its field and say what to do (docs/BUSINESS-LOGIC.md §36).
+     * Sentences, because that is what appears under the box. Shown verbatim, so each must
+     * name its field and say what to do (docs/BUSINESS-LOGIC.md §36).
      *
      * @return array<string, string>
      */

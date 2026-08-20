@@ -16,10 +16,8 @@ use App\Application\Routes\MonthCalendar;
 use App\Http\Resources\RouteCalendarResource;
 
 /**
- * "When is it cheap?" — one month of one route (design/README.md §3).
- *
- * A month outside the ~3-month window is valid and returns an empty answer (`days: []`, null bounds) instead of 404,
- * so paging past it stays clean (docs/BUSINESS-LOGIC.md §36).
+ * "When is it cheap?" — one month of one route (design/README.md §3). A month outside
+ * the window answers empty rather than 404, so paging stays clean (docs/BUSINESS-LOGIC.md §36).
  */
 final class RouteCalendarController extends Controller
 {
@@ -28,8 +26,8 @@ final class RouteCalendarController extends Controller
         // See RouteController for why this is abort() and not firstOrFail().
         $route = Route::query()->where('code', $code)->first() ?? abort(404, 'Unknown route.');
 
-        // Validated as a shape (regex), not parsed — Carbon's parser accepts non-months like "now"/"+3 days", and this value
-        // feeds a BETWEEN against the database (docs/BUSINESS-LOGIC.md §36).
+        // Validated as a shape (regex), not parsed: Carbon accepts "now"/"+3 days", and this
+        // value feeds a BETWEEN against the database (docs/BUSINESS-LOGIC.md §36).
         $validated = $request->validate([
             'month' => ['sometimes', 'string', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
         ]);
@@ -60,14 +58,14 @@ final class RouteCalendarController extends Controller
             (float) config('orbit.calendar.pricey_at'),
         );
 
-        // Booking links are templates, not one URL per day; BookingLink/config('orbit.booking') own the hosts, paths and
-        // casing so the client only formats dates (docs/BUSINESS-LOGIC.md §36).
+        // Booking links are templates, not one URL per day; BookingLink owns the hosts, paths
+        // and casing so the client only formats dates.
 
         // aviasales is primary since Orbit's own prices come from it (see the €29-vs-€68 bug).
         // Why: docs/BUSINESS-LOGIC.md §36.
 
-        // Named tokens {ddmm}/{yymmdd}, not a bare {date}: the two sites want different date shapes.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Named tokens {ddmm}/{yymmdd}, not a bare {date}: the two sites want different date
+        // shapes.
         return RouteCalendarResource::make($calendar)
             ->additional(['meta' => [
                 'code'    => $route->code,
