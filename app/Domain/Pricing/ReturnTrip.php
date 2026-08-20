@@ -8,8 +8,8 @@ use DateTimeImmutable;
 use InvalidArgumentException;
 
 /**
- * The cheapest ROUND-TRIP fare a provider found for one pair of dates. Sibling of DatedFare (long-haul one-way is ~58-69% of return, not half). Grain is (departure, nights) — nights is the stored fact,
- * return date is always derived. Zero nights is legal; negative is refused by the constructor (docs/BUSINESS-LOGIC.md §15).
+ * The cheapest ROUND-TRIP fare for one pair of dates. Grain is (departure, nights); nights is the
+ * stored fact and the return date is always derived (docs/BUSINESS-LOGIC.md §15).
  */
 final readonly class ReturnTrip
 {
@@ -28,8 +28,8 @@ final readonly class ReturnTrip
     }
 
     /**
-     * The day you would fly home. Derived, never stored (see the class-level design note). Midnight-anchored like `departure_date` (a DATE column) so it
-     * compares equal to the same calendar day written elsewhere.
+     * The day you would fly home. Derived, never stored, and midnight-anchored like
+     * `departure_date` so it compares equal to the same calendar day.
      */
     public function returnDate(): DateTimeImmutable
     {

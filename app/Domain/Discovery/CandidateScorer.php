@@ -65,8 +65,8 @@ final readonly class CandidateScorer
     }
 
     /**
-     * Where `$cents` falls among the fares of its own window, as a percentage. Strictly-cheaper share (0 = cheapest); an
-     * empty window scores 100, not 0, so missing data can't masquerade as a bargain (docs/BUSINESS-LOGIC.md §16).
+     * Where `$cents` falls among the fares of its own window. An empty window scores 100, not 0, so
+     * missing data cannot masquerade as a bargain (docs/BUSINESS-LOGIC.md §16).
      *
      * @param  list<int>  $windowCents
      */
@@ -84,8 +84,8 @@ final readonly class CandidateScorer
     }
 
     /**
-     * The middle fare of a window, in cents — or null if there is no window. Median, not mean (long right tail skews it); lower of two middles on an even
-     * count, so the result is a fare someone was actually offered (docs/BUSINESS-LOGIC.md §16).
+     * The middle fare of a window, or null if there is no window. Median, not mean, and the lower
+     * of two middles, so the result is a fare somebody was offered.
      *
      * @param  list<int>  $windowCents
      */

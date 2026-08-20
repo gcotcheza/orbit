@@ -11,14 +11,14 @@ use Illuminate\Support\Facades\Date;
 use App\Application\Ports\ReturnTripProvider;
 
 /**
- * Round-trip fake, not a test double — same standing as FakePriceProvider (default adapter until ORBIT_RETURNS_PROVIDER=travelpayouts). Deliberately sparse (COVERAGE_IN_HUNDREDTHS, measured against real
- * coverage) rather than dense like the one-way fake; priced as two FakeFareModel legs with RETURN_DISCOUNT, sharing the model so one-way/return numbers agree (docs/BUSINESS-LOGIC.md §15).
+ * Round-trip fake, not a test double — deliberately sparse rather than dense like the one-way fake,
+ * and priced as two FakeFareModel legs (docs/BUSINESS-LOGIC.md §15).
  */
 final readonly class FakeReturnProvider implements ReturnTripProvider
 {
     /**
-     * Cells (of a hundred) that carry a fare: 5, measured against real coverage (181d x 16 stays x 5% ≈ 145/route vs
-     * 119/56/23 real entries) — raising it flatters future screens (docs/BUSINESS-LOGIC.md §15).
+     * Cells (of a hundred) that carry a fare: 5, measured against real coverage — raising it
+     * flatters future screens.
      */
     private const COVERAGE_IN_HUNDREDTHS = 5;
 
@@ -45,8 +45,8 @@ final readonly class FakeReturnProvider implements ReturnTripProvider
         }
 
         /**
-         * Date::now(), not `new DateTimeImmutable` — that's the clock Date::setTestNow() moves; a fake that ignored it would
-         * price every replayed morning identically (docs/BUSINESS-LOGIC.md §15).
+         * Date::now(), not `new DateTimeImmutable` — that is the clock Date::setTestNow() moves,
+         * and a fake ignoring it would price every replayed morning alike.
          */
         $observedAt = Date::now()->toDateTimeImmutable();
 
@@ -61,8 +61,8 @@ final readonly class FakeReturnProvider implements ReturnTripProvider
                 }
 
                 /**
-                 * The hole is stable: crc32(route, date, stay) is the same empty cell on this box, in CI and after docker compose down
-                 * -v — a test can assert "no fare" (docs/BUSINESS-LOGIC.md §15).
+                 * The hole is stable: crc32(route, date, stay) is the same empty cell everywhere,
+                 * so a test can assert "no fare".
                  */
                 if (crc32($routeCode.':returns:'.$day->format('Ymd').':'.$stay) % 100 >= self::COVERAGE_IN_HUNDREDTHS) {
                     continue;
@@ -72,8 +72,8 @@ final readonly class FakeReturnProvider implements ReturnTripProvider
                 $back = $this->model->priceCents($routeCode, $day->modify("+{$stay} days"), $observedAt);
 
                 /**
-                 * Stamped as found now (not null): null would hide the freshness feature from every screenshot/sandbox run. This is the one thing the fake flatters —
-                 * real returns are routinely days old (TravelpayoutsReturnProvider, point 9) (docs/BUSINESS-LOGIC.md §15).
+                 * Stamped as found now, not null: null would hide the freshness feature from every
+                 * screenshot. The one thing this fake flatters.
                  */
                 $trips[] = new ReturnTrip(
                     $day,
@@ -88,8 +88,8 @@ final readonly class FakeReturnProvider implements ReturnTripProvider
     }
 
     /**
-     * Every stay length the configured bands cover, ascending, deduped — read from config so a retuned
-     * orbit.returns.durations still has fares in the bands it asks about (docs/BUSINESS-LOGIC.md §15).
+     * Every stay length the configured bands cover, ascending and deduped — read from config, so a
+     * retuned `durations` still has fares in its bands.
      *
      * @return list<int>
      */

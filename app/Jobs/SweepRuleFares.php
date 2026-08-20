@@ -15,8 +15,8 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
- * Go and find out what a rule is worth. Queued on rule creation and daily after the watchlist poll, so a new rule isn't empty on day one. Creates
- * `routes` rows for unwatched pairs on purpose, and caps + shortens the horizon to protect the provider's rate limit (docs/BUSINESS-LOGIC.md §11).
+ * Go and find out what a rule is worth. It creates `routes` rows for unwatched pairs on purpose,
+ * and caps the horizon to protect the rate limit (docs/BUSINESS-LOGIC.md §11).
  */
 final class SweepRuleFares implements ShouldQueue
 {

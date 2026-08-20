@@ -41,8 +41,8 @@ final readonly class MailDealNotifier implements DealNotifier
         $notification = self::notificationFor($notice, $alertIds);
 
         /*
-         * Quiet hours as a queue delay: the notification is ShouldQueue so this line means something. The instant was already
-         * settled by App\Application\Alerts\DeliveryWindow (docs/BUSINESS-LOGIC.md §10).
+         * Quiet hours as a queue delay: the notification is ShouldQueue, so this line means
+         * something. The instant was already settled by DeliveryWindow.
          */
         if ($notBefore !== null) {
             $notification->delay($notBefore);
