@@ -55,9 +55,8 @@
 
 <style scoped>
 .tab-bar {
-  /* Fixed, not sticky: belongs to the app, not the scroller — every screen
-     already reserves room for it (.app-shell--tabs).
-     Why: docs/BUSINESS-LOGIC.md §36. */
+  /* Fixed, not sticky: it belongs to the app, not the scroller, and every screen already reserves
+     room for it. */
   position: fixed;
   inset-inline: 0;
   bottom: 0;
@@ -89,9 +88,8 @@
   transition: color 0.18s ease;
 }
 
-/* Active state is CSS only: RouterLink sets `router-link-exact-active`, every
-   icon strokes with currentColor. Exact avoids '/' matching every route.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* Active state is CSS only: RouterLink sets `router-link-exact-active`. Exact, or '/' matches every
+   route. */
 .tab.router-link-exact-active {
   color: var(--accent);
 }
@@ -102,13 +100,8 @@
   letter-spacing: 0.01em;
 }
 
-/* Centre button keeps its accent fill regardless of active state — it reads
-   as an action, not a destination.
-   Why: docs/BUSINESS-LOGIC.md §36.
-
-   DO NOT change -6px without recomputing: sized so the button + label (59px)
-   clears the bar's 67px content height without growing it.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* The centre button keeps its accent fill regardless of active state. DO NOT change -6px without
+   recomputing: button + label (59px) must clear the bar's 67px content height. */
 .tab--search {
   margin-top: -6px;
 }

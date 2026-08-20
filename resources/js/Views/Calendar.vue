@@ -202,11 +202,8 @@ onMounted(loadRoutes)
       </p>
     </template>
 
-    <!-- TELEPORTED, and not for tidiness. This screen's root carries `rise-in`,
-         and an element with a transform is the containing block for its
-         fixed-position descendants — so a sheet rendered in place would be
-         pinned to the scrolling column rather than to the viewport for as long
-         as that animation is live. Out at the body it is simply fixed. -->
+    <!-- TELEPORTED, and not for tidiness: this screen's root carries a transform, which would be
+         the containing block for a fixed sheet (docs/BUSINESS-LOGIC.md §36). -->
     <Teleport to="body">
       <DaySheet
         v-if="selected && hasFares"
@@ -291,10 +288,8 @@ onMounted(loadRoutes)
   color: var(--good-ink);
 }
 
-/* The fill is set HERE and not as a `fill="var(--good)"` attribute: var() is a
-   CSS value, and a presentation attribute that carries one is honoured by some
-   browsers and dropped as invalid by others — which would paint the star
-   black. Every tokenised SVG colour in this branch goes through CSS. */
+/* The fill is set HERE, not as a `fill="var(--good)"` attribute: browsers that reject var() there
+   paint the star black. */
 .banner__star {
   flex-shrink: 0;
   fill: var(--good);

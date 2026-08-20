@@ -394,9 +394,8 @@ defineExpose({ clear })
   color: var(--muted);
 }
 
-/* What the ✕ is positioned against: the margin moved here from the input so
-   both share the same 44px top the ✕ centres in.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* What the ✕ is positioned against: the margin moved here from the input so both share the same
+   44px top the ✕ centres in. */
 .field__box {
   position: relative;
   margin-top: 9px;
@@ -423,16 +422,14 @@ defineExpose({ clear })
   border-color: var(--accent);
 }
 
-/* Padding for the ✕ reserved whether or not it's shown — text width changing
-   mid-type would reflow what's being typed.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* Padding for the ✕ is reserved whether or not it is shown — a text width changing mid-type would
+   reflow what is being typed. */
 .field__input--clearable {
   padding-right: 42px;
 }
 
-/* On the field, not beside it, so it reads as one control; 30px matches the
-   toast dismiss target and stops short of the field's 44px so a tap near the text edge still lands in the text.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* On the field, not beside it, so it reads as one control; 30px stops short of the 44px so a tap
+   near the text edge still lands in the text. */
 .field__clear {
   position: absolute;
   top: 50%;
@@ -457,9 +454,8 @@ defineExpose({ clear })
   stroke: currentColor;
 }
 
-/* In the flow, not floating — a 430px column means an overlaid panel would sit
-   on the buttons beneath it. Capped/scrolled internally; --panel (not --card) keeps the hairline dropdown look.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* In the flow, not floating — on a 430px column an overlaid panel would sit on the buttons beneath
+   it. --panel keeps the hairline look. */
 
 .options {
   max-height: 244px;
@@ -543,9 +539,8 @@ defineExpose({ clear })
   cursor: default;
 }
 
-/* The divider between curated ("opinion") and priceable-only places, styled as
-   a quiet caption rather than a row.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* The divider between curated ("opinion") and priceable-only places, styled as a quiet caption
+   rather than a row. */
 .options__split {
   margin: 6px 0 2px;
   padding: 9px 10px 3px;
@@ -558,9 +553,8 @@ defineExpose({ clear })
   color: var(--muted);
 }
 
-/* Styled as a question, not a result: quieter, with the city bold (the word
-   that answers) and the code aligned to match ordinary suggestion rows.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* Styled as a question, not a result: quieter, with the city bold — the word that answers — and the
+   code aligned to the ordinary rows. */
 .option--guess {
   justify-content: space-between;
   color: var(--muted);

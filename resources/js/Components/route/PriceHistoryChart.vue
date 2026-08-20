@@ -120,9 +120,8 @@ const note = computed(() => {
 </template>
 
 <style scoped>
-/* One tone in, four colours out — the card sets --tone and every painted
-   part reads it, so switching tone is one class on one element.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* One tone in, four colours out — the card sets --tone and every painted part reads it, so
+   switching tone is one class. */
 .chart-card--good {
   --tone: var(--good);
 }
@@ -207,9 +206,8 @@ const note = computed(() => {
   animation: chart-area 1.1s ease both 0.3s;
 }
 
-/* `pathLength="1"` normalises the path's length, so a dash of 1 covers it
-   whatever the real geometry — draw-on is one offset, no JS measuring.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* `pathLength="1"` normalises the path, so a dash of 1 covers it whatever the geometry — draw-on is
+   one offset, no JS measuring. */
 .chart__line {
   fill: none;
   stroke: var(--tone);
@@ -225,9 +223,8 @@ const note = computed(() => {
   stroke: var(--tone);
   stroke-width: 2.5;
 
-  /* SVG's transform origin defaults to the user-space origin — without these
-     two, the pop animation scales from the chart's corner, not the dot.
-     Why: docs/BUSINESS-LOGIC.md §36. */
+  /* SVG's transform origin defaults to the user-space origin: without these two the pop scales from
+     the chart's corner, not the dot. */
   transform-box: fill-box;
   transform-origin: center;
   animation: chart-pop 0.4s ease both 1.1s;

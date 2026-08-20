@@ -113,9 +113,8 @@ async function submit() {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  /* Fills the shell's main area. The safe-area inset is subtracted because
-     .app-shell__main has already spent it as padding — 100dvh on top of that
-     is a screen that scrolls by the height of the notch. */
+  /* Fills the shell's main area. The safe-area inset is subtracted because .app-shell__main already
+     spent it as padding. */
   min-height: calc(100dvh - env(safe-area-inset-top));
   padding: 32px var(--gutter);
 }

@@ -27,11 +27,8 @@ defineProps({
 
 <template>
   <div class="booking">
-    <!--
-      LEFT THEN RIGHT, AND THE ORDER IS THE OWNER'S: the check before the act.
-      Reading order and tap order agree, and the thing that spends money is the
-      one furthest from where a thumb rests by accident.
-    -->
+    <!-- LEFT THEN RIGHT, AND THE ORDER IS THE OWNER'S: the check before the act, so the thing that
+         spends money is furthest from an idle thumb. -->
     <div class="booking__actions">
       <a
         v-if="skyscannerUrl"
@@ -51,9 +48,8 @@ defineProps({
         rel="noopener"
       >
         <span>See this fare on Aviasales</span>
-        <!-- Stroked from the style block, on the accent fill — see the note in
-             AdviceCallout.vue. Only the loud one carries it: two outward arrows
-             on one line is decoration, and this is the one that is the point. -->
+        <!-- Stroked from the style block (see AdviceCallout.vue). Only the loud one carries it: two
+             arrows on one line is decoration. -->
         <svg width="16" height="16" viewBox="0 0 17 17" fill="none" aria-hidden="true">
           <path d="M5 12L12 5M12 5H6M12 5v6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
@@ -90,9 +86,8 @@ defineProps({
   justify-content: center;
   gap: 7px;
 
-  /* A floor and not a height: the 54 px the design gives the hand-off, kept as
-     the minimum so that two lines of label grow the pair instead of spilling
-     out of it. */
+  /* A floor and not a height: the design's 54px kept as a minimum, so two lines of label grow the
+     pair instead of spilling. */
   min-height: 54px;
   padding: 8px 12px;
   border-radius: 16px;
@@ -133,10 +128,8 @@ defineProps({
   stroke: var(--accent-ink);
 }
 
-/* The second opinion, always in the outline treatment: it is a check on the
-   number above, never the conclusion. `--ink2` rather than the accent, so that
-   under a warning — when the Aviasales button is an outline too — the pair still
-   reads in the right order. */
+/* The second opinion, always outlined: a check on the number, never the conclusion. --ink2, so the
+   pair keeps its order under a warning. */
 .booking__compare {
   background: var(--card);
   color: var(--ink2);

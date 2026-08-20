@@ -12,10 +12,8 @@ defineEmits(['pick'])
 </script>
 
 <template>
-  <!-- A group of toggles rather than a `tablist`: these chips select which
-       route the month below is for, but the grid is not a tabpanel and wiring
-       one up with `aria-controls` would describe a widget this screen does not
-       have. `aria-pressed` says the true thing — this one is the chosen one. -->
+  <!-- A group of toggles rather than a `tablist`: the grid is not a tabpanel, and `aria-pressed`
+       says the true thing. -->
   <div class="chips" role="group" aria-label="Route">
     <button
       v-for="route in routes"
@@ -26,19 +24,16 @@ defineEmits(['pick'])
       @click="$emit('pick', route.code)"
     >
       <span>{{ route.origin.iata }}→{{ route.destination.iata }}</span>
-      <!-- The city, under the codes. Six chips reading AMS→OPO, AMS→FAO,
-           EIN→LIS are six anagrams unless you already know them, and this
-           screen's question — "when is it cheap?" — is asked about a PLACE.
-           Same addition, same reasoning, as the globe's route rail. -->
+      <!-- The city, under the codes: six chips reading AMS→OPO are six anagrams unless you already
+           know them. -->
       <span class="chip__city">{{ route.destination.city }}</span>
     </button>
   </div>
 </template>
 
 <style scoped>
-/* Bleeds into the screen's gutter so the row scrolls edge to edge, then pads
-   it back — a chip half-cut by the viewport is the affordance that says there
-   are more of them. */
+/* Bleeds into the screen's gutter so the row scrolls edge to edge — a chip half-cut by the viewport
+   says there are more. */
 .chips {
   display: flex;
   gap: 8px;
@@ -73,9 +68,8 @@ defineEmits(['pick'])
   font-family: var(--font-body);
   font-size: var(--text-sm);
   font-weight: 500;
-  /* Stepped back rather than set to --muted: the active chip is INK on BG, and
-     a fixed grey on it would be a colour nobody picked. Opacity inherits
-     whichever ink the chip is currently wearing. */
+  /* Stepped back rather than set to --muted: the active chip is INK on BG, and a fixed grey on it
+     would be a colour nobody picked. */
   opacity: 0.68;
 }
 

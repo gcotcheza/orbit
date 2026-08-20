@@ -32,14 +32,8 @@ const hasTabBar = computed(() => route.meta.layout === 'tabs')
 
     <TabBar v-if="hasTabBar" />
 
-    <!--
-      A SIBLING OF <main>, NOT SOMETHING INSIDE IT. It is fixed to the viewport
-      and lives for as long as the app does, so putting it in the RouterView
-      would tie an announcement about the whole app to whichever screen happened
-      to be mounted — and would put a node inside the <KeepAlive> that caches the
-      globe. `updateReady` is a module-level ref in lib/pwa.js rather than a
-      store: one boolean, one writer, no server state.
-    -->
+    <!-- A SIBLING OF <main>, not something inside it: fixed to the viewport, and outside the
+         <KeepAlive> that caches the globe (docs/BUSINESS-LOGIC.md §36). -->
     <UpdateToast
       v-if="updateReady"
       :above-tab-bar="hasTabBar"

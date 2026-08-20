@@ -61,9 +61,8 @@ const emit = defineEmits(['update:modelValue'])
   height: 21px;
   border-radius: 50%;
 
-  /* The knob is white in BOTH themes — it is a physical object on a coloured
-     track, not a piece of the palette, and a knob that turned dark in the dark
-     theme would read as the switch being off. That is what --on-solid is. */
+  /* The knob is white in BOTH themes — a physical object on a coloured track, not a piece of the
+     palette. That is what --on-solid is. */
   background: var(--on-solid);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 

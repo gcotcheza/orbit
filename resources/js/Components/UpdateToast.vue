@@ -31,9 +31,8 @@ defineEmits(['refresh', 'dismiss'])
 </template>
 
 <style scoped>
-/* Fixed to the viewport rather than to the shell, and then centred on the shell's
-   own column — the same trick the day sheet uses, so on a laptop the toast
-   belongs to the phone in the middle of the window rather than to the window. */
+/* Fixed to the viewport, then centred on the shell's own column — the day sheet's trick, so on a
+   laptop the toast belongs to the phone. */
 .toast {
   position: fixed;
   inset-inline: 0;

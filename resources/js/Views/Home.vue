@@ -276,10 +276,8 @@ onActivated(() => {
   box-shadow: var(--shadow);
 }
 
-/* Rides up over the globe's lower edge, matching the spotlight card's overlap.
-
-   MUST STAY AFTER .home__notice: its shorthand `margin` would overwrite a
-   margin-top declared before it. */
+/* Rides up over the globe's lower edge. MUST STAY AFTER .home__notice: its shorthand `margin` would
+   overwrite a margin-top above it. */
 .home__notice--over {
   position: relative;
   z-index: 4;

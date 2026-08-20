@@ -226,16 +226,11 @@ function messageFor(failure) {
       <p class="screen__note">Any airport to any airport. See what it costs before you commit to watching it.</p>
     </header>
 
-    <!-- The form's own submit — the Enter key, and the primary button — is the
-         LOOK-UP, which is what "look before you watch" means at the keyboard as
-         well as under the thumb. -->
+    <!-- The form's own submit — Enter, and the primary button — is the LOOK-UP, which is "look
+         before you watch" at the keyboard too. -->
     <form class="search rise-in" novalidate @submit.prevent="attempt('lookup')" @focusout="onFocusOut">
-      <!--
-        THE PLACEHOLDER IS THE WHOLE AFFORDANCE. The box used to arrive holding
-        "AMS" and prompting nothing, which is a read-out; "Somewhere else?" says
-        both of the things this field is for — that the pills above are the
-        ordinary answer, and that this is where the other 3,267 airports go.
-      -->
+      <!-- THE PLACEHOLDER IS THE WHOLE AFFORDANCE: the box used to arrive holding "AMS", which is a
+           read-out, not an invitation. -->
       <AirportField
         id="search-from"
         ref="fromField"
@@ -250,12 +245,8 @@ function messageFor(failure) {
         @open="openField = 'from'"
         @close="openField = ''"
       >
-        <!--
-          IN THE FIELD RATHER THAN ABOVE IT, so the pills and the box under them
-          read as one control. They are buttons and not radios: a radiogroup says
-          "these are the options", and since the search screen they are three of
-          three thousand.
-        -->
+        <!-- IN THE FIELD RATHER THAN ABOVE IT, so pills and box read as one control. Buttons, not
+             radios: these are three of three thousand. -->
         <template #quick>
           <div class="quick" role="group" aria-label="Home airports">
             <button
@@ -288,9 +279,8 @@ function messageFor(failure) {
 
       <p v-if="error" class="search__error" role="alert">{{ error }}</p>
 
-      <!-- `role="status"`: nothing went wrong, and an assertive announcement
-           over a deliberate action is the screen reader shouting about a thing
-           the user just did. -->
+      <!-- `role="status"`: nothing went wrong, and an assertive announcement over a deliberate
+           action is shouting about what the user just did. -->
       <p v-if="added" class="search__added" role="status">
         {{ added.label }} is on your watch list.
         <RouterLink class="search__added-link" :to="{ name: 'route-detail', params: { id: added.code } }">
@@ -300,31 +290,15 @@ function messageFor(failure) {
 
       <button class="search__submit" type="submit" :disabled="!canSubmit">Look up</button>
 
-      <!--
-        THE COMMITMENT, KEPT AND MADE QUIETER. It is the same write it always
-        was and it is still one tap; what changed is that it is no longer the
-        only way to find out what a route costs.
-      -->
+      <!-- THE COMMITMENT, KEPT AND MADE QUIETER: the same write it always was, and still one
+           tap. -->
       <button class="search__watch" type="button" :disabled="!canSubmit" @click="attempt('watch')">
         {{ adding ? 'Adding…' : 'Add to watch' }}
       </button>
     </form>
 
-    <!--
-      THE STRIP RENDERS ONLY WHEN THERE IS SOMETHING ON IT. No skeleton, no
-      "loading deals…", and no empty state — three deliberate omissions.
-
-      A skeleton would reserve space on every visit for a section that is
-      frequently, legitimately empty (a box with no sweep provider, a week where
-      nothing cleared the thresholds), and reserving space is a promise. The
-      form must not move under somebody's thumb while a background fetch lands,
-      which is the same reflow argument the suggestion panels are built around.
-
-      AND AN EMPTY STATE WOULD BE THE WRONG APOLOGY. "No deals today" implies a
-      thing that failed; nothing did. Every threshold in `orbit.discovery` is a
-      floor rather than a quota precisely so that "nothing was remarkable this
-      week" is a possible answer, and the honest rendering of it is silence.
-    -->
+    <!-- THE STRIP RENDERS ONLY WHEN THERE IS SOMETHING ON IT: no skeleton, no empty state, three
+         deliberate omissions (docs/BUSINESS-LOGIC.md §36). -->
     <section v-if="finds.length" class="finds" aria-labelledby="finds-heading">
       <header class="finds__head">
         <h2 id="finds-heading" class="finds__title">Deals from your airports</h2>
@@ -460,10 +434,8 @@ function messageFor(failure) {
   font-weight: 600;
 }
 
-/* The second action, and it looks like one: no fill, no border, the accent the
-   rest of the app uses for "this is a thing you can tap". Full width and 40 px
-   tall so it is still a thumb target on a phone — quieter than the button above
-   it, not smaller than a finger. */
+/* The second action, and it looks like one: no fill, no border, and 40px tall so it is still a
+   thumb target. */
 .search__watch {
   width: 100%;
   height: 40px;

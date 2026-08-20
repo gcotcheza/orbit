@@ -53,14 +53,8 @@ const label = computed(() => (props.confident ? `Deal score ${props.score} out o
       <span class="gauge__value tabular">{{ confident ? score : '—' }}</span>
     </div>
 
-    <!-- THE SCALE IS PART OF THE NUMBER. A ring reading 65 with "DEAL SCORE"
-         under it is a figure with no units: 65 out of 100, out of 10, out of
-         five stars, or a rank among the routes on the list — all four are
-         readings a person actually offered, and the arc does not settle it
-         because an arc is what a battery meter is too. The `aria-label` has
-         said "out of 100" from the start; this is the sighted half of the same
-         sentence. Dropped when there is no score to scale — "/100" under a
-         dash would be putting units on a number that is not there. -->
+    <!-- THE SCALE IS PART OF THE NUMBER — 65 with no units is four different readings. Dropped when
+         there is no score (docs/BUSINESS-LOGIC.md §36). -->
     <p class="gauge__caption">Deal score{{ confident ? ' /100' : '' }}</p>
   </div>
 </template>
@@ -85,9 +79,8 @@ const label = computed(() => (props.confident ? `Deal score ${props.score} out o
   stroke-width: 6;
 }
 
-/* The stroke is a CSS property rather than a `stroke="var(--good)"` attribute:
-   var() is a CSS value, and browsers disagree about whether a presentation
-   attribute may carry one. The ones that say no paint the ring black. */
+/* The stroke is a CSS property, not a `stroke="var(--good)"` attribute: browsers that reject var()
+   there paint the ring black. */
 .gauge__ring {
   fill: none;
   stroke-width: 6;
@@ -125,10 +118,8 @@ const label = computed(() => (props.confident ? `Deal score ${props.score} out o
   color: var(--ink);
 }
 
-/* The caption is wider than the 58 px dial above it now that it carries the
-   scale, and it must stay on one line: "DEAL" over "SCORE /100" would read as
-   two labels. The gauge block simply gets as wide as its widest child, which
-   the price row beside it has room for. */
+/* The caption carries the scale now and must stay on one line: "DEAL" over "SCORE /100" would read
+   as two labels. */
 .gauge__caption {
   white-space: nowrap;
   font-size: var(--text-xs);

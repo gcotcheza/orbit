@@ -15,11 +15,8 @@ defineProps({
 <template>
   <div class="callout" :class="`callout--${tone}`">
     <div class="callout__icon">
-      <!-- The glyph's colour is set in the style block below, not as a `stroke`
-           attribute here: the square is filled with a saturated tone in both
-           themes, so the glyph is --on-solid in both, and a presentation
-           attribute carrying a var() is honoured by some browsers and dropped
-           as invalid by others. -->
+      <!-- The glyph's colour is set in the style block, not as a `stroke` attribute — var() in a
+           presentation attribute (docs/BUSINESS-LOGIC.md §36). -->
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
         <!-- An hourglass: the thing has been started and has not finished, which
              is exactly what a route Orbit is still learning about is. -->

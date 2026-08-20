@@ -26,8 +26,8 @@ export function easeInOutQuad(t) {
 }
 
 /**
- * Initial bearing (deg clockwise from north) — a BEARING, not the on-screen line angle. It
- * changes along a great circle, so the choreography recomputes it per frame.
+ * Initial bearing in degrees clockwise from north, [0, 360) — a BEARING, not the on-screen line
+ * angle, and it changes along a great circle, so it is recomputed per frame.
  */
 export function bearing(from, to) {
     const fromLat = from.lat * RAD
@@ -41,8 +41,8 @@ export function bearing(from, to) {
 }
 
 /**
- * Great-circle path via slerp — matches globe.gl's drawn arc, unlike a straight lat/lng line.
- * The degenerate case collapses to the endpoints rather than NaN (docs/BUSINESS-LOGIC.md §36).
+ * Great-circle path via slerp, `segments + 1` points — it matches globe.gl's drawn arc, unlike a
+ * straight lat/lng line. Degenerate pairs collapse to the endpoints rather than NaN.
  */
 export function greatCirclePoints(from, to, segments = FLIGHT_SEGMENTS) {
     const a = toVector(from)

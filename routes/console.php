@@ -40,7 +40,7 @@ Schedule::command('orbit:poll-returns')
 
 /*
  * 05:20 — surfaces only: no mail, no alert, ever. Not 05:40, to avoid Monday's
- * `orbit:refresh-stats` at that time (docs/BUSINESS-LOGIC.md §16).
+ * `orbit:refresh-stats` at that time (docs/BUSINESS-LOGIC.md §13).
  */
 Schedule::command('orbit:discover')
     ->dailyAt('05:20')

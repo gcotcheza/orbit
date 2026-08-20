@@ -124,10 +124,8 @@ const evidence = computed(() => {
   color: var(--accent-ink);
 }
 
-/* --info (not --good, not --warn): a relative find is a different kind, not a better or
-   worse one. Both themes carry the token (resources/css/tokens.css), so no theme branch
-   needed. No letter-spacing here, unlike .find__from's 0.13em label tracking.
-   Why: docs/BUSINESS-LOGIC.md §16. */
+/* --info, not --good or --warn: a relative find is a different kind, not a better or worse one
+   (docs/BUSINESS-LOGIC.md §16). */
 .find__lane {
   display: inline-block;
   margin-top: 4px;

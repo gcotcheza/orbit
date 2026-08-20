@@ -294,9 +294,8 @@ watch(reducedMotion, () => play({ instant: true }))
 
 <template>
   <div class="stage">
-    <!-- Nothing in here is reachable or meaningful to a screen reader: the
-         route it is drawing is written out in the caption below it and in the
-         spotlight card underneath. -->
+    <!-- Nothing in here is meaningful to a screen reader: the route is written out in the caption
+         and the card below. -->
     <div ref="viewport" class="stage__globe" aria-hidden="true"></div>
 
     <p class="stage__chip">
@@ -310,9 +309,8 @@ watch(reducedMotion, () => play({ instant: true }))
 
     <PlaneGlyph v-show="flying" :bearing="bearing" />
 
-    <!-- The text is in a span of its own so that the scrim behind it is the
-         SHAPE OF THE WORDS rather than a bar across the whole stage — see the
-         style block. -->
+    <!-- The text is in a span of its own so the scrim is the SHAPE OF THE WORDS rather than a bar
+         across the stage. -->
     <p class="stage__caption"><span class="stage__caption-text">{{ caption }}</span></p>
   </div>
 </template>
@@ -363,9 +361,8 @@ watch(reducedMotion, () => play({ instant: true }))
   background: var(--accent);
 }
 
-/* Under the chip and quieter than it: the chip is a fact about the watchlist,
-   this is a note about the camera. It is over the Earth like the caption is, so
-   it takes the same scrim — a hint nobody can read is not a hint. */
+/* Under the chip and quieter than it, and over the Earth like the caption, so it takes the same
+   scrim — a hint nobody can read is not a hint. */
 .stage__hint {
   position: absolute;
   left: var(--gutter);
@@ -392,9 +389,8 @@ watch(reducedMotion, () => play({ instant: true }))
   position: absolute;
   inset-inline: 0;
   bottom: calc(6px + var(--spotlight-overlap) + 8px);
-  /* Kept, and now load-bearing for a second reason: the caption has moved onto
-     the globe's own rectangle, and a drag that starts on this text still has
-     to reach the globe's rotate controls underneath it. */
+  /* Kept, and load-bearing twice over: a drag that starts on this text still has to reach the
+     globe's rotate controls underneath. */
   pointer-events: none;
 
   display: flex;

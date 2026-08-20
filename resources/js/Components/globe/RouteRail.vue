@@ -130,9 +130,8 @@ watch(
 .rail__chip--active {
   border-color: var(--accent);
   background: var(--accent);
-  /* White on accent in both themes (--ink would be near-black on it in
-     light); --on-solid also used by the tab bar's centre button.
-     Why: docs/BUSINESS-LOGIC.md §36. */
+  /* White on accent in both themes (--ink would be near-black in light); --on-solid, as the tab
+     bar's centre button uses. */
   color: var(--on-solid);
   box-shadow: 0 6px 16px var(--accent-glow);
 }
@@ -179,9 +178,8 @@ watch(
   background: var(--warn);
 }
 
-/* Active chip's dot matches the label (white): tone is already said by the
-   card above; a colored dot on the accent fill would read as a status light.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* The active chip's dot matches the label: the card above already says the tone, and a coloured dot
+   would read as a status light. */
 .rail__chip--active .rail__dot {
   background: var(--on-solid);
 }

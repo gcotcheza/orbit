@@ -103,9 +103,8 @@ function cellLabel(cell) {
   visibility: hidden;
 }
 
-/* A day inside the month that we have no fare for. Present, dated, and
-   visibly not a price — the alternative is a hole in the month, which reads
-   as a rendering fault rather than as an absence of data. */
+/* A day inside the month with no fare: present, dated and visibly not a price. A hole in the month
+   reads as a rendering fault. */
 .cell--empty {
   background: var(--card2);
   color: var(--muted);

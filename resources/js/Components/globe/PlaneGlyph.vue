@@ -32,11 +32,8 @@ defineProps({
   pointer-events: none;
   fill: var(--globe-plane);
 
-  /* The glow the design asks for. --accent-ink IS that colour to within a few
-     units in the dark theme, and in the light theme it darkens instead — which
-     is what keeps a white plane visible over a bright Atlantic. A literal
-     rgba() here would have been the one colour in this app that could not
-     follow the theme. */
+  /* --accent-ink IS the glow the design asks for, and it darkens in the light theme; a literal
+     rgba() could not follow the theme. */
   filter: drop-shadow(0 0 7px var(--accent-ink));
 }
 </style>

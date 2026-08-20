@@ -3,8 +3,8 @@
 // createWebHistory, not hashes: every route gets a real, shareable URL (and a PWA launch target);
 // routes/web.php answers every non-API path with the same shell (docs/BUSINESS-LOGIC.md §36).
 
-// routes/web.php answers every non-API path with the same shell (docs/BUSINESS-LOGIC.md §36).
-// tree and drop the globe's <KeepAlive> cache (docs/BUSINESS-LOGIC.md §36).
+// meta.layout ('tabs' or 'bare') is a string, not a swappable layout component: swapping would
+// remount the tree and drop the globe's <KeepAlive> cache (docs/BUSINESS-LOGIC.md §36).
 
 // meta.guestOnly mirrors the server's auth split and is opt-in: a route without it needs a session,
 // so screens are private by default (docs/BUSINESS-LOGIC.md §36).

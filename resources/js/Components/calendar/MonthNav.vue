@@ -54,9 +54,8 @@ const nextLabel = computed(() => `Go to ${monthLabel(addMonths(props.month, 1))}
   color: var(--ink2);
 }
 
-/* Disabled rather than hidden: the edge of the poll window is information, and
-   an arrow that vanishes moves the one beside it under the thumb that was
-   about to tap it. */
+/* Disabled rather than hidden: the edge of the poll window is information, and a vanishing arrow
+   moves its neighbour under the thumb. */
 .month-nav__button:disabled {
   color: var(--muted);
   opacity: 0.4;
