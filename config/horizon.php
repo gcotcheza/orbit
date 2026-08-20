@@ -11,8 +11,8 @@ return [
     'path' => env('HORIZON_PATH', 'horizon'),
 
     /*
-     * Shared secret HorizonServiceProvider accepts in place of a login (`?token=` / X-Horizon-Token). EMPTY MEANS DENY,
-     * never "no secret required" (docs/BUSINESS-LOGIC.md §36).
+     * Shared secret HorizonServiceProvider takes instead of a login (`?token=`/X-Horizon-Token).
+     * EMPTY MEANS DENY, never "no secret required" (docs/BUSINESS-LOGIC.md §36).
      */
     'dashboard_token' => env('HORIZON_DASHBOARD_TOKEN', ''),
 

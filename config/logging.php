@@ -11,11 +11,6 @@ return [
     |--------------------------------------------------------------------------
     | Default Log Channel
     |--------------------------------------------------------------------------
-    |
-    | This option defines the default log channel that is utilized to write
-    | messages to your logs. The value provided here should match one of
-    | the channels present in the list of "channels" configured below.
-    |
     */
 
     'default' => env('LOG_CHANNEL', 'stack'),
@@ -24,11 +19,6 @@ return [
     |--------------------------------------------------------------------------
     | Deprecations Log Channel
     |--------------------------------------------------------------------------
-    |
-    | This option controls the log channel that should be used to log warnings
-    | regarding deprecated PHP and library features. This allows you to get
-    | your application ready for upcoming major versions of dependencies.
-    |
     */
 
     'deprecations' => [
@@ -40,14 +30,6 @@ return [
     |--------------------------------------------------------------------------
     | Log Channels
     |--------------------------------------------------------------------------
-    |
-    | Here you may configure the log channels for your application. Laravel
-    | utilizes the Monolog PHP logging library, which includes a variety
-    | of powerful log handlers and formatters that you're free to use.
-    |
-    | Available drivers: "single", "daily", "slack", "syslog",
-    |                    "errorlog", "monolog", "custom", "stack"
-    |
     */
 
     'channels' => [
@@ -83,30 +65,10 @@ return [
 
         /*
         |----------------------------------------------------------------------
-        | mail — where the log mailer's messages go
+        | mail — the log mailer's own file (MAIL_LOG_CHANNEL)
         |----------------------------------------------------------------------
         |
-        | THE ONE CHANNEL ORBIT ADDED, and it exists because the staged rollout
-        | was invisible. Until ghiecode.io is verified as a sending domain,
-        | MAIL_MAILER=log: every alert this app exists to send is written to a
-        | log rather than delivered, deliberately, so that the firing rules can
-        | be read against real fares before anybody's phone lights up. But
-        | Symfony's log transport writes at DEBUG and production's `single`
-        | channel has a floor of LOG_LEVEL=info — so each mail was rendered,
-        | handed to Monolog and dropped. The stage was a stage with nothing on
-        | it, and nothing said so.
-        |
-        | ITS LEVEL IS A LITERAL AND NOT env('LOG_LEVEL'). That is the entire
-        | fix: a channel whose only records are DEBUG must not take its floor
-        | from a variable set for the application log — reading it is the bug,
-        | one file further along.
-        |
-        | ITS OWN FILE because a mail is not an event: one send is a full MIME
-        | message, tens of lines long, and interleaving those with the app's
-        | errors makes both harder to read. `storage/logs/mail.log` is the path
-        | the deploy runbook says to tail.
-        |
-        | Reached through MAIL_LOG_CHANNEL — config/mail.php's `log` mailer.
+        | `level` IS A LITERAL, NOT env('LOG_LEVEL') — see docs/BUSINESS-LOGIC.md §36.
         |
         */
 
