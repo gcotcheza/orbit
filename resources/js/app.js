@@ -1,18 +1,5 @@
-// =============================================================================
-// Orbit — the whole client entry point
-// =============================================================================
-// #app is empty in app.blade.php: every pixel this app draws comes from here.
-// That is worth stating because it decides the failure mode — a fault in this
-// file is not a broken component, it is a white screen with a 200 behind it and
-// nothing in any server log.
-//
-// ORDER IS DELIBERATE:
-//   1. pinia, because both the theme and the router's guard read a store;
-//   2. the theme, applied to the document BEFORE mount so the first frame Vue
-//      paints is already the right one;
-//   3. the router, whose beforeEach awaits /api/me;
-//   4. mount.
-// =============================================================================
+// The whole client entry point — #app is empty in the Blade, so a fault here is a white screen
+// with a 200 behind it. Order is deliberate: pinia, theme, router, mount.
 import '../css/app.css'
 
 import { createApp } from 'vue'

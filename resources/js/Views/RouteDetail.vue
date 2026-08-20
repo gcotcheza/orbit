@@ -1,17 +1,7 @@
 <script setup>
 /*
- * One route: what it costs, what it usually costs, what we think of that
- * (design/README.md §2). No tab bar — see this route's meta in
- * resources/js/router/index.js.
- *
- * Null fields render as "not yet", never a false €0.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * `history[].date` is when we LOOKED, never the day you FLY.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * A route Orbit has never priced is fetched on demand from here.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One route: what it costs, what it usually costs, what we think of that (design/README.md §2).
+ * Null fields render as "not yet"; `history[].date` is when we LOOKED (docs/BUSINESS-LOGIC.md §3).
  */
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'

@@ -1,21 +1,7 @@
 <script setup>
 /*
- * Home — the Orbit globe (design/README.md §1).
- *
- * The signature screen: a photoreal Earth that tours the watchlist, a card for
- * whichever route the camera is on, and a rail to jump to another one.
- *
- * `name` must stay 'Home' — App.vue's <KeepAlive> matches on it to avoid rebuilding the WebGL scene.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * One request, every route — GET /api/watchlist carries arcs, card and rail
- * together (docs/API.md), so the tour never waits on the network.
- *
- * The list is shared (stores/watchlist.js), not fetched here — a paused route must not linger in this screen's tour.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * Keyed by route code, not index, so a reorder from another device doesn't
- * cut the camera to a different route.
+ * Home — the Orbit globe (design/README.md §1). `name` must stay 'Home' for App.vue's
+ * <KeepAlive>; the list is shared and the tour is keyed by route code (docs/BUSINESS-LOGIC.md §36).
  */
 import { computed, onActivated, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'

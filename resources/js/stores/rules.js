@@ -119,10 +119,8 @@ export const useRulesStore = defineStore('rules', () => {
     }
 
     /**
-     * Pause a rule or start it again — optimistic, and honest when it fails.
-     *
-     * A silent revert is worse than no optimism at all: the switch appears to
-     * work, then appears to have been forgotten.
+     * Pause a rule or start it again — optimistic, and honest when it fails: a silent revert is
+     * worse than no optimism, since the switch appears to work and then to be forgotten.
      */
     async function toggle(rule, active) {
         const previous = rule.active
@@ -160,8 +158,8 @@ export const useRulesStore = defineStore('rules', () => {
     }
 
     /**
-     * Start watching one of a rule's matches. Reuses the add-route watchlist endpoint (a rule never adds on its own) and
-     * returns the new row for the list to splice in (docs/BUSINESS-LOGIC.md §11).
+     * Start watching one of a rule's matches. Reuses the add-route endpoint (a rule never adds on
+     * its own) and returns the new row for the list to splice in (docs/BUSINESS-LOGIC.md §11).
      */
     async function watch(match) {
         error.value = ''

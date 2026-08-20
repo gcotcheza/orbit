@@ -1,7 +1,5 @@
-// Every request goes through here, so "does the server know who I am" has one
-// answer. Cookie auth only, no tokens: the session cookie is httpOnly and
-// unreadable from JS, so there is nothing in localStorage to steal.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Every request goes through here, so "does the server know who I am" has one answer. Cookie
+// auth only: the session cookie is httpOnly, so there is nothing in localStorage to steal.
 import axios from 'axios'
 
 export const http = axios.create({
@@ -19,8 +17,8 @@ export const http = axios.create({
 })
 
 /*
- * DO NOT make these imports static (circular with stores/auth.js -> router, which fails silently as `undefined`, not loudly). This interceptor is the one place a dead session redirects to login;
- * `/api/me` and `/login` are exempt since a 401 from either is expected, not an expired session (docs/BUSINESS-LOGIC.md §36).
+ * DO NOT make these imports static — circular with stores/auth.js, which fails silently as
+ * `undefined`. `/api/me` and `/login` are exempt: a 401 from either is expected.
  */
 const SESSION_EXEMPT = ['/api/me', '/login']
 
@@ -56,8 +54,8 @@ http.interceptors.response.use(null, async (error) => {
 })
 
 /**
- * Ask the server for a fresh CSRF cookie. Called before signing in: a login form left open for hours can outlive the
- * shell's original cookie, turning an uninterpretable 419 into a working sign-in (docs/BUSINESS-LOGIC.md §36).
+ * Ask the server for a fresh CSRF cookie, before signing in: a form left open for hours can
+ * outlive the shell's original cookie, turning a 419 into a working sign-in.
  */
 export function ensureCsrfCookie() {
     return http.get('/sanctum/csrf-cookie')
