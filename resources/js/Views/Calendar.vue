@@ -1,18 +1,7 @@
 <script setup>
 /*
- * "When is it cheap?" — one route, one month, a fare per day
- * (design/README.md §3).
- *
- * TWO DATE AXES LIVE IN THIS APP AND THIS SCREEN IS THE OTHER ONE. The route
- * detail's chart is dated by when we LOOKED; every date here is a date you
- * FLY (docs/API.md). Nothing on this screen is derived from an observation
- * date, which is why the calendar endpoint is the only one it reads.
- *
- * THE ROUTE CHIPS READ THE SHARED LIST. This screen fetched `/api/watchlist`
- * for itself while the store that now holds it was being written in a parallel
- * worktree; the swap was flagged for the DRY pass and is this file's part of
- * it. The chips are the only thing here that wants the watchlist — every fare
- * on the screen comes from the calendar endpoint below.
+ * "When is it cheap?" — one route, one month, a fare per day (design/README.md §3). Every date
+ * here is a date you FLY, the other axis from the detail chart (docs/BUSINESS-LOGIC.md §3).
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -27,28 +16,8 @@ import { addMonths, currentMonthKey, dayLabel, monthLabel } from '@/Components/c
 import { useWatchlistStore } from '@/stores/watchlist'
 
 /*
- * How far the arrows go. Orbit maintains about eleven months of departures
- * (`orbit.poll.horizon_days`, 334 days — the airline booking edge), so anything
- * past that is a guaranteed empty grid: the bounds are the honest edge of what
- * we know rather than an arbitrary limit. The past is not offered at all — a
- * fare you can no longer buy is not a deal.
- *
- * ELEVEN, WHICH IS ELEVEN STEPS AND TWELVE GRIDS. 334 days can never touch more
- * than twelve calendar months — brute-forced over every start date in a
- * four-year span, which is the same arithmetic that picked the number — so
- * `+11` is the last month the poller can ever have put a fare in. One arrow
- * fewer would hide a month of real fares; one more is a promise of data that
- * cannot exist.
- *
- * THE FAR MONTHS ARE LEGITIMATELY THIN, AND SOMETIMES EMPTY. Three separate
- * reasons, none of them a bug: a window that opens early in a month closes
- * inside the twelfth one; the provider's cache thins with distance, so months 7
- * to 11 come back patchy where the near ones are solid; and those months are
- * only refreshed once a week (`orbit.poll.far_refresh_weekday`), so a route
- * added on Sunday has nothing out there until Saturday. The screen already says
- * so ("No fares seen for this month yet"), because that is also what every month
- * of a brand-new route looks like — stopping short to guarantee a full grid
- * would hide real fares on every other day.
+ * How far the arrows go: eleven steps and twelve grids, because 334 days can never touch more
+ * than twelve calendar months. The far months are legitimately thin (docs/BUSINESS-LOGIC.md §4).
  */
 const FIRST_MONTH = currentMonthKey()
 const LAST_MONTH = addMonths(FIRST_MONTH, 11)
@@ -65,12 +34,8 @@ const monthFailed = ref(false)
 const selected = ref(null)
 
 /*
- * The day sheet's two hand-off templates — `{ aviasales, skyscanner }`, each
- * with a named date hole in it, exactly as the endpoint's `meta` sent them
- * (docs/API.md). Read here rather than in the sheet because the sheet is handed
- * a fare and not a response — and kept as the STRINGS THE SERVER SENT rather
- * than rebuilt from the route code, because the hosts, the path shapes and the
- * affiliate marker live in config/orbit.php and are not this screen's business.
+ * The day sheet's two hand-off templates, kept as THE STRINGS THE SERVER SENT rather than
+ * rebuilt from the route code — hosts and path shapes live in config/orbit.php.
  */
 const booking = ref(null)
 
@@ -78,47 +43,27 @@ const booking = ref(null)
 const booted = computed(() => routesStatus.value !== 'loading')
 
 /*
- * One "could not load" for the two requests this screen makes. They fail the
- * same way and the message covers both — and a screen that could not get the
- * watchlist has no route to ask the calendar endpoint about anyway.
+ * One "could not load" for the two requests this screen makes: they fail the same way, and a
+ * screen without the watchlist has no route to ask the calendar endpoint about.
  */
 const failed = computed(() => monthFailed.value || routesStatus.value === 'failed')
 
 const canPrev = computed(() => month.value > FIRST_MONTH)
 const canNext = computed(() => month.value < LAST_MONTH)
 
-// `min` is null for a month we hold no fares for, which is a 200 and not an
-// error (docs/API.md) — it is what the arrows walk into at the edge of the
-// poll window, and what a brand-new route looks like everywhere.
+// `min` is null for a month we hold no fares for, which is a 200 and not an error — it is what
+// the arrows walk into at the edge of the poll window (docs/API.md).
 const hasFares = computed(() => payload.value?.min != null && payload.value?.max != null)
 
 /*
- * The last request wins, not the last response.
- *
- * Tapping through four route chips fires four requests, and without this the
- * grid shows whichever the network happened to finish last. The token is
- * captured per call and compared before anything is written.
+ * The last request wins, not the last response: tapping through four chips fires four requests,
+ * and the token is captured per call and compared before anything is written.
  */
 let request = 0
 
 /**
- * The month to OPEN a route on: the one its cheapest departure is in.
- *
- * THE SCREEN USED TO OPEN ON TODAY, ALWAYS, and that is a wrong answer often
- * enough to be the screen's biggest defect. "When is it cheap?" was answered
- * with the current month — which the poll window only half covers, because the
- * days before today are gone — while the route's actual cheapest day sat two
- * taps away in September, unmentioned. The banner at the foot of the grid says
- * "cheapest THIS month"; nothing said which month to be in.
- *
- * `cheapest.date` is a DEPARTURE date and the summary now carries it for every
- * route (docs/API.md), so this is a lookup rather than a request.
- *
- * CLAMPED INTO THE WINDOW THE ARROWS CAN REACH. A landing month outside
- * FIRST_MONTH..LAST_MONTH would be a grid with both arrows pointing back the
- * way it came, or one the `canPrev`/`canNext` bounds disagree with. The clamp
- * is written against those two constants rather than against a number, so it
- * follows the window when the window changes.
+ * The month to OPEN a route on: the one its cheapest departure is in, clamped into the window
+ * the arrows can reach. Opening on today, always, was this screen's biggest defect.
  */
 function monthFor(routeCode) {
   const date = routes.value.find((route) => route.code === routeCode)?.cheapest?.date ?? null
@@ -138,10 +83,8 @@ function monthFor(routeCode) {
 }
 
 /**
- * Pick a route, and land on the month worth looking at for it.
- *
- * Both refs are written in the same tick, so the watcher below fires once and
- * one request goes out — not one for the route and a second for the month.
+ * Pick a route, and land on the month worth looking at. Both refs are written in the same tick,
+ * so the watcher below fires once and one request goes out.
  */
 function select(next) {
   code.value = next
