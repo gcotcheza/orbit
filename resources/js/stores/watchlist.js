@@ -1,17 +1,5 @@
-// The watch list — the routes the owner asked Orbit to price, and the
-// writes that change them.
-//
-// Three screens read this one list (globe, watch screen, calendar); this
-// store folds together what were three copies that could disagree.
-// Why: docs/BUSINESS-LOGIC.md §36.
-//
-// State and actions, no getters — each screen's own slice (active-only,
-// first code, a count) is one line of `computed` where it's needed.
-// Why: docs/BUSINESS-LOGIC.md §36.
-//
-// Optimistic: `toggle`/`remove` apply immediately and revert on failure
-// into `error` — a silent revert is how an app stops meaning what it shows.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The watch list, and the writes that change it. Three screens read this one list; state and
+// actions, no getters; optimistic writes revert into `error` (docs/BUSINESS-LOGIC.md §36).
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { http } from '@/lib/http'
@@ -28,13 +16,8 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     const error = ref('')
 
     /**
-     * Fetch the list.
-     *
-     * Deliberately not deduped or sequence-guarded — every caller awaits this and reads `routes`; it's one GET, running it
-     * twice costs one request (docs/BUSINESS-LOGIC.md §36).
-     *
-     * Rows are not cleared first — a screen showing this list shows a status too, so stale rows stay visible instead of
-     * the globe rebuilding for nothing (docs/BUSINESS-LOGIC.md §36).
+     * Fetch the list. Deliberately not deduped or sequence-guarded — every caller awaits it, and
+     * rows are not cleared first, so stale rows stay visible instead of a rebuild.
      */
     async function refresh() {
         status.value = 'loading'
@@ -98,13 +81,8 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     }
 
     /**
-     * Watch a new pair.
-     *
-     * Throws rather than setting `error` — the one place this store differs from stores/rules.js; the add form phrases a
-     * failed 422 itself (docs/BUSINESS-LOGIC.md §36).
-     *
-     * A new route arrives with no prices — that's correct, and WatchRow draws it rather than the screen waiting for the
-     * queued poll (docs/BUSINESS-LOGIC.md §36).
+     * Watch a new pair. Throws rather than setting `error` — the add form phrases a failed 422
+     * itself — and a new route arrives with no prices, which WatchRow draws.
      */
     async function add(origin, destination) {
         error.value = ''

@@ -18,8 +18,8 @@ export const useAuthStore = defineStore('auth', () => {
             const { data } = await http.get('/api/me')
             user.value = data.data
         } catch (error) {
-            // Non-401 errors (500, dropped connection, mid-deploy) are treated as "not signed in" so
-            // the app still draws, but logged: silent failures read as phantom logout bugs.
+            // Non-401 errors (500, dropped connection, mid-deploy) read as "not signed in" so the
+            // app still draws, but are logged: silent failures read as phantom logout bugs.
             if (error.response?.status !== 401) {
                 console.error('Could not determine the session state.', error)
             }

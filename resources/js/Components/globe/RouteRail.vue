@@ -1,13 +1,7 @@
 <script setup>
 /*
- * "Fly to a route" — the horizontal rail of chips under the spotlight card
- * (design/README.md §1). Tapping selects the route: parent replays the
- * flight tour and re-draws the card.
- *
- * Tab list semantically (role="tablist"/"tab"): chips select which of
- * several things the screen shows. Globe/card aren't aria-controls'd — that
- * would lie about a decorative canvas being one panel.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * "Fly to a route" — the rail of chips under the spotlight card (design/README.md §1). A tab
+ * list semantically; the globe and card are not aria-controls'd (docs/BUSINESS-LOGIC.md §36).
  */
 import { nextTick, useTemplateRef, watch } from 'vue'
 import { euro } from '@/lib/format'
@@ -23,18 +17,8 @@ defineEmits(['select'])
 const track = useTemplateRef('track')
 
 /*
- * Selected chip must stay on screen: the tour auto-advances it every ~11s,
- * and off-screen the rail (the one control showing WHERE in the list the
- * camera is) looks like it forgot which route is showing.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * `inline: 'center'` (not 'nearest'): edge-visible still reads as "end of
- * list". `block: 'nearest'` stops the browser scrolling the whole PAGE to
- * drag the 360px globe off-screen instead.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * Smooth only if wanted (lib/motion.js decides). `nextTick`: the first
- * selection can land before the chip list has rendered.
+ * The selected chip must stay on screen — `inline: 'center'`, and `block: 'nearest'` stops the
+ * browser dragging the globe off-page. `nextTick` because the first selection can beat render.
  */
 watch(
   () => props.activeCode,
