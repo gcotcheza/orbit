@@ -65,8 +65,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => clearTimeout(undoTimer))
 
-// Stop watching a route and offer undo; the store already reverts failed deletes and sets `notice`, so the undo offer only appears when the list actually changed.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Stop watching a route and offer undo; the store already reverts failed deletes and sets `notice`,
+// so the undo offer only appears when the list actually changed (docs/BUSINESS-LOGIC.md §36).
 async function remove(route) {
   const label = `${route.origin.iata}→${route.destination.iata}`
 
@@ -88,8 +88,8 @@ async function remove(route) {
 }
 
 /**
- * Put it back. The same write the add form makes — see the note on UNDO_MS for
- * why that is enough to restore the route rather than merely re-create it.
+ * Put it back. The same write the add form makes — see the note on UNDO_MS for why that is enough
+ * to restore the route rather than merely re-create it.
  */
 async function undoRemove() {
   const removed = undo.value
@@ -121,7 +121,8 @@ async function toggle(route, active) {
   }
 }
 
-// A new Set each time, not a mutation: Vue 3 does track Set methods, but replacing keeps this consistent with the ref assignments around it (the set is always tiny).
+// A new Set each time, not a mutation: Vue 3 does track Set methods, but replacing keeps this
+// consistent with the ref assignments around it (the set is always tiny).
 function markBusy(code, busy) {
   const next = new Set(busyCodes.value)
 
@@ -135,8 +136,8 @@ function markBusy(code, busy) {
 }
 
 /*
- * Pause or resume a rule. The store is optimistic and puts the switch back if
- * the write fails, exactly like the route toggle above.
+ * Pause or resume a rule. The store is optimistic and puts the switch back if the write fails,
+ * exactly like the route toggle above.
  */
 async function toggleRule(rule, active) {
   markRuleBusy(rule.id, true)

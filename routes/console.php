@@ -75,8 +75,8 @@ Schedule::command('orbit:alerts')
     ->withoutOverlapping();
 
 /*
- * Sunday 09:00 — later than the weekday runs on purpose (meant to be read over coffee), and the only mail Orbit sends
- * that nothing crossed a threshold to earn (docs/BUSINESS-LOGIC.md §13, §10).
+ * Sunday 09:00 — later than the weekday runs on purpose (meant to be read over coffee), and the
+ * only mail Orbit sends that nothing crossed a threshold to earn (docs/BUSINESS-LOGIC.md §13, §10).
  */
 Schedule::command('orbit:digest')
     ->weeklyOn(0, '09:00')

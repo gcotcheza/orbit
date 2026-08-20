@@ -24,8 +24,8 @@ return new class extends Migration
             // Why: docs/BUSINESS-LOGIC.md §10.
             $table->string('type', 32);
 
-            // Score at the moment of decision, 0-100; NULL on a rule match or digest (neither has one) — a zero would read as "scored terribly".
-            // Why: docs/BUSINESS-LOGIC.md §10.
+            // Score at the moment of decision, 0-100; NULL on a rule match or digest (neither has
+            // one) — a zero would read as "scored terribly" (docs/BUSINESS-LOGIC.md §10).
             $table->unsignedSmallInteger('score')->nullable();
 
             /* Cents, like every other price in this app. NULL on the digest. */
@@ -43,8 +43,8 @@ return new class extends Migration
             $table->timestamps();
 
             /*
-             * THE COOLDOWN'S INDEX, in the order the question is asked: this
-             * account, this route, this kind, recently.
+             * THE COOLDOWN'S INDEX, in the order the question is asked: this account, this route,
+             * this kind, recently.
              */
             $table->index(['user_id', 'route_id', 'type', 'triggered_at']);
 

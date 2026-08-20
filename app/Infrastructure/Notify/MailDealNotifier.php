@@ -20,8 +20,8 @@ use App\Application\Alerts\RouteDealNotice;
 use App\Application\Alerts\RuleMatchNotice;
 
 /**
- * The mail adapter behind App\Application\Ports\DealNotifier. Transport is config-driven (MAIL_MAILER); the
- * per-channel settings gate lives here (docs/BUSINESS-LOGIC.md §10).
+ * The mail adapter behind App\Application\Ports\DealNotifier. Transport is config-driven
+ * (MAIL_MAILER); the per-channel settings gate lives here (docs/BUSINESS-LOGIC.md §10).
  */
 final readonly class MailDealNotifier implements DealNotifier
 {
@@ -52,8 +52,8 @@ final readonly class MailDealNotifier implements DealNotifier
     }
 
     /**
-     * The digest is a separate subscription from the deal alerts (design/
-     * README.md §6): wanting the summary without mid-week pings is valid.
+     * The digest is a separate subscription from the deal alerts (design/ README.md §6): wanting
+     * the summary without mid-week pings is valid.
      */
     private function wants(User $user, AlertType $type): bool
     {
@@ -65,8 +65,8 @@ final readonly class MailDealNotifier implements DealNotifier
     }
 
     /**
-     * Unknown notice types throw rather than fail silently — a silently undelivered alert is this app's worst failure mode
-     * (see AppServiceProvider) (docs/BUSINESS-LOGIC.md §10).
+     * Unknown notice types throw rather than fail silently — a silently undelivered alert is this
+     * app's worst failure mode (see AppServiceProvider) (docs/BUSINESS-LOGIC.md §10).
      *
      * @param  list<int>  $alertIds
      */

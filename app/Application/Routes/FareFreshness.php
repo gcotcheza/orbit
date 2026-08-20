@@ -21,8 +21,8 @@ final readonly class FareFreshness
     public function __construct(private Cache $cache) {}
 
     /**
-     * When the provider was last asked about this route, as far as the calendar
-     * knows. Null when it has never answered with anything.
+     * When the provider was last asked about this route, as far as the calendar knows. Null when it
+     * has never answered with anything.
      */
     public function lastFetchedAt(Route $route): ?CarbonImmutable
     {
@@ -38,8 +38,8 @@ final readonly class FareFreshness
     }
 
     /**
-     * Whether a fetch at that moment is still fresh. Takes the timestamp rather than the
-     * route so a caller that already read it doesn't pay for the query twice.
+     * Whether a fetch at that moment is still fresh. Takes the timestamp rather than the route so a
+     * caller that already read it doesn't pay for the query twice.
      */
     public function isFresh(?CarbonImmutable $fetchedAt): bool
     {
@@ -64,8 +64,8 @@ final readonly class FareFreshness
             return false;
         }
 
-        // Cache add(): remembers "asked and got nothing" and guards a duplicate simultaneous fetch.
-        // Why: docs/BUSINESS-LOGIC.md §1.
+        // Cache add(): remembers "asked and got nothing" and guards a duplicate simultaneous fetch
+        // (docs/BUSINESS-LOGIC.md §1).
         if (! $this->cache->add(self::key($route), true, self::hours() * 3600)) {
             return false;
         }

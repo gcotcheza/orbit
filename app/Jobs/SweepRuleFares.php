@@ -40,8 +40,8 @@ final class SweepRuleFares implements ShouldQueue
 
         $fresh = $this->pricedToday($codes);
 
-        // Fresh-today codes are filtered out BEFORE the cap, not after — otherwise a rule overlapping the watchlist would never reach its own tail.
-        // Why: docs/BUSINESS-LOGIC.md §11.
+        // Fresh-today codes are filtered out BEFORE the cap, not after — otherwise a rule
+        // overlapping the watchlist would never reach its own tail (docs/BUSINESS-LOGIC.md §11).
         $wanted = array_values(array_filter($codes, static fn (string $code): bool => ! isset($fresh[$code])));
 
         $cap = (int) config('orbit.rules.sweep_cap');

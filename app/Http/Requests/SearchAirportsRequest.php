@@ -7,8 +7,8 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * `GET /api/airports?q=` — what somebody typed into the destination box. 2-60 char bounds are a cost decision, not a
- * validation list; see below (docs/BUSINESS-LOGIC.md §36).
+ * `GET /api/airports?q=` — what somebody typed into the destination box. 2-60 char bounds are a
+ * cost decision, not a validation list; see below (docs/BUSINESS-LOGIC.md §36).
  */
 final class SearchAirportsRequest extends FormRequest
 {
@@ -42,8 +42,8 @@ final class SearchAirportsRequest extends FormRequest
     }
 
     /**
-     * Trimmed BEFORE the rules run, so that "  a  " is one character rather
-     * than five and is refused for the reason it is actually too short.
+     * Trimmed BEFORE the rules run, so that "  a  " is one character rather than five and is
+     * refused for the reason it is actually too short.
      */
     protected function prepareForValidation(): void
     {

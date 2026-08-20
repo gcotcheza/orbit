@@ -65,8 +65,8 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
     Route::get('/watchlist', WatchlistController::class)->name('watchlist');
 
     /*
-     * `[A-Z]{3}-[A-Z]{3}` route-code shape only (App\Models\Route::codeFor) — anything else is a malformed request, not a
-     * miss (docs/BUSINESS-LOGIC.md §36).
+     * `[A-Z]{3}-[A-Z]{3}` route-code shape only (App\Models\Route::codeFor) — anything else is a
+     * malformed request, not a miss (docs/BUSINESS-LOGIC.md §36).
      */
     Route::get('/routes/{code}', [RouteController::class, 'show'])
         ->where('code', '[A-Z]{3}-[A-Z]{3}')
@@ -77,8 +77,8 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
         ->name('routes.calendar');
 
     /*
-     * Computed at request time rather than cached (see App\Application\Rules\RuleViews) — a cached count would go stale
-     * the moment after computing (docs/BUSINESS-LOGIC.md §36).
+     * Computed at request time rather than cached (see App\Application\Rules\RuleViews) — a cached
+     * count would go stale the moment after computing (docs/BUSINESS-LOGIC.md §36).
      */
     Route::get('/rules', [RuleController::class, 'index'])->name('rules.index');
 
@@ -97,8 +97,8 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
         ->name('airports');
 
     /*
-     * No screen reads this yet, deliberately (alerts screen stays settings-only this PR) — exists so the mail pipeline is
-     * inspectable from outside the database (docs/BUSINESS-LOGIC.md §36).
+     * No screen reads this yet, deliberately (alerts screen stays settings-only this PR) — exists
+     * so the mail pipeline is inspectable from outside the database (docs/BUSINESS-LOGIC.md §36).
      */
     Route::get('/alerts', AlertController::class)->name('alerts');
 
@@ -123,8 +123,8 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
         ->name('routes.lookup');
 
     /*
-     * ⚠ Most expensive write here: one tap = one of 250 monthly SerpAPI searches.
-     * No body; the date is the server's (docs/BUSINESS-LOGIC.md §17).
+     * ⚠ Most expensive write here: one tap = one of 250 monthly SerpAPI searches. No body; the date
+     * is the server's (docs/BUSINESS-LOGIC.md §17).
      */
     Route::post('/routes/{code}/live-price', [RouteController::class, 'liveCheck'])
         ->where('code', '[A-Z]{3}-[A-Z]{3}')
@@ -133,8 +133,8 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
 
     Route::post('/watchlist', [WatchlistItemController::class, 'store'])->name('watchlist.store');
 
-    // Same `[A-Z]{3}-[A-Z]{3}` route-code shape constraint as the reads above; malformed, not a miss.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Same `[A-Z]{3}-[A-Z]{3}` route-code shape constraint as the reads above; malformed, not a
+    // miss (docs/BUSINESS-LOGIC.md §36).
     Route::patch('/watchlist/{code}', [WatchlistItemController::class, 'update'])
         ->where('code', '[A-Z]{3}-[A-Z]{3}')
         ->name('watchlist.update');

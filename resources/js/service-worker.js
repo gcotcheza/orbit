@@ -1,5 +1,5 @@
-// Served verbatim by App\Http\Controllers\Pwa\ServiceWorkerController (not bundled by Vite). DO NOT cache anything
-// with a fare in it (docs/BUSINESS-LOGIC.md §35).
+// Served verbatim by App\Http\Controllers\Pwa\ServiceWorkerController (not bundled by Vite). DO NOT
+// cache anything with a fare in it (docs/BUSINESS-LOGIC.md §35).
 
 /* global __SW_PRECACHE__ */
 // ^ Substituted by ServiceWorkerController; a global to ESLint, a literal to the browser.
@@ -14,8 +14,8 @@ const OFFLINE_URL = '/offline'
 const PRECACHE = __SW_PRECACHE__
 
 /**
- * Install: allSettled (not all) so one 404 in precache doesn't abort install; cache: 'reload' avoids installing an
- * asset the browser cached before this deploy (docs/BUSINESS-LOGIC.md §35).
+ * Install: allSettled (not all) so one 404 in precache doesn't abort install; cache: 'reload'
+ * avoids installing an asset the browser cached before this deploy (docs/BUSINESS-LOGIC.md §35).
  */
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -64,8 +64,8 @@ self.addEventListener('message', (event) => {
 self.addEventListener('fetch', (event) => {
     const request = event.request
 
-    // Writes are never intercepted — there is no offline queue, and a replayed PATCH would be worse than a failed one
-    // (docs/BUSINESS-LOGIC.md §35).
+    // Writes are never intercepted — there is no offline queue, and a replayed PATCH would be worse
+    // than a failed one (docs/BUSINESS-LOGIC.md §35).
     if (request.method !== 'GET') return
 
     const url = new URL(request.url)
@@ -115,8 +115,8 @@ async function cacheFirst(request) {
 }
 
 /**
- * Navigate: always network, offline page on failure — never a cached copy of a real page, since the fallback carries
- * no fares (docs/BUSINESS-LOGIC.md §35).
+ * Navigate: always network, offline page on failure — never a cached copy of a real page, since the
+ * fallback carries no fares (docs/BUSINESS-LOGIC.md §35).
  */
 async function navigate(request) {
     try {

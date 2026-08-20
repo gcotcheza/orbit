@@ -10,8 +10,8 @@ use App\Models\UserSettings;
 use App\Domain\Alerts\QuietHours;
 
 /**
- * When this account may be interrupted — the one place quiet hours stop being a wall clock and become an instant,
- * computed once, here (docs/BUSINESS-LOGIC.md §10).
+ * When this account may be interrupted — the one place quiet hours stop being a wall clock and
+ * become an instant, computed once, here (docs/BUSINESS-LOGIC.md §10).
  */
 final readonly class DeliveryWindow
 {
@@ -31,8 +31,8 @@ final readonly class DeliveryWindow
     }
 
     /**
-     * The instant an alert decided at `$now` may be delivered — or NULL when
-     * that is right now, which is the ordinary answer at 06:55 in the morning.
+     * The instant an alert decided at `$now` may be delivered — or NULL when that is right now,
+     * which is the ordinary answer at 06:55 in the morning.
      */
     public function opensAfter(DateTimeInterface $now): ?CarbonImmutable
     {
@@ -45,8 +45,8 @@ final readonly class DeliveryWindow
         $end = $local->setTime($this->quiet->endHour(), $this->quiet->endMinuteOfHour());
 
         /*
-         * Crossing midnight, "08:00" is TOMORROW's — true every night for the
-         * default 22:00–08:00 window; using today's date would fire ten hours early.
+         * Crossing midnight, "08:00" is TOMORROW's — true every night for the default 22:00–08:00
+         * window; using today's date would fire ten hours early.
          */
         return $end <= $local ? $end->addDay() : $end;
     }

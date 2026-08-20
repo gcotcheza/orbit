@@ -26,8 +26,8 @@ final class PasswordController extends Controller
         // The route is behind `auth`; the request cannot resolve without one.
         assert($user instanceof User);
 
-        // `hashed` cast bcrypts on save — assigning plaintext is correct; hashing here first
-        // would double-hash it and lock the one account out.
+        // `hashed` cast bcrypts on save — assigning plaintext is correct; hashing here first would
+        // double-hash it and lock the one account out.
         $user->password = $password;
 
         // Kill every recaller cookie ever issued for this account. See above.
@@ -41,8 +41,8 @@ final class PasswordController extends Controller
          */
         Auth::logoutOtherDevices($password);
 
-        // Re-issue THIS device's recaller against the token just written, so it keeps the
-        // long session LoginController deliberately gives it.
+        // Re-issue THIS device's recaller against the token just written, so it keeps the long
+        // session LoginController deliberately gives it.
         Auth::login($user, remember: true);
 
         // Against fixation, and it is what hands the SPA its new CSRF token.

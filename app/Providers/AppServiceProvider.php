@@ -47,8 +47,8 @@ final class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         /*
-         * Fare ports are chosen by name in config/orbit.php; an unknown name throws at resolution rather than silently falling
-         * back to a fake (docs/BUSINESS-LOGIC.md §36).
+         * Fare ports are chosen by name in config/orbit.php; an unknown name throws at resolution
+         * rather than silently falling back to a fake (docs/BUSINESS-LOGIC.md §36).
          */
         $this->app->bind(PriceProvider::class, fn (): PriceProvider => match ($name = config('orbit.providers.price')) {
             'fake'          => new FakePriceProvider,
@@ -63,8 +63,8 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         /*
-         * Own switch on purpose, though it hits the same vendor as the price port — lets real one-way fares run while returns
-         * still use the fake (docs/BUSINESS-LOGIC.md §36).
+         * Own switch on purpose, though it hits the same vendor as the price port — lets real
+         * one-way fares run while returns still use the fake (docs/BUSINESS-LOGIC.md §36).
          */
         $this->app->bind(ReturnTripProvider::class, fn (): ReturnTripProvider => match ($name = config('orbit.providers.returns')) {
             'fake'          => new FakeReturnProvider,
@@ -73,8 +73,8 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         /*
-         * Own switch though it reads the same endpoint as the return-trip adapter — the two must be able to fail and be turned
-         * off independently (docs/BUSINESS-LOGIC.md §36).
+         * Own switch though it reads the same endpoint as the return-trip adapter — the two must be
+         * able to fail and be turned off independently (docs/BUSINESS-LOGIC.md §36).
          */
         $this->app->bind(OriginSweepProvider::class, fn (): OriginSweepProvider => match ($name = config('orbit.providers.sweep')) {
             'fake'          => new FakeSweepProvider,
@@ -83,8 +83,8 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         /*
-         * Bound directly rather than by config name — SerpAPI is the only such adapter. NOT a singleton (holds no state across
-         * calls) (docs/BUSINESS-LOGIC.md §36).
+         * Bound directly rather than by config name — SerpAPI is the only such adapter. NOT a
+         * singleton (holds no state across calls) (docs/BUSINESS-LOGIC.md §36).
          */
         $this->app->bind(GoogleFlightsCheck::class, function (): GoogleFlightsCheck {
             /** @var array<string, mixed> $serpapi */
@@ -98,8 +98,8 @@ final class AppServiceProvider extends ServiceProvider
                 logger: $this->app->make('log'),
                 baseUrl: (string) $serpapi['base_url'],
                 /*
-                 * Empty string reads as unset (same convention as seed.password), not as a literal key to authenticate a metered API
-                 * with (docs/BUSINESS-LOGIC.md §36).
+                 * Empty string reads as unset (same convention as seed.password), not as a literal
+                 * key to authenticate a metered API with (docs/BUSINESS-LOGIC.md §36).
                  */
                 key: is_string($key) && trim($key) !== '' ? $key : null,
                 reserve: (int) $serpapi['reserve'],
@@ -110,8 +110,8 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         /*
-         * Config read once here into a pure value (Domain calls no config()). `max_eur_per_km` × 100 = cents/km, not euros ×
-         * 100 — check twice (docs/BUSINESS-LOGIC.md §36).
+         * Config read once here into a pure value (Domain calls no config()). `max_eur_per_km` ×
+         * 100 = cents/km, not euros × 100 — check twice (docs/BUSINESS-LOGIC.md §36).
          */
         $this->app->singleton(DiscoveryPolicy::class, function (): DiscoveryPolicy {
             /** @var array<string, mixed> $discovery */
@@ -131,8 +131,8 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         /*
-         * Own value, not folded into DiscoveryPolicy — two products, not one lane. `min_discount` is a FRACTION (0.40 = 40%),
-         * not a euro figure (docs/BUSINESS-LOGIC.md §36).
+         * Own value, not folded into DiscoveryPolicy — two products, not one lane. `min_discount`
+         * is a FRACTION (0.40 = 40%), not a euro figure (docs/BUSINESS-LOGIC.md §36).
          */
         $this->app->singleton(RelativeLanePolicy::class, function (): RelativeLanePolicy {
             /** @var array<string, mixed> $relative */
@@ -145,8 +145,8 @@ final class AppServiceProvider extends ServiceProvider
                 maxPriceCents: (int) round(((float) $relative['max_price_eur']) * 100),
                 minDiscount: (float) $relative['min_discount'],
                 /*
-                 * Same €15 as the absolute lane's, read from the same key — one decision today, so one setting (docs/BUSINESS-LOGIC.md
-                 * §36).
+                 * Same €15 as the absolute lane's, read from the same key — one decision today, so
+                 * one setting (docs/BUSINESS-LOGIC.md §36).
                  */
                 minSavingsCents: (int) round(((float) $discovery['min_absolute_savings_eur']) * 100),
                 minBaselineDays: (int) $relative['min_baseline_days'],
@@ -156,8 +156,8 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         /*
-         * Read once here, not in Domain — DealScorer calls no config().
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * Read once here, not in Domain — DealScorer calls no config() (docs/BUSINESS-LOGIC.md
+         * §36).
          */
         $this->app->singleton(DealScorer::class, function (): DealScorer {
             /** @var array{weights: array{percentile: int|float, trend: int|float, absolute: int|float}, tiers: array{insane: int, great: int, good: int}, trend_days: int, trend_saturation_per_day: int|float} $score */
@@ -173,16 +173,16 @@ final class AppServiceProvider extends ServiceProvider
                 trendDays: $score['trend_days'],
                 trendSaturationPerDay: (float) $score['trend_saturation_per_day'],
                 /*
-                 * Same number AlertPolicy uses below, on purpose — "too young to alert" and "too young to score" are one decision
-                 * (docs/BUSINESS-LOGIC.md §36).
+                 * Same number AlertPolicy uses below, on purpose — "too young to alert" and "too
+                 * young to score" are one decision (docs/BUSINESS-LOGIC.md §36).
                  */
                 minTrackingDays: (int) config('orbit.alerts.min_tracking_days'),
             ));
         });
 
         /*
-         * Read once, handed in, same boundary as DealScorer above. Singleton because three consumers share it, not as a perf
-         * optimisation (docs/BUSINESS-LOGIC.md §36).
+         * Read once, handed in, same boundary as DealScorer above. Singleton because three
+         * consumers share it, not as a perf optimisation (docs/BUSINESS-LOGIC.md §36).
          */
         $this->app->singleton(RuleVocabulary::class, function (): RuleVocabulary {
             /** @var list<string> $origins */
@@ -198,8 +198,8 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         /*
-         * Read once here, not in Domain — AlertPolicy calls no config(), same boundary as DealScorer/ScoringPolicy above
-         * (docs/BUSINESS-LOGIC.md §36).
+         * Read once here, not in Domain — AlertPolicy calls no config(), same boundary as
+         * DealScorer/ScoringPolicy above (docs/BUSINESS-LOGIC.md §36).
          */
         $this->app->singleton(AlertPolicy::class, fn (): AlertPolicy => new AlertPolicy(
             cooldownHours: (int) config('orbit.alerts.cooldown_hours'),
@@ -211,8 +211,8 @@ final class AppServiceProvider extends ServiceProvider
         ));
 
         /*
-         * Bound directly rather than by config name — mail is the only channel today; web push arrives later as an ADDITION
-         * (docs/PLAN.md) (docs/BUSINESS-LOGIC.md §36).
+         * Bound directly rather than by config name — mail is the only channel today; web push
+         * arrives later as an ADDITION (docs/PLAN.md) (docs/BUSINESS-LOGIC.md §36).
          */
         $this->app->bind(DealNotifier::class, MailDealNotifier::class);
 
@@ -224,8 +224,8 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         /*
-         * Chosen by name in config/orbit.php; anthropic COMPOSES regex and falls back to it on any failure. Unknown name
-         * throws at resolution (docs/BUSINESS-LOGIC.md §36).
+         * Chosen by name in config/orbit.php; anthropic COMPOSES regex and falls back to it on any
+         * failure. Unknown name throws at resolution (docs/BUSINESS-LOGIC.md §36).
          */
         $this->app->bind(RuleTextParser::class, function (): RuleTextParser {
             $regex = new RegexRuleTextParser($this->app->make(RuleVocabulary::class));
@@ -383,8 +383,8 @@ final class AppServiceProvider extends ServiceProvider
             ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
 
         /*
-         * 20/min, keyed on account. Exists before it is needed: the day an Anthropic key lands in .env this becomes a metered
-         * call per keystroke (docs/BUSINESS-LOGIC.md §36).
+         * 20/min, keyed on account. Exists before it is needed: the day an Anthropic key lands in
+         * .env this becomes a metered call per keystroke (docs/BUSINESS-LOGIC.md §36).
          */
         RateLimiter::for('rules-parse', fn (Request $request): Limit => Limit::perMinute(20)
             ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
@@ -410,8 +410,8 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         /*
-         * ⚠ NOT what rations the SerpAPI month — the reserve and the cooldown
-         * are (docs/BUSINESS-LOGIC.md §17). This catches a retry loop.
+         * ⚠ NOT what rations the SerpAPI month — the reserve and the cooldown are
+         * (docs/BUSINESS-LOGIC.md §17). This catches a retry loop.
          */
         RateLimiter::for('live-check', static function (Request $request): array {
             $key = (string) ($request->user()?->getAuthIdentifier() ?? $request->ip());

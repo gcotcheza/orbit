@@ -19,14 +19,14 @@ return new class extends Migration
             $table->foreignId('airport_id')->unique()->constrained()->cascadeOnDelete();
 
             /*
-             * JSON array of tags, not a tags table + pivot — closed vocabulary of nine words, nothing joins/counts/edits them
-             * through a UI (docs/BUSINESS-LOGIC.md §36).
+             * JSON array of tags, not a tags table + pivot — closed vocabulary of nine words,
+             * nothing joins/counts/edits them through a UI (docs/BUSINESS-LOGIC.md §36).
              */
             $table->json('vibes');
 
             /*
-             * How warm it is, month by month: {"1": 2, ..., "12": 3} on a 1-5 scale (1 pack a coat, 5 beach) — a rating, not a
-             * temperature (docs/BUSINESS-LOGIC.md §36).
+             * How warm it is, month by month: {"1": 2, ..., "12": 3} on a 1-5 scale (1 pack a coat,
+             * 5 beach) — a rating, not a temperature (docs/BUSINESS-LOGIC.md §36).
              */
             $table->json('warmth');
 

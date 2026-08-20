@@ -25,21 +25,21 @@ use App\Http\Requests\UpdateWatchedRouteRequest;
 final class WatchlistItemController extends Controller
 {
     /**
-     * Start watching a pair. 201, with the route's summary as it stands — for
-     * a new one that's `confident: false` and no prices until the jobs below run.
+     * Start watching a pair. 201, with the route's summary as it stands — for a new one that's
+     * `confident: false` and no prices until the jobs below run.
      */
     public function store(AddWatchedRouteRequest $request, RouteSnapshots $snapshots): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
 
-        // The lookup rather than the check — see App\Http\Requests\RoutePairRequest,
-        // which both this write and the route lookup take their pair from.
+        // The lookup rather than the check — see App\Http\Requests\RoutePairRequest, which both
+        // this write and the route lookup take their pair from.
         $origin = $request->airport('origin');
         $destination = $request->airport('destination');
 
-        // Find or create: a route is a fact about the world, not a possession — reusing an existing row hands back price history already paid for.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Find or create: a route is a fact about the world, not a possession — reusing an existing
+        // row hands back price history already paid for (docs/BUSINESS-LOGIC.md §36).
         $route = Route::query()->firstOrCreate(
             ['code' => Route::codeFor($origin->iata, $destination->iata)],
             [
@@ -52,8 +52,8 @@ final class WatchlistItemController extends Controller
             'user_id'  => $user->id,
             'route_id' => $route->id,
             'active'   => true,
-            // Onto the end of the owner's order. `-1` so the first route added
-            // to an empty list gets position 0, like the seeder's.
+            // Onto the end of the owner's order. `-1` so the first route added to an empty list
+            // gets position 0, like the seeder's.
             'position' => (int) ($user->watchlistItems()->max('position') ?? -1) + 1,
         ]);
 
@@ -99,8 +99,8 @@ final class WatchlistItemController extends Controller
      */
     private static function item(User $user, string $code): WatchlistItem
     {
-        // See RouteController for why abort() rather than firstOrFail(): the
-        // framework's own 404 body names an internal class.
+        // See RouteController for why abort() rather than firstOrFail(): the framework's own 404
+        // body names an internal class.
         return $user->watchlistItems()
             ->whereHas('route', function (Builder $route) use ($code): void {
                 /** @var Builder<Route> $route */

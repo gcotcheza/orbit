@@ -1,5 +1,5 @@
-// The rest of the world (3,270 airports) via `?q=` against `GET /api/airports`. A composable,
-// not a Pinia store: each search field needs its own query (docs/BUSINESS-LOGIC.md §36).
+// The rest of the world (3,270 airports) via `?q=` against `GET /api/airports`. A composable, not a
+// Pinia store: each search field needs its own query (docs/BUSINESS-LOGIC.md §36).
 import { onScopeDispose, ref } from 'vue'
 import { http } from '@/lib/http'
 import { markRow, MAX_SUGGESTIONS } from '@/stores/destinations'
@@ -126,16 +126,16 @@ export function useAirportSearch() {
         }
     }
 
-    // A disposed box is not waiting for an answer. `failSilently`: also called from a unit
-    // test outside any component scope.
+    // A disposed box is not waiting for an answer. `failSilently`: also called from a unit test
+    // outside any component scope.
     onScopeDispose(cancel, true)
 
     return { results, status, search, clear }
 }
 
 /**
- * The two lists shown as one: curated always first, deduped by code, `world: true` the only
- * thing added, and `exclude` filtered BEFORE the limit cut (docs/BUSINESS-LOGIC.md §36).
+ * The two lists shown as one: curated always first, deduped by code, `world: true` the only thing
+ * added, and `exclude` filtered BEFORE the limit cut (docs/BUSINESS-LOGIC.md §36).
  *
  * @param {Array<object>} curated already ranked and marked by searchDestinations
  * @param {Array<object>} world `GET /api/airports`'s rows, in the server's order
