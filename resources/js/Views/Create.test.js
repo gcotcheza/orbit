@@ -246,12 +246,8 @@ describe('Create', () => {
         expect(wrapper.findComponent(RouterLinkStub).props().to).toEqual({ name: 'watch' })
     })
 
-    /*
-     * THE ONE THIS SCREEN KEEPS GETTING WRONG. A × that is live when the finger
-     * goes down and inert when it comes up fires no `click` at all, so the
-     * removal visibly does nothing. It is never disabled — not during the
-     * debounce, not while the parse it would replace is on the wire.
-     */
+    // Live when the finger goes down, inert when it comes up = no `click` at
+    // all. Why: docs/BUSINESS-LOGIC.md §11.
     it('leaves every × live through the debounce and through the parse', async () => {
         const wrapper = await screen()
 
@@ -333,6 +329,30 @@ describe('Create', () => {
         await flushPromises()
 
         expect(wrapper.find('.cta').attributes('disabled')).toBeUndefined()
+    })
+
+    /* A failed parse read nothing, so the same string typed again is a new
+       question — not the one already on screen. */
+    it('re-asks after a failed parse when the text is retyped', async () => {
+        const wrapper = await screen()
+
+        post.mockRejectedValueOnce({ response: { status: 429 } })
+
+        await wrapper.find('textarea').setValue('a beach week in June')
+        await vi.advanceTimersByTimeAsync(500)
+        await flushPromises()
+
+        expect(wrapper.find('.error').text()).toContain('Slow down a moment')
+
+        post.mockClear()
+
+        await wrapper.find('textarea').setValue('a beach week in Jun')
+        await wrapper.find('textarea').setValue('a beach week in June')
+        await vi.advanceTimersByTimeAsync(500)
+        await flushPromises()
+
+        expect(post).toHaveBeenCalledTimes(1)
+        expect(lastParse().text).toBe('a beach week in June')
     })
 
     it('leaves the form alone and says why when the rule is refused', async () => {

@@ -33,6 +33,7 @@ let timer = null
 const asked = ref(SEED)
 
 const parsing = computed(() => parseStatus.value === 'parsing')
+const failed = computed(() => parseStatus.value === 'failed')
 const readingStale = computed(() => parsing.value || text.value !== asked.value)
 const canCreate = computed(() => understood.value && !saving.value && !readingStale.value)
 
@@ -50,12 +51,12 @@ onBeforeUnmount(() => {
   rules.clearReading()
 })
 
-/* Typing is the only thing debounced, and text back at the reading's own
-   cancels the wait rather than asking the same question twice. */
+/* Typing is the only thing debounced. Text back at the reading's own cancels
+   the wait instead of asking twice — unless that ask is the one that failed. */
 watch(text, (value) => {
   clearTimeout(timer)
 
-  if (value !== asked.value) {
+  if (value !== asked.value || failed.value) {
     timer = setTimeout(ask, DEBOUNCE_MS)
   }
 })
