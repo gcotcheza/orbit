@@ -1,106 +1,7 @@
 <script setup>
 /*
- * Search — the centre tab, and what this app turned out to be for.
- *
- * =============================================================================
- * WHY THIS SCREEN EXISTS, AND WHAT IT REPLACED
- * =============================================================================
- * The centre of the tab bar was a + that wrote a deal RULE. On the first day of
- * real use the owner made thirty-two look-ups and wrote zero rules — through a
- * form that was folded away behind a small + in the watch screen's header,
- * offered three origins, and was the second thing on the third screen. The most
- * used feature in the app was the hardest one to reach, and the least used one
- * had the biggest button.
- *
- * So the centre button is a magnifying glass now and this is what is behind it:
- * two boxes and two things to do with them. Rules did not go away — /create is
- * unchanged and is reached from the rules section of the watch screen, where
- * the rules themselves already live (Watchlist.vue).
- *
- * =============================================================================
- * ANY AIRPORT TO ANY AIRPORT
- * =============================================================================
- * The From box is new and it is the point. It takes any of the 3,270 airports
- * Orbit can price, exactly as the To box does, because
- * App\Http\Requests\RoutePairRequest stopped restricting the origin to the three
- * within a drive on the same day this screen was drawn — "what does Barcelona
- * to Palermo cost while I am already in Barcelona" is an ordinary question and
- * that rule was the only thing making it unaskable. See the note there, and the
- * one on `origins` in config/orbit.php for what stayed home-only (rules).
- *
- * THE THREE HOME AIRPORTS ARE STILL ONE TAP. They are quick chips above the
- * box, not a closed list: nine flights in ten leave from AMS, EIN or DUS, and a
- * screen that made the common case cost eight keystrokes to buy the rare one
- * would be a worse screen. They are written out here rather than fetched, which
- * is the same call the old form made about the same three strings — they have
- * not changed since the design was drawn, and they are now presentation rather
- * than validation, so there is nothing left for them to disagree with.
- *
- * =============================================================================
- * THE PILLS ARE THE ORIGIN; THE BOX IS THE EXCEPTION
- * =============================================================================
- * The two were ONE VALUE until now — tapping DUS wrote "DUS" into the From box,
- * typing over it unlit every pill — and the box paid for it. A field arriving
- * prefilled with three capital letters and no placeholder is a READ-OUT: it
- * shows an answer rather than inviting a question, and it has to be selected
- * and deleted before it looks typeable at all. The To box beside it, empty and
- * prompting, proved the point by contrast — the same component, and only one of
- * the two read as a place to type.
- *
- * SO THEY ARE TWO VALUES. `home` is the lit pill and is the origin whenever the
- * box is empty; `from` is "somewhere else" and starts empty and stays empty
- * until somebody types. The box NEVER mirrors the pill — that mirroring is the
- * whole defect — which means the two can be in a state no single value could
- * express, and one rule settles it: TEXT WINS WHILE THERE IS TEXT, PILLS WIN ON
- * TAP. Typing unlights the pills, tapping a pill empties the box, and `origin`
- * below is the only place either fact is read.
- *
- * ONE COMPUTED FOR EVERY CONSUMER, and that is the part worth guarding. "Look
- * up", "Add to watch", the To box's exclusion and both refusals all read
- * `origin` — so a screen showing an unlit pill beside typed text cannot send
- * the pill, and there is no second rule anywhere to fall out of step with this
- * one.
- *
- * =============================================================================
- * TWO ACTIONS, AND THE PRIMARY ONE IS THE QUESTION
- * =============================================================================
- * "Look up" opens the route's own screen without writing anything: the detail
- * screen prices the pair on arrival if Orbit has nothing recent for it
- * (docs/API.md, `POST /api/routes/lookup`). "Add to watch" is the commitment,
- * still one tap, for somebody who already knows they want it.
- *
- * THE LOOK-UP DOES NOT TOUCH THE NETWORK FROM HERE. It is a navigation, and a
- * screen that sat spinning for three seconds before it changed would be the app
- * freezing on the page you are leaving. The screen being opened is the one that
- * has to handle a route with no fares anyway — a bookmark, a shared link, a
- * lookup made a month ago — so putting the fetch there is one path rather than
- * two. What that costs, stated plainly: a well-formed code Orbit has no airport
- * for ("ZZZ") is refused on the detail screen rather than here. The ADD path
- * still answers below the fields, exactly as it always did.
- *
- * THE PANEL FLAG LIVES HERE AND NOT IN THE FIELDS, and it is not tidiness — see
- * the long note in Components/search/AirportField.vue. A field can only ask "did
- * focus leave me"; the buttons are not in it, so a field closing its own panel
- * on focusout would move the buttons out from under the pointer between
- * mousedown and mouseup and no click would ever be produced. Asking "did focus
- * leave the FORM" is the fix, and it can only be asked here.
- *
- * =============================================================================
- * AND BELOW THE FORM: THE QUESTION NOBODY TYPED
- * =============================================================================
- * "Deals from your airports" is the discovery strip — routes nobody is watching
- * that Orbit swept up at 05:20 and then went and verified (docs/BUSINESS-LOGIC
- * .md §16). It is on THIS screen and not the home globe for a reason that is
- * about what each screen is for: the globe tours the watchlist, which is what
- * the owner already thought of, and crowding a €27 Marrakesh into it would be
- * two answers to two different questions on one canvas. A person on the search
- * screen is already asking "where could I go" — this is the same question,
- * answered before they finished typing it.
- *
- * IT IS BELOW THE FORM AND NOT ABOVE IT. The form is what the tab is for and
- * what the muscle memory reaches for; the strip is a reward for scrolling. A
- * discovery section that pushed the boxes down the screen would be the app
- * deciding it knows better than the person who tapped Search.
+ * Search — the centre tab. Any airport to any airport, the three home pills are presentation
+ * only, and TEXT WINS WHILE THERE IS TEXT, PILLS WIN ON TAP (docs/BUSINESS-LOGIC.md §36).
  */
 import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
@@ -111,10 +12,8 @@ import { useDiscoveriesStore } from '@/stores/discoveries'
 import { useWatchlistStore } from '@/stores/watchlist'
 
 /**
- * The airports within a sensible drive — `config('orbit.origins')`, and the one
- * place in the client that still names them. Presentation only now: the server
- * takes any airport at either end, so these three are a shortcut rather than a
- * list to be refused for straying from.
+ * The airports within a sensible drive — the one place in the client that still names them,
+ * and presentation only now: the server takes any airport at either end.
  */
 const HOME = ['AMS', 'EIN', 'DUS']
 
@@ -123,15 +22,8 @@ const watchlist = useWatchlistStore()
 const discoveries = useDiscoveriesStore()
 
 /*
- * ASKED FOR ON MOUNT, AND NOTHING WAITS ON IT. The form above renders and works
- * whether or not this ever answers — the store logs a failure and stays quiet
- * rather than putting a sentence about a feature nobody asked for over the
- * boxes somebody is trying to type into (see stores/discoveries.js).
- *
- * EVERY VISIT, NOT ONCE. The set turns over daily at 05:20 and the tab is
- * tapped several times a day; a cached-forever strip would be showing
- * yesterday's deals by the evening. It is one GET of about ten rows against a
- * precomputed table — the cheapest read in the API.
+ * Asked for on mount and nothing waits on it; every visit, not once — the set turns over
+ * daily at 05:20 and it is the cheapest read in the API.
  */
 onMounted(() => discoveries.refresh())
 
@@ -158,22 +50,15 @@ const fromField = useTemplateRef('fromField')
 const elsewhere = computed(() => from.value.trim() !== '')
 
 /*
- * The boundary: what the boxes show is a place, what the API takes is a code.
- *
- * AND, AT THIS END, WHICH OF TWO CONTROLS IS SPEAKING — see the note at the top.
- * There is exactly one of these because there is exactly one rule.
+ * The boundary: what the boxes show is a place, what the API takes is a code — and which of
+ * the two controls is speaking. There is one of these because there is one rule.
  */
 const origin = computed(() => (elsewhere.value ? toCode(from.value) : home.value))
 const destination = computed(() => toCode(to.value))
 
 /**
- * Whether a pill is the one the screen is going to use.
- *
- * A LIT PILL BESIDE TYPED TEXT WOULD BE TWO ANSWERS TO ONE QUESTION, which is
- * why this is not simply `code === home`: the pills go dark the moment the box
- * has anything in it, and light again the moment it is emptied. Nothing is
- * forgotten while they are dark — `home` still holds the last pill tapped, so
- * clearing the box hands the origin back to it rather than to AMS.
+ * Whether a pill is the one the screen will use. Not simply `code === home`: a lit pill beside
+ * typed text would be two answers to one question, and `home` is not forgotten while dark.
  *
  * @param {string} code
  */
@@ -182,31 +67,14 @@ function lit(code) {
 }
 
 /**
- * The discoveries this screen shows, which is not necessarily all of them.
- *
- * SIX, AND THE SERVER'S ORDER IS KEPT. `orbit.discovery.max_rows` bounds the
- * table at twelve so that a failed run leaves yesterday's set standing beside
- * today's — a storage rule, not a display one. Twelve cards under a form is a
- * page somebody scrolls past rather than reads, and the list is already sorted
- * by what a kilometre costs, so the first six ARE the six best. It is the same
- * call `alerts.mail_deals` makes about a mail: everything is kept, a handful is
- * shown.
+ * The discoveries this screen shows — six, in the server's order. Twelve rows is a storage
+ * rule, not a display one, and the list is already sorted by what a kilometre costs.
  */
 const finds = computed(() => discoveries.discoveries.slice(0, 6))
 
 /**
- * "this morning", "yesterday" — when the set was found, or null.
- *
- * IT MATTERS MORE HERE THAN THE PHRASING SUGGESTS. Without it the heading reads
- * as "here are some deals, checked just now", and they were checked at 05:20
- * against a cache that was itself up to three days old. The per-card "seen 2
- * days ago" line says how old each PRICE is; this says how old the SEARCH is,
- * and they are two different questions.
- *
- * DATE-ONLY COMPARISON, in the viewer's own zone, because "this morning" is a
- * claim about which calendar day it is rather than about elapsed hours — a run
- * at 05:20 is still "this morning" at 23:00 and is "yesterday" at 00:05, which
- * an hours-based rule would get backwards on both counts.
+ * "this morning", "yesterday" — how old the SEARCH is, which is not the per-card price age.
+ * Date-only comparison in the viewer's zone: it is a claim about the calendar day.
  */
 const foundLabel = computed(() => {
   const iso = discoveries.discoveredAt
@@ -237,18 +105,8 @@ function startOfDay(date) {
 const canSubmit = computed(() => IATA.test(origin.value) && IATA.test(destination.value) && !adding.value)
 
 /**
- * Light a home airport, and take the box out of the argument.
- *
- * A TAP ON A PILL BEATS WHATEVER IS TYPED, and emptying the box is what makes
- * it mean that. Somebody who taps DUS over a half-typed "barcel" has changed
- * their mind; a screen that lit DUS and went on showing "barcel" would be
- * wrong in one of the two places, and which one it was wrong in would depend
- * on a rule nobody can see.
- *
- * THROUGH THE FIELD RATHER THAN AT THE MODEL, which is the same one-word
- * difference it was when this wrote a code instead: the box owns what a write
- * to it costs. See `clear()` in AirportField.vue — and note that it no longer
- * costs anything, because emptying is the cancellation.
+ * Light a home airport, and take the box out of the argument: a tap beats whatever is typed,
+ * and emptying the box is what makes it mean that. Through the field, not at the model.
  */
 function takeHome(code) {
   error.value = ''
@@ -258,12 +116,8 @@ function takeHome(code) {
 }
 
 /**
- * Focus left the form, so nothing is being chosen from.
- *
- * NOT ON THE FIELDS, AND NOT `@blur`. The whole argument is in AirportField.vue
- * — in one line: the panel is in the flow, focusout fires on mousedown, and a
- * panel that closes when focus moves to the button under it takes the button
- * with it.
+ * Focus left the form, so nothing is being chosen from. NOT on the fields and not `@blur`: a
+ * panel that closes when focus moves to the button under it takes the button with it.
  */
 function onFocusOut(event) {
   if (!event.currentTarget.contains(event.relatedTarget)) {
@@ -272,11 +126,8 @@ function onFocusOut(event) {
 }
 
 /**
- * Send the pair, whichever of the two buttons asked for it.
- *
- * ONE CHECK FOR BOTH, because both mean the same thing by "a route": two
- * three-letter codes, and two different airports. A look-up that accepted
- * `BARCELO` would navigate to a screen that could only apologise.
+ * Send the pair, whichever button asked. ONE CHECK FOR BOTH, because both mean the same thing
+ * by "a route": two three-letter codes, and two different airports.
  *
  * @param {'lookup'|'watch'} intent
  */
@@ -318,25 +169,16 @@ function attempt(intent) {
 }
 
 /**
- * Open the route without writing anything.
- *
- * The code is assembled here rather than asked for, because `ORIGIN-DEST` is
- * what a route code IS (App\Models\Route::codeFor) and this screen has both
- * halves in hand.
+ * Open the route without writing anything. The code is assembled here rather than asked for,
+ * because `ORIGIN-DEST` is what a route code IS and this screen has both halves.
  */
 function lookUp() {
   router.push({ name: 'route-detail', params: { id: `${origin.value}-${destination.value}` } })
 }
 
 /**
- * Start watching the pair.
- *
- * IT STAYS ON THIS SCREEN. A route added a second ago has no polls, no history
- * and no opinion — `confident: false`, score 0, "tracking 0 days"
- * (docs/API.md's day-1 honesty) — so pushing somebody at its detail screen
- * would be showing them the emptiest version of the thing they just asked for.
- * A sentence, a link, and a box ready for the next question is the honest
- * answer, and the store has already put the row on the list either way.
+ * Start watching the pair. IT STAYS ON THIS SCREEN: a route added a second ago has no polls,
+ * no history and no opinion, so its detail screen is the emptiest version of it.
  */
 async function add() {
   adding.value = true
@@ -355,11 +197,8 @@ async function add() {
 }
 
 /**
- * The server's sentence, or one about the connection.
- *
- * A refused add is answered here, under the fields that were refused, rather
- * than in a banner somewhere else — which is why stores/watchlist.js `add`
- * throws instead of writing a sentence of its own.
+ * The server's sentence, or one about the connection — answered here, under the fields that
+ * were refused, which is why stores/watchlist.js `add` throws instead of writing its own.
  */
 function messageFor(failure) {
   const response = failure.response
