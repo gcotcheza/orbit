@@ -1,21 +1,8 @@
-// =============================================================================
-// Months, days and the seven columns
-// =============================================================================
 // The calendar's date arithmetic, kept away from the components that draw it.
-//
-// EVERYTHING HERE IS UTC, DELIBERATELY. The API's dates are `YYYY-MM-DD`
-// strings — a calendar day, with no time and no zone (docs/API.md). The obvious
-// `new Date('2026-06-01')` parses that as UTC MIDNIGHT and then answers
-// `getDay()` through the viewer's own timezone, so the same string is Monday
-// the 1st in Amsterdam and Sunday the 31st in New York — and the whole grid
-// shifts a column for anyone west of London. Parsing the parts and asking only
-// the `getUTC*` questions removes the zone from the problem entirely.
-//
-// The locale is pinned to en-US for the same reason it is pinned in the design:
-// "June 11" is the copy in design/README.md §3, and a device set to de-DE
-// rendering "11. Juni" would be a different screen from the one that was
-// signed off. Orbit has one user and one language.
-// =============================================================================
+// Everything is UTC, deliberately: parsing YYYY-MM-DD via `new Date()` reads
+// the viewer's own timezone on `getDay()`, shifting the whole grid for anyone
+// west of London. Locale is pinned to en-US to match the signed-off design.
+// Why: docs/BUSINESS-LOGIC.md §36.
 
 const LOCALE = 'en-US'
 
@@ -114,14 +101,8 @@ function leadingBlanks(year, month) {
 }
 
 /**
- * The cells of one month, in reading order, ready for a 7-column grid.
- *
- * BUILT FROM THE CALENDAR, FILLED FROM THE API — never the other way round.
- * `days` arrives with the days we have no fare for simply MISSING
- * (docs/API.md), so walking that array and laying it out by index would put the
- * 3rd fare in the 3rd box and slide every date after a gap onto the wrong
- * weekday. Here the grid is generated from the month itself and each cell looks
- * its own date up.
+ * The cells of one month, in reading order, ready for a 7-column grid. Built from the calendar, filled from the API — never the other way round: `days`
+ * arrives with gaps missing entirely, so indexing into it would misalign every date after a gap (docs/BUSINESS-LOGIC.md §36).
  *
  * Blanks carry a key of their own because Vue needs one and their index is the
  * only thing that distinguishes them.

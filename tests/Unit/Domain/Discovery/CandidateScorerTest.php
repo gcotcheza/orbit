@@ -15,12 +15,8 @@ use App\Domain\Discovery\DiscoveryPolicy;
  * The cheap half of the discovery funnel, which is arithmetic and is therefore
  * pinned here rather than inferred from a job's output.
  *
- * THE CANDIDATES ARE THE REAL ONES. Every fare below is a row from the
- * 2026-08-16 origin sweep of the three home airports, with the distance
- * computed from the seeded coordinates. That matters more than usual for this
- * class: the thresholds in config/orbit.php were CHOSEN by looking at this
- * data, so a test built from invented numbers would agree with itself and prove
- * nothing about whether the defaults do the job.
+ * The candidates are real rows from the 2026-08-16 sweep — the thresholds were chosen by looking at this data;
+ * invented numbers would prove nothing (docs/BUSINESS-LOGIC.md §16).
  */
 final class CandidateScorerTest extends TestCase
 {
@@ -29,10 +25,8 @@ final class CandidateScorerTest extends TestCase
     /**
      * config/orbit.php's shipped defaults, with one knob at a time moved.
      *
-     * THE DEFAULTS ARE WRITTEN OUT RATHER THAN READ FROM CONFIG, because this
-     * is a pure unit test with no framework under it — and because a test that
-     * read the same file it was checking could never catch a default changing.
-     * tests/Feature/DiscoveryRunTest asserts these agree with config.
+     * Written out rather than read from config — a pure unit test can't read config, and reading the file it checks could
+     * never catch drift (docs/BUSINESS-LOGIC.md §16).
      */
     private function policy(
         float $minKilometres = 400.0,
@@ -98,9 +92,8 @@ final class CandidateScorerTest extends TestCase
     }
 
     /**
-     * THE REASON THE ABSOLUTE CEILING EXISTS. Singapore at €287 is 27.3 m€/km —
-     * comfortably under the 30 threshold, and genuinely a remarkable fare — and
-     * it is not what this screen promises.
+     * Singapore at €287 is 27.3 m€/km — comfortably under the ratio threshold, and genuinely remarkable — yet not what
+     * this screen promises (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function the_price_ceiling_keeps_long_haul_off_a_screen_about_impulse_fares(): void
@@ -145,11 +138,6 @@ final class CandidateScorerTest extends TestCase
         ], new DateTimeImmutable(self::NOW)));
     }
 
-    /**
-     * =========================================================================
-     * FRESHNESS — and the null case, which is the one that matters
-     * =========================================================================
-     */
     #[Test]
     public function it_discards_prices_older_than_the_policy_allows(): void
     {
@@ -171,10 +159,8 @@ final class CandidateScorerTest extends TestCase
     }
 
     /**
-     * THE OPPOSITE OF WHAT AlertPolicy DOES WITH THE SAME FACT, deliberately —
-     * see DealCandidate::ageInDays(). "Insanely cheap" is a claim about right
-     * now, so a price of unknown vintage is exactly the one that must not be on
-     * the screen.
+     * The opposite of what AlertPolicy does with the same fact, deliberately — see DealCandidate::ageInDays(). Unknown
+     * vintage must not be shown (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_price_of_unknown_age_is_treated_as_too_old(): void
@@ -187,11 +173,6 @@ final class CandidateScorerTest extends TestCase
         $this->assertSame([], $scorer->admit([$unknown], new DateTimeImmutable(self::NOW)));
     }
 
-    /**
-     * =========================================================================
-     * THE SHORTLIST
-     * =========================================================================
-     */
     #[Test]
     public function it_shortlists_only_as_many_as_the_budget_allows(): void
     {
@@ -210,9 +191,8 @@ final class CandidateScorerTest extends TestCase
     }
 
     /**
-     * Málaga really did appear in both the DUS sweep (€29) and the EIN sweep
-     * (€31) on 2026-08-16. Verifying both would spend two of five window
-     * fetches and two of five Google searches to tell the owner one thing.
+     * Málaga appeared in both the DUS (€29) and EIN (€31) sweeps on 2026-08-16 — verifying both wastes two of five Google
+     * searches on one thing (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function it_never_spends_two_slots_on_the_same_city(): void
@@ -255,11 +235,6 @@ final class CandidateScorerTest extends TestCase
         );
     }
 
-    /**
-     * =========================================================================
-     * THE WINDOW STATISTICS
-     * =========================================================================
-     */
     #[Test]
     public function it_places_a_fare_in_its_own_window(): void
     {
@@ -275,9 +250,8 @@ final class CandidateScorerTest extends TestCase
     }
 
     /**
-     * STRICTLY CHEAPER, so a flat window puts the candidate at 0 rather than at
-     * 100 — and the savings floor is what refuses it. Each rule is blind to the
-     * case the other catches.
+     * Strictly cheaper: a flat window puts the candidate at 0, not 100 — the savings floor is what refuses it; each rule
+     * is blind to what the other catches (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_flat_window_scores_zero_and_is_refused_on_savings_instead(): void
@@ -304,9 +278,8 @@ final class CandidateScorerTest extends TestCase
     }
 
     /**
-     * The median must be a fare somebody was actually offered — it is
-     * subtracted from a real price to produce a saving the screen states in
-     * euros.
+     * The median must be a fare somebody was actually offered — it's subtracted from a real price to produce the saving
+     * the screen states (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function the_median_of_an_even_window_is_an_observed_fare(): void

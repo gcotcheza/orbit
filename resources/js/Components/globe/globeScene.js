@@ -1,37 +1,8 @@
-// =============================================================================
-// The globe, as a thing with knobs on
-// =============================================================================
-// Everything in this app that knows globe.gl exists is in this file. It is not
-// a component and it holds no reactive state: it takes a DOM element, builds
-// the WebGL scene design/README.md §1 specifies, and hands back an object with
-// a handful of verbs on it. GlobeStage.vue does the choreography by calling
-// those verbs; lib/geo.js works out the numbers to call them with.
-//
-// WHY THE SPLIT. globe.gl is a chained-setter API over Three.js with its own
-// render loop and its own tweens — the exact opposite of Vue's model, and
-// pointing a `watch` at it directly produces code where a reactive dependency
-// and a WebGL side effect are the same line and neither can be read. Keeping
-// the seam here also means the day this is swapped for a different renderer,
-// the screen above it does not change.
-//
-// THE TEXTURES ARE OURS, SERVED FROM public/globe/. The design prototype pulls
-// them from unpkg; deploy/nginx/flights-ghiecode.conf sends
-// `default-src 'self'` and `img-src 'self' data: blob:`, so a CDN texture is a
-// blocked request and a black marble. They are committed, three files, ~2.5 MB
-// — see the PR body — and they are the only images this app has.
-//
-// NOTHING HERE HARD-CODES A COLOUR. Every one is read out of tokens.css at the
-// moment it is applied, through token(), because a hex in this file would be
-// the one colour in Orbit that the light theme could not reach.
-// =============================================================================
+// All globe.gl/Three.js code lives in this file, kept out of Vue's reactivity (GlobeStage.vue calls its verbs; lib/geo.js supplies the numbers). Textures are served locally, not from a CDN (CSP), and
+// every colour is read from tokens.css via token() rather than hard-coded (docs/BUSINESS-LOGIC.md §36).
 
-/**
- * The Earth, as photographed.
- *
- * `night` is the prototype's "Night lights" tweak (design/README.md §Known
- * gaps) and is a candidate user setting; it is vendored and named here so that
- * switching to it is one argument rather than one download.
- */
+// The Earth, as photographed. `night` is a candidate user setting, vendored here so switching to it is one argument, not one download.
+// Why: docs/BUSINESS-LOGIC.md §36.
 export const TEXTURES = {
     day: '/globe/earth-blue-marble.jpg',
     night: '/globe/earth-night.jpg',
@@ -39,18 +10,8 @@ export const TEXTURES = {
 
 const BUMP_TEXTURE = '/globe/earth-topology.png'
 
-/**
- * Is there a GPU at the other end of this?
- *
- * A phone with WebGL disabled, a locked-down browser, a machine whose driver
- * has been blocklisted: all of them run the JavaScript perfectly and then draw
- * nothing at all, which reads as a broken app rather than as an unsupported
- * one. The home screen probes FIRST and renders a plain list instead — the
- * globe is the signature of this app, not the content of it.
- *
- * The probe canvas is thrown away immediately; it is a capability question, not
- * a rendering one.
- */
+// Probes WebGL support so the home screen can fall back to a plain list instead of drawing nothing; the probe canvas is discarded immediately.
+// Why: docs/BUSINESS-LOGIC.md §36.
 export function hasWebgl() {
     try {
         const canvas = document.createElement('canvas')
@@ -64,13 +25,8 @@ export function hasWebgl() {
 }
 
 /**
- * Build the scene inside `element`.
- *
- * globe.gl is imported HERE, dynamically, for two reasons: it carries Three.js
- * with it and is by far the largest thing this app ships, so it must not sit in
- * the entry chunk; and an import that fails — a stale service-worker cache, a
- * flaky connection on a train — becomes a rejected promise the caller can fall
- * back from instead of a blank screen.
+ * Build the scene inside `element`; globe.gl is imported dynamically since it's this app's largest dependency and import failures reject cleanly.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
  * @param {HTMLElement} element
  * @param {{ onContextLost?: () => void }} options
@@ -85,18 +41,16 @@ export async function createGlobeScene(element, { onContextLost } = {}) {
         .showAtmosphere(true)
         .atmosphereAltitude(0.22)
 
-        // Hairline arcs, "like satellite-route imagery" (design/README.md §1).
-        // The stroke is per-datum so that the reduced-motion view can draw the
-        // whole watchlist faintly with the same layer.
+        // Hairline arcs (design/README.md §1); stroke is per-datum so reduced-motion can reuse the same layer at low opacity.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         .arcColor('color')
         .arcStroke('stroke')
         .arcAltitudeAutoScale(0.45)
         .arcDashLength('dashLength')
         .arcDashGap('dashGap')
         .arcDashAnimateTime('dashAnimateTime')
-        // Arcs are replaced wholesale on every route change, and a transition
-        // would animate the old route's arc into the new one's — two airports
-        // sliding across the planet, which is not what a change of route is.
+        // Arc transitions are disabled: a tween would visibly slide the old route's arc into the new one's on every route change.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         .arcsTransitionDuration(0)
 
         .pointColor('color')
@@ -110,9 +64,8 @@ export async function createGlobeScene(element, { onContextLost } = {}) {
         .ringRepeatPeriod(1100)
         .ringAltitude(0.016)
 
-    // Rotate-drag only (design/README.md §1). Zoom and pan would fight the
-    // camera choreography for control of the same three numbers, and the tour
-    // would yank the view back mid-gesture.
+    // Rotate-drag only (design/README.md §1); zoom/pan would fight the camera choreography and yank the view mid-gesture.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     const controls = globe.controls()
     controls.enableZoom = false
     controls.enablePan = false
@@ -120,10 +73,8 @@ export async function createGlobeScene(element, { onContextLost } = {}) {
 
     const canvas = globe.renderer().domElement
 
-    // A lost context is a globe that has stopped existing while the page is
-    // still up — a backgrounded tab on a phone under memory pressure is the
-    // common cause. Telling the screen lets it fall back to the list rather
-    // than leave a hole where the Earth was.
+    // A lost WebGL context (common on backgrounded phones under memory pressure) is reported via onContextLost so the screen can fall back to the list.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     const handleContextLost = (event) => {
         event.preventDefault()
         onContextLost?.()
@@ -132,16 +83,8 @@ export async function createGlobeScene(element, { onContextLost } = {}) {
     canvas.addEventListener('webglcontextlost', handleContextLost)
 
     const scene = {
-        /**
-         * Fit the renderer to the element it is drawing into.
-         *
-         * The element's own box is the single source of the size — the 360 px
-         * from design/README.md §1 is written once, in GlobeStage.vue's CSS,
-         * and never as a number in here. A zero box (the screen is display:none,
-         * or has not been laid out yet) is ignored rather than passed on: a
-         * camera with a 0/0 aspect ratio is a matrix full of NaN that does not
-         * recover when the element comes back.
-         */
+        // Element's box is the single source of size (set once in GlobeStage.vue's CSS); a zero box is skipped since a 0/0 aspect ratio produces an unrecoverable NaN camera matrix.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         resize() {
             const { clientWidth, clientHeight } = element
 
@@ -150,22 +93,12 @@ export async function createGlobeScene(element, { onContextLost } = {}) {
             }
         },
 
-        /**
-         * Re-read the atmosphere colour from the stylesheet.
-         *
-         * The only part of the globe that changes with the theme: the Earth
-         * texture is the same photograph either way, so a re-tinted arc would
-         * stop matching it (tokens.css says the same thing, from the other
-         * side).
-         */
+        // Atmosphere colour is the only themed part of the globe; the Earth texture is a fixed photograph, so nothing else should be re-tinted.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         applyTheme() {
             globe.atmosphereColor(token('--globe-atmosphere'))
         },
 
-        /**
-         * Draw one route: its arc, both airports, and a pulse over the
-         * destination.
-         */
         showRoute(route) {
             globe
                 .arcsData([arcFor(route, { active: true })])
@@ -180,14 +113,8 @@ export async function createGlobeScene(element, { onContextLost } = {}) {
                 }])
         },
 
-        /**
-         * Draw every route at once, faintly, with no pulse and no dash
-         * animation — the reduced-motion view of the same watchlist.
-         *
-         * Nothing here moves, so all of it can be on screen: the arcs stop
-         * being a film and become a map, which is the honest static answer to
-         * "what am I watching".
-         */
+        // Reduced-motion view: draws every route at once, faintly, with no pulse/dash — an honest static map instead of a film.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         showAllRoutes(routes, activeCode) {
             globe
                 .arcsData(routes.map((route) => arcFor(route, { active: route.code === activeCode, still: true })))
@@ -203,15 +130,8 @@ export async function createGlobeScene(element, { onContextLost } = {}) {
             globe.pointOfView(pov, ms)
         },
 
-        /**
-         * Stop and start the render loop.
-         *
-         * Called when the tab is hidden or the screen is cached by KeepAlive.
-         * requestAnimationFrame is already throttled in a hidden tab, but the
-         * globe is also running dash and ring tweens on its own clock, and a
-         * phone should not be asked to keep a planet warm for a screen nobody
-         * is looking at.
-         */
+        // Called when the tab is hidden or the screen is KeepAlive-cached; globe.gl runs its own tweens outside requestAnimationFrame's throttling, so this stops them explicitly.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         pause() {
             globe.pauseAnimation()
         },
@@ -222,9 +142,7 @@ export async function createGlobeScene(element, { onContextLost } = {}) {
 
         destroy() {
             canvas.removeEventListener('webglcontextlost', handleContextLost)
-            // Frees the WebGL context, the textures and the geometry. Without
-            // it a browser hits its context limit after a few remounts and
-            // starts silently killing the oldest one.
+            // DO NOT REMOVE: frees the WebGL context/textures/geometry, or the browser hits its context limit after a few remounts and kills the oldest one.
             globe._destructor()
             element.replaceChildren()
         },
@@ -248,34 +166,24 @@ function arcFor(route, { active, still = false }) {
         endLng: route.destination.lng,
         color: [token('--globe-arc-from'), token('--globe-arc-to')],
         stroke: active ? 0.35 : 0.16,
-        // A solid line when nothing is allowed to move: dashes that do not
-        // travel are just a dotted line, and dashes that do are the thing
-        // reduced motion is asking us not to do.
+        // Solid line (dashLength=1) when reduced motion is on: a static dash pattern is just a dotted line, an animated one is what reduced motion forbids.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         dashLength: still ? 1 : 0.5,
         dashGap: still ? 0 : 0.22,
         dashAnimateTime: still ? 0 : 2400,
     }
 }
 
-/**
- * The destination pulse: the token colour, fading out as the ring expands.
- *
- * globe.gl asks for a FUNCTION of the ring's own progress here, which is the
- * only way to express a fade — and the only reason this file parses a hex at
- * all. The colour still comes from tokens.css; only the alpha is ours.
- */
+// globe.gl requires a function of progress to express a fade, the only reason this file parses a hex colour; the colour still comes from tokens.css, only the alpha is ours.
+// Why: docs/BUSINESS-LOGIC.md §36.
 function fadingRing(hex) {
     const { r, g, b } = toRgb(hex)
 
     return (t) => `rgba(${r}, ${g}, ${b}, ${(0.55 * (1 - t)).toFixed(2)})`
 }
 
-/**
- * Read a design token off the document.
- *
- * Live rather than cached: `data-theme` can change at any moment (stores/theme.js)
- * and this is the cheapest possible way of always agreeing with the stylesheet.
- */
+// Reads live rather than cached: `data-theme` can change at any moment (stores/theme.js), so this stays cheaply in sync with the stylesheet.
+// Why: docs/BUSINESS-LOGIC.md §36.
 function token(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 }

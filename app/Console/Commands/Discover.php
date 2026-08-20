@@ -12,28 +12,16 @@ use Illuminate\Support\Facades\Date;
 /**
  * Go and find the cheap routes nobody is watching.
  *
- * SCHEDULED, UNLIKE `orbit:poll-returns` — routes/console.php runs it at 05:20
- * daily, and the reason this PR could add the entry where the returns
- * foundation deliberately did not is that discovery has a READER on the day it
- * ships. `GET /api/discoveries` and the search screen's "Deals from your
- * airports" section are in this same PR, so the requests it spends buy
- * something the owner can see tomorrow morning. A schedule entry filling a
- * table nothing reads is a standing cost for no benefit; this is not that.
+ * Scheduled daily at 05:20 (routes/console.php) because discovery has a reader on day one: GET /api/discoveries and
+ * the search screen.
  *
- * IT IS ALSO SAFE TO SCHEDULE IN A WAY THE POLLS ARE NOT, and that is the other
- * half of the argument. Nothing here can send mail. The worst a bad discovery
- * run can do is put a disappointing card on a screen somebody chose to open
- * (docs/BUSINESS-LOGIC.md §16).
+ * Safe to schedule, unlike the polls — nothing here can send mail; the worst case is a disappointing card.
  *
- * ONE JOB, NOT A FAN-OUT, which is why this command is so much shorter than
- * PollFares and SweepRules. Discovery is a RANKING across all three origins and
- * cannot be split per route without either a rendezvous or three separate
- * budgets — see App\Jobs\DiscoverDeals.
+ * One job, not a fan-out: discovery is a RANKING across all three origins and cannot be split per route. See
+ * App\Jobs\DiscoverDeals (docs/BUSINESS-LOGIC.md §16).
  *
- * WHY A COMMAND AT ALL, given it dispatches exactly one job: routes/console.php
- * is loaded on EVERY artisan invocation including `migrate` against an empty
- * database, so anything that touches a model has to live behind a command name
- * rather than in the schedule file. The same rule every other entry follows.
+ * A command, not schedule-file code, because routes/console.php loads on every artisan invocation, including against
+ * an empty database (docs/BUSINESS-LOGIC.md §13).
  */
 final class Discover extends Command
 {
@@ -45,10 +33,8 @@ final class Discover extends Command
     public function handle(): int
     {
         /*
-         * `--now` EXISTS FOR THE SAME REASON `orbit:poll-returns --now` DOES:
-         * somebody on a box wants to see the answer, and a queued job's answer
-         * arrives in a worker's log. It is also what the deploy runbook uses to
-         * fill the screen once rather than waiting for 05:20.
+         * `--now` exists for the same reason `orbit:poll-returns --now` does:
+         * somebody on a box wants to see the answer, not dig through a worker's log.
          */
         if ($this->option('now')) {
             $this->components->info('Sweeping now — this makes real provider requests.');
@@ -68,12 +54,8 @@ final class Discover extends Command
     }
 
     /**
-     * What the run left on the screen.
-     *
-     * READ BACK FROM THE TABLE RATHER THAN RETURNED BY THE JOB, because the job
-     * is a queued class whose contract is a void `handle()` — and because the
-     * table is what the API will actually serve. A summary computed in the job
-     * and printed here could agree with itself and disagree with the screen.
+     * What the run left on the screen — read back from the table (what the API
+     * serves), not returned by the job, whose handle() contract is void.
      */
     private function report(): void
     {
@@ -82,11 +64,8 @@ final class Discover extends Command
 
         if ($discoveries->isEmpty()) {
             /*
-             * AN EMPTY ANSWER IS A REAL ANSWER. A week with no deals in it
-             * should produce an empty discovery screen rather than the least
-             * mediocre thing available — see App\Domain\Discovery\
-             * DiscoveryPolicy, where every threshold is a floor rather than a
-             * quota.
+             * An empty answer is a real answer: no deals means an empty screen, not the least-mediocre thing available. See
+             * App\Domain\Discovery\DiscoveryPolicy (docs/BUSINESS-LOGIC.md §16).
              */
             $this->components->warn('Nothing cleared the thresholds — no discoveries today.');
 

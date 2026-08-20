@@ -14,17 +14,11 @@ use App\Http\Resources\UserSettingsResource;
 /**
  * How and when Orbit reaches the owner (design/README.md §6).
  *
- * BOTH ACTIONS ANSWER THE SAME BODY, which is the contract the screen is built
- * on: it PUTs the object it is holding and renders whatever comes back, so a
- * value the server clamped or normalised lands on screen without a follow-up
- * GET. That is also what makes the optimistic switches safe — the response is
- * the truth, and the screen adopts it.
+ * Both actions answer the same body — the response is the truth the screen adopts, which is what makes the optimistic
+ * switches safe.
  *
- * THE ROW IS CREATED ON FIRST READ (App\Models\UserSettings::for) rather than
- * by a seeder. One account today, and an account that has never opened this
- * screen still has to have settings the alert engine can read — so "the
- * settings exist" is a property of asking for them, not of a deploy having
- * run.
+ * The row is created on first read (UserSettings::for), not by a seeder, so an account that never opened this screen
+ * still has settings to read (docs/BUSINESS-LOGIC.md §36).
  */
 final class SettingsController extends Controller
 {
@@ -48,12 +42,8 @@ final class SettingsController extends Controller
     }
 
     /**
-     * ALWAYS 200, PINNED. A JsonResource answers 201 when the model behind it
-     * `wasRecentlyCreated`, which is right for a resource somebody asked to
-     * create and wrong for both of these: the row appearing on first read is
-     * an implementation detail of storage, not a thing the client made, and a
-     * PUT that answered 201 the first time and 200 afterwards would be a
-     * status code that describes the database rather than the request.
+     * ALWAYS 200, PINNED — a JsonResource answers 201 when wasRecentlyCreated, which is wrong here: the row appearing on
+     * first read isn't a thing the client made.
      */
     private function present(UserSettings $settings): JsonResponse
     {
@@ -66,12 +56,8 @@ final class SettingsController extends Controller
     /**
      * The three levels of the segmented control, described.
      *
-     * SENT WITH EVERY RESPONSE RATHER THAN BAKED INTO THE SCREEN. Each blurb
-     * quotes the score its level fires at, and that number is config's
-     * (`score.tiers`, via UserSettings::minimumScoreFor) — a "80+" typed into
-     * a Vue template is a sentence that goes quietly wrong the day the tier is
-     * retuned, on the one screen whose whole job is to explain what will
-     * happen.
+     * Sent with every response rather than baked into the screen — a hardcoded "80+" in a template would silently drift
+     * from config's `score.tiers`.
      *
      * @return list<array{level: int, name: string, minimumScore: int, blurb: string}>
      */

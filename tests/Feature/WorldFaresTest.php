@@ -20,40 +20,8 @@ use Database\Seeders\WorldAirportSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * Long-haul, on fares that were really there.
- *
- * WHY THIS FILE EXISTS SEPARATELY FROM TravelpayoutsPollTest, which already
- * drives the app end to end on recorded fares: every route in that file is
- * AMS-LIS, a 2,000 km hop with eighty-odd days of coverage and a €80 fare. The
- * world import claims Orbit can price ANY airport on Earth, and that claim was
- * worth checking against the actual API before shipping the feature that makes
- * it — rather than after, on the owner's box, with a screen that says nothing.
- *
- * WHAT THE RECORDING FOUND, on 2026-08-15, for the 91-day window from that
- * morning (eight live calls, the fixtures beside this file):
- *
- *     AMS-JFK   59 of 91 days covered (65%)   €334 – €704, median €461
- *     AMS-BKK   69 of 91 days covered (76%)   €272 – €396, median €303
- *
- * Two things in there are worth the owner knowing and are asserted below so
- * they cannot quietly stop being true:
- *
- * 1. LONG-HAUL COVERAGE IS THINNER AND LUMPIER THAN SHORT-HAUL. AMS-JFK's
- *    November had exactly ONE priced day in the whole month. Travelpayouts
- *    serves a cache of other people's searches, and nobody is searching a
- *    Thursday in November yet. The calendar has always had holes; on these
- *    routes it has more of them, and this is what that looks like.
- *
- * 2. THE PRICES ARE ONE-WAY AND READ EXPENSIVE, and are not wrong. €461 median
- *    to New York is a one-way fare, which is roughly what a return costs and
- *    is the number this app has always dealt in (see the adapter's note 5, and
- *    docs/BUSINESS-LOGIC.md §11). A "deal" on a long-haul route is therefore a
- *    much bigger number than a deal to Lisbon, which the scorer handles
- *    already — it compares a route against ITSELF, never against another route.
- *
- * THE FIXTURES ARE THE REAL BODIES, minus nothing. There is no token in them
- * to scrub: the API takes it in an `X-Access-Token` header and echoes nothing
- * back.
+ * Long-haul fares from a real recording (2026-08-15, fixtures beside this file) — separate from
+ * TravelpayoutsPollTest's short-haul AMS-LIS case. Fixtures are unscrubbed real bodies (docs/BUSINESS-LOGIC.md §36).
  */
 final class WorldFaresTest extends TestCase
 {
@@ -68,12 +36,9 @@ final class WorldFaresTest extends TestCase
         /* The morning the fixtures were recorded, so their coverage means what it says. */
         Date::setTestNow('2026-08-15 06:10:00');
 
-        /*
-         * AND THE WINDOW THEY WERE RECORDED FOR. Production polls six months
-         * since "six-month fare horizon"; asking for six here would ask for
-         * three months nobody recorded, and Http::preventStrayRequests would
-         * fail the test — correctly. See TravelpayoutsPollTest, which pins the
-         * same 90 for the same reason.
+        /**
+         * Window is 90, not six months: asking for six would request months nobody recorded and Http::preventStrayRequests
+         * would correctly fail — see TravelpayoutsPollTest (docs/BUSINESS-LOGIC.md §36).
          */
         config([
             'orbit.poll.window_days'             => 90,
@@ -102,11 +67,7 @@ final class WorldFaresTest extends TestCase
 
         PollRoutePrices::dispatchSync($route->id);
 
-        /*
-         * 59 of 91. The fake provider answers for all 91 and always has; this
-         * is what a real long-haul answer looks like, and the screens have
-         * handled gaps since the calendar was built.
-         */
+        /* 59 of 91: real long-haul coverage has gaps — the calendar has always handled them. */
         $this->assertSame(59, CalendarFare::query()->where('route_id', $route->id)->count());
 
         $observation = PriceObservation::query()->where('route_id', $route->id)->firstOrFail();
@@ -137,22 +98,8 @@ final class WorldFaresTest extends TestCase
     }
 
     /**
-     * THE FINDING THAT WOULD HAVE BEEN A BUG REPORT, recorded as a test.
-     *
-     * Ask Travelpayouts for AMS-JFK and every entry comes back saying
-     * `"destination": "NYC"` — the CITY code. The API normalises a
-     * multi-airport city to it, so a watch on JFK is really a watch on
-     * "cheapest from Amsterdam to any New York airport", and the fare may be
-     * Newark's.
-     *
-     * ORBIT IS RIGHT EITHER WAY, and this asserts why: the adapter reads only
-     * `depart_date`, `value` and `actual` from an entry and never the echoed
-     * origin/destination, so the fare lands on the route that was ASKED for. If
-     * a later version of that adapter started trusting the echoed code, this
-     * test fails and the calendar does not silently empty.
-     *
-     * It is worth the owner knowing rather than hiding: "AMS-JFK €334" means
-     * New York, not necessarily Kennedy.
+     * Travelpayouts answers AMS-JFK with destination "NYC" (city code) — the adapter must read only
+     * depart_date/value/actual and never the echoed code, or the fare lands wrong (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_multi_airport_city_answers_under_its_city_code_and_still_lands_on_the_route(): void
@@ -178,19 +125,8 @@ final class WorldFaresTest extends TestCase
     }
 
     /**
-     * THE WHOLE POINT OF THE WORLD IMPORT, in one request: a code that did not
-     * exist in this app a week ago, typed into the box, priced.
-     *
-     * `exists:airports,iata` in App\Http\Requests\RoutePairRequest is the rule
-     * that used to refuse it and is UNCHANGED — what changed is the table under
-     * it.
-     *
-     * THE SECOND HALF USED TO ASSERT THAT EWR-JFK WAS REFUSED, because the
-     * origins were closed to AMS, EIN and DUS. The search screen opened them on
-     * 2026-08-16 (see RoutePairRequest), so the world import now reaches BOTH
-     * ends of a pair: two American airports, neither of them anywhere near the
-     * owner, priced on request. That is the same feature this test was written
-     * for, finished.
+     * World import: a code unknown a week ago, priced on request. RoutePairRequest's exists:airports,iata rule is unchanged — only the airports table under
+     * it grew, so this now reaches both ends of a pair (see RoutePairRequest's 2026-08-16 origin change) (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function the_lookup_endpoint_prices_a_pair_it_only_knows_because_of_the_world_import(): void
@@ -212,17 +148,9 @@ final class WorldFaresTest extends TestCase
         $this->assertSame(69, CalendarFare::query()->where('route_id', $route->id)->count());
         $this->assertSame(0, $route->watchlistItems()->count(), 'A lookup still watches nothing.');
 
-        /*
-         * AND NOW THE OTHER END. EWR is in the table because of the same
-         * import, is not in `config('orbit.origins')`, and is not an airport
-         * anybody drives to from Eindhoven — which is exactly the pair the
-         * origin rule used to refuse and the search screen exists to allow.
-         *
-         * A PROVIDER WITH NOTHING TO SAY, on purpose: `data: []` is a real
-         * answer (docs/API.md — `price.current: null` is not a failure), and
-         * what is being asserted here is that the request reaches the provider
-         * at all rather than dying in validation. The month fixtures above are
-         * a four-response sequence spent on AMS-BKK.
+        /**
+         * EWR-JFK: neither airport is in orbit.origins, exactly the pair the origin rule used to refuse. data: [] is a real provider answer (docs/API.md), not a
+         * failure — asserts the request reaches the provider rather than dying in validation (docs/BUSINESS-LOGIC.md §36).
          */
         $this->assertNotNull(Airport::query()->where('iata', 'EWR')->first());
 
@@ -236,8 +164,6 @@ final class WorldFaresTest extends TestCase
 
         $this->assertSame(0, WatchlistItem::query()->count(), 'A lookup still watches nothing.');
     }
-
-    // -- Helpers -------------------------------------------------------------
 
     private function airports(): void
     {

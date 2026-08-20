@@ -17,11 +17,9 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * POST /api/routes/{code}/live-price — "Check live price", and the guardrails
- * between one tap and a month's SerpAPI quota (docs/BUSINESS-LOGIC.md §17).
- *
- * ⚠ NO REAL SERPAPI REQUEST IS MADE BY ANYTHING IN THIS FILE. The fixtures are
- * the ones recorded on 2026-08-16 for the discovery work.
+ * POST /api/routes/{code}/live-price — guardrails between one tap and a month's SerpAPI
+ * quota (docs/BUSINESS-LOGIC.md §17).
+ * ⚠ NO REAL SERPAPI REQUEST IS MADE HERE — fixtures recorded 2026-08-16.
  */
 final class LivePriceCheckTest extends TestCase
 {
@@ -322,13 +320,8 @@ final class LivePriceCheckTest extends TestCase
     }
 
     /**
-     * =========================================================================
-     * BILLED OR NOT BILLED — the difference a row is written on
-     * =========================================================================
-     * Google answering without a `price_insights` block is a real answer on a
-     * thin route and SerpAPI counted the search, so the row is written and the
-     * cooldown covers it. Everything below this is a search that never
-     * happened: no row, and the button is still there to try again.
+     * Billed vs not billed: Google answering without price_insights on a thin route still counted as a billed search, so the row is written and cooldown
+     * covers it — everything below is a search that never happened (no row, button still there) (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_silent_answer_is_recorded_rather_than_re_bought(): void
@@ -421,12 +414,8 @@ final class LivePriceCheckTest extends TestCase
     }
 
     /**
-     * =========================================================================
-     * ⚠ TWO TAPS THAT RACE — a paid answer must never come back as a 500
-     * =========================================================================
-     * Both requests pass the cooldown and the quota, both spend a search, and
-     * the unique key lets exactly one row through. The listener below is the
-     * other request committing its row while this one is mid-flight.
+     * ⚠ Two taps that race: a paid answer must never come back as a 500. Both spend a search; the unique key lets exactly
+     * one row through — the listener below mimics the other request committing mid-flight (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_tap_that_loses_the_race_serves_the_winners_answer(): void
@@ -461,11 +450,8 @@ final class LivePriceCheckTest extends TestCase
     }
 
     /**
-     * =========================================================================
-     * ⚠ THE CALLOUT MAY NOT RECOMMEND A FARE THIS DOCUMENT DOUBTS
-     * =========================================================================
-     * The demoted half is in tests/Feature/RouteDetailApiTest; this is the half
-     * with a live price behind it.
+     * ⚠ The callout may not recommend a fare this document doubts. Demoted half is in
+     * tests/Feature/RouteDetailApiTest; this is the half with a live price behind it.
      */
     #[Test]
     public function a_live_price_dearer_than_the_cached_one_replaces_the_advice(): void

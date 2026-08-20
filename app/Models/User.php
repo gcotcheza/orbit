@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -39,11 +38,8 @@ class User extends Authenticatable
      * The trips this account described in English (design/README.md §4),
      * newest first — a rule somebody just wrote is the one they want to see.
      *
-     * SEPARATE FROM `watchlistItems` AND NOT A KIND OF IT. docs/PLAN.md is
-     * explicit that rules and the watchlist are different concepts: a rule
-     * finds routes nobody is watching yet, and promoting one of its matches to
-     * the watchlist is a deliberate tap rather than something a rule does on
-     * the owner's behalf.
+     * Separate from `watchlistItems`, not a kind of it (docs/PLAN.md): a rule finds unwatched routes; promoting a match is
+     * a deliberate tap, not automatic (docs/BUSINESS-LOGIC.md §11).
      *
      * @return HasMany<DealRule, $this>
      */
@@ -55,11 +51,8 @@ class User extends Authenticatable
     /**
      * Everything Orbit has decided to tell this account, newest first.
      *
-     * ORDERED BY `triggered_at` AND NOT BY `created_at`, which are the same
-     * instant today and will not be the first time a run is retried: the row
-     * records the moment the DECISION was made, and a ledger that listed itself
-     * by the moment it was written would put a re-queued job's rows in the
-     * wrong place in its own history.
+     * Ordered by `triggered_at`, not `created_at`: they diverge on a retried run, and this must reflect when the DECISION
+     * was made, not written (docs/BUSINESS-LOGIC.md §10).
      *
      * @return HasMany<Alert, $this>
      */
@@ -71,11 +64,8 @@ class User extends Authenticatable
     /**
      * How and when this account wants to be told about a deal.
      *
-     * MAY NOT EXIST YET, which is why almost nothing should use this relation
-     * directly: UserSettings::for($user) is the accessor that creates the row
-     * on first read. The relation is here because that method needs it, and
-     * because a later screen wanting settings eager-loaded should be able to
-     * ask for them by name.
+     * MAY NOT EXIST YET — use UserSettings::for($user), which creates the row on first read. This relation exists for that
+     * method and for eager-loading (docs/BUSINESS-LOGIC.md §36).
      *
      * @return HasOne<UserSettings, $this>
      */
@@ -85,8 +75,6 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the attributes that should be cast.
-     *
      * @return array<string, string>
      */
     protected function casts(): array

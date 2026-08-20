@@ -17,13 +17,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 /**
  * A city pair, and the hub every price in this app hangs off.
  *
- * NAMED `Route` DESPITE Illuminate\Support\Facades\Route existing. The domain
- * word for what this is, is "route" — it is on every screen and in every URL —
- * and renaming the model to avoid a collision would put the framework's
- * vocabulary ahead of the product's in the one place the product's should win.
- * The two are never both needed in the same file: routes/web.php uses the
- * facade and nothing else, and a controller uses the model and nothing else.
- * Where a test needs both, it aliases at the import.
+ * Named `Route` despite Illuminate's Route facade: "route" is the domain word everywhere in the product, so it wins the name; the two are never both
+ * needed in one file (tests alias at the import if they are) (docs/BUSINESS-LOGIC.md §1).
  *
  * @property int $id
  * @property string $code "AMS-LIS"
@@ -90,11 +85,8 @@ final class Route extends Model
     }
 
     /**
-     * The routes worth spending a provider call on.
-     *
-     * ONE DEFINITION, because two commands and a seeder all need it and
-     * "watched" drifting between them would mean a route being polled but
-     * never scored, or scored against statistics nothing refreshes.
+     * The routes worth spending a provider call on. ONE definition: two commands and a seeder all need it, and drift here
+     * means a route polled but never scored (or scored against stale statistics) (docs/BUSINESS-LOGIC.md §1).
      *
      * @return Builder<Route>
      */

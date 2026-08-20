@@ -1,24 +1,5 @@
-// =============================================================================
-// Deal rules
-// =============================================================================
-// The trips the owner described in English (design/README.md §4), and the
-// reading of the one they are typing right now.
-//
-// TWO HALVES THAT LOOK UNRELATED AND ARE NOT. `reading` is the create screen's
-// live parse; `rules` is the watch screen's list. They share a store because
-// they share a shape — every rule in the list carries the same `chips`,
-// `criteria` and `matches` a parse does (docs/API.md) — and because creating a
-// rule has to put the new row into a list the other screen may already be
-// holding. Two stores would mean the watch tab showing a stale count the
-// moment a rule was written.
-//
-// STALENESS IS THE HARD PART. The create screen parses on a 500 ms debounce
-// while somebody types, so two parses are routinely in flight and they can
-// come back in either order — adopting the slower one would leave the chips
-// describing a sentence that is no longer on screen. Only the most recent
-// request may write, which is the same `sequence` guard stores/settings.js
-// uses and for the same reason.
-// =============================================================================
+// The trips the owner described in English (design/README.md §4), and the reading of the one they are typing right now
+// (docs/BUSINESS-LOGIC.md §11).
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { http } from '@/lib/http'
@@ -47,21 +28,14 @@ export const useRulesStore = defineStore('rules', () => {
     const matches = computed(() => reading.value?.matches ?? { count: 0, cheapest: null, sample: [] })
 
     /**
-     * Whether the current parse found anything at all.
-     *
-     * On `chips`, not on the text: a sentence Orbit could not read and an empty
-     * box are the same answer from the server, and the screen says different
-     * things about them using the text it already has.
+     * Whether the current parse found anything at all. Checked via `chips`, not the raw text — server treats "unreadable"
+     * and "empty" the same (docs/BUSINESS-LOGIC.md §11).
      */
     const understood = computed(() => chips.value.length > 0)
 
     /**
-     * Read a sentence back.
-     *
-     * The DEBOUNCE IS THE CALLER'S — Create.vue owns the 500 ms timer because
-     * that is a fact about a textarea rather than about rules. What lives here
-     * is the part a component cannot get right on its own: refusing to adopt
-     * an answer that a newer request has already superseded.
+     * Read a sentence back. Debounce lives in Create.vue (a textarea concern); this only refuses stale responses
+     * (docs/BUSINESS-LOGIC.md §11).
      */
     async function parse(text, removed = []) {
         parseStatus.value = 'parsing'
@@ -122,12 +96,8 @@ export const useRulesStore = defineStore('rules', () => {
     }
 
     /**
-     * Save the rule currently on the create screen.
-     *
-     * IT RETURNS THE ROW rather than only storing it, because the screen has
-     * something to say afterwards — the design's created state names the rule
-     * it just made. It throws on failure so the caller can leave the form as
-     * it was; `error` carries the sentence to show.
+     * Save the rule currently on the create screen. Returns the row (the created state names it) and throws on failure so
+     * the form is left as-is (docs/BUSINESS-LOGIC.md §11).
      */
     async function create(text, removed = []) {
         error.value = ''
@@ -190,16 +160,8 @@ export const useRulesStore = defineStore('rules', () => {
     }
 
     /**
-     * Start watching one of a rule's matches.
-     *
-     * THE EXISTING WATCHLIST WRITE, not a new one — docs/PLAN.md is explicit
-     * that a rule never adds a route on the owner's behalf, so this is the
-     * same endpoint the add-route form uses and the tap is the owner's.
-     *
-     * IT RETURNS THE NEW WATCHLIST ROW, so the screen that already holds that
-     * list can put it straight in rather than re-fetching — the response is in
-     * exactly the shape `GET /api/watchlist` sends (docs/API.md). NULL when
-     * the write failed; `error` carries the sentence to show.
+     * Start watching one of a rule's matches. Reuses the add-route watchlist endpoint (a rule never adds on its own) and
+     * returns the new row for the list to splice in (docs/BUSINESS-LOGIC.md §11).
      */
     async function watch(match) {
         error.value = ''
@@ -244,12 +206,8 @@ export const useRulesStore = defineStore('rules', () => {
 })
 
 /**
- * One sentence somebody can act on, out of whatever went wrong.
- *
- * The 422 branch reads the server's own message rather than writing one here:
- * App\Http\Controllers\RuleController phrases the "could not read a trip out
- * of that" case for a person, and restating it in the client would be two
- * copies to keep in step.
+ * One sentence somebody can act on, out of whatever went wrong. 422 uses the server's own message (RuleController)
+ * rather than a client copy of it (docs/BUSINESS-LOGIC.md §11).
  */
 function messageFor(failure, fallback) {
     const response = failure.response

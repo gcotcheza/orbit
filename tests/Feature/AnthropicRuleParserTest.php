@@ -22,21 +22,8 @@ use App\Infrastructure\Nlp\RegexRuleTextParser;
 use App\Infrastructure\Nlp\AnthropicRuleTextParser;
 
 /**
- * The parser that will run the day a key exists.
- *
- * NOTHING HERE MAKES A CALL. The SDK is driven through a mock PSR-18
- * transporter carrying canned HTTP responses, which is deliberately a level
- * lower than mocking the SDK's own client would be: the cases worth testing —
- * a refusal, a truncation — are things the SDK DESERIALISES, so a test that
- * mocked `messages->create()` would be asserting that the mock returns what
- * the mock was told to return. Driving the real deserialiser is what proves
- * this class reads `stop_reason` off a real response the way it thinks it
- * does.
- *
- * EVERY FAILURE FALLS BACK, and that is the property under test throughout:
- * the create screen re-parses on a 500 ms debounce, so there is no useful
- * error to show between two keystrokes and a refusal must cost a less clever
- * reading rather than the screen.
+ * The parser that will run the day a key exists. No real call: driven through a mock PSR-18 transporter so the SDK's own deserialiser is exercised, not
+ * a mock of `messages->create()`. Every failure falls back — there is no useful error to show mid-keystroke (docs/BUSINESS-LOGIC.md §11).
  */
 final class AnthropicRuleParserTest extends TestCase
 {
@@ -97,8 +84,6 @@ final class AnthropicRuleParserTest extends TestCase
         ]);
     }
 
-    // -- The happy path ------------------------------------------------------
-
     #[Test]
     public function it_reads_the_models_json_into_criteria(): void
     {
@@ -145,14 +130,8 @@ final class AnthropicRuleParserTest extends TestCase
         $this->assertSame([], $this->parser([])->parse('   ')->chips);
     }
 
-    // -- The failures, all of which fall back --------------------------------
-
-    /**
-     * A refusal is a successful HTTP 200 with an empty content array, which is
-     * exactly why `stop_reason` is checked before `content` is read — code
-     * that indexed content[0] first would crash on the case it most needs to
-     * survive.
-     */
+    // A refusal is HTTP 200 with empty content — `stop_reason` must be checked before `content` is indexed, or the crash case is the one most needing to survive.
+    // Why: docs/BUSINESS-LOGIC.md §11.
     #[Test]
     public function a_refusal_falls_back_to_the_regex_parser(): void
     {
@@ -235,12 +214,8 @@ final class AnthropicRuleParserTest extends TestCase
         $this->assertSame(8000, $criteria->maxPriceCents);
     }
 
-    /**
-     * A rule the regexes cannot read either. The point is that it is still an
-     * answer rather than an exception — App\Application\Ports\RuleTextParser
-     * says implementations never throw, and the create screen is asked about
-     * half-finished English constantly.
-     */
+    // Still an answer, never an exception — RuleTextParser implementations never throw; the create screen is asked about half-finished English constantly.
+    // Why: docs/BUSINESS-LOGIC.md §11.
     #[Test]
     public function a_failure_on_a_sentence_nobody_can_read_is_still_not_an_exception(): void
     {
@@ -249,8 +224,6 @@ final class AnthropicRuleParserTest extends TestCase
         $this->assertSame([], $parsed->chips);
         $this->assertTrue($parsed->criteria()->isEmpty());
     }
-
-    // -- Wiring --------------------------------------------------------------
 
     #[Test]
     public function without_a_key_the_container_hands_out_the_regex_parser(): void
@@ -268,12 +241,8 @@ final class AnthropicRuleParserTest extends TestCase
         $this->assertInstanceOf(AnthropicRuleTextParser::class, $this->app->make(RuleTextParser::class));
     }
 
-    /**
-     * A typo in .env must not silently downgrade the parser — the same rule
-     * the fare providers are bound under, for the same reason: a box quietly
-     * doing something dumber than it was paid to looks exactly like a box that
-     * is working.
-     */
+    // A typo in .env must not silently downgrade the parser — same rule the fare providers are bound under: quietly doing something dumber looks like working.
+    // Why: docs/BUSINESS-LOGIC.md §11.
     #[Test]
     public function an_unknown_parser_name_throws_rather_than_falling_back(): void
     {
@@ -284,13 +253,8 @@ final class AnthropicRuleParserTest extends TestCase
         $this->app->make(RuleTextParser::class);
     }
 
-    // -- The prompt ----------------------------------------------------------
-
-    /**
-     * The schema is built from the vocabulary rather than written out, so the
-     * model is structurally unable to answer with an airport this app does not
-     * fly from or a vibe no destination carries.
-     */
+    // Schema built from the vocabulary, not written out — the model is structurally unable to answer with an airport or vibe this app doesn't know.
+    // Why: docs/BUSINESS-LOGIC.md §11.
     #[Test]
     public function the_schema_only_permits_words_this_app_knows(): void
     {

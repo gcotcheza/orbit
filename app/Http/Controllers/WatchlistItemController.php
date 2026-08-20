@@ -19,33 +19,14 @@ use App\Http\Resources\WatchlistRouteResource;
 use App\Http\Requests\UpdateWatchedRouteRequest;
 
 /**
- * Adding, pausing and dropping a watched route (design/README.md §5).
- *
- * SEPARATE FROM WatchlistController, which stays the single-action GET it was
- * written as. Splitting reads from writes here is not ceremony: the read is
- * the app's launch request and is tuned for it (four queries for any number of
- * routes), while these three are one-row operations a person triggers by
- * tapping something. Keeping them apart means neither grows the other's
- * concerns, and the read's route declaration does not have to change to add a
- * write.
- *
- * EVERY WRITE ANSWERS WITH THE ROW IN THE LIST's OWN SHAPE
- * (WatchlistRouteResource), so the screen replaces the item it was holding
- * rather than re-fetching the list. That matters most for the optimistic
- * toggle: the response is what the server actually believes, and the row
- * adopts it.
- *
- * KEYED ON THE ROUTE CODE, not on the watchlist row's id. The client already
- * has `code` for every row (docs/API.md calls it "the only id the client
- * needs"), and a URL that reads `/api/watchlist/AMS-LIS` is one somebody can
- * check in a network tab.
+ * Adding, pausing and dropping a watched route (design/README.md §5). Separate from WatchlistController (the tuned read stays untouched by writes). Every write answers in the list's own row shape
+ * (WatchlistRouteResource), so the screen replaces rather than re-fetches. Keyed on route code, not row id — the client already has `code` for every row (docs/BUSINESS-LOGIC.md §36).
  */
 final class WatchlistItemController extends Controller
 {
     /**
-     * Start watching a pair. 201, with the route's summary as it stands —
-     * which for a new one is `confident: false` and no prices at all, until
-     * the two jobs below have run.
+     * Start watching a pair. 201, with the route's summary as it stands — for
+     * a new one that's `confident: false` and no prices until the jobs below run.
      */
     public function store(AddWatchedRouteRequest $request, RouteSnapshots $snapshots): JsonResponse
     {
@@ -57,12 +38,8 @@ final class WatchlistItemController extends Controller
         $origin = $request->airport('origin');
         $destination = $request->airport('destination');
 
-        /*
-         * FIND OR CREATE. A route is a fact about the world, not a possession:
-         * the pair may already exist because it was watched and dropped, or
-         * because PR10's rules surfaced it. Re-using the row is what hands the
-         * owner back the price history they already paid for.
-         */
+        // Find or create: a route is a fact about the world, not a possession — reusing an existing row hands back price history already paid for.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         $route = Route::query()->firstOrCreate(
             ['code' => Route::codeFor($origin->iata, $destination->iata)],
             [
@@ -80,14 +57,8 @@ final class WatchlistItemController extends Controller
             'position' => (int) ($user->watchlistItems()->max('position') ?? -1) + 1,
         ]);
 
-        /*
-         * QUEUED, NOT SYNCHRONOUS. Both jobs call a provider, and the person
-         * who just tapped "Add route" should get their row back now rather
-         * than after two HTTP round trips to Travelpayouts. The screen is
-         * built for the gap: the row renders its "no opinion yet" state until
-         * the poll lands, which is the same state every genuinely new route
-         * has (docs/API.md, day-1 honesty).
-         */
+        // Queued, not synchronous: the tap should get a row back now, not after two round trips to the provider. The row renders "no opinion yet" until the poll lands.
+        // Why: docs/BUSINESS-LOGIC.md §36.
         PollRoutePrices::dispatch($route->id);
         RefreshRouteStats::dispatch($route->id);
 
@@ -109,13 +80,8 @@ final class WatchlistItemController extends Controller
     }
 
     /**
-     * Stop watching. 204 — there is nothing left to describe.
-     *
-     * THE ROUTE AND ITS HISTORY SURVIVE, and only the watchlist row goes.
-     * Every observation under it was a real morning's fare, it cost a provider
-     * call to gather, and adding the pair back next spring should not start
-     * from nothing. Nothing else in the app treats an unwatched route as
-     * deleted — the detail screen is deliberately not scoped to the watchlist.
+     * Stop watching. 204 — there is nothing left to describe. The route and its history survive — only the watchlist row
+     * goes; nothing else in the app treats an unwatched route as deleted (docs/BUSINESS-LOGIC.md §36).
      */
     public function destroy(Request $request, string $code): JsonResponse
     {
@@ -128,11 +94,8 @@ final class WatchlistItemController extends Controller
     }
 
     /**
-     * This account's watchlist row for a route code, or a 404 that says so.
-     *
-     * SCOPED TO THE USER, not merely filtered by code. There is one account
-     * today; the row this returns is the one about to be written to, and
-     * "whose is it" is not a question a write should answer by assuming.
+     * This account's watchlist row for a route code, or a 404 that says so. Scoped to the user, not merely filtered by
+     * code — "whose is it" must never be assumed on a write (docs/BUSINESS-LOGIC.md §36).
      */
     private static function item(User $user, string $code): WatchlistItem
     {

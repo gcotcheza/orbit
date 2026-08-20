@@ -21,17 +21,10 @@ use Illuminate\Validation\ValidationException;
  * The owner's standing rules: listing them, writing one, pausing one, dropping
  * one (design/README.md §4 and the rules section of §5).
  *
- * EVERY ANSWER IS THE ROW IN THE LIST'S OWN SHAPE, the same contract
- * WatchlistItemController keeps, so a screen replaces the rule it was holding
- * rather than re-fetching. That matters most for the pause toggle: the
- * response is what the server actually believes, including a match count that
- * may have moved since the row was drawn.
+ * Every answer is the row's own shape, matching WatchlistItemController's contract.
  *
- * CREATING A RULE QUEUES A SWEEP AND DOES NOT WAIT FOR IT. A brand-new rule
- * names routes Orbit has never priced, so its honest match count on the moment
- * of creation is often zero and fills in a minute later — the same day-1
- * honesty a new watchlist route has (docs/API.md). Running the sweep inline
- * would put thirty provider calls behind one tap.
+ * Creating a rule queues a sweep and does not wait for it — day-1 honesty.
+ * Why: docs/BUSINESS-LOGIC.md §11.
  */
 final class RuleController extends Controller
 {
@@ -66,12 +59,8 @@ final class RuleController extends Controller
         $criteria = $parser->parse($text)->without($request->removed())->criteria();
 
         /*
-         * A RULE THAT ASKS FOR NOTHING IS REFUSED, and not because the text
-         * was empty. Empty criteria mean "every fare from every airport to
-         * everywhere, at any price" — a rule that would match hundreds of
-         * routes and alert on all of them, which is not a deal tracker, it is
-         * a firehose. It is also the exact state somebody reaches by removing
-         * every chip, so the message names the way out.
+         * A rule with empty criteria matches every fare everywhere — refused as a firehose, not merely for empty text
+         * (docs/BUSINESS-LOGIC.md §11).
          */
         if ($criteria->isEmpty()) {
             throw ValidationException::withMessages([
@@ -82,9 +71,8 @@ final class RuleController extends Controller
         $rule = DealRule::query()->create([
             'user_id' => $user->id,
             /*
-             * The TRIMMED text, and the criteria AFTER the removals — the two
-             * are deliberately not the same reading. See the migration for why
-             * both are stored and why loading a rule never re-parses its text.
+             * Trimmed text and post-removal criteria — deliberately not the same reading.
+             * Why: docs/BUSINESS-LOGIC.md §11.
              */
             'raw_text' => $text,
             'criteria' => $criteria->toArray(),
@@ -109,10 +97,8 @@ final class RuleController extends Controller
         $rule->update(['active' => $request->boolean('active')]);
 
         /*
-         * A rule that has just been switched back on may have been asleep for
-         * weeks, so its routes are re-swept rather than left to the next
-         * morning. Pausing queues nothing — there is nothing to find out about
-         * a rule nobody is listening to.
+         * Resuming re-sweeps immediately rather than waiting for the next
+         * morning; pausing queues nothing.
          */
         if ($rule->active) {
             SweepRuleFares::dispatch($rule->id);
@@ -124,10 +110,7 @@ final class RuleController extends Controller
     /**
      * Drop a rule. 204 — there is nothing left to describe.
      *
-     * THE ROUTES IT SURFACED SURVIVE, and so do their fares. Every one of them
-     * cost a provider call, several may be on the watchlist by now, and a rule
-     * is a question rather than a possession — deleting the question does not
-     * unask what it already found out.
+     * The routes it surfaced survive, and so do their fares — deleting the question doesn't unask what it found.
      */
     public function destroy(Request $request, int $id): JsonResponse
     {
@@ -140,11 +123,8 @@ final class RuleController extends Controller
     }
 
     /**
-     * This account's rule, or a 404 that says so.
-     *
-     * SCOPED TO THE USER rather than merely filtered by id. There is one
-     * account today; the row this returns is the one about to be written to,
-     * and "whose is it" is not a question a write should answer by assuming.
+     * This account's rule, or a 404 that says so — scoped to the user, not just the id.
+     * Why: docs/BUSINESS-LOGIC.md §11.
      */
     private static function rule(User $user, int $id): DealRule
     {

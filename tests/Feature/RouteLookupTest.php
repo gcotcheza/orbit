@@ -23,36 +23,14 @@ use PHPUnit\Framework\Attributes\Test;
 use App\Application\Ports\PriceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
-/**
- * `POST /api/routes/lookup` — look before you watch.
- *
- * WHAT THIS ENDPOINT IS FOR: seeing what a pair costs WITHOUT putting it on the
- * watchlist. Everything below is one of the four things that makes it different
- * from `POST /api/watchlist`, which is the write it most resembles:
- *
- *   1. it creates a route and NOT a watchlist row — asserted on every path,
- *      because a lookup that quietly started watching something would be the
- *      app taking a decision the owner deliberately did not take;
- *   2. it fetches fares INSIDE the request rather than queueing them, because
- *      nobody is coming back tomorrow to see what a route they were curious
- *      about costs;
- *   3. it refuses to fetch twice inside `orbit.lookup.fresh_for_hours`, which
- *      is the difference between a feature and a way to spend the provider
- *      allowance by holding down F5;
- *   4. it is throttled, for the same reason.
- *
- * THE PROVIDER IS A SPY, not the fake adapter, and that is the whole point of
- * the file: what is being asserted is HOW OFTEN the provider is called, which
- * the fake — deterministic, free and instant — cannot tell anybody. `.env.testing`
- * pins the fake, so every test here overrides the binding first.
- */
+// `POST /api/routes/lookup`: creates a route (never a watchlist row), fetches inline (not queued), dedupes within `orbit.lookup.fresh_for_hours`, and is throttled.
+// Why: docs/BUSINESS-LOGIC.md §1.
 final class RouteLookupTest extends TestCase
 {
     use BuildsRouteData, RefreshDatabase;
 
     private User $owner;
 
-    /** The provider bound for the test, counting what it is asked. */
     private SpyPriceProvider $provider;
 
     protected function setUp(): void
@@ -78,8 +56,6 @@ final class RouteLookupTest extends TestCase
         parent::tearDown();
     }
 
-    // -- Who may ask ---------------------------------------------------------
-
     #[Test]
     public function a_guest_is_refused_with_json_and_creates_nothing(): void
     {
@@ -91,18 +67,8 @@ final class RouteLookupTest extends TestCase
         $this->assertSame(0, $this->provider->calls);
     }
 
-    // -- The pair ------------------------------------------------------------
-
-    /**
-     * The same four sentences `POST /api/watchlist` answers with, because both
-     * requests take their pair from App\Http\Requests\RoutePairRequest. A
-     * refusal here is shown on the screen that asked, so the wording is part of
-     * the contract (docs/API.md).
-     *
-     * THERE WERE FIVE, and the fifth was "Orbit only tracks departures from
-     * AMS, EIN or DUS." It went with the search screen on 2026-08-16 — see the
-     * test below, which is the same pair the old one refused.
-     */
+    // Error wording is shared with POST /api/watchlist via RoutePairRequest and is part of the API contract (docs/API.md).
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function it_refuses_a_pair_it_cannot_price_and_says_which_half_is_wrong(): void
     {
@@ -124,7 +90,6 @@ final class RouteLookupTest extends TestCase
 
         $this->lookup([])->assertStatus(422)->assertJsonValidationErrors(['origin', 'destination']);
 
-        // Nothing was created and nobody was called for any of them.
         $this->assertSame(0, Route::query()->count());
         $this->assertSame(0, $this->provider->calls);
     }
@@ -137,21 +102,8 @@ final class RouteLookupTest extends TestCase
             ->assertJsonPath('data.code', 'AMS-MAD');
     }
 
-    /**
-     * =========================================================================
-     * THE SEARCH SCREEN, IN ONE REQUEST — any airport to any airport
-     * =========================================================================
-     * `LIS` has no `is_origin` flag and is not in `config('orbit.origins')`, and
-     * until 2026-08-16 that made this exact pair a 422: "Orbit only tracks
-     * departures from AMS, EIN or DUS." The rule it fell to was the one thing
-     * standing between the owner and "what does Lisbon to Madrid cost while I
-     * am already in Lisbon".
-     *
-     * IT IS THE FULL PATH, deliberately, and not just a 200: the route is
-     * created, the provider is asked, and the watchlist is untouched. A widened
-     * validation rule that reached a code path expecting a home origin would
-     * pass a status assertion and fail here.
-     */
+    // Any airport can be looked up (not just AMS/EIN/DUS) since 2026-08-16; asserts the full path — route created, provider called, watchlist untouched.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function it_prices_a_pair_that_starts_nowhere_near_home(): void
     {
@@ -166,11 +118,8 @@ final class RouteLookupTest extends TestCase
         $this->assertSame(0, WatchlistItem::query()->count());
     }
 
-    /**
-     * AND THE PAIR THE OLD RULE WAS ACTUALLY WRITTEN FOR still behaves: the
-     * origins are the RULE ENGINE's now (config/orbit.php), and nothing about
-     * this endpoint reads them.
-     */
+    // The origin restriction now belongs to the rule engine (config/orbit.php); this endpoint no longer reads it.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function the_origin_config_is_no_longer_consulted_by_this_endpoint(): void
     {
@@ -181,12 +130,8 @@ final class RouteLookupTest extends TestCase
             ->assertJsonPath('data.code', 'AMS-MAD');
     }
 
-    /**
-     * A pair already on the watchlist is a perfectly ordinary thing to look up
-     * — the detail screen of a watched route is reachable from four places —
-     * and the "you are already watching AMS-LIS" rule that guards the ADD is
-     * deliberately not inherited here.
-     */
+    // Looking up an already-watched pair is allowed; the ADD endpoint's "already watching" guard is deliberately not inherited here.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function looking_up_a_route_that_is_already_watched_is_allowed(): void
     {
@@ -199,8 +144,6 @@ final class RouteLookupTest extends TestCase
             ->assertJsonPath('data.code', 'AMS-LIS')
             ->assertJsonPath('meta.watched', true);
     }
-
-    // -- What it creates, and what it does not -------------------------------
 
     #[Test]
     public function it_creates_the_route_once_and_never_a_watchlist_row(): void
@@ -240,17 +183,8 @@ final class RouteLookupTest extends TestCase
         $this->assertSame($route->id, Route::query()->where('code', 'AMS-MAD')->firstOrFail()->id);
     }
 
-    // -- The fetch -----------------------------------------------------------
-
-    /**
-     * THE FEATURE, in one test: a pair Orbit has never priced comes back priced.
-     *
-     * The provider is asked once, for the whole `orbit.poll.window_days` window
-     * — the same one a watched route gets, so a looked-up fare and a watched
-     * one are the same number about the same six months — and both writes the
-     * morning poll makes are made here: the calendar the heatmap draws, and the
-     * day's observation the chart and the score are built on.
-     */
+    // One fetch covers the full `orbit.poll.window_days` window (same as a watched route) and writes both the calendar and the day's observation, mirroring the morning poll.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function it_prices_a_route_nobody_has_ever_looked_at(): void
     {
@@ -288,11 +222,8 @@ final class RouteLookupTest extends TestCase
         );
     }
 
-    /**
-     * FRESH FARES ARE NOT RE-FETCHED. `orbit.lookup.fresh_for_hours` is the
-     * rule, and the calendar's own `fetched_at` is where it is read from — so a
-     * route the 06:10 poll touched this morning costs a lookup nothing at all.
-     */
+    // Fresh fares are not re-fetched: gated by `orbit.lookup.fresh_for_hours` against the calendar's `fetched_at`.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function it_does_not_call_the_provider_for_a_route_priced_this_morning(): void
     {
@@ -331,13 +262,8 @@ final class RouteLookupTest extends TestCase
         $this->assertSame(1, $this->provider->calls);
     }
 
-    /**
-     * THE HOLE THE CACHE FLAG PLUGS. Travelpayouts serves other people's
-     * searches, so a real pair can genuinely have no fares — and an empty
-     * answer writes no rows, which means the "has it got fresh fares" question
-     * would say no forever and every view of the screen would spend another six
-     * or seven provider calls on the same silence.
-     */
+    // Empty answers write no rows, so a naive "has fresh fares" check would say no forever and re-ask the provider on every view; the cache flag plugs that.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function a_pair_with_no_fares_at_all_is_asked_about_once(): void
     {
@@ -358,13 +284,8 @@ final class RouteLookupTest extends TestCase
         $this->assertSame(1, $this->provider->calls, 'the provider was asked again about a pair it has nothing for');
     }
 
-    /**
-     * A provider that is down is answered with the route as it stands rather
-     * than with a 500: the calendar keeps whatever it had, nothing is deleted
-     * (App\Jobs\PollRoutePrices returns early on an empty answer), and the
-     * screen draws its "no fare seen yet" state. `meta.fares.fresh` stays false,
-     * which is what stops the client from claiming otherwise.
-     */
+    // Provider downtime returns the route as-is (no 500); PollRoutePrices leaves existing data alone and `meta.fares.fresh` stays false so the client won't claim otherwise.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function a_provider_with_nothing_to_say_is_not_an_error(): void
     {
@@ -387,8 +308,6 @@ final class RouteLookupTest extends TestCase
         $this->assertSame(1, CalendarFare::query()->count());
     }
 
-    // -- The throttle --------------------------------------------------------
-
     /**
      * Six a minute, keyed on the account — see AppServiceProvider for why that
      * number and what one miss costs the fare budget.
@@ -405,8 +324,6 @@ final class RouteLookupTest extends TestCase
 
         $this->lookup(['origin' => 'AMS', 'destination' => 'LIS'])->assertStatus(429);
     }
-
-    // -- Helpers -------------------------------------------------------------
 
     /**
      * @param  array<string, string>  $body

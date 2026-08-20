@@ -17,13 +17,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
  * Where "book it" goes — both destinations, and the one digit that is easy to
  * get backwards.
  *
- * WHY THIS IS WORTH ITS OWN FILE. Every failure here is silent. A link with the
- * day and the month swapped opens perfectly, shows real flights, and searches
- * the wrong date; a lower-cased IATA pair searches a different place entirely
- * (Travelpayouts' own docs give the trap: `ROc1` is Romania in business class,
- * `ROC1` is Rochester airport in economy); a missing passenger digit produces a
- * page that simply does not search. None of those is a 500 and none of them
- * would ever appear in a log.
+ * Worth its own file: every failure here is silent — swapped day/month, mismatched IATA casing, a missing passenger
+ * digit — none is a 500, none logs (docs/BUSINESS-LOGIC.md §36).
  *
  * A Laravel TestCase and not a plain one, because the shapes are half
  * config/orbit.php's — which is the point of them being there.
@@ -42,16 +37,9 @@ final class BookingLinkTest extends TestCase
         config()->set('orbit.travelpayouts.marker', self::MARKER);
     }
 
-    // ------------------------------------------------------ the primary hand-off
-
     /**
-     * THE SHAPE, AND THE DIGITS ARE THE ASSERTION.
-     *
-     * `AMS1509OPO1` is Amsterdam to Porto on the FIFTEENTH OF SEPTEMBER: day
-     * first, two digits each, upper case, one adult in economy (no class
-     * letter). Every part of that is verified against Travelpayouts'
-     * documentation and two live pages rather than remembered — see
-     * App\Application\Routes\BookingLink.
+     * `AMS1509OPO1` = Amsterdam to Porto, 15 Sep: day first, two digits each, upper case, one adult economy — verified
+     * against Travelpayouts' docs.
      */
     #[Test]
     public function the_aviasales_link_is_origin_then_day_then_month_then_destination(): void
@@ -65,11 +53,8 @@ final class BookingLinkTest extends TestCase
     }
 
     /**
-     * THE DAY AND THE MONTH, TOLD APART.
-     *
-     * `0509` and `0905` are both plausible and only one is 5 September, so a
-     * date whose two halves cannot be confused is the only assertion that
-     * proves the order. The 15th cannot be a month.
+     * `0509`/`0905` are both plausible dates — only a value whose halves can't be confused (15 can't be a month) actually
+     * proves the order (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function the_day_comes_before_the_month(): void
@@ -93,10 +78,8 @@ final class BookingLinkTest extends TestCase
     }
 
     /**
-     * NO DATE MEANS THE PRE-FILLED SEARCH FORM, not a results page for no day.
-     * It is the documented shape for dateless params and the honest destination
-     * for a route Orbit has no fares for yet: there is nothing to show results
-     * for, so the reader gets the box with the route already in it.
+     * No date means the pre-filled search form, not empty results — the documented shape, and honest when there's nothing
+     * to show yet (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_route_with_no_fares_yet_lands_on_the_pre_filled_search_form(): void
@@ -117,12 +100,8 @@ final class BookingLinkTest extends TestCase
         $this->assertStringContainsString('OPO1&', BookingLink::aviasales($this->route()));
     }
 
-    // ------------------------------------------------------------- the marker
-
     /**
-     * THE ATTRIBUTION, WHICH FINALLY GOES SOMEWHERE. `travelpayouts.marker` sat
-     * unused since the day it was added; it rides on the Aviasales hand-off and
-     * on nothing else.
+     * `travelpayouts.marker` sat unused since it was added; it rides on the Aviasales hand-off only, never Skyscanner.
      */
     #[Test]
     public function the_marker_is_on_the_aviasales_link_and_on_no_other(): void
@@ -139,9 +118,8 @@ final class BookingLinkTest extends TestCase
     }
 
     /**
-     * ABSENT RATHER THAN EMPTY on a box with no marker. `?marker=` with nothing
-     * after it is a parameter the other end has to interpret, and the answer to
-     * "whose link is this" is better left unsaid than said blank.
+     * Absent rather than empty: `?marker=` with nothing after it is a param the other end must interpret; better left
+     * unsaid than said blank (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     #[DataProvider('missingMarkers')]
@@ -172,8 +150,6 @@ final class BookingLinkTest extends TestCase
         ];
     }
 
-    // ---------------------------------------------------- the second opinion
-
     #[Test]
     public function the_skyscanner_link_keeps_the_shape_it_always_had(): void
     {
@@ -189,9 +165,8 @@ final class BookingLinkTest extends TestCase
     }
 
     /**
-     * THE TWO CASINGS ARE OPPOSITE AND BOTH MATTER. Skyscanner's path is
-     * lower-case; Aviasales' params are upper-case and case-SENSITIVE in a way
-     * that silently changes which place is searched.
+     * Both casings matter: Skyscanner's path is lower-case, Aviasales' params are upper-case and case-sensitive — wrong
+     * case searches a different place (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function the_two_links_case_their_codes_in_opposite_directions(): void
@@ -203,12 +178,9 @@ final class BookingLinkTest extends TestCase
         $this->assertStringContainsString('AMS1509OPO', BookingLink::aviasales($route, $date));
     }
 
-    // -------------------------------------------------------- the templates
-
     /**
-     * THE HOLES ARE NAMED AFTER THEIR DATE FORMAT, so the client fills them by
-     * name and never has to know which URL belongs to which site (docs/API.md).
-     * Each template is its own dated link with the date lifted out.
+     * Holes are named after their date format, so the client fills them by name without knowing which URL belongs to which
+     * site (docs/API.md) (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function each_template_is_its_own_link_with_a_named_hole_where_the_date_goes(): void
@@ -227,10 +199,8 @@ final class BookingLinkTest extends TestCase
     }
 
     /**
-     * AND SUBSTITUTING THE HOLE REPRODUCES THE DATED LINK EXACTLY — which is the
-     * property the day sheet depends on and the one that would break silently
-     * if either form were edited without the other. Written as a substitution
-     * rather than as two literals so it cannot be satisfied by a copy-paste.
+     * Substituting the hole must reproduce the dated link exactly — the property the day sheet depends on if template and
+     * dated form drift (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function filling_a_template_gives_the_same_url_as_asking_for_that_date(): void

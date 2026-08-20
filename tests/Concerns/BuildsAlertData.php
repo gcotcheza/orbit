@@ -15,14 +15,9 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Mail\Transport\ArrayTransport;
 
 /**
- * Fixtures for the alert pipeline's tests.
+ * Fixtures for the alert pipeline's tests, sharing one set of price knots.
  *
- * ONE SET OF STATISTICS FOR EVERY ROUTE, so that the score a route earns is a
- * function of its price alone and a reader can check it: against the knots
- * below, €44 scores 94, €60 scores 72 and €93 scores 40 — one on each side of
- * every sensitivity. The arithmetic is App\Domain\Pricing\DealScorer's and has
- * its own tests; what these fixtures buy is being able to say "a route the
- * owner would want to hear about" in one line.
+ * Why: docs/BUSINESS-LOGIC.md §10.
  */
 trait BuildsAlertData
 {
@@ -44,14 +39,8 @@ trait BuildsAlertData
     protected const ORDINARY_CENTS = 9300;
 
     /**
-     * A route this account watches, priced at `$cents` today.
-     *
-     * ONE PRICE IN THE SCORING WINDOW AND NOT A SERIES, deliberately: two
-     * prices give the scorer a trend to fold in and the expected score stops
-     * being something a reader can work out from the knots above. The trend
-     * component has its own tests. The second row `priceRoute()` writes is
-     * outside that window and exists only to age the route — see
-     * Tests\Concerns\BuildsRouteData::trackedSince().
+     * A route this account watches, priced at `$cents` today — one price, deliberately, not a trend series
+     * (docs/BUSINESS-LOGIC.md §10).
      */
     protected function watchedRoute(User $user, string $destination, int $cents, bool $active = true): Route
     {
@@ -73,15 +62,8 @@ trait BuildsAlertData
     }
 
     /**
-     * Today's price on a route Orbit has been watching long enough to have an
-     * opinion about it.
-     *
-     * `trackedSince()` IS WHAT MAKES THE SCORE EXIST AT ALL. Below
-     * config('orbit.alerts.min_tracking_days') the scorer answers "not enough
-     * data yet" and App\Domain\Alerts\AlertPolicy answers `immature-data`, so
-     * without that line every test in this file would be testing the maturity
-     * gate instead of the thing it names. The gate has its own tests; these
-     * want a route whose only interesting property is its price.
+     * Today's price on a route old enough to have a score — `trackedSince()` is what clears the maturity gate
+     * (docs/BUSINESS-LOGIC.md §10).
      */
     protected function priceRoute(Route $route, int $cents, string $departure = '2026-09-04'): void
     {
@@ -108,11 +90,8 @@ trait BuildsAlertData
     }
 
     /**
-     * A ledger row for something Orbit already said — the cooldown's input.
-     *
-     * DELIVERED BY DEFAULT, because that is what an alert from yesterday
-     * normally is, and because the digest's "this week" callout only counts
-     * rows a channel actually took.
+     * A ledger row for something Orbit already said. Delivered by default,
+     * since the digest only counts rows a channel actually took.
      */
     protected function alerted(
         User $user,
@@ -146,14 +125,8 @@ trait BuildsAlertData
     }
 
     /**
-     * Everything that actually reached the transport.
-     *
-     * THE ARRAY MAILER RATHER THAN `Mail::fake()`. A fake replaces the channel
-     * and never fires NotificationSent, which is the event
-     * App\Infrastructure\Notify\MarkAlertsDelivered stamps `delivered_at` from
-     * — so a test that faked it could not tell a delivered alert from an
-     * undelivered one. `.env.testing` already pins MAIL_MAILER to `array`, so
-     * this is the whole pipeline with only the socket missing.
+     * Everything that actually reached the transport — array mailer, not `Mail::fake()`, so `delivered_at` assertions
+     * still work (docs/BUSINESS-LOGIC.md §10).
      *
      * @return list<Email>
      */

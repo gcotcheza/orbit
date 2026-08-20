@@ -13,11 +13,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 /**
  * The window that crosses midnight.
  *
- * THE DEFAULT WINDOW IS 22:00–08:00 (see the user_settings migration), which
- * means the ordinary case is the hard one and a naive `>= start AND < end` is
- * not merely wrong — it is wrong in the direction of sending mail at three in
- * the morning to the one person this app has. Half the assertions below are
- * about that single window.
+ * The default window is 22:00-08:00 (user_settings migration) — the ordinary case, not an edge case.
+ * Why: docs/BUSINESS-LOGIC.md §10.
  */
 final class QuietHoursTest extends TestCase
 {
@@ -25,8 +22,6 @@ final class QuietHoursTest extends TestCase
     {
         return $hour * 60 + $minute;
     }
-
-    // -- The window that crosses midnight ------------------------------------
 
     #[Test]
     #[DataProvider('nightHours')]
@@ -54,9 +49,8 @@ final class QuietHoursTest extends TestCase
     }
 
     /**
-     * The end being exclusive is what lets a held mail go out AT the end of the
-     * window: a window that still covered 08:00 would defer its own delivery by
-     * another full day, every day.
+     * The end is exclusive so held mail can go out AT 08:00 — inclusive would
+     * defer delivery by a full day, every day.
      */
     #[Test]
     public function the_end_of_the_window_is_not_inside_it(): void
@@ -67,8 +61,6 @@ final class QuietHoursTest extends TestCase
         $this->assertFalse($quiet->covers(self::minute(8)));
         $this->assertNull($quiet->minutesUntilEnd(self::minute(8)));
     }
-
-    // -- An ordinary window inside one day -----------------------------------
 
     #[Test]
     #[DataProvider('daytimeHours')]
@@ -92,8 +84,6 @@ final class QuietHoursTest extends TestCase
         ];
     }
 
-    // -- How long the mail waits ---------------------------------------------
-
     #[Test]
     #[DataProvider('waits')]
     public function it_says_how_long_until_the_window_opens(int $minuteOfDay, ?int $wait): void
@@ -116,8 +106,6 @@ final class QuietHoursTest extends TestCase
         ];
     }
 
-    // -- The settings that switch it off -------------------------------------
-
     #[Test]
     public function quiet_hours_switched_off_cover_nothing(): void
     {
@@ -129,10 +117,8 @@ final class QuietHoursTest extends TestCase
     }
 
     /**
-     * "From 22:00 to 22:00" is somebody who has not finished setting it up, not
-     * a request never to be contacted again. Reading it as twenty-four hours of
-     * silence would make the app look broken in a way nothing on screen
-     * explains.
+     * A zero-length window means "not finished setting it up", not a request
+     * for 24 hours of silence.
      */
     #[Test]
     public function a_zero_length_window_covers_nothing(): void
@@ -141,12 +127,9 @@ final class QuietHoursTest extends TestCase
         $this->assertFalse(QuietHours::between('22:00', '22:00')->covers(self::minute(3)));
     }
 
-    // -- Reading the stored value --------------------------------------------
-
     /**
-     * Postgres hands a `time` column back as `22:00:00` and SQLite hands back
-     * whatever string was written to it — the same engine difference
-     * App\Models\UserSettings trims for. Both have to parse.
+     * Same Postgres/SQLite `time`-precision difference App\Models\UserSettings trims for. Both must parse here too.
+     * Why: docs/BUSINESS-LOGIC.md §10.
      */
     #[Test]
     public function it_reads_both_precisions_the_two_engines_produce(): void
@@ -191,9 +174,8 @@ final class QuietHoursTest extends TestCase
     }
 
     /**
-     * A caller that computed a minute by adding to one it already had can
-     * produce 1500 or -30, and neither is a time this class should have no
-     * opinion about.
+     * A caller adding to a minute it already had can produce 1500 or -30;
+     * this class still has an opinion about both.
      */
     #[Test]
     public function minutes_outside_a_day_wrap_rather_than_confuse_it(): void

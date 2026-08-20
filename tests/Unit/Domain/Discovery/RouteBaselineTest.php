@@ -10,11 +10,8 @@ use PHPUnit\Framework\Attributes\Test;
 use App\Domain\Discovery\RouteBaseline;
 
 /**
- * The relative lane's arithmetic, hand-computed.
- *
- * A PLAIN PHPUnit TestCase AND NOT Tests\TestCase — no framework, no database,
- * no container. App\Domain\Discovery\RouteBaseline is a pure value and the whole
- * argument for it being one is that its rules can be checked with a calculator.
+ * The relative lane's arithmetic, hand-computed. Plain PHPUnit TestCase (not Tests\TestCase) — no framework/DB, since
+ * RouteBaseline is a pure value (docs/BUSINESS-LOGIC.md §16).
  */
 final class RouteBaselineTest extends TestCase
 {
@@ -23,11 +20,6 @@ final class RouteBaselineTest extends TestCase
         return new RouteBaseline('AMS-DUB', $medianCents, $sampleDays, new DateTimeImmutable($measuredAt));
     }
 
-    /**
-     * =========================================================================
-     * THE DISCOUNT — the number the whole lane ranks on
-     * =========================================================================
-     */
     #[Test]
     public function the_owners_dublin_case_is_half_off(): void
     {
@@ -39,9 +31,8 @@ final class RouteBaselineTest extends TestCase
     public function the_measured_malaga_find_is_sixty_three_percent_off(): void
     {
         /*
-         * DUS-AGP on 2026-08-16: €29 against the €78 median of its own October
-         * window — the measurement the whole verification stage was built on,
-         * and the upper of the two real cases the 0.40 threshold sits below.
+         * DUS-AGP 2026-08-16 real fare: upper of the two cases the 0.40 verification threshold sits below
+         * (docs/BUSINESS-LOGIC.md §16).
          */
         $this->assertEqualsWithDelta(0.628, $this->baseline(7800)->discountOf(2900), 0.001);
     }
@@ -53,12 +44,8 @@ final class RouteBaselineTest extends TestCase
     }
 
     /**
-     * THE ONE THAT KILLED THE BAND-MEDIAN DESIGN, KEPT AS A REGRESSION.
-     *
-     * AMS-DUB at €30 against the 500–1000 km band median of €29 scores −3.4%:
-     * Dublin is the MEDIAN fare for its distance, which is why a baseline drawn
-     * from the sweep could never surface it and why this lane remembers the
-     * route's own window instead. See App\Domain\Discovery\Lane.
+     * DO NOT remove: this killed the band-median design. AMS-DUB is the MEDIAN fare for its distance, so a sweep-drawn baseline could never surface it —
+     * this lane keeps the route's own window instead (see Lane) (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_fare_dearer_than_its_baseline_scores_negative_and_is_not_clamped(): void
@@ -70,12 +57,8 @@ final class RouteBaselineTest extends TestCase
     }
 
     /**
-     * A ZERO MEDIAN ANSWERS ZERO RATHER THAN DIVIDING.
-     *
-     * It cannot arise — `median_cents` is unsigned and an empty window writes no
-     * baseline at all — and the alternative to the guard is INF, which sorts to
-     * the TOP of a discount ranking. The one impossible input that would be
-     * catastrophic is worth a line.
+     * DO NOT remove the zero-median guard: it can't arise in practice, but without it the alternative is INF, which sorts
+     * to the TOP of rankings (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_zero_median_cannot_produce_an_infinite_discount(): void
@@ -83,11 +66,6 @@ final class RouteBaselineTest extends TestCase
         $this->assertSame(0.0, $this->baseline(0)->discountOf(5000));
     }
 
-    /**
-     * =========================================================================
-     * THE SAVING — the euro figure, and the one place clamping IS right
-     * =========================================================================
-     */
     #[Test]
     public function the_saving_is_the_gap_in_cents(): void
     {
@@ -95,9 +73,8 @@ final class RouteBaselineTest extends TestCase
     }
 
     /**
-     * CLAMPED WHERE THE DISCOUNT IS NOT, and the asymmetry is deliberate: the
-     * discount is a RANKING KEY and has to keep its sign to order correctly,
-     * while "€-12 under its usual" is not a sentence a card can print.
+     * Saving clamps at 0 (discount doesn't): discount is a ranking key that must keep its sign, but "€-12 under its usual"
+     * can't print on a card (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_dearer_fare_saves_nothing_rather_than_a_negative_amount(): void
@@ -105,11 +82,6 @@ final class RouteBaselineTest extends TestCase
         $this->assertSame(0, $this->baseline(2900)->savingOf(3000));
     }
 
-    /**
-     * =========================================================================
-     * AGE — what stops a yardstick becoming a fossil
-     * =========================================================================
-     */
     #[Test]
     public function age_is_measured_in_days_from_when_it_was_measured(): void
     {

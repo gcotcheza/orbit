@@ -12,10 +12,8 @@ use Illuminate\Console\Scheduling\Schedule;
 /**
  * The clock, asserted rather than remembered.
  *
- * A schedule is invisible when it is wrong: nothing errors, no page breaks, and
- * the only symptom is prices that are a day old — which looks exactly like
- * prices that have not moved. Worse, a timezone left off drifts an hour twice a
- * year and nobody notices in either direction.
+ * A wrong schedule is invisible — nothing errors, prices just look a day old, and a missing timezone drifts an hour
+ * twice a year unnoticed (docs/BUSINESS-LOGIC.md §13).
  */
 final class ScheduleTest extends TestCase
 {
@@ -54,18 +52,11 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * THE SECOND SPEED, AND THE HOUR IS THE POINT OF IT.
+     * The second speed, and the hour is the point of it: months 7-11 cost 12 calls/route vs. 7 daily, so this runs in the
+     * empty 04:00 hour, not 06:00.
      *
-     * Orbit maintains eleven months of calendar and fetches the near six every
-     * morning; this run fills in months 7 to 11. It costs twelve provider calls
-     * per watched route where the daily poll costs seven, and Travelpayouts
-     * allows ~200 an hour per IP — so in the 06:00 hour, beside the rule sweep's
-     * 120, nine watched routes would be 228 and over the limit. In an otherwise
-     * empty 04:00 hour it is 108, and the ordinary morning is left exactly as it
-     * was. config/orbit.php's `poll` section carries the whole table.
-     *
-     * IT DOES NOT REPLACE THAT DAY'S POLL: the daily entry still runs four hours
-     * later, and both write the same observation from the same near window.
+     * Does not replace that day's poll — the daily entry still runs four hours later, both writing the same near-window
+     * observation (docs/BUSINESS-LOGIC.md §13).
      */
     #[Test]
     public function the_far_months_are_refreshed_once_a_week_in_an_hour_of_their_own(): void
@@ -90,13 +81,8 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * ROUND TRIPS GO WHERE THERE IS ROOM, NOT WHERE THE OTHER POLLS ARE.
-     *
-     * One request per watched route, flat — `/v2/prices/latest` answers for the
-     * whole horizon in a single call — so nine today. The 06:00 hour is already
-     * at 183 of Travelpayouts' ~200 (poll 63 + sweep 120) and is the hour that
-     * breaks first as the watchlist grows; the 04:00 hour holds 108 on Saturday
-     * and nothing at all on the other six mornings. 108 + 9 = 117.
+     * Round trips go where there is room, not where the other polls are: the 06:00 hour is already at 183/~200; 04:00 has
+     * 108 on Saturday, 0 otherwise (docs/BUSINESS-LOGIC.md §13).
      */
     #[Test]
     public function round_trips_are_polled_in_the_hour_the_budget_left_free(): void
@@ -117,14 +103,8 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * THE GAP IS THE PER-MINUTE LIMIT, NOT THE HOURLY ONE.
-     *
-     * Both of these share the 04:00 hour on a Saturday and both are staggered
-     * fan-outs: nine routes at `orbit.poll.stagger_minutes` is twenty-four
-     * minutes, so the far poll is still queueing jobs until 04:34. Starting the
-     * returns run at 04:20 would interleave the two and hand the provider two
-     * bursts in the same minutes — which is the one thing the stagger exists to
-     * prevent, and which the hourly arithmetic above would not notice.
+     * The gap is the per-minute limit, not the hourly one: nine routes stagger over 24 minutes, so returns must start
+     * after the far poll's fan-out ends (docs/BUSINESS-LOGIC.md §13).
      */
     #[Test]
     public function the_returns_run_starts_after_the_far_polls_fan_out_is_away(): void
@@ -177,14 +157,8 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * THE ORDER IS LOAD-BEARING, not a preference.
-     *
-     * App\Jobs\SweepRuleFares skips any route the morning has already priced,
-     * so sweeping before the poll would spend a rule's capped budget
-     * re-fetching the watchlist and the routes only a rule cares about would
-     * never get their turn. And the alert run reads what both of them wrote:
-     * going first would not fail, it would simply mail this morning's verdict
-     * on yesterday's prices, every day, invisibly.
+     * The order is load-bearing, not a preference: sweeping before the poll wastes budget re-fetching the watchlist;
+     * alerts before both mails stale prices (docs/BUSINESS-LOGIC.md §13).
      */
     #[Test]
     public function the_morning_runs_in_the_order_each_one_depends_on(): void
@@ -205,10 +179,8 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * `vite.config.js` stops the build emptying public/build, which makes this
-     * the only thing that ever deletes an old chunk. The deploy runs it too;
-     * the schedule is what keeps a forgotten deploy step from becoming a full
-     * disk.
+     * `vite.config.js` stops the build emptying public/build, so this is the only thing that deletes an old chunk; the
+     * schedule backstops the deploy step (docs/BUSINESS-LOGIC.md §13).
      */
     #[Test]
     public function old_builds_are_pruned_nightly(): void
@@ -236,9 +208,8 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * The schedule names COMMANDS, never closures or jobs that would have to
-     * enumerate routes. routes/console.php is loaded on every artisan
-     * invocation, including `migrate` against an empty database.
+     * The schedule names commands, never closures that would enumerate routes — routes/console.php loads on every artisan
+     * call, even `migrate` on empty DB (docs/BUSINESS-LOGIC.md §13).
      */
     #[Test]
     public function nothing_scheduled_queries_the_database_to_be_defined(): void

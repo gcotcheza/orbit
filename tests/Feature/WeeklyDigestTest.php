@@ -22,16 +22,8 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * Sunday, 09:00 Europe/Amsterdam.
- *
- * THE CLOCK IS 07:00 UTC ON A REAL SUNDAY (2026-08-16), which is 09:00 in
- * Amsterdam — the hour routes/console.php schedules, and outside the default
- * quiet window by an hour.
- *
- * WHAT THESE TESTS ARE MOSTLY ABOUT is the two ways it sends nothing. A digest
- * is the one mail here that is not earned by a threshold, so the only things
- * standing between it and being weekly noise are the switch and the emptiness
- * check.
+ * Sunday, 09:00 Europe/Amsterdam — 07:00 UTC on 2026-08-16, the hour
+ * routes/console.php schedules, an hour outside the default quiet window.
  */
 final class WeeklyDigestTest extends TestCase
 {
@@ -128,9 +120,8 @@ final class WeeklyDigestTest extends TestCase
     }
 
     /**
-     * THE COOLDOWN DOES NOT APPLY HERE, deliberately. A route announced on
-     * Monday has been suppressed all week; the digest is not an interruption
-     * and its whole job is to say where things stand.
+     * THE COOLDOWN DOES NOT APPLY HERE, deliberately — the digest is not an
+     * interruption; its whole job is to say where things stand.
      */
     #[Test]
     public function a_route_that_has_been_cooling_down_all_week_is_still_in_it(): void
@@ -161,9 +152,8 @@ final class WeeklyDigestTest extends TestCase
     }
 
     /**
-     * A watched route Orbit has never priced is not something to say. The
-     * design's answer to that state is the "tracking N days" note on a screen,
-     * not a line in a mail that reads like a verdict.
+     * A route Orbit has never priced is not something to say — the design's
+     * answer is the "tracking N days" note on screen, not a verdict in mail.
      */
     #[Test]
     public function a_watchlist_of_routes_with_no_prices_is_nothing_to_say(): void
@@ -194,8 +184,7 @@ final class WeeklyDigestTest extends TestCase
 
     /**
      * The deal alerts and the digest are two subscriptions (design/README.md
-     * §6): somebody who wants the Sunday summary without being pinged mid-week
-     * is making a reasonable request.
+     * §6) — wanting the summary without mid-week pings is a valid choice.
      */
     #[Test]
     public function the_digest_is_sent_even_when_the_deal_alerts_are_off(): void
@@ -211,9 +200,8 @@ final class WeeklyDigestTest extends TestCase
     }
 
     /**
-     * A deal still sitting in the queue behind quiet hours has not been seen
-     * yet, and a digest that counted it would be summarising mail somebody is
-     * about to receive.
+     * A deal still queued behind quiet hours has not been seen — counting it
+     * would summarise mail somebody is about to receive.
      */
     #[Test]
     public function the_week_counts_only_what_was_actually_delivered(): void

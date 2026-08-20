@@ -9,16 +9,11 @@ use DateTimeImmutable;
 /**
  * "Mar – May", as a thing the matcher can use.
  *
- * MONTHS AND NOT DATES, and that is the whole design decision in this file.
- * A rule is a STANDING alert — "somewhere sunny in spring, under €80" is a
- * sentence about every spring, not about spring 2027 — so a window stored as
- * two dates would quietly expire, and the rule would go silent on the exact
- * anniversary the owner wrote it for. Two month numbers never expire;
- * `resolve()` turns them into the next real span each time somebody asks.
+ * Months, not dates — the whole design decision. A rule is a STANDING alert ("spring, under €80" means every spring), so dates would quietly expire;
+ * `resolve()` turns two month numbers into the next real span each time.
  *
- * WRAPPING IS NORMAL. Winter is December to February, so `to` being smaller
- * than `from` is the ordinary case rather than an error, and every method here
- * has to mean the right thing when it happens.
+ * Wrapping is normal (winter = Dec-Feb): `to` < `from` is the ordinary case, not an error, and every method here must
+ * mean the right thing then (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class MonthWindow
 {
@@ -36,11 +31,8 @@ final readonly class MonthWindow
     ) {}
 
     /**
-     * A window, or NULL if either end is not a month.
-     *
-     * Nullable rather than throwing because both callers are parsing
-     * somebody's typing — the model's JSON or a regex capture — and a month 13
-     * is a sentence this app could not read, not a bug it should crash on.
+     * A window, or NULL if either end is not a month. Nullable rather than throwing: both callers parse untrusted input,
+     * and a month 13 is bad input, not a bug to crash on (docs/BUSINESS-LOGIC.md §11).
      */
     public static function of(int $from, int $to): ?self
     {
@@ -79,18 +71,11 @@ final readonly class MonthWindow
     /**
      * The next real span this window stands for, as of `$today`.
      *
-     * THE START MAY BE IN THE PAST, and deliberately: asked in April, "spring"
-     * is the spring we are standing in, and answering with next March would
-     * hide every fare on offer. Only a window that has ENDED rolls forward to
-     * next year. Callers intersect this with fares that are all in the future
-     * anyway, so a start behind today costs nothing.
+     * Start may be in the past (deliberately): in April, "spring" is the spring we're in, not next March. Callers
+     * intersect with future fares anyway, so a past start costs nothing.
      *
-     * THE SEARCH STARTS A YEAR BACK, which only matters for a wrapping window.
-     * Asked on 10 January, "winter" is the winter around us — it began last
-     * December — and a search that started at the current year would answer
-     * with next December, leaving a January rule matching nothing for eleven
-     * months. For a non-wrapping window the extra year has already ended and
-     * the loop simply moves past it.
+     * Search starts a year back (matters only for wrapping windows): on 10 Jan, "winter" began last December — starting at
+     * the current year would answer next December, matching nothing for eleven months (docs/BUSINESS-LOGIC.md §11).
      *
      * @return array{DateTimeImmutable, DateTimeImmutable} [first day of `from`, last day of `to`]
      */

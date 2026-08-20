@@ -5,19 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Rules;
 
 /**
- * The words this app knows, handed to the parts of it that are not allowed to
- * call config().
- *
- * App\Domain is pure PHP — that is docs/PLAN.md's line, and the reason the
- * deal scorer takes a ScoringPolicy rather than reading its weights. The rule
- * parser has the same problem three times over (which airports, which vibes,
- * what each is called), so it gets the same answer: one value, built once in
- * App\Providers\AppServiceProvider, injected into both adapters and into
- * ParsedRule.
- *
- * IT IS ALSO WHY THE REGEX PARSER IS A UNIT TEST AND NOT A FEATURE TEST. A
- * parser that queried the airports table for "amsterdam" would need a database
- * to prove it can read a sentence.
+ * The words this app knows, handed to parts not allowed to call config() — App\Domain is pure PHP (docs/PLAN.md).
+ * Built once in AppServiceProvider (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class RuleVocabulary
 {
@@ -35,11 +24,8 @@ final readonly class RuleVocabulary
     ) {}
 
     /**
-     * The chip text for a vibe, falling back to the vibe itself.
-     *
-     * The fallback is for a vibe that reached us from a stored rule or from
-     * the model after somebody edited the vocabulary — showing the raw word is
-     * a worse chip, and a missing-key crash is a worse screen.
+     * The chip text for a vibe, falling back to the vibe itself — a stored
+     * rule may predate an edited vocabulary; a crash is worse than the raw word.
      */
     public function labelFor(string $vibe): string
     {

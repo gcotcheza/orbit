@@ -14,50 +14,8 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
- * Ask the provider what one route costs, and write down both answers.
- *
- * TWO WRITES FROM ONE CALL, which is the reason this job exists rather than
- * two:
- *
- *   1. `calendar_fares` — every departure date this run asked for, upserted.
- *      This is the heatmap.
- *   2. `route_price_history` — ONE row, today's cheapest fare anywhere in the
- *      NEAR window, however deep this run went. This is the sparkline, the
- *      detail chart, and the trend quarter of the deal score.
- *
- * Splitting them would mean two provider calls a day per route for the same
- * data, on APIs that charge by the call and rate-limit by the minute.
- *
- * IDEMPOTENT PER DAY. Both writes are upserts keyed on a date, so a retry, a
- * manual `orbit:poll-fares`, or a deploy that runs the seeder again overwrites
- * the day's figures rather than adding a second point to the series and
- * bending the trend. That property is what makes it safe to leave this in a
- * schedule AND in a seeder.
- *
- * IT TAKES AN ID, NOT A MODEL. A queued job holding a model re-fetches it on
- * unserialize and THROWS if the row is gone; a route removed from the
- * watchlist between 06:10 and the worker picking the job up is a normal
- * Tuesday, not a failure worth a Horizon alert.
- *
- * AND IT TAKES A WINDOW, OPTIONALLY, WHICH IS NOW THE MOST IMPORTANT ARGUMENT
- * IN THIS FILE. Three callers ask for three different depths:
- *
- *   181 days  the daily 06:10 poll and every synchronous lookup — the NEAR
- *             window, `orbit.poll.window_days`.
- *   334 days  the weekly `orbit:poll-fares --far` run — the whole horizon Orbit
- *             maintains, `orbit.poll.horizon_days`.
- *    89 days  App\Jobs\SweepRuleFares, because thirty speculative routes × seven
- *             calendar months is more requests than the provider allows in an
- *             hour (config/orbit.php, `rules`).
- *
- * THE DEPTH IS ALWAYS PASSED IN, never decided here from the day of the week.
- * A job that chose its own window would answer differently depending on when a
- * worker happened to pick it up — a Saturday poll retried on Sunday would fetch
- * half of what its payload promised — and the same gate would silently make a
- * person's lookup cost twelve provider calls on one morning a week.
- *
- * THE DELETES BELOW READ THREE DIFFERENT NUMBERS, deliberately, and that is the
- * whole reason a horizon polled at two speeds is safe. Read them.
+ * Ask the provider what one route costs, and write down both answers: `calendar_fares` (the heatmap) and `route_price_history` (one row, the day's near-window minimum). Idempotent per day (both
+ * upserts). Takes a route id (not a model — a removed watchlist row must not throw) and an optional window depth, always passed in by the caller, never decided here.
  */
 final class PollRoutePrices implements ShouldQueue
 {

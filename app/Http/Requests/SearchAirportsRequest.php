@@ -7,24 +7,8 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * `GET /api/airports?q=` — what somebody has typed into the destination box.
- *
- * TWO CHARACTERS IS THE FLOOR, and it is a cost decision rather than a taste
- * one. A single letter matches something like a third of 3,270 airports, and
- * the ten rows that come back from it are ten arbitrary rows — a suggestion
- * list that is worse than no suggestion list, bought with a round trip per
- * keystroke. The client (resources/js/stores/airports.js) does not ask below
- * two either; this is the server saying the same thing so that the rule is
- * true of the endpoint rather than of one caller.
- *
- * SIXTY CHARACTERS IS THE CEILING, which is longer than the longest city name
- * in the snapshot and short enough that the `LIKE` behind it cannot be handed
- * a kilobyte.
- *
- * THE SEARCH IS NOT A VALIDATION LIST, exactly as `GET /api/destinations` is
- * not: App\Http\Requests\RoutePairRequest accepts any code in `airports`,
- * which since the world import is any scheduled airport on Earth, whether or
- * not this endpoint would have offered it.
+ * `GET /api/airports?q=` — what somebody typed into the destination box. 2-60 char bounds are a cost decision, not a
+ * validation list; see below (docs/BUSINESS-LOGIC.md §36).
  */
 final class SearchAirportsRequest extends FormRequest
 {

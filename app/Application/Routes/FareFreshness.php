@@ -13,51 +13,8 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Contracts\Cache\Repository as Cache;
 
 /**
- * How old this route's fares are, and fetching new ones when somebody is
- * waiting for them.
- *
- * WHY THIS EXISTS AT ALL. Every fare in Orbit is gathered by the 06:10 poll,
- * which only ever looks at routes on the watchlist (docs/BUSINESS-LOGIC.md §4)
- * — so a route nobody watches has no prices, and the screen that shows it has
- * nothing to draw. That was fine while the only way to reach a route was to
- * watch it first; `POST /api/routes/lookup` is the owner asking to see a price
- * BEFORE making that commitment, and this class is the "then fetch it now" the
- * question implies.
- *
- * THE FRESHNESS RULE IS ONE NUMBER, `orbit.lookup.fresh_for_hours`, and it is
- * asked of the CALENDAR rather than of the route: `calendar_fares.fetched_at`
- * is stamped by App\Jobs\PollRoutePrices on every upsert, so the newest of them
- * is the last time anybody — the morning poll, a rule sweep, or a lookup —
- * asked the provider about this pair. Nothing new has to be recorded to know
- * that.
- *
- * AND ONE THING THAT CANNOT BE ASKED OF THE CALENDAR: whether we asked and got
- * NOTHING. Travelpayouts serves a cache of other people's searches and an empty
- * answer is a real answer (see the adapter) — it writes no rows, so a pair with
- * no fares would read as "stale" forever and be re-fetched, six or seven
- * provider calls at a time, on every single view of the screen. So the ATTEMPT
- * is remembered in the cache for the same window, and that memory is what the
- * second view reads.
- *
- * `add()` RATHER THAN `has()` + `put()`, atomically, for the same reason the
- * fare adapter's warning uses it: two views of the same route arriving together
- * must produce one fetch, not two. It doubles as the stampede guard.
- *
- * SYNCHRONOUS, AND THAT IS THE POINT. The two jobs below are the same ones
- * `POST /api/watchlist` queues; run inline they cost the request one provider
- * round trip per calendar month of the NEAR window (six or seven), which is the
- * one to three seconds the lookup screen shows "Checking current fares…" for.
- * Queueing them instead would answer with an empty route and no way for the
- * person looking at it to know when to look again — which is exactly the state
- * a watched route is allowed to be in for one morning and a looked-up one is
- * not, because nobody is coming back to it tomorrow.
- *
- * WHAT BOUNDS THE WAIT is the provider's own timeouts (`orbit.travelpayouts`:
- * 5 s to connect, 15 s to read, one retry) — a hung provider is therefore
- * minutes rather than forever, which is far too long for a person and is why
- * the client aborts its own request first and says so. The writes are upserts,
- * so a fetch whose answer nobody is waiting for any more still leaves the fares
- * behind for the next view.
+ * Route freshness + fetch-on-demand for POST /api/routes/lookup: freshness is read off calendar_fares.fetched_at (no extra bookkeeping), a cache add() remembers both "asked and got nothing" and guards
+ * against a fetch stampede, and both jobs run dispatchSync so a looked-up route never sits watchable-but-empty (docs/BUSINESS-LOGIC.md §1).
  */
 final readonly class FareFreshness
 {
@@ -69,11 +26,9 @@ final readonly class FareFreshness
      */
     public function lastFetchedAt(Route $route): ?CarbonImmutable
     {
-        /*
-         * The ROW rather than `max('fetched_at')`, so the model's cast is what
-         * turns the column into a date. `max()` hands back whatever the driver
-         * stores — a string on SQLite, a timestamp on Postgres — and parsing
-         * that by hand is one more place the two databases can disagree.
+        /**
+         * Row, not max('fetched_at'): max() returns a driver-native value (string on SQLite, timestamp on Postgres) that would
+         * need hand-parsing — the model cast handles it (docs/BUSINESS-LOGIC.md §1).
          */
         return CalendarFare::query()
             ->where('route_id', $route->id)
@@ -83,10 +38,8 @@ final readonly class FareFreshness
     }
 
     /**
-     * Whether fares fetched at that moment are still worth showing without
-     * asking again. Takes the timestamp rather than the route so a caller that
-     * has already read it — every caller that publishes it — does not pay for
-     * the query twice.
+     * Whether a fetch at that moment is still fresh. Takes the timestamp rather than the
+     * route so a caller that already read it doesn't pay for the query twice.
      */
     public function isFresh(?CarbonImmutable $fetchedAt): bool
     {
@@ -111,50 +64,21 @@ final readonly class FareFreshness
             return false;
         }
 
-        // See the class docblock: this is both the "we already asked and got
-        // nothing" memory and the guard against two simultaneous views paying
-        // for the same fetch twice.
+        // Cache add(): remembers "asked and got nothing" and guards a duplicate simultaneous fetch.
+        // Why: docs/BUSINESS-LOGIC.md §1.
         if (! $this->cache->add(self::key($route), true, self::hours() * 3600)) {
             return false;
         }
 
-        /*
-         * THE WHOLE NEAR WINDOW, not a cheaper slice of it. `price.current` is
-         * defined as the cheapest fare in the next six months (docs/API.md) — a
-         * route fetched three months deep would look cheaper or dearer than a
-         * watched one for no reason a reader could see, and every number on the
-         * screen next to it is computed from those same 181 days.
-         *
-         * AND NOT THE ELEVEN-MONTH HORIZON EITHER, which is the newer half of
-         * the decision. A watched route's calendar runs to
-         * `orbit.poll.horizon_days` because one scheduled run a week can afford
-         * twelve provider calls per route; a lookup cannot, because the calls
-         * are SEQUENTIAL and SOMEBODY IS WAITING — twelve round trips at up to
-         * 15 s a read is not a screen anybody sits through — and because the
-         * endpoint's throttle is derived from what one miss costs
-         * (config/orbit.php, `lookup`): twelve calls a miss would spend the
-         * hourly allowance on twenty lookups.
-         *
-         * WHAT A LOOKED-UP ROUTE THEREFORE LACKS is months 7 to 11. Nothing
-         * shows them — the calendar screen only draws routes on the watchlist —
-         * and the first weekly far run after it is watched fills them in.
-         *
-         * PASSED EXPLICITLY rather than left to the job's default, so this
-         * choice is visible at the call site that pays for it.
-         *
-         * `dispatchSync` runs the job's handle() through the container here and
-         * now. It is not a queued dispatch that happens to be fast: nothing is
-         * serialised, nothing retries, and an exception is this request's.
+        /**
+         * window_days (6mo), not horizon_days (11mo): a lookup's calls are sequential with somebody waiting, and the throttle is priced off this window — a looked-up route lacks months 7-11 until the weekly
+         * poll fills them in. dispatchSync runs handle() inline: no serialization, no retry, an exception here is this request's (docs/BUSINESS-LOGIC.md §1).
          */
         PollRoutePrices::dispatchSync($route->id, (int) config('orbit.poll.window_days'));
 
-        /*
-         * AND WHAT IT USUALLY COSTS, in the same breath. `self` statistics are
-         * computed out of the two tables the poll above has just written, so
-         * this is local arithmetic rather than a second provider call — and
-         * without it the screen would draw a fare with no "usual €93" to
-         * compare it to, which is the one number that makes a price mean
-         * anything.
+        /**
+         * Self statistics computed from the two tables the poll just wrote — local arithmetic, not a second provider call —
+         * else the screen has no "usual €93" to compare (docs/BUSINESS-LOGIC.md §1).
          */
         RefreshRouteStats::dispatchSync($route->id);
 

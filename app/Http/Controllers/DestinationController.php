@@ -11,43 +11,24 @@ use App\Http\Resources\DestinationOptionResource;
 /**
  * Everywhere Orbit knows how to fly to — the add-route form's typeahead.
  *
- * WHY THE WHOLE LIST IN ONE REQUEST AND NOT A `?q=` SEARCH. There are a
- * hundred and eighty-four of them and the number is two checked-in files
- * (database/seeders/data/european_destinations.php and world_destinations.php),
- * not a growing table. The entire payload is a few kilobytes, so the form
- * fetches it once when it opens and filters in the browser — which means a
- * suggestion appears on the keystroke rather than after a round trip, and
- * typing "bilb" costs four requests fewer than a search endpoint would. A `?q=`
- * endpoint over 184 rows is a network hop bought with somebody's latency and
- * nothing else.
+ * The whole list in one request, not `?q=` search: 184 destinations from two checked-in seed files is a few KB, so
+ * filtering in the browser beats a round trip.
  *
- * THE OTHER 3,086 AIRPORTS ARE NOT IN HERE, and that is the whole shape of
- * world flights: they have no `destinations` row, no vibes and no warmth, and
- * they are searched one query at a time through
- * App\Http\Controllers\AirportController. Sending them all would be 200 KB
- * before anybody typed anything, for rows the rule engine can never match.
+ * The other 3,086 airports aren't in here — they have no `destinations` row and are searched one at a time via
+ * AirportController instead.
  *
- * WHAT COUNTS AS A DESTINATION IS THE `destinations` TABLE, not `airports`.
- * The three origins (AMS, EIN, DUS) are airports with no destinations row —
- * the seeder's own note says Amsterdam "is also a destination for nobody" —
- * and offering the owner a flight from Amsterdam to Amsterdam is the one
- * suggestion this list must never make.
+ * What counts as a destination is the `destinations` table, not `airports` — so an origin like Amsterdam is never
+ * offered as a flight to itself.
  *
- * IT IS NOT A VALIDATION LIST. AddWatchedRouteRequest still accepts any code in
- * `airports`, which is broader than this, and deliberately: what a form offers
- * and what an API accepts are two decisions, and narrowing the second one to
- * match a dropdown would break a URL somebody typed. See docs/API.md.
+ * Not a validation list: AddWatchedRouteRequest still accepts any `airports` code, deliberately, so narrowing this
+ * dropdown can't break a URL somebody typed (docs/BUSINESS-LOGIC.md §36).
  */
 final class DestinationController extends Controller
 {
     public function __invoke(): JsonResponse
     {
-        /*
-         * ONE QUERY, FOUR COLUMNS, AND NO EAGER LOAD. The `destinations` row is
-         * what makes an airport a destination and carries nothing this list
-         * prints — the vibes and the monthly warmth ratings belong to the rule
-         * parser — so it is asked about with an `exists` and never fetched.
-         */
+        // One query, four columns, no eager load: `destinations` carries nothing this list prints (vibes/warmth belong to the
+        // rule parser), so it's an `exists` check only (docs/BUSINESS-LOGIC.md §36).
         $airports = Airport::query()
             ->whereHas('destination')
             ->orderBy('city')
@@ -56,13 +37,8 @@ final class DestinationController extends Controller
         return DestinationOptionResource::collection($airports)
             ->additional(['meta' => ['count' => $airports->count()]])
             ->response()
-            /*
-             * PRIVATE, because it is behind a session even though its contents
-             * are the same for everybody: a shared cache holding an
-             * authenticated response is how one account's answer reaches
-             * another. An hour is well under the time it takes this list to
-             * change, which is a deploy.
-             */
+            // Private, not shared: a shared cache holding an authenticated response is how one account's answer reaches another,
+            // even though the content is the same for everyone (docs/BUSINESS-LOGIC.md §36).
             ->header('Cache-Control', 'private, max-age=3600');
     }
 }

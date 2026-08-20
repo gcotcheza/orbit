@@ -18,92 +18,8 @@ use Illuminate\Contracts\Cache\Repository as Cache;
 /**
  * Real round-trip fares, from Travelpayouts' `/v2/prices/latest`.
  *
- * ---------------------------------------------------------------------------
- * THE THINGS THAT ARE NOT OBVIOUS
- *
- * 1. ONE CALL PER ROUTE, FOR THE WHOLE HORIZON. `period_type=year` answers with
- *    every cached round-trip find from today to roughly a year out in a single
- *    request — the recorded AMS-LIS answer spanned 2026-08-16 to 2027-06-18 —
- *    so Orbit's eleven-month horizon costs ONE request where the one-way
- *    calendar costs seven or twelve. That is the whole budget story for
- *    returns, and it is why config/orbit.php's `returns` section has no near/far
- *    split: there is nothing to split.
- *
- *    `period_type=month` + `beginning_of_period` DOES work — it is not a trap —
- *    but it is strictly worse: November 2026 alone came back with 5 of the 119
- *    entries the year call already contained. Twelve requests for a subset of
- *    what one request returns.
- *
- * 2. `one_way=false` IS LOAD-BEARING AND ITS DEFAULT IS NOT TO BE TRUSTED. The
- *    two settings return DISJOINT caches, verified on AMS-LIS on 2026-08-16:
- *    `one_way=true` gave 128 entries with an EMPTY `return_date` on every one,
- *    `one_way=false` gave 119 entries with a populated `return_date` on every
- *    one. The documented default is `false`, but this app has been bitten once
- *    already by a Travelpayouts default (the currency; see point 7), so it is
- *    sent explicitly on every request.
- *
- * 3. `limit` MUST BE SENT AND ITS DEFAULT IS 30. AMS-BKK returned 338 entries
- *    with `limit=1000` and exactly 30 without it — so an adapter that omitted
- *    it would silently discard 91% of the data and look like it was working.
- *    1000 is the documented maximum; no recorded route came close to it, and
- *    `page` is therefore not used.
- *
- * 4. `trip_duration` IS SILENTLY IGNORED, WHICH IS WHY THE BAND IS FILTERED
- *    HERE. The parameter is documented and does nothing: `trip_duration=7`
- *    against AMS-LIS returned a BYTE-IDENTICAL body to the same request without
- *    it — same 119 entries, same stay-length histogram from 0 to 14 nights.
- *    So the port's `NightsBand` is applied to the parsed answer, and a narrow
- *    band costs exactly what a wide one does. Sending it anyway would be an
- *    adapter pretending it had narrowed something.
- *
- * 5. AN EMPTY ANSWER IS A REAL ANSWER, AND SPARSE IS THE NORMAL CASE — more so
- *    than for one-way fares. The share of near-window departure dates carrying
- *    any round-trip fare at all was 27.5% (AMS-LIS), 14.8% (AMS-JFK), 33.5%
- *    (AMS-BKK) and 7.7% (EIN-BCN), against 41-87% for one-way month-matrix
- *    coverage. Most covered dates carry exactly ONE stay length. App\Jobs\
- *    PollReturnFares upserts, so a failed call leaves yesterday's rows standing.
- *
- * 6. IT THROWS FOR A MISSING TOKEN AND FOR NOTHING ELSE — the same rule
- *    TravelpayoutsPriceProvider follows, for the same reason. A box set to
- *    `ORBIT_RETURNS_PROVIDER=travelpayouts` with no token is a deploy-time
- *    mistake somebody must find out about immediately; an API that is down is
- *    Tuesday, and produces no fares and a line in the log.
- *
- * 7. THE ENVELOPE'S CURRENCY HAS THE LAST WORD, identically to the one-way
- *    adapter. The API's own default is roubles and a request it does not
- *    understand is answered in them rather than refused — and "€472" that is
- *    really ₽472 is a fare Orbit would shout about. `value` is whole units, so
- *    cents are a multiplication.
- *
- * 8. `found_at` HAS TWO SHAPES ACROSS THIS API AND THIS ENDPOINT USES THE ONE
- *    WITHOUT THE `Z`. Measured on the same afternoon, from the same account:
- *
- *        /v2/prices/latest        2026-08-10T20:11:25     no zone marker
- *        /v2/prices/week-matrix   2026-08-13T08:12:45Z    trailing Z
- *        /v2/prices/month-matrix  2026-08-13T08:12:45Z    trailing Z
- *
- *    Both are UTC — the bare one is not local time, it is the same instant with
- *    the marker left off — so both are parsed, both against UTC, and anything
- *    else yields NULL rather than a guess. An adapter that had copied
- *    TravelpayoutsPriceProvider's single pinned format would have dropped the
- *    age off all 198 recorded entries and shown every round-trip fare as
- *    "age unknown", which is the one failure this field exists to prevent.
- *
- * 9. THE AGE MATTERS MORE HERE THAN ANYWHERE ELSE IN THE APP. This endpoint
- *    serves the last SEVEN DAYS of finds — the recorded `found_at` range was
- *    2026-08-09 to 2026-08-16 on all three routes, with only 45% of AMS-LIS
- *    entries found on the day of the call. Round-trip fares are structurally
- *    older than one-way ones, and any future alert on them has to reckon with
- *    `orbit.alerts.max_fare_age_days` being 2.
- *
- * 10. THE API NORMALISES SOME AIRPORTS TO CITY CODES. Asking for `destination=
- *     JFK` returns entries whose `destination` reads `NYC`. Nothing here reads
- *     those fields back — the route is known from the arguments and the row is
- *     keyed on `route_id` — but a caller that matched on the echoed code would
- *     find nothing, on exactly the long-haul routes this feature is for.
- *
- * 11. THE WARNING IS RATE-LIMITED, GLOBALLY, ON ITS OWN KEY. See `warn()`.
- * ---------------------------------------------------------------------------
+ * One request per route answers the whole ~year horizon (`period_type=year`). `one_way=false`, `limit=1000` (default 30 silently drops 91% of data), and
+ * `trip_duration` (ignored by the API; band filtered here) are all load-bearing (docs/BUSINESS-LOGIC.md §15).
  */
 final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
 {
@@ -115,13 +31,8 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
      */
     private const CURRENCY = 'eur';
 
-    /**
-     * ITS OWN KEY, NOT THE ONE-WAY ADAPTER'S. The two talk to different
-     * endpoints and can fail independently — a returns poll going quiet while
-     * the calendar keeps filling is a thing somebody needs told about, and a
-     * shared key would let whichever failed first silence the other for a
-     * quarter of an hour.
-     */
+    // Own key, not the one-way adapter's — a shared key would let whichever
+    // endpoint fails first silence the warning for the other one too.
     private const WARN_KEY = 'orbit:travelpayouts:returns:warned';
 
     public function __construct(
@@ -165,12 +76,9 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
 
         /**
          * Keyed 'Y-m-d|nights' so the cheapest-per-pair reduction and the
-         * ordering the port promises are both array operations.
-         *
-         * THE REDUCTION HAS NEVER HAD ANYTHING TO DO, and it is here anyway:
-         * (depart_date, return_date) was unique in every recording — 119 of
-         * 119, 56 of 56, 338 of 338 — but the endpoint documents no such
-         * guarantee, and `min` is one line.
+         * promised ordering are both array operations. The reduction has
+         * never had anything to do (every recorded pair was unique) but the
+         * API documents no such guarantee.
          *
          * @var array<string, ReturnTrip> $cheapest
          */
@@ -183,22 +91,14 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
                 continue;
             }
 
-            /*
-             * ONE REQUEST ANSWERS FOR ROUGHLY A YEAR (`period_type=year`),
-             * which is wider than any window a caller asks for — the poll asks
-             * for the eleven-month horizon and a screen might ask for three
-             * months. The port promises departures in [$from, $to], so the
-             * spill is dropped here rather than left for the job to prune.
-             */
+            // The year-wide answer spills past any caller's [$from, $to]; the
+            // port promises departures inside it, so drop the spill here.
             if ($trip->departureDate < $from || $trip->departureDate > $to) {
                 continue;
             }
 
-            /*
-             * THE BAND IS FILTERED HERE BECAUSE THE API WILL NOT DO IT — see
-             * point 4. `null` is "every stay length", which is what the poll
-             * asks for.
-             */
+            // Filtered here because the API's own trip_duration is a no-op.
+            // Null means every stay length, which is what the poll asks for.
             if ($nights !== null && ! $nights->contains($trip->nights)) {
                 continue;
             }
@@ -211,12 +111,8 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
             }
         }
 
-        /*
-         * `ksort` ON A KEY WHOSE NIGHTS HALF IS ZERO-PADDED, which is why the
-         * padding above exists: the port promises departure date ascending and
-         * then stay length ascending, and a plain string sort would order
-         * '2026-09-01|10' before '2026-09-01|2'.
-         */
+        // Nights half is zero-padded so this string ksort() doesn't order
+        // '2026-09-01|10' before '2026-09-01|2'.
         ksort($cheapest);
 
         return array_values($cheapest);
@@ -237,19 +133,12 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
                 ->baseUrl($this->baseUrl)
                 ->connectTimeout($this->connectTimeout)
                 ->timeout($this->timeout)
-                /*
-                 * `retries` is how many times a failure is TRIED AGAIN and
-                 * Laravel's argument is the total number of attempts; off by one
-                 * here is a silently disabled retry. `throw: false` because the
-                 * branch below reads the status itself.
-                 */
+                // Laravel's arg is total attempts, not retries; +1 avoids an
+                // off-by-one silently disabling the retry.
                 ->retry($this->retries + 1, $this->retryDelayMs, throw: false)
                 ->withHeaders([
-                    /*
-                     * IN A HEADER AND NOT THE QUERY STRING. A URL is the one
-                     * part of an HTTP request that gets written to an access
-                     * log, a proxy trace and an exception report by default.
-                     */
+                    // Header, not query string — URLs get written to access
+                    // logs, proxy traces and exception reports by default.
                     'X-Access-Token'  => $this->token,
                     'Accept-Encoding' => 'gzip, deflate',
                 ])
@@ -258,30 +147,20 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
                     'origin'      => $origin,
                     'destination' => $destination,
                     'currency'    => self::CURRENCY,
-                    /*
-                     * THE STRING 'false', WHICH IS WHAT THIS API ANSWERS TO,
-                     * and the parameter that makes this a round-trip request at
-                     * all. See point 2 — the two settings are disjoint caches.
-                     */
+                    // 'false' is what makes this a round-trip request; one_way
+                    // true/false are disjoint caches, not a filter. See §36.
                     'one_way' => 'false',
-                    /*
-                     * THE WHOLE HORIZON IN ONE REQUEST. `month` would need
-                     * `beginning_of_period` and twelve calls for a subset of
-                     * this (point 1).
-                     */
+                    // Whole horizon in one request; period_type=month would
+                    // need 12 calls for a subset of this.
                     'period_type' => 'year',
-                    /* Default 30, which would discard 91% of AMS-BKK (point 3). */
+                    // Default is 30, which silently drops most real routes.
                     'limit' => $this->limit,
-                    /*
-                     * "all prices" rather than only those found through partner
-                     * links. Orbit is not monetising these clicks, and the
-                     * narrower set is measurably thinner on already-sparse
-                     * routes — which round-trip routes all are.
-                     */
+                    // All prices, not just partner-link ones -- Orbit isn't
+                    // monetising clicks, and the narrower set is thinner.
                     'show_to_affiliates' => 'false',
                 ]);
         } catch (Throwable $e) {
-            /* Connection refused, DNS, TLS, the read timeout above. */
+            // Connection refused, DNS, TLS, the read timeout above.
             $this->warn('Could not reach Travelpayouts for return fares.', [
                 'route' => $route,
                 'error' => $e->getMessage(),
@@ -313,11 +192,8 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
         /** @var mixed $currency */
         $currency = $body['currency'] ?? null;
 
-        /*
-         * THE ENVELOPE HAS THE LAST WORD ON THE CURRENCY — the API's default is
-         * roubles and a request it does not understand is answered in them
-         * rather than refused. Nothing downstream could tell the difference.
-         */
+        // The API's default is roubles; an unrecognised request is answered
+        // in them rather than refused, so this is checked explicitly.
         if (! is_string($currency) || mb_strtolower($currency) !== self::CURRENCY) {
             $this->warn('Travelpayouts answered return fares in the wrong currency.', [
                 'route'    => $route,
@@ -346,14 +222,8 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
             return null;
         }
 
-        /*
-         * `actual` IS TRAVELPAYOUTS SAYING THE PRICE HAS GONE STALE, and a fare
-         * the provider itself no longer stands behind is not one to show
-         * somebody. It was true in all 198 recorded entries, so this is
-         * insurance rather than a hot path — which is exactly why
-         * tests/Fixtures/travelpayouts/latest-returns-malformed.json carries
-         * the case the API would not give us.
-         */
+        // `actual` false means Travelpayouts itself no longer stands behind
+        // the price -- not a fare to show. Insurance, not a hot path.
         if (($entry['actual'] ?? true) === false) {
             return null;
         }
@@ -365,11 +235,8 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
             return null;
         }
 
-        /*
-         * A FREE FLIGHT IS A BUG, NOT A DEAL. Zero and negative are the two
-         * shapes a missing price arrives in, and either would win every
-         * cheapest-fare comparison it was ever put into.
-         */
+        // A free flight is a bug, not a deal -- and would win every
+        // cheapest-fare comparison it was put into.
         if ($value <= 0) {
             return null;
         }
@@ -377,33 +244,19 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
         $departure = $this->date($entry['depart_date'] ?? null, $reference);
         $return = $this->date($entry['return_date'] ?? null, $reference);
 
-        /*
-         * A MISSING `return_date` IS A ONE-WAY FARE AND HAS NO PLACE IN THIS
-         * TABLE. `one_way=false` means every entry should carry one — all 198
-         * recorded ones did — but the one-way cache serves the SAME field as an
-         * empty string, so a request that lost its `one_way` parameter would
-         * otherwise fill `return_fares` with one-way prices under a stay length
-         * of zero. That is the round-trip version of the €252-instead-of-€80
-         * mistake the one-way adapter documents, pointing the other way.
-         */
+        // DO NOT drop this null check: a missing return_date means a
+        // one-way fare leaked from the disjoint one_way=true cache -- keeping
+        // it would silently fill return_fares with one-way prices at 0 nights.
         if ($departure === null || $return === null) {
             return null;
         }
 
-        /*
-         * WHOLE DAYS BETWEEN TWO MIDNIGHTS. Both dates are built with '!' below,
-         * so both are midnight in the same zone and the difference cannot pick
-         * up a fractional day from a DST boundary the way a diff of two wall
-         * clocks would.
-         */
+        // Whole days between two midnights ('!' below), so DST can't add a
+        // fractional day the way a diff of wall clocks would.
         $nights = (int) $departure->diff($return)->format('%r%a');
 
-        /*
-         * A RETURN BEFORE ITS OUTBOUND IS CORRUPT, and a stay past `max_nights`
-         * is not a trip anybody is shopping for — the longest real one recorded
-         * was 56 nights on AMS-BKK. Both are dropped here rather than at the
-         * column, so the reason is written down once.
-         */
+        // A return before its outbound is corrupt data; both bounds are
+        // checked here, once, rather than at the column.
         if ($nights < 0 || $nights > $this->maxNights) {
             return null;
         }
@@ -413,13 +266,8 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
 
     /**
      * A 'Y-m-d' from the API as a midnight in the window's own timezone, or
-     * null for anything else — including an empty string, which is how this API
-     * spells "one way".
-     *
-     * '!' zeroes the fields the format does not mention, so the result is
-     * midnight rather than midnight-plus-the-current-time-of-day. THE ROUND-TRIP
-     * COMPARISON IS WHAT REJECTS '2026-02-31', which createFromFormat would
-     * otherwise roll cheerfully into March.
+     * null for anything else (including '', how this API spells "one way").
+     * The round-trip format comparison is what rejects '2026-02-31'.
      */
     private function date(mixed $value, DateTimeImmutable $reference): ?DateTimeImmutable
     {
@@ -437,20 +285,10 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
     }
 
     /**
-     * When this price was found, per the provider — or null if it will not say.
-     *
-     * TWO FORMATS, BOTH UTC, AND THIS ENDPOINT USES THE SECOND ONE. See point 8
-     * of the class docblock for the measurements: `/v2/prices/latest` stamps
-     * `2026-08-10T20:11:25` with no zone marker while the matrix endpoints stamp
-     * a trailing `Z`. Both are the same instant in UTC; only the notation
-     * differs, so both are accepted and both are read as UTC.
-     *
-     * PINNED FORMATS RATHER THAN `new DateTimeImmutable($s)`. The loose parser
-     * accepts "tomorrow", "+3 days" and a bare "13:51" (which it dates to
-     * TODAY), and every one of those would come back as a confident timestamp
-     * built out of a value the API did not mean. This field's whole job is to be
-     * trustworthy, so an unrecognised shape is no answer rather than a plausible
-     * one — and the round trip is what rejects `2026-02-31T00:00:00`.
+     * When this price was found, per the provider, or null if it won't say.
+     * Two formats across this API, both UTC (with/without trailing `Z`) --
+     * both accepted. Pinned formats, not `new DateTimeImmutable($s)`: the
+     * loose parser accepts "tomorrow" and would fabricate a confident answer.
      *
      * @param  array<mixed>  $entry
      */
@@ -478,16 +316,9 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
 
     /**
      * Say that the provider is failing — at most once every `warn_every_minutes`.
-     *
-     * ONE KEY FOR THE WHOLE ADAPTER, not one per route. The thing worth knowing
-     * is "round-trip fares are not coming in this morning", and a poll is one
-     * call per watched route — so an unlimited version turns one outage into a
-     * line per route in a log nobody reads to the end of. The suppressed calls
-     * are not silently lost: the line that does get through says how long the
-     * silence after it lasts.
-     *
-     * `add()` RATHER THAN `has()` + `put()` because it is atomic, and the poll's
-     * jobs run in parallel Horizon workers.
+     * One key for the whole adapter, not per route, so one outage doesn't
+     * become a line per route. `add()`, not `has()`+`put()`, since it must be
+     * atomic across parallel Horizon workers.
      *
      * @param  array<string, scalar>  $context
      */

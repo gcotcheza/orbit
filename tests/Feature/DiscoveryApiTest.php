@@ -107,11 +107,8 @@ final class DiscoveryApiTest extends TestCase
     }
 
     /**
-     * THE LANE IS PUBLISHED AS THE ENUM'S STRING, because the client draws a
-     * different sentence for each and that sentence is a claim about EVIDENCE:
-     * an absolute card's price speaks for itself, a relative card has to say
-     * "rare price for this route" or the reader is right to wonder what an
-     * ordinary-looking €60 is doing on a strip of insane fares.
+     * The lane is published as the enum's string: the client's sentence per lane is a claim about evidence — a relative
+     * price needs "rare for this route" or it looks arbitrary next to an absolute one (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_relative_find_publishes_its_lane(): void
@@ -191,7 +188,6 @@ final class DiscoveryApiTest extends TestCase
         $codes = $this->actingAs($this->user)->getJson('/api/discoveries')->json('data.*.code');
         $this->assertSame(['DUS-AGP'], $codes);
 
-        /* And a flight that has already left. */
         Discovery::query()->where('code', 'DUS-AGP')->update(['departure_date' => '2026-08-15']);
 
         $this->actingAs($this->user)->getJson('/api/discoveries')
@@ -200,9 +196,8 @@ final class DiscoveryApiTest extends TestCase
     }
 
     /**
-     * A box with no sweep provider, or a week where nothing was remarkable.
-     * Every threshold is a floor rather than a quota precisely so this can
-     * happen.
+     * A box with no sweep provider, or a week where nothing was remarkable; every threshold is a floor, not a quota,
+     * precisely so this can happen (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function an_empty_set_is_a_real_and_common_answer(): void

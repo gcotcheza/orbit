@@ -14,13 +14,8 @@ use PHPUnit\Framework\Attributes\Test;
 use App\Domain\Rules\DestinationProfile;
 
 /**
- * Which places, and which fares.
- *
- * THE CLIMATE GATE IS THE INTERESTING PART. "Somewhere sunny in spring" is
- * answered by the BEST month in the window rather than every month, and the
- * two tests that pin that down are the difference between a rule that finds
- * Lisbon in May and a rule that finds the Canaries and nothing else — see
- * config/orbit.php for the reasoning and the seeder data for the ratings.
+ * Which places, and which fares. THE CLIMATE GATE: matched by the BEST
+ * month in the window, not every month — see config/orbit.php.
  */
 final class RuleMatcherTest extends TestCase
 {
@@ -47,8 +42,6 @@ final class RuleMatcherTest extends TestCase
     {
         return new DatedFare(new DateTimeImmutable($date), $cents);
     }
-
-    // -- Where ---------------------------------------------------------------
 
     #[Test]
     public function a_rule_with_no_vibe_is_about_everywhere(): void
@@ -84,8 +77,7 @@ final class RuleMatcherTest extends TestCase
 
     /**
      * The sweep spends a capped budget on this order (App\Jobs\SweepRuleFares),
-     * so it has to be total: two places that tie on everything must still come
-     * back the same way round on every run.
+     * so ties must break the same way every run.
      */
     #[Test]
     public function a_tie_is_broken_alphabetically_so_the_order_never_moves(): void
@@ -116,9 +108,8 @@ final class RuleMatcherTest extends TestCase
     }
 
     /**
-     * A rule with no season has no season to check a climate against, and
-     * inventing one would answer a question nobody asked. The `sunny` tag on
-     * the destination already carries the judgement.
+     * No season means no climate check — inventing one would answer a
+     * question nobody asked; the `sunny` tag already carries the judgement.
      */
     #[Test]
     public function a_warm_rule_with_no_window_does_not_check_the_climate(): void
@@ -140,8 +131,6 @@ final class RuleMatcherTest extends TestCase
 
         $this->assertCount(1, $ranked);
     }
-
-    // -- Which fare ----------------------------------------------------------
 
     #[Test]
     public function with_no_criteria_it_takes_the_cheapest_fare_there_is(): void

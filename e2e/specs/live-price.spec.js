@@ -1,29 +1,16 @@
-// =============================================================================
 // A fare that may already be gone, and the button that goes and asks
-// =============================================================================
-// ⚠ WHY THREE OF THESE FOUR TESTS INTERCEPT THE APP'S OWN API, WHEN NOTHING
-//   ELSE IN THIS SUITE DOES: the sandbox cannot hold the states. Its fares are
-//   minutes old (nothing can be demoted), it has no SERPAPI_KEY and must never
-//   have one, and a Google that times out is not something a seeder can make.
-//   The endpoint itself is proven in tests/Feature/LivePriceCheckTest against
-//   recorded fixtures; what is left is that a browser DRAWS these documents.
 //
-// The fourth is the whole round trip, and it is the state this box is really
-// in: no key, so no search, so a 503 with a sentence.
-// =============================================================================
+// ⚠ Three of four tests intercept the app's own API: the sandbox can't hold states
+// (fares are minutes old, no SERPAPI_KEY). The fourth exercises the real refusal.
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { expect, shot, test } from '../fixtures.js'
 
 /** Seeded by database/seeders/WatchlistSeeder — six routes, this is the first. */
 const CODE = 'AMS-LIS'
 
 /**
- * The document the screen is drawing, with the one fact this sandbox cannot
- * hold: a cheapest fare found three days ago that the SERVER judged
- * `mayBeGone`.
- *
- * ⚠ The advice is qualified here too, because App\Http\Resources\
- * RouteDetailResource qualifies it — a body with `mayBeGone` true and a callout
- * saying "lock it in" is not a document this API can produce.
+ * ⚠ Also ages `advice`: RouteDetailResource wouldn't pair `mayBeGone: true` with a "lock it in" callout, so the
+ * fixture can't either (docs/BUSINESS-LOGIC.md §36).
  */
 function ageTheCheapestFare(body) {
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 3_600_000).toISOString()
@@ -63,11 +50,8 @@ test('a stale, far-below-usual fare is demoted instead of shouted', async ({ pag
     /* The plain "Seen 3 days ago" line is REPLACED rather than joined. */
     await expect(page.locator('.price__seen')).toHaveCount(0)
 
-    /*
-     * ⚠ THE DEMOTION IS REAL AT THE PIXEL LEVEL, which is the half a class
-     * assertion cannot make: a build that added the class and no style would
-     * pass `toHaveClass` and change nothing a person sees.
-     */
+    // ⚠ Checks computed style, not just the class: a class with no matching CSS would pass toHaveClass while changing
+    // nothing a person sees (docs/BUSINESS-LOGIC.md §36).
     const headline = await page.evaluate(() => {
         const style = getComputedStyle(document.querySelector('.price__value'))
 
@@ -153,9 +137,8 @@ test('the live price takes the headline and Orbit’s own becomes context', asyn
 })
 
 /**
- * ⚠ A CHECK THAT COULD NOT BE MADE COST NOTHING, SO THE BUTTON STAYS. This is
- * the state the endpoint answers when SerpAPI itself is unreachable: no row is
- * written, no cooldown starts, and the offer to try again is honest.
+ * ⚠ A check that couldn't be made costs nothing, so the button stays: no row written, no cooldown started, when
+ * SerpAPI itself is unreachable (docs/BUSINESS-LOGIC.md §36).
  */
 test('a Google that could not be reached leaves the offer standing', async ({ page, browserConsole }) => {
     browserConsole.allow(/Failed to load resource.*status of 503/)

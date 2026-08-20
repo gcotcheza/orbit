@@ -8,44 +8,11 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 
 /**
- * `php artisan build:retain` — keep the last few builds' assets on disk, and
- * delete the ones before that.
+ * `php artisan build:retain` — keep the last few builds' assets on disk, delete the rest via a per-build ledger (mtime
+ * can't identify a build).
  *
- * ---------------------------------------------------------------------------
- * WHAT IT IS FOR
- *
- * `vite.config.js` sets `build.emptyOutDir: false`, so a build now ADDS files
- * to `public/build/assets` rather than replacing the directory — see that file
- * for the two ways a wiped directory kills a page that is already open. Adding
- * without ever removing is a disk that fills up, and this is the removing half.
- *
- * ---------------------------------------------------------------------------
- * A LEDGER, BECAUSE A FILE'S mtime IS NOT ITS BUILD
- *
- * Something has to know which file belonged to which build, and that is not
- * recoverable from the filesystem: a chunk whose content did not change keeps
- * its name AND its timestamp across builds, so by mtime it would look ancient
- * forever and be deleted while the current page is still asking for it.
- *
- * So each run writes a snapshot — `public/build/builds/<version>.json`, listing
- * exactly the files the manifest referenced at that moment. `<version>` is the
- * md5 prefix of manifest.json: the same string App\Services\Pwa\BuildAssets
- * gives the service worker for its cache name, so "a build" means the same
- * thing in both places.
- *
- * Retention is then trivial and, more importantly, honest: keep the newest N
- * snapshots, keep the union of the files they name, delete every other file in
- * `assets/`. A chunk shared by three builds is listed in three snapshots and
- * survives until the last of them is dropped.
- *
- * ---------------------------------------------------------------------------
- * WHY THREE
- *
- * The window that matters is "how long can a phone hold a reference to an old
- * build and still be rescued", and it is bounded by how often this app is
- * deployed on a bad day. Two would be one short of that. Beyond three the
- * returns are nothing: a device that has missed four deploys has been asleep
- * for days and fetches fresh HTML the moment it wakes.
+ * Default `--keep=3`: balances phone cache staleness against build count.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 final class RetainBuilds extends Command
 {
@@ -73,9 +40,8 @@ final class RetainBuilds extends Command
         $manifestPath = $dir.'/manifest.json';
 
         if (! File::exists($manifestPath)) {
-            // A checkout that has never been built. Not an error: the deploy
-            // runs this straight after the build, and a missing manifest there
-            // means the build failed and has already said so.
+            // Not an error: deploy runs this right after build; a missing manifest means build already failed and reported it
+            // (docs/BUSINESS-LOGIC.md §36).
             $this->components->warn("No build manifest at {$manifestPath} — nothing to retain.");
 
             return self::SUCCESS;
@@ -113,11 +79,8 @@ final class RetainBuilds extends Command
     }
 
     /**
-     * Every file the manifest points at, as paths relative to the build dir.
-     *
-     * `file`, `css` and `assets` — the chunk itself, the stylesheets Vite
-     * attached to it, and everything it emitted, which is where the font faces
-     * are.
+     * Every file the manifest points at: `file`, `css`, and `assets` chunks
+     * (font faces live under `assets`), relative to the build dir.
      *
      * @return list<string>
      */
@@ -163,9 +126,8 @@ final class RetainBuilds extends Command
     /**
      * Write the snapshot for this build, unless one already exists.
      *
-     * NOT overwritten on a re-run, and that is the point: `recorded_at` is what
-     * orders the ledger, so refreshing it would make today's scheduled run look
-     * like a new build and push a genuinely newer one out of the window.
+     * Not overwritten on rerun: `recorded_at` orders the ledger, so refreshing would bump this run ahead of a genuinely
+     * newer build.
      *
      * @param  list<string>  $files
      * @return bool whether a new snapshot was written
@@ -185,15 +147,8 @@ final class RetainBuilds extends Command
         File::put($path, (string) json_encode([
             'version' => $version,
 
-            /*
-             * MICROSECONDS, and they are load bearing.
-             *
-             * `recorded_at` is the only thing that orders the ledger, and two
-             * deploys can easily land in the same second — a rebuild that only
-             * touches one screen takes well under one. At second resolution the
-             * comparison ties, the sort becomes arbitrary, and retention starts
-             * dropping the wrong build.
-             */
+            // MICROSECONDS matter: two deploys can land in the same second; at that resolution the sort ties and retention drops
+            // the wrong build (docs/BUSINESS-LOGIC.md §36).
             'recorded_at' => now()->format('Y-m-d\TH:i:s.uP'),
 
             'files' => $files,
@@ -247,16 +202,11 @@ final class RetainBuilds extends Command
     /**
      * Delete everything in `assets/` that no retained snapshot names.
      *
-     * Scoped to that one directory on purpose. `public/build` also holds
-     * `manifest.json` and the ledger itself, and a prune that walked the whole
-     * tree would be one glob away from deleting its own bookkeeping.
+     * Scoped to `assets/` only — `public/build` also holds manifest.json and the ledger; walking the whole tree risks
+     * deleting our own bookkeeping.
      *
-     * A KEPT FILE KEEPS ITS SOURCE MAP. Vite does not list `app-XYZ.js.map` in
-     * the manifest — only `app-XYZ.js` — so a prune that named files purely
-     * from the manifest would delete every map in the directory on its first
-     * run after each deploy. `build.sourcemap` is off today and this line does
-     * nothing; the day somebody turns it on to debug a phone is the day they
-     * would otherwise discover the maps vanish an hour later.
+     * A kept file also keeps its `.map` (Vite omits maps from the manifest).
+     * Why: docs/BUSINESS-LOGIC.md §36.
      *
      * @param  list<string>  $retained
      * @return list<string> paths deleted, relative to the build dir

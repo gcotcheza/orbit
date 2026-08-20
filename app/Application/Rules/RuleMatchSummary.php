@@ -10,21 +10,14 @@ use App\Domain\Pricing\DatedFare;
  * "6 trips match this right now — cheapest €34" (design/README.md §4), plus
  * the handful the screen can actually show.
  *
- * THE COUNT IS OF EVERYTHING AND THE SAMPLE IS NOT. The banner's number has to
- * be the truth about the rule — a rule that matches sixty routes is a rule
- * somebody should probably tighten, and a "6" capped by the sample size would
- * hide exactly that. The sample is what fits on a phone.
+ * The count is of everything; the sample is what fits on a phone — capping the count itself would hide a rule that
+ * needs tightening.
  *
- * EMPTY IS A REAL ANSWER, not an error: a rule with no matches yet is the
- * ordinary state of a rule created ten seconds ago, before
- * App\Jobs\SweepRuleFares has fetched a fare for any of the routes it named.
+ * Empty is a real answer, not an error: a rule created seconds ago, before App\Jobs\SweepRuleFares has priced any of
+ * its routes, has no matches yet.
  *
- * AND SO IS A COUNT THAT IS ONLY A FLOOR, which is what `pending` is for. The
- * same sweep is the reason a rule can say "2 trips match" before it is saved
- * and "32 trips match" a minute after: the count was never wrong, it was
- * counted over the candidates Orbit had already priced. `pending` is how many
- * of them it had not, so the screen can phrase the number as the floor it is
- * rather than as a total the next refresh contradicts.
+ * A count can also be only a floor (`pending`): the sweep prices candidates over time, so "2 trips" before save and
+ * "32" a minute after were both correct (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class RuleMatchSummary
 {
@@ -32,7 +25,7 @@ final readonly class RuleMatchSummary
      * @param  list<RuleMatch>  $matches  every match, cheapest first
      * @param  list<RuleMatch>  $sample  the first config('orbit.rules.sample') of them
      * @param  int  $pending  candidate routes this rule is about that Orbit holds
-     *                        no fare for yet — see the note above
+     *                        no fare for yet
      */
     private function __construct(
         public array $matches,
@@ -56,13 +49,8 @@ final readonly class RuleMatchSummary
     /**
      * Is the count below a floor rather than a total?
      *
-     * TRUE MEANS "AT LEAST", and the screen has to say so. `count()` is the
-     * truth about the fares Orbit HOLDS, which on the create screen is a
-     * different question from the one the person typing is asking: they mean
-     * "how many trips are there", and the answer to that is still arriving —
-     * App\Jobs\SweepRuleFares prices the rest after the rule is saved. A "2"
-     * that becomes 32 a minute later was not wrong, it was unqualified, and an
-     * unqualified number is the one somebody decides not to save a rule on.
+     * True means "at least": count() is what Orbit holds, not what exists — the unqualified number is what makes people
+     * not save a rule (docs/BUSINESS-LOGIC.md §11).
      */
     public function partial(): bool
     {
@@ -74,11 +62,8 @@ final readonly class RuleMatchSummary
         return count($this->matches);
     }
 
-    /**
-     * The cheapest fare any of them found — the second half of the banner's
-     * sentence. NULL when nothing matched, which the screen renders as the
-     * "nothing yet" state rather than as €0.
-     */
+    // Null when nothing matched; the screen renders that as "nothing yet", not €0.
+    // Why: docs/BUSINESS-LOGIC.md §11.
     public function cheapest(): ?DatedFare
     {
         return $this->matches[0]->cheapest ?? null;

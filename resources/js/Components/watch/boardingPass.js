@@ -1,35 +1,12 @@
-// =============================================================================
-// The two pieces of boarding-pass dressing
-// =============================================================================
-// design/README.md §5 draws each watched route as a boarding pass: a flag
-// swatch next to the destination city, and a flight number in the eyebrow.
-// Neither is data — there is no flight and no airline — so both are DERIVED
-// here rather than invented by the server, and both are PURE FUNCTIONS of what
-// the API already sends.
-//
-// PURE MATTERS. A random flight number would change on every render, which on
-// a boarding pass reads as the app losing track of which route it is showing;
-// and a swatch computed in a component's setup would be recomputed per row per
-// render for no reason. Same input, same output, always.
-// =============================================================================
+// Flag swatch and flight number are derived here, not sent by the server —
+// neither is real data, and both must be pure (same input, same output) so a
+// boarding pass doesn't visibly change between renders.
+// Why: docs/BUSINESS-LOGIC.md §36.
 
-// -- Flags --------------------------------------------------------------------
-//
-// CSS GRADIENTS RATHER THAN IMAGES OR EMOJI. An image per country is 28 HTTP
-// requests for 22×15 px of decoration; flag emoji are the obvious alternative
-// and are the wrong one — Windows has no flag glyphs at all and renders the
-// regional-indicator pair as two grey letters, which is exactly the platform
-// somebody will open this on from a laptop.
-//
-// EVERY COUNTRY IN THE SEED SET IS HERE — the 28 in
-// database/seeders/data/european_destinations.php, keyed by the `countryCode`
-// the API sends. They are APPROXIMATIONS at 22×15: stripes and crosses are
-// exact, charges (Albania's eagle, Turkey's crescent, the Union Jack's
-// saltires) are simplified to what survives at that size. Portugal keeps its
-// dot because the design's own prototype drew one.
-//
-// A country not listed gets a neutral slate swatch rather than nothing, so a
-// destination added by hand still looks like a boarding pass.
+// CSS gradients, not images/emoji: an image per country is 28 requests for
+// 22×15px, and Windows renders flag emoji as grey letters. Approximated at
+// that size; unlisted countries fall back to a neutral slate swatch.
+// Why: docs/BUSINESS-LOGIC.md §36.
 
 const NEUTRAL = 'linear-gradient(135deg, #8b93ad, #5d6883)'
 
@@ -149,20 +126,9 @@ export function flagFor(countryCode) {
     return FLAGS[countryCode] ?? NEUTRAL
 }
 
-// -- Flight numbers -----------------------------------------------------------
-
 /**
- * The `FW###` in the boarding pass eyebrow, derived from the route code.
- *
- * THERE IS NO REAL FLIGHT. A watched route is a city pair and a price, not a
- * booking, and the design's flight number is set dressing that makes the card
- * read as a boarding pass. It is derived rather than random so that AMS-LIS is
- * FW-something-the-same on every render, on every device and after every
- * reload — a number that changed between two glances would be the one detail
- * that gives the whole card away as fiction.
- *
- * The hash is the design prototype's own: a 31-multiplier rolling sum, kept
- * small enough that the arithmetic is exact in a double.
+ * The `FW###` in the boarding pass eyebrow, derived from the route code. No real flight — set dressing for the card. Derived, not random, so AMS-LIS shows the same number on every render/device/reload
+ * (a changing number would give the fiction away). Hash is the design prototype's own 31-multiplier sum (docs/BUSINESS-LOGIC.md §36).
  *
  * @param {string} code "AMS-LIS"
  * @returns {string} "FW304"

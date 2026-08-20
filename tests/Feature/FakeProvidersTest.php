@@ -14,11 +14,8 @@ use App\Application\Ports\PriceProvider;
 use App\Application\Ports\PriceStatsProvider;
 
 /**
- * The two adapters, and the wiring that chooses them.
- *
- * The binding tests matter more than they look: a typo in
- * ORBIT_PRICE_PROVIDER that silently fell back to the fake would put invented
- * prices into a real alert, which is the worst thing this app could do.
+ * The two adapters, and the wiring that chooses them — a typo in
+ * ORBIT_PRICE_PROVIDER silently using the fake would put invented prices in a real alert.
  */
 final class FakeProvidersTest extends TestCase
 {
@@ -68,10 +65,8 @@ final class FakeProvidersTest extends TestCase
     }
 
     /**
-     * The provider reads the application clock, which is what lets
-     * Database\Seeders\FakeHistorySeeder replay past mornings through the real
-     * poller. If it read a wall clock instead, the backfill would write sixty
-     * identical rows.
+     * Reads the application clock so FakeHistorySeeder can replay past
+     * mornings through the real poller — a wall clock would write sixty identical rows.
      */
     #[Test]
     public function the_price_provider_follows_the_application_clock(): void
@@ -98,9 +93,8 @@ final class FakeProvidersTest extends TestCase
     public function the_stats_provider_answers_a_sorted_five_number_summary(): void
     {
         /*
-         * Held as the PORT, not as the adapter: the assertions below are the
-         * contract every future provider has to satisfy, including the null
-         * that a real one is allowed to answer.
+         * Held as the PORT, not the adapter: the assertions below are the
+         * contract every future provider must satisfy, including a null answer.
          */
         /** @var PriceStatsProvider $provider */
         $provider = $this->app->make(PriceStatsProvider::class);
@@ -119,9 +113,8 @@ final class FakeProvidersTest extends TestCase
     }
 
     /**
-     * The subtlest property in the whole fake: the usual price must NOT move
-     * with the route-wide swing that today's fare carries, or the two cancel
-     * and every route is scored as permanently average. See FakeFareModel.
+     * The subtlest property in the fake: usual price must NOT move with
+     * today's route-wide swing (see FakeFareModel), or every route scores as average.
      */
     #[Test]
     public function todays_cheapest_fare_can_sit_well_below_the_usual_price(): void

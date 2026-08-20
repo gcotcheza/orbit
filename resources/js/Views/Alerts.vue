@@ -1,31 +1,7 @@
 <script setup>
 /*
- * Alerts (design/README.md §6) — how and when Orbit reaches the owner.
- *
- * Four cards: the delivery channels, the sensitivity that decides what counts
- * as worth telling them about, the timing, and the two controls that were
- * already here.
- *
- * THE THEME SWITCH AND SIGN-OUT ARE NOT LEFTOVERS. They landed in PR4 as the
- * only UI exercising the theme store and the session, and the design puts both
- * on this screen — the placeholder prose around them is what this PR deletes.
- * They keep their own card at the bottom because they are about the app;
- * everything above is about alerts.
- *
- * THE ACCOUNT CARD IS THE EXCEPTION TO "everything here is about alerts", and
- * it is here because there is nowhere else: this screen is the only settings
- * surface the tab bar reaches, and a password that can only be changed by
- * running the seeder again on a box is one the owner will never change. It sits
- * BELOW the alert settings and ABOVE the app card, which is the order of how
- * often each is touched. Who you are moved into it from the app card in the
- * same PR, so the card says what account the password belongs to.
- *
- * THE SENSITIVITY BLURB COMES FROM THE SERVER. Each level's sentence quotes
- * the deal score it fires at, that number is config/orbit.php's `score.tiers`,
- * and it is the same number the API publishes as a route's `tier`. A "score
- * 80+" typed into this template would be a promise that goes quietly wrong the
- * day the tier is retuned — on the one screen whose entire job is to say what
- * will happen.
+ * Alerts (design/README.md §6) — how and when Orbit reaches the owner:
+ * channels, sensitivity, timing, plus the app's theme/sign-out controls.
  */
 import { computed, nextTick, onMounted, useTemplateRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -73,26 +49,8 @@ const quietNote = computed(() => {
 onMounted(settingsStore.load)
 
 /*
- * =============================================================================
- * ARRIVING AT THE ACCOUNT, WHEN THAT IS WHAT WAS ASKED FOR
- * =============================================================================
- * The home screen's round PERSON button points here with `#account` on it,
- * because that glyph promises the account and this screen opens on alerts. The
- * tab bar's own Alerts item carries no hash and lands at the top, as it should —
- * the two entrances mean different things and now arrive in different places.
- *
- * WHY NOT THE ROUTER'S `scrollBehavior`. It runs one tick after the navigation
- * is confirmed, which on this screen is while `GET /api/settings` is still in
- * flight: the account card is rendered (it is outside the loading gate, because
- * it needs no settings) but everything ABOVE it is not, so it is a few hundred
- * pixels higher than where it will end up. Scrolling to it then and letting four
- * cards appear above it afterwards lands the reader in the middle of the quiet
- * hours. Waiting for the request to settle — either way, `ready` or `failed` —
- * is the difference between arriving at the account and arriving near it.
- *
- * `immediate`, so a screen whose settings were already in the store (this
- * component is not kept alive, but the store is) does not wait for a status
- * change that has already happened.
+ * Scroll to #account only once settings settle (ready/failed), not via router
+ * `scrollBehavior` — mid-fetch it fires before layout above it is final.
  */
 const route = useRoute()
 const accountHeading = useTemplateRef('accountHeading')
@@ -116,10 +74,9 @@ function save(patch) {
 }
 
 /*
- * A time input can be cleared, and an empty string is not a time — the server
- * would answer 422 and the switch would revert for a reason nobody typed.
- * Ignoring the empty state leaves the previous value in place, which is what
- * an emptied field means here.
+ * Empty string from a cleared time input isn't valid (server 422s); ignore it
+ * and keep the previous value instead of saving.
+ * Why: docs/BUSINESS-LOGIC.md §10.
  */
 function saveTime(field, value) {
   if (value !== '') {
@@ -195,6 +152,8 @@ async function signOut() {
           label="Alert sensitivity"
           @update:model-value="save({ sensitivity: $event })"
         />
+        <!-- Blurb (incl. score number) comes from server/config score.tiers, never
+             hardcoded, so a retuned tier can't go stale here (docs/BUSINESS-LOGIC.md §10). -->
         <p class="blurb">{{ chosenSensitivity?.blurb }}</p>
       </section>
 
@@ -208,9 +167,8 @@ async function signOut() {
           />
         </SettingRow>
 
-        <!-- Revealed by the switch above, per the design: the window is only
-             worth showing while it is doing something. The values are kept
-             either way, so switching quiet hours back on restores them. -->
+        <!-- Shown only while quiet hours is on; values persist while hidden.
+             Why: docs/BUSINESS-LOGIC.md §10. -->
         <div v-if="settings.quietHours" class="window card__row">
           <label class="window__field">
             <span class="window__label">From</span>
@@ -243,11 +201,11 @@ async function signOut() {
       </section>
     </template>
 
+    <!-- Account card is here because there's nowhere else: this is the only
+         settings surface the tab bar reaches (docs/BUSINESS-LOGIC.md §10). -->
     <h2 id="account" ref="accountHeading" class="section">Account</h2>
     <section class="card">
-      <!-- Who this is, above the one thing that can be changed about it. The
-           name and address are not editable and are not meant to be: they are
-           the seeder's, and the API has no endpoint for either. -->
+      <!-- Name/email read-only: they're the seeder's, no edit endpoint exists (docs/BUSINESS-LOGIC.md §10). -->
       <div class="account card__row">
         <p class="account__name">{{ user?.name }}</p>
         <p class="account__email">{{ user?.email }}</p>
@@ -256,6 +214,8 @@ async function signOut() {
       <ChangePassword />
     </section>
 
+    <!-- Theme + sign-out aren't leftovers: kept here as the only screen touching
+         the theme store and the session (docs/BUSINESS-LOGIC.md §10). -->
     <h2 class="section">This app</h2>
     <section class="card card--padded">
       <SegmentedControl :model-value="theme" :options="THEMES" label="Theme" @update:model-value="themeStore.set" />
@@ -371,8 +331,6 @@ async function signOut() {
   color: var(--muted);
 }
 
-/* --- The quiet window ---------------------------------------------------- */
-
 .window {
   display: flex;
   gap: 10px;
@@ -412,8 +370,6 @@ async function signOut() {
   outline: none;
   border-color: var(--accent);
 }
-
-/* --- Account ------------------------------------------------------------- */
 
 .account {
   padding: 14px 16px;

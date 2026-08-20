@@ -16,15 +16,11 @@ use PHPUnit\Framework\Attributes\DataProvider;
 /**
  * The two round-trip values, which are pure PHP and are tested as such.
  *
- * `Tests\TestCase` boots the framework and is what a test needs when it touches
- * a database, a container binding or the HTTP client. Neither of these types
- * touches any of that, so this extends PHPUnit's own case — the same choice
- * tests/Unit/Domain/Pricing/PriceStatsTest makes.
+ * Extends PHPUnit's TestCase, not Tests\TestCase, since nothing here touches a database, a container binding or the
+ * HTTP client (docs/BUSINESS-LOGIC.md §15).
  */
 final class ReturnTripTest extends TestCase
 {
-    // -------------------------------------------------------------- the return date
-
     #[Test]
     public function the_return_date_is_derived_from_the_stay_length(): void
     {
@@ -36,11 +32,8 @@ final class ReturnTripTest extends TestCase
     #[Test]
     public function a_same_day_return_is_zero_nights_and_is_perfectly_legal(): void
     {
-        /*
-         * NOT A DEGENERATE CASE. Three of the 198 entries recorded from the live
-         * API on 2026-08-16 had `return_date == depart_date`, so a floor of one
-         * night would be the app inventing a rule the airline does not have.
-         */
+        // NOT a degenerate case: live data showed real same-day returns, so 0 nights is valid.
+        // Why: docs/BUSINESS-LOGIC.md §15.
         $trip = new ReturnTrip(new DateTimeImmutable('2026-11-03'), 0, 9900);
 
         $this->assertSame('2026-11-03', $trip->returnDate()->format('Y-m-d'));
@@ -49,11 +42,8 @@ final class ReturnTripTest extends TestCase
     #[Test]
     public function the_return_date_crosses_a_month_a_year_and_a_dst_boundary_without_drifting(): void
     {
-        /*
-         * THE CLOCKS GO BACK ON 2026-10-25 IN EUROPE/AMSTERDAM. A derivation
-         * done in seconds rather than in days would land this one at 23:00 on
-         * the 30th and print the wrong calendar day.
-         */
+        // DST guard: must derive in days, not seconds, or the Oct 25 Amsterdam clock change breaks the date.
+        // Why: docs/BUSINESS-LOGIC.md §15.
         $autumn = new ReturnTrip(new DateTimeImmutable('2026-10-24 00:00:00', new DateTimeZone('Europe/Amsterdam')), 7, 12000);
         $this->assertSame('2026-10-31', $autumn->returnDate()->format('Y-m-d'));
 
@@ -64,28 +54,19 @@ final class ReturnTripTest extends TestCase
     #[Test]
     public function a_return_leg_before_its_outbound_is_refused(): void
     {
-        /*
-         * A CORRUPT ROW RATHER THAN AN UNUSUAL TRIP. The column is unsigned, so
-         * this would fail at the database with a message about a constraint;
-         * failing here says what is actually wrong.
-         */
+        // A corrupt row, not an unusual trip: fails here with a clear message instead of an opaque DB constraint error.
+        // Why: docs/BUSINESS-LOGIC.md §15.
         $this->expectException(InvalidArgumentException::class);
 
         new ReturnTrip(new DateTimeImmutable('2026-11-03'), -1, 13400);
     }
 
-    // -------------------------------------------------------------------- the band
-
     #[Test]
     #[DataProvider('bandMembership')]
     public function a_band_is_inclusive_at_both_ends(int $nights, bool $inside): void
     {
-        /*
-         * BOTH ENDS, which is how "6 to 8 nights" reads and how
-         * RuleCriteria::$tripLengthNights has been documented since the rules
-         * engine shipped. Exclusive at the top would quietly stop every [2, 3]
-         * weekend rule matching a Sunday return.
-         */
+        // Inclusive at both ends, per RuleCriteria::$tripLengthNights; exclusive would break Sunday-return weekend rules.
+        // Why: docs/BUSINESS-LOGIC.md §15.
         $this->assertSame($inside, (new NightsBand(6, 8))->contains($nights));
     }
 

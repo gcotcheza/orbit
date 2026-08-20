@@ -12,24 +12,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * The cheapest round-trip found for one (departure date, stay length).
  *
- * THE ROW BEHIND App\Domain\Pricing\ReturnTrip, and the sibling of
- * App\Models\CalendarFare — that one is a ONE-WAY price for a departure date,
- * this one is the price of going and coming back. The two are never mixed: a
- * long-haul one-way reads roughly two thirds of the return fare on the same
- * route, so a screen that put both in the same column would be comparing two
- * different trips.
+ * Row behind App\Domain\Pricing\ReturnTrip; sibling of CalendarFare (one-way). Never compare the two directly — a
+ * long-haul one-way reads ~2/3 of the return.
  *
- * `return_date` IS NOT A COLUMN. `nights` is the stored fact and the return
- * date is derived from it (`returnDate()` below, and the migration's docblock
- * for the three reasons). Storing both would be one fact written twice, and the
- * copy that drifts is always the one somebody reads.
+ * `return_date` is NOT a column — derived from `nights` via `returnDate()`, to avoid one fact stored (and drifting)
+ * twice.
  *
- * TWO TIMESTAMPS THAT SOUND ALIKE AND ARE NOT, exactly as on CalendarFare:
- * `fetched_at` is when ORBIT asked, `found_at` is when the price was found by
- * whoever's search turned it up. Null means "not known" and renders as nothing
- * at all. The gap between them is WIDER here than on the one-way table —
- * `/v2/prices/latest` serves a seven-day-deep cache — which is why nothing may
- * substitute one for the other.
+ * `fetched_at` (Orbit asked) vs `found_at` (price was found) are not interchangeable; the gap is wider here than on
+ * the one-way table (docs/BUSINESS-LOGIC.md §15).
  *
  * @property int $id
  * @property int $route_id
@@ -52,13 +42,8 @@ final class ReturnFare extends Model
     }
 
     /**
-     * The day you would fly home — derived, never stored.
-     *
-     * NOT AN ACCESSOR/ATTRIBUTE, deliberately. An `Attribute` of this name
-     * would appear in `toArray()` and in every API resource that spreads the
-     * model, which is how a derived value starts being treated as a column and
-     * ends up in somebody's `where` clause. A method has to be called on
-     * purpose.
+     * Day you'd fly home — derived, never stored. Deliberately NOT an Attribute/accessor: that would leak into
+     * toArray()/API and invite treating a derived value as a real column (docs/BUSINESS-LOGIC.md §15).
      */
     public function returnDate(): CarbonImmutable
     {
@@ -66,13 +51,8 @@ final class ReturnFare extends Model
     }
 
     /*
-     * NO DURATION-BAND SCOPE HERE YET, AND THAT IS ON PURPOSE. The obvious one
-     * — `whereBetween('nights', [$band->min, $band->max])` — is one line, and
-     * writing it before a single caller exists would be guessing at the shape
-     * the screens want (cheapest per band? per departure week? per month?). The
-     * migration's `(route_id, nights, departure_date)` index is where that
-     * intent is recorded; the query that uses it belongs to the PR that has a
-     * screen to justify it.
+     * DELIBERATELY no duration-band scope yet — would guess at a shape no caller has asked for. Migration's (route_id,
+     * nights, departure_date) index already records the intent for whoever adds it (docs/BUSINESS-LOGIC.md §15).
      */
 
     /**

@@ -9,17 +9,8 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
- * The distance the discovery ranking is built on.
- *
- * PLAIN PHPUnit\TestCase, NOT Tests\TestCase — this touches no framework at
- * all, which is the property App\Domain is supposed to have and the reason the
- * class exists separately from resources/js/lib/geo.js.
- *
- * THE REFERENCE FIGURES ARE THE PROVIDER'S OWN, and that is the point of the
- * exercise. Travelpayouts sends a `distance` on every swept entry and it agreed
- * with this arithmetic to within 10% on 518 of the 520 AMS destinations Orbit
- * holds coordinates for — so its numbers are a genuine independent check, right
- * up until the one row where they are not.
+ * The distance the discovery ranking is built on. Plain PHPUnit\TestCase, not Tests\TestCase — matches App\Domain's
+ * framework-free design (docs/BUSINESS-LOGIC.md §16).
  */
 final class HaversineTest extends TestCase
 {
@@ -42,12 +33,8 @@ final class HaversineTest extends TestCase
     public function it_agrees_with_the_provider_on_the_hops_the_provider_gets_right(): void
     {
         /*
-         * From the 2026-08-16 AMS origin sweep. These are the numbers
-         * Travelpayouts itself returned in the `distance` field, and they are
-         * asserted to 2% rather than exactly: the provider is not publishing a
-         * haversine, it is publishing a rounded figure from its own source, and
-         * a test that demanded agreement to the kilometre would be pinning
-         * somebody else's rounding.
+         * From the 2026-08-16 AMS sweep; asserted to 2%, not exact — the provider publishes a rounded figure, not a haversine
+         * (docs/BUSINESS-LOGIC.md §16).
          */
         $expected = [
             'AGP' => 1883,
@@ -76,12 +63,8 @@ final class HaversineTest extends TestCase
     }
 
     /**
-     * THE ROW THAT JUSTIFIES THIS CLASS EXISTING.
-     *
-     * The 2026-08-16 sweep returned AMS-BRU at €51 with `distance: 5951`. On
-     * that figure it scores 0.0086 €/km — twice as good as anything else in the
-     * answer, top of the discovery list every single day. Brussels is 158 km
-     * from Schiphol and the fare is one of the worst in the sweep.
+     * THE ROW THAT JUSTIFIES THIS CLASS EXISTING: AMS-BRU's provider distance (5951 km) was wrong by ~40x, ranking a bad
+     * fare as the day's best deal (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function it_refuses_the_one_distance_the_provider_got_catastrophically_wrong(): void
@@ -95,7 +78,6 @@ final class HaversineTest extends TestCase
 
         $this->assertEqualsWithDelta(158.0, $ours, 5.0);
 
-        /* The provider's figure, and what each implies for a €51 fare. */
         $theirs = 5951.0;
 
         $this->assertGreaterThan(0.30, 51 / $ours, 'On the true distance this is an expensive hop.');
@@ -112,9 +94,8 @@ final class HaversineTest extends TestCase
     }
 
     /**
-     * A NaN here becomes an infinite €/km, which sorts to the top of the
-     * cheapest-first list — the one failure mode this whole feature cannot
-     * tolerate. See the clamp in `kilometres()`.
+     * A NaN here becomes an infinite €/km, sorting top of the cheapest list —
+     * the one failure mode this feature cannot tolerate; see kilometres()'s clamp.
      */
     #[Test]
     public function identical_points_are_zero_and_not_nan(): void
@@ -139,9 +120,8 @@ final class HaversineTest extends TestCase
     public function it_crosses_the_antimeridian_the_short_way(): void
     {
         /*
-         * Two degrees of longitude apart, either side of the date line. A naive
-         * implementation that subtracted longitudes without the trigonometry
-         * would call this 358 degrees of flying.
+         * Two degrees apart, either side of the date line — a naive longitude
+         * subtraction would call this 358 degrees of flying.
          */
         $distance = Haversine::kilometres(0.0, 179.0, 0.0, -179.0);
 

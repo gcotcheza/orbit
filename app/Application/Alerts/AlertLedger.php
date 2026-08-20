@@ -15,25 +15,9 @@ use App\Domain\Alerts\LastAlert;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
- * The `alerts` table, as the pipeline uses it: what was already said, and the
- * writing down of what is about to be.
+ * The `alerts` table, as the pipeline reads and writes it.
  *
- * THE COOLDOWN IS READ IN ONE QUERY, not one per route. A run asks about every
- * watched route and every route every rule matched — thirty of them is an
- * ordinary morning — and a `SELECT` per route would be a fan-out of tiny
- * queries in a job that already has a provider's rate limit to worry about.
- *
- * AND ONLY THE COOLDOWN WINDOW IS FETCHED. Anything older than
- * config('orbit.alerts.cooldown_hours') cannot suppress anything —
- * App\Domain\Alerts\AlertPolicy fires on it either way — so it does not need to
- * be in memory. That keeps the read a constant size on a table that grows
- * forever, and it is why `recentFor()` returning nothing for a route means
- * "nothing is holding this back" rather than "this route has never fired".
- *
- * BOTH THIS AND THE POLICY READ THE SAME CONFIG KEY for that window, which is
- * what makes the two safe to reason about separately: a cooldown lengthened in
- * config lengthens the query with it, and a ledger that fetched a shorter
- * window than the policy enforced would silently stop suppressing anything.
+ * Why: docs/BUSINESS-LOGIC.md §10.
  */
 final class AlertLedger
 {
@@ -72,14 +56,9 @@ final class AlertLedger
     }
 
     /**
-     * What "the same alert as last time" means.
+     * What "the same alert as last time" means — the rule is part of the key.
      *
-     * THE RULE IS PART OF THE KEY, so two rules that both match AMS-FAO are two
-     * cooldowns rather than one. Each rule is a separate question the owner
-     * asked, and a match answering one of them is not an answer to the other —
-     * suppressing it would mean a rule written this morning stays silent
-     * because a different rule mentioned the route yesterday, which reads
-     * exactly like the new rule not working.
+     * Why: docs/BUSINESS-LOGIC.md §10.
      */
     public static function key(AlertType $type, ?int $routeId, ?int $ruleId): string
     {
@@ -87,13 +66,9 @@ final class AlertLedger
     }
 
     /**
-     * Write down that Orbit decided to say this.
+     * Write down that Orbit decided to say this; `triggered_at` is the cooldown anchor.
      *
-     * `triggered_at` IS THE DECISION AND `delivered_at` STAYS NULL until a
-     * channel confirms — see App\Infrastructure\Notify\MarkAlertsDelivered.
-     * Quiet hours can put hours between the two, and the cooldown deliberately
-     * runs from the first: a window that stretched by however long somebody
-     * slept would not be a 24-hour cooldown.
+     * Why: docs/BUSINESS-LOGIC.md §10.
      *
      * @param  array<string, mixed>  $payload
      */
@@ -122,9 +97,8 @@ final class AlertLedger
     }
 
     /**
-     * A transport took these. Stamped once — a row that has already been
-     * delivered is not re-stamped by a retry, so the timestamp keeps meaning
-     * "when it first went out".
+     * A transport took these, stamped once so a retry does not re-stamp an
+     * already-delivered row.
      *
      * @param  list<int>  $ids
      */
@@ -141,14 +115,9 @@ final class AlertLedger
     }
 
     /**
-     * What Orbit actually sent this account since `$since` — the digest's
-     * "this week" callout.
+     * The digest's "this week" callout — delivered rows only.
      *
-     * DELIVERED ROWS ONLY, and route-or-rule rows only. A deal held by quiet
-     * hours and still in the queue has not been seen yet, and a digest that
-     * counted it would be telling somebody about mail they are about to
-     * receive; the previous digest is excluded because a digest listing itself
-     * is not a week's news.
+     * Why: docs/BUSINESS-LOGIC.md §10.
      *
      * @return Collection<int, Alert>
      */

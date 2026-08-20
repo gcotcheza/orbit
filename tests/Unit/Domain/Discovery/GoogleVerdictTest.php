@@ -12,24 +12,14 @@ use App\Domain\Discovery\GoogleVerdict;
  * The rule that decides whether a card may say "verified", and the three real
  * measurements that decided what the rule had to be.
  *
- * THIS IS THE MOST IMPORTANT TEST IN THE FEATURE. Everything else here is a
- * ranking, and a bad ranking shows somebody a mediocre fare. This is the only
- * place Orbit puts ANOTHER COMPANY'S NAME on its own claim, and getting it
- * wrong means the badge means nothing — which is worse than not having one.
+ * The most important test in the feature: the only place Orbit puts another company's name on its own claim, so
+ * getting it wrong is worse than no badge (docs/BUSINESS-LOGIC.md §16).
  */
 final class GoogleVerdictTest extends TestCase
 {
     /**
-     * =========================================================================
-     * THE REGRESSION THAT DEFINES THE RULE
-     * =========================================================================
-     * Three finalists, put to Google Flights on 2026-08-16, the same day the
-     * sweep was recorded. Every one of them is under its typical-range low; not
-     * one of them is a fare Google can actually sell.
-     *
-     * If this test ever goes green with `confirmsCheap()` returning true, the
-     * verdict has been rewritten to read the candidate's own price — and the
-     * badge has gone back to being Orbit vouching for itself.
+     * THE REGRESSION THAT DEFINES THE RULE: three real Google Flights finalists, each under its typical-range low. DO NOT let confirmsCheap() return true
+     * here — that means the badge is vouching for itself again (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function it_refuses_to_confirm_a_fare_google_cannot_find(): void
@@ -65,11 +55,8 @@ final class GoogleVerdictTest extends TestCase
         $this->assertTrue($verdict->confirmsCheap());
     }
 
-    /**
-     * The other half of the rule: Google has not used the word, but its own
-     * cheapest seat is at or under the bottom of its typical band — which is
-     * the same statement made with numbers.
-     */
+    // The other half of the rule: Google's own cheapest at/under its typical-band low counts as confirmation too — same
+    // claim, made with numbers instead of the word (docs/BUSINESS-LOGIC.md §16).
     #[Test]
     public function googles_own_cheapest_under_its_typical_low_is_also_enough(): void
     {
@@ -78,11 +65,8 @@ final class GoogleVerdictTest extends TestCase
         $this->assertFalse((new GoogleVerdict('typical', 5600, 5500, 17500))->confirmsCheap());
     }
 
-    /**
-     * A thin route comes back with no `price_insights` at all — EIN-VNO's
-     * sibling shape on the same afternoon. "No opinion" is a real answer and it
-     * is not permission.
-     */
+    // A thin route with no `price_insights` at all (EIN-VNO's sibling shape); "no opinion" is a real answer, and not
+    // permission to confirm (docs/BUSINESS-LOGIC.md §16).
     #[Test]
     public function no_opinion_confirms_nothing(): void
     {
@@ -97,11 +81,8 @@ final class GoogleVerdictTest extends TestCase
         $this->assertFalse((new GoogleVerdict('high', 20000, 5500, 17500))->confirmsCheap());
     }
 
-    /**
-     * `confirmed` is stored so that a rule retuned next month cannot silently
-     * restate what last month's cards claimed — the same argument
-     * App\Http\Resources\AlertResource makes for reading a stored payload.
-     */
+    // `confirmed` is stored, not recomputed, so a rule retuned next month can't silently restate what last month's cards
+    // claimed (same argument as AlertResource) (docs/BUSINESS-LOGIC.md §16).
     #[Test]
     public function it_stores_the_facts_and_the_conclusion(): void
     {

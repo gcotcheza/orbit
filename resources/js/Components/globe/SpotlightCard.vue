@@ -1,21 +1,8 @@
 <script setup>
 /*
- * The card under the globe: what the camera is currently flying, in words.
- *
- * design/README.md §1 — route code, city, country, the fare and how it compares
- * to usual, then a verdict pill, a fortnight's sparkline and a chevron into the
- * route detail.
- *
- * IT IS A LINK, not a button with a router.push in it. The whole card opens
- * /route/AMS-LIS, and a real <a> is what makes that long-pressable, openable in
- * a new tab, and announced as a link rather than as a mystery.
- *
- * THE DAY-1 CASE IS NOT AN ERROR. A route added this morning has
- * `price.current: null`, no statistics and `confident: false` (docs/API.md).
- * The card then says what it actually knows — "No fare yet" and how long we
- * have been watching — instead of drawing €0 and a damning verdict. The same
- * note appears for any route with under a fortnight of history, which is
- * docs/PLAN.md's day-1 honesty rule.
+ * The card under the globe: what the camera is flying, in words (design/README.md §1).
+ * A real link, not a router.push button; day-1 routes say what they actually know.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 import { computed } from 'vue'
 import PriceSparkline from '@/Components/PriceSparkline.vue'
@@ -35,12 +22,9 @@ const price = computed(() => euro(props.route.price.current))
 const comparison = computed(() => usualPriceLabel(props.route.price.pctBelow))
 
 /*
- * THE DAY THE FARE IS FOR, compactly — "Wed, Sep 9" and nothing else, because
- * the card has a 27 px price, a comparison and sometimes a tracking note in a
- * right-hand column that must not become a paragraph. It is a DEPARTURE date
- * (docs/API.md's other axis) and it is the answer to the first question this
- * card used to leave hanging: €74 to Lisbon, yes, but WHEN. Null before the
- * first poll, when there is no fare to date either.
+ * The day the fare is for, compactly — a DEPARTURE date (docs/API.md's
+ * other axis), null before the first poll. Answers "€74 to Lisbon, but WHEN".
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 const departure = computed(() => departureLabel(props.route.cheapest?.date ?? null))
 
@@ -90,9 +74,8 @@ const trackingNote = computed(() => {
 
 <style scoped>
 .spotlight {
-  /* No margins: WHERE the card sits is the screen's business — the home screen
-     rides it up over the globe's lower edge (design/README.md §1), and the
-     WebGL fallback stacks a column of them. */
+  /* No margins: WHERE the card sits is the screen's business — the home
+     screen rides it over the globe's edge; the WebGL fallback stacks them. */
   display: block;
   padding: 16px 17px;
   border: 1px solid var(--line);

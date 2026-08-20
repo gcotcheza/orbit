@@ -16,35 +16,10 @@ use Illuminate\Notifications\Messages\MailMessage;
 /**
  * The staged rollout can be read.
  *
- * ===========================================================================
- * WHAT THIS IS ABOUT
+ * Verifies the dedicated mail log channel actually catches what the old single/info setup silently dropped.
  *
- * Orbit ships with `MAIL_MAILER=log` on purpose (.env.example): until
- * ghiecode.io is a verified sending domain, every alert the app decides to send
- * is written down instead of delivered, so that the firing rules can be judged
- * against real fares before anybody's phone lights up in the dark.
- *
- * That stage was invisible. Symfony's log transport writes each message at
- * DEBUG level; production's default channel is `single` with a floor of
- * `LOG_LEVEL=info`. So the mail was rendered, handed to Monolog, and dropped —
- * with no error anywhere, because nothing failed. The deploy runbook told
- * whoever was on the box to tail `laravel.log` for alert mail that was never
- * going to be in it.
- *
- * The fix is a `mail` channel of its own at `debug` (config/logging.php) with
- * `MAIL_LOG_CHANNEL` pointed at it. This file holds both halves: that a mail
- * now lands there, and that the arrangement it replaces really did swallow it.
- *
- * ===========================================================================
- * WHY THE NOTIFICATION IS A THROWAWAY AND NOT ONE OF ORBIT'S THREE
- *
- * Every real subject this app sends starts with a plane, an arrow or an em
- * dash ("✈ AMS→OPO €44 — 53% below usual"), and a non-ASCII header is written
- * into a MIME message RFC 2047-encoded — `=?utf-8?Q?=E2=9C=88...`. Asserting on
- * that would make this a test about header encoding, which is Symfony's job and
- * is not the thing in doubt. What is in doubt is whether a message that reached
- * the transport reaches a file somebody can read, so the subject here is plain
- * ASCII and appears verbatim.
+ * Uses a throwaway plain-ASCII notification so assertions aren't about MIME header encoding.
+ * Why: docs/BUSINESS-LOGIC.md §10.
  */
 final class MailLogChannelTest extends TestCase
 {
@@ -162,10 +137,8 @@ final class MailLogChannelTest extends TestCase
     }
 
     /**
-     * Both managers cache what they built from the configuration as it was.
-     * MailManager holds the transport (and therefore the channel the transport
-     * writes to) and LogManager holds the channel itself, so a config change
-     * either of them has already read is a change to nothing at all.
+     * MailManager and LogManager each cache what they built from config, so a
+     * config change either has already read does nothing without this.
      */
     private function rebuildManagers(): void
     {

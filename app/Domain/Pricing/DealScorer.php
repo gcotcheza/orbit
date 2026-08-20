@@ -4,98 +4,18 @@ declare(strict_types=1);
 
 namespace App\Domain\Pricing;
 
-/**
- * Is this a good price? — the question the whole app exists to answer.
- *
- * ZERO FRAMEWORK IMPORTS, by design (docs/PLAN.md): the scoring rule is the
- * one piece of Orbit that is genuinely ours rather than plumbing, and it is
- * kept where it can be read, reasoned about and unit-tested without a
- * container, a database or a clock. Everything it needs arrives as arguments.
- *
- * THE THREE COMPONENTS, each 0-100, combined at the weights in
- * config/orbit.php (60 / 25 / 15):
- *
- *   1. PERCENTILE (60) — where the fare sits in the route's own price
- *      distribution. This is the bulk of the answer because it is the only
- *      component that knows what OTHER prices on this route look like: €71 is
- *      a bargain to Reykjavík and a rip-off to Düsseldorf, and only the
- *      statistics know which route you are on.
- *
- *   2. TREND (25) — which way our own last 30 days are moving. It is what
- *      separates "cheap, book it" from "cheap and still falling, wait", and
- *      it is deliberately the smaller weight: a falling price is a reason to
- *      hesitate, not a reason to call something a deal.
- *
- *   3. ABSOLUTE (15) — how close to the route's own floor the fare is. The
- *      percentile component saturates near the bottom (everything below p25
- *      scores about the same), and this is what still separates "as cheap as
- *      this route has ever been" from "merely cheap".
- *
- * MISSING INPUTS SHRINK THE QUESTION RATHER THAN THE ANSWER. A route with no
- * history yet is scored on the two components that do not need it, with the
- * weights renormalised over what was computable — not scored out of 75 and
- * quietly capped. A route with nothing at all gets score 0 and
- * `confident: false`, which the UI is expected to render as "no opinion yet"
- * rather than as a bad deal.
- *
- * AND A ROUTE WITH TOO LITTLE OF IT ANSWERS THE SAME WAY. Below
- * `$policy->minTrackingDays` mornings the scorer declines the question rather
- * than renormalising it, because the failure there is not a missing component
- * but a poisoned one: the statistics are computed from the fares Orbit itself
- * collected (App\Infrastructure\Pricing\SelfStatsProvider), so on day one the
- * current price IS the minimum, the median and the maximum. Every component
- * agrees, agrees confidently, and returns 100 for a route nobody has learned
- * anything about yet. That is the one wrong answer this class must never give,
- * because it is the one that gets mailed.
- */
+// Deal score = weighted blend of percentile (60), trend (25), absolute-floor (15) components (config/orbit.php), each renormalised over what's computable; missing/insufficient history (below `$policy->minTrackingDays`) returns noOpinion() rather than a false-confident 100.
+// Why: docs/BUSINESS-LOGIC.md §7.
 final readonly class DealScorer
 {
     public function __construct(private ScoringPolicy $policy = new ScoringPolicy) {}
 
-    /**
-     * The answer for a route Orbit cannot judge yet: one added an hour ago and
-     * not polled, and equally one polled every morning since Tuesday.
-     *
-     * A DISTINCT METHOD rather than `score(0, null, empty)`, because a price
-     * of zero is the cheapest fare imaginable and would score 100. "We do not
-     * know" and "it is free" are not the same answer and must not share a
-     * code path.
-     *
-     * THE SENTENCE FITS BOTH CALLERS, and that is not a coincidence: "Orbit has
-     * only just started pricing this route" is the honest reading of a route
-     * with no prices AND of one with three days of them. The UI needs no new
-     * state for the second case, which is the whole reason the maturity gate is
-     * expressed as this value rather than as a flag beside a live score — see
-     * resources/js/Components/globe/SpotlightCard.vue, which prints
-     * `verdict.label` without asking whether we meant it.
-     *
-     * "PRICING" AND NOT "WATCHING", WHICH IS A ONE-WORD FIX FOR A SENTENCE THAT
-     * BECAME FALSE. It was written when the only way to reach a route was to put
-     * it on the watchlist, so "started watching" described every route that
-     * could reach this line. `POST /api/routes/lookup` broke that: the route
-     * detail now opens on pairs nobody watches and nobody is going to, and
-     * telling somebody Orbit has "started watching" a route it will never poll
-     * again is a promise the app does not keep — on the very screen that offers
-     * a "Watch this route" button, which then reads as already pressed.
-     * "Pricing" is true of both: it is what Orbit did, and it says nothing about
-     * whether it will do it again tomorrow. Flagged in PR #29.
-     */
+    // The "can't judge yet" answer, distinct from score(0,...) (0 cents would score 100); the same sentence covers zero history and a few days of it, per SpotlightCard.vue's `verdict.label` contract. "Pricing" not "Watching" since PR #29 (lookup can reach this without watching).
+    // Why: docs/BUSINESS-LOGIC.md §7.
     public function noOpinion(): DealScore
     {
-        /*
-         * THE SHORT IS 'New', NOT 'Normal', AND THE TONE STAYS NORMAL.
-         *
-         * The pill has room for one word and that word was doing the opposite
-         * of this method's whole job: a route Orbit has no opinion about was
-         * labelled with the same word as a route it has judged and found
-         * unremarkable. Two different answers — "we have not learned this yet"
-         * and "we looked, and it is ordinary" — read identically on the
-         * watchlist, which is the screen where they sit side by side.
-         *
-         * 'New' is the state and not a verdict, which is what makes it the
-         * honest word here. The TONE is untouched: this is still not a warning
-         * and still not good news, and colouring it would be an opinion.
-         */
+        // Pill label is 'New', not 'Normal': "no data yet" and "judged ordinary" used to share a label and were indistinguishable on the watchlist. 'New' is a state, not a verdict, so tone stays TONE_NORMAL.
+        // Why: docs/BUSINESS-LOGIC.md §7.
         $verdict = new Verdict('Not enough data yet', 'New', Verdict::TONE_NORMAL);
 
         return new DealScore(
@@ -120,12 +40,8 @@ final readonly class DealScorer
      */
     public function score(int $currentCents, ?PriceStats $stats, PriceHistory $history, int $trackingDays): DealScore
     {
-        /*
-         * ASKED FIRST, and the argument is required rather than defaulted:
-         * every caller has this number to hand, and a default would be a
-         * silent claim that whoever forgot it was looking at a mature route.
-         * That claim is exactly the bug this guard exists to prevent.
-         */
+        // `$trackingDays` is required, not defaulted: a default would silently claim an uncounted caller was looking at a mature route — the exact bug this guard prevents.
+        // Why: docs/BUSINESS-LOGIC.md §7.
         if ($trackingDays < $this->policy->minTrackingDays) {
             return $this->noOpinion();
         }
@@ -166,31 +82,15 @@ final readonly class DealScorer
         );
     }
 
-    /**
-     * 50 is flat. Falling faster than the configured saturation pins it at
-     * 100, rising that fast pins it at 0, and everything between is linear —
-     * a curve here would be a claim about how fares behave that we have no
-     * data to make.
-     */
+    // Trend component is linear (50=flat, saturating to 0/100): a curve would claim knowledge about fare behaviour this app doesn't have.
+    // Why: docs/BUSINESS-LOGIC.md §7.
     private function trendComponent(float $drift): float
     {
         return max(0.0, min(100.0, 50.0 - ($drift / $this->policy->trendSaturationPerDay) * 50.0));
     }
 
-    /**
-     * 100 at the route's own floor, 0 at its usual price and above. NULL when
-     * the floor and the usual price are the same number.
-     *
-     * The half of the distribution ABOVE the median is deliberately all zero:
-     * this component's job is to grade bargains, and the percentile component
-     * is already grading everything else.
-     *
-     * THE NULL IS NOT A DIVISION GUARD, it is an answer. A route whose min and
-     * median coincide has never been cheaper than usual, so "how close to its
-     * floor is this" has nothing to measure — and both 0 and 100 would be a
-     * claim. Returning null lets the weight fall to the components that do
-     * know something, the same way a missing history does.
-     */
+    // 100 at the floor, 0 at usual price and above, NULL when floor==usual (not a division guard — an answer meaning "nothing to measure", so weight falls to other components).
+    // Why: docs/BUSINESS-LOGIC.md §7.
     private function absoluteComponent(int $currentCents, PriceStats $stats): ?float
     {
         $span = $stats->medianCents - $stats->minCents;
@@ -202,13 +102,8 @@ final readonly class DealScorer
         return max(0.0, min(1.0, ($stats->medianCents - $currentCents) / $span)) * 100.0;
     }
 
-    /**
-     * A drift small enough that a person would call the price "steady".
-     *
-     * Tied to the saturation rather than being its own constant so that
-     * turning the trend sensitivity up in config does not leave the WORD
-     * "falling" meaning something different from the number next to it.
-     */
+    // Threshold is tied to trendSaturationPerDay, not its own constant, so tuning trend sensitivity can't make the word "falling" disagree with the number shown beside it.
+    // Why: docs/BUSINESS-LOGIC.md §7.
     private function isFalling(?float $drift): bool
     {
         return $drift !== null && $drift <= -0.2 * $this->policy->trendSaturationPerDay;
@@ -263,11 +158,7 @@ final readonly class DealScorer
         return new Advice($verdict->label, $body, $verdict->tone);
     }
 
-    /**
-     * Cents to the string a person reads. Whole euros lose the decimals,
-     * because every fare this app has ever shown is a whole number of euros
-     * and "€52.00" in a sentence reads like a receipt.
-     */
+    // Whole euros lose the decimals: every fare this app has ever shown is a whole number, and "€52.00" in a sentence reads like a receipt.
     private static function euros(int $cents): string
     {
         return $cents % 100 === 0

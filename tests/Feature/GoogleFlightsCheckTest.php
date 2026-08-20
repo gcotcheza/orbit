@@ -12,9 +12,8 @@ use App\Infrastructure\Verify\GoogleFlightsCheck;
 use Illuminate\Http\Client\Factory as HttpFactory;
 
 /**
- * The SerpAPI guardrails on a free plan's 250 searches a MONTH: no key no
- * calls, quota before any search, nothing below the reserve, `max_per_run` a
- * run — and the one with teeth, that a skipped check never becomes a claim.
+ * SerpAPI guardrails on a free 250-searches-a-month plan: no key means no
+ * calls, quota checked before spending, nothing below reserve, capped per run.
  */
 final class GoogleFlightsCheckTest extends TestCase
 {
@@ -41,11 +40,6 @@ final class GoogleFlightsCheckTest extends TestCase
         );
     }
 
-    /**
-     * =========================================================================
-     * 1. NO KEY, NO CALLS — and this is the DEFAULT state of the app
-     * =========================================================================
-     */
     #[Test]
     public function without_a_key_it_spends_nothing_and_asks_nothing(): void
     {
@@ -75,11 +69,6 @@ final class GoogleFlightsCheckTest extends TestCase
         $this->assertFalse($this->app->make(GoogleFlightsCheck::class)->isConfigured());
     }
 
-    /**
-     * =========================================================================
-     * 2 + 4. THE QUOTA IS READ FIRST, AND THE CAP BOUNDS WHAT IT ALLOWS
-     * =========================================================================
-     */
     #[Test]
     public function it_reads_the_quota_before_it_spends_anything(): void
     {
@@ -109,11 +98,6 @@ final class GoogleFlightsCheckTest extends TestCase
         $this->assertSame(2, $this->check(reserve: 247)->available());
     }
 
-    /**
-     * =========================================================================
-     * 3. THE HARD RESERVE — the one that protects a feature that does not exist
-     * =========================================================================
-     */
     #[Test]
     public function below_the_reserve_it_refuses_to_spend_anything_at_all(): void
     {
@@ -165,11 +149,6 @@ final class GoogleFlightsCheckTest extends TestCase
         $this->assertSame(5, $this->check()->available());
     }
 
-    /**
-     * =========================================================================
-     * THE SEARCH ITSELF
-     * =========================================================================
-     */
     #[Test]
     public function it_asks_google_about_a_one_way_fare_in_euros(): void
     {
@@ -185,11 +164,8 @@ final class GoogleFlightsCheckTest extends TestCase
             $this->assertSame('DUS', $query['departure_id']);
             $this->assertSame('AGP', $query['arrival_id']);
             $this->assertSame('2026-10-24', $query['outbound_date']);
-            /*
-             * ONE WAY. Every price in the funnel is one-way; asking about a
-             * round trip would compare a €29 one-way against a €200 return and
-             * call the difference a discrepancy.
-             */
+            // ONE WAY: every price in the funnel is one-way; a round trip would compare a €29 one-way against a €200 return and
+            // call it a discrepancy (docs/BUSINESS-LOGIC.md §17).
             $this->assertSame('2', $query['type']);
             $this->assertSame('EUR', $query['currency']);
             $this->assertSame('nl', $query['gl']);
@@ -243,12 +219,8 @@ final class GoogleFlightsCheckTest extends TestCase
     }
 
     /**
-     * =========================================================================
-     * DEGRADATION — every one of these is a skip, not a fault
-     * =========================================================================
-     * ⚠ And `ask()` says which kind: a search SerpAPI answered was billed even
-     * when Google had nothing to say; one it never ran was not, and a caller
-     * must be able to tell those apart before it records anything.
+     * ⚠ `ask()` says which kind: SerpAPI billed a search that found nothing to say; one it never ran was not — callers
+     * must tell those apart (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_route_google_has_no_opinion_about_was_still_billed(): void
@@ -274,9 +246,8 @@ final class GoogleFlightsCheckTest extends TestCase
     }
 
     /**
-     * ⚠ A body that does not echo EUR back, or a search that did not finish, is
-     * not an answer to the question this app asked. Dollars would read as a
-     * bargain, and a partial result as a market.
+     * ⚠ A body not echoing EUR, or an unfinished search, is not an answer — dollars would read as a bargain, partial
+     * results as a real market (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_body_that_is_not_a_finished_euro_search_is_no_answer(): void
@@ -315,11 +286,6 @@ final class GoogleFlightsCheckTest extends TestCase
         $this->assertNull($verdict->typicalLowCents);
     }
 
-    /**
-     * =========================================================================
-     * THE WIRING
-     * =========================================================================
-     */
     #[Test]
     public function the_container_reads_the_guardrails_out_of_config(): void
     {

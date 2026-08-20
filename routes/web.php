@@ -19,57 +19,20 @@ use App\Http\Controllers\WatchlistItemController;
 use App\Http\Controllers\Auth\CurrentUserController;
 
 /*
-|--------------------------------------------------------------------------
-| Web routes
-|--------------------------------------------------------------------------
-|
-| Five routes are the entire authentication surface, seven more are the read
-| API the screens are built on, eleven more are the writes those screens make,
-| and the last one is the single-page app.
-|
-| WHAT IS DELIBERATELY ABSENT: registration, password RESET, email
-| verification, account management. docs/PLAN.md locks Orbit to a single user,
-| created by `db:seed` (see Database\Seeders\SingleUserSeeder), and a route
-| that does not exist cannot be misconfigured, rate-limit-bypassed or left
-| enabled by a later refactor. AuthenticationTest asserts that nothing is
-| registered at /register, /forgot-password, /reset-password, /verify-email or
-| /confirm-password, and that a POST to any of them is refused — asserted
-| against the route table rather than against a 404, because the catch-all at
-| the bottom of this file answers every unclaimed GET with the shell.
-|
-| THE FIFTH AUTH ROUTE DOES NOT SOFTEN ANY OF THAT. `PUT /api/profile/password`
-| is an authenticated CHANGE — behind `auth`, and behind the current password
-| (App\Http\Requests\UpdatePasswordRequest) — so it is a rotation the owner
-| performs from the settings screen, not a recovery anybody can trigger. The
-| distinction that matters is who can reach it: a reset flow answers to a guest
-| who claims to be the owner, and nothing here does.
-|
-*/
+ * Web routes: auth surface, read API, write API, then the SPA shell. DELIBERATELY ABSENT: registration, password
+ * reset, email verification (AuthenticationTest asserts this) (docs/BUSINESS-LOGIC.md §36).
+ */
 
 /*
- * The login screen is a Vue view like every other screen, so this serves the
- * same shell the catch-all at the bottom of this file serves, and could have
- * been left to it.
- *
- * IT IS DECLARED ANYWAY, FOR ITS NAME. Laravel's default guest redirect is
- * `route('login')` — ApplicationBuilder::withMiddleware sets it before this
- * app's own configuration runs — and Authenticate::unauthenticated() resolves
- * that URL EAGERLY, before it has looked at whether the response should be
- * JSON. In an app with no route named `login`, every unauthenticated request
- * to a guarded route is therefore a 500 from the URL generator rather than a
- * 401, and the JSON-rendering rule in bootstrap/app.php never gets a chance to
- * apply. One named route is a smaller answer than overriding the redirect.
+ * DO NOT REMOVE the `login` name: Laravel's guest redirect resolves route('login') eagerly, before checking for JSON —
+ * with no route named `login`, every unauthenticated request 500s (docs/BUSINESS-LOGIC.md §36).
  */
 Route::view('/login', 'app')->name('login');
 
 Route::middleware('guest')->group(function (): void {
     /*
-     * Throttled by email+IP — see AppServiceProvider. One account means one
-     * password to guess, so this route is the whole brute-force surface.
-     *
-     * Answers JSON, not a redirect: the caller is fetch() from a page that must
-     * not navigate. A 302 would be followed and handed back as the shell's HTML
-     * with a 200, i.e. as a successful login.
+     * Throttled by email+IP (AppServiceProvider) — whole brute-force surface, one account. Answers JSON not a redirect: a
+     * 302 here would be followed by fetch() and read as a 200 login (docs/BUSINESS-LOGIC.md §36).
      */
     Route::post('/login', [LoginController::class, 'store'])
         ->middleware('throttle:login')
@@ -80,33 +43,8 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
     /*
-     * Changing the password, from the alerts screen's Account card.
-     *
-     * UNDER `/api/` LIKE EVERY OTHER JSON ENDPOINT, and for the same reason
-     * they are: bootstrap/app.php renders exceptions as JSON on that prefix
-     * alone, so a guest here gets a 401 with a body rather than a redirect
-     * fetch() would follow and hand back as the shell's HTML with a 200. The
-     * SPA catch-all at the bottom of this file refuses that prefix too.
-     *
-     * IN THE `auth` GROUP AND NOT THE `auth:sanctum` ONE below, beside
-     * /logout, because this is a SESSION action rather than a data write: the
-     * credential is the cookie, the current password is checked against the
-     * session guard's user, and the response rotates the session. One guard
-     * end to end is what makes that legible. (Sanctum's token path is closed
-     * at the guard anyway — see AppServiceProvider.)
-     *
-     * `profile/` RATHER THAN BARE `password/`, and not only for shape:
-     * AuthenticationTest asserts that no route uri STARTS WITH `password`,
-     * which is what keeps Laravel's own /password reset scaffolding from ever
-     * appearing here. A nested path says "an account setting" instead of
-     * claiming the prefix that test defends.
-     *
-     * THROTTLED, unlike the writes below. The others need one because they
-     * cost money or are reachable by a guest; this one is neither — it is the
-     * only authenticated route in the app that CHECKS A SECRET, and a limiter
-     * is what stops a session that is open on an unattended phone from being
-     * used to guess the current password offline-fast. Five a minute is the
-     * same number the login route allows, because it is the same guess.
+     * Password change (session guard, `auth` not `auth:sanctum`), throttled since this is the only authenticated route that checks a secret. `profile/` not
+     * bare `password/`: AuthenticationTest forbids any route URI starting with `password` (docs/BUSINESS-LOGIC.md §36).
      */
     Route::put('/api/profile/password', [PasswordController::class, 'update'])
         ->middleware('throttle:password-change')
@@ -114,58 +52,21 @@ Route::middleware('auth')->group(function (): void {
 });
 
 /*
- * Who is signed in, if anyone.
- *
- * The SPA calls this once on boot to decide between the app and the login
- * screen, so its GUEST answer matters as much as its authenticated one: under
- * `/api/` bootstrap/app.php renders exceptions as JSON, so that answer is a
- * 401 with a body rather than a redirect fetch() would follow.
- *
- * `auth:sanctum` rather than `auth`, and in the `web` group rather than an api
- * one. Sanctum's guard tries config('sanctum.guard') — the session guard —
- * before it looks for a token, so a first-party cookie authenticates here with
- * no token anywhere; and being in the `web` group means the session is booted
- * unconditionally rather than on Sanctum's Origin/Referer heuristic. See
- * bootstrap/app.php.
+ * Boot-time "who is signed in" check; the SPA picks app vs login screen off the answer. `auth:sanctum` in the `web`
+ * group: session guard fires before token lookup, no Origin/Referer heuristic (docs/BUSINESS-LOGIC.md §36).
  */
 Route::middleware('auth:sanctum')->get('/api/me', CurrentUserController::class)->name('me');
 
 /*
-|--------------------------------------------------------------------------
-| The read API
-|--------------------------------------------------------------------------
-|
-| Seven endpoints, and between them they are the entire data supply for the
-| globe home, the route detail, the price calendar, the watchlist, the rules
-| the watch screen lists, the places its add form offers and the deals nobody
-| asked for — plus the alert ledger, which no screen reads yet and which
-| docs/API.md publishes anyway.
-| Their exact shapes are docs/API.md — that file is the contract those screens
-| are built against, and it is written before they are.
-|
-| IN routes/web.php AND NOT routes/api.php, which this app does not have. The
-| reasoning is the same as for /api/me above: the `web` group boots the session
-| unconditionally, while Sanctum's `api` group decides whether to by sniffing
-| Origin/Referer — a heuristic that on a single-origin SPA can only ever turn a
-| signed-in user into a 401. The `/api/` PREFIX is what matters and is kept: it
-| is what bootstrap/app.php renders exceptions as JSON under, and what the SPA
-| catch-all at the bottom of this file refuses to swallow.
-|
-| ALL SEVEN ARE READS. The writes are the group below.
-|
-*/
+ * The read API (docs/API.md is the contract). Lives in routes/web.php, not routes/api.php (this app has none): the
+ * `web` group boots the session unconditionally, unlike Sanctum's `api` group (docs/BUSINESS-LOGIC.md §36).
+ */
 Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
     Route::get('/watchlist', WatchlistController::class)->name('watchlist');
 
     /*
-     * `AMS-LIS`, and the pattern says so.
-     *
-     * Without the constraint every misspelling reaches the controller and
-     * comes back as a 404 from a database round trip — and, more to the point,
-     * `/api/routes/../../something` would be a routing question rather than a
-     * pattern violation. Two three-letter groups is exactly what a route code
-     * is (App\Models\Route::codeFor), so anything else is not a miss, it is a
-     * malformed request.
+     * `[A-Z]{3}-[A-Z]{3}` route-code shape only (App\Models\Route::codeFor) — anything else is a malformed request, not a
+     * miss (docs/BUSINESS-LOGIC.md §36).
      */
     Route::get('/routes/{code}', [RouteController::class, 'show'])
         ->where('code', '[A-Z]{3}-[A-Z]{3}')
@@ -176,130 +77,54 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
         ->name('routes.calendar');
 
     /*
-     * The owner's standing rules, each with what it matches this morning
-     * (design/README.md §4). A read, in the read group, even though the
-     * matching happens at request time rather than being stored — see
-     * App\Application\Rules\RuleViews for why a cached count would be a number
-     * that is wrong from the next poll onwards.
+     * Computed at request time rather than cached (see App\Application\Rules\RuleViews) — a cached count would go stale
+     * the moment after computing (docs/BUSINESS-LOGIC.md §36).
      */
     Route::get('/rules', [RuleController::class, 'index'])->name('rules.index');
 
     /*
-     * Everywhere Orbit knows how to fly to, for the add-route form's typeahead
-     * (design/README.md §5's destination box, which the owner cannot use
-     * without knowing IATA codes off by heart).
-     *
-     * THE WHOLE LIST, AND NO `?q=`. A hundred and eighty-four rows from two
-     * checked-in files — the client fetches it once and filters as somebody
-     * types. See App\Http\Controllers\DestinationController for why that is
-     * the cheaper of the two designs rather than the lazier one, and the route
-     * below for the half of the world this one deliberately does not carry.
+     * Returns the WHOLE destination list, no `?q=` — client fetches once and filters locally (see
+     * App\Http\Controllers\DestinationController) (docs/BUSINESS-LOGIC.md §36).
      */
     Route::get('/destinations', DestinationController::class)->name('destinations');
 
     /*
-     * All 3,270 of them — every scheduled airport on Earth, searched.
-     *
-     * THE ONE THAT IS NOT THE WHOLE LIST, and the endpoint above explains why
-     * it is allowed to be: 3,270 rows is 200 KB the form would download before
-     * anybody typed anything, so this half is a query and the curated half
-     * stays a load-once list. The client shows them merged, curated first.
-     *
-     * A READ IN THE READ GROUP, and the only one here that is THROTTLED. It
-     * costs no third-party money — the reason the parser and the lookup are
-     * limited — but it is the one endpoint in this file that a keystroke can
-     * fire, and sixty a minute is a debounce that has failed rather than a
-     * person typing. See the `airport-search` limiter in
-     * App\Providers\AppServiceProvider.
+     * NOT preloaded like /destinations — 3,270 airports would be 200KB upfront, so this is a query. Throttled (only read
+     * route that is) because a keystroke can fire it, not for cost (docs/BUSINESS-LOGIC.md §36).
      */
     Route::get('/airports', AirportController::class)
         ->middleware('throttle:airport-search')
         ->name('airports');
 
     /*
-     * What Orbit has actually sent, newest first — the alert ledger.
-     *
-     * NO SCREEN READS IT YET, deliberately: the alerts screen stays settings-
-     * only in this PR. It is here because the pipeline is otherwise invisible
-     * from outside the database, and a feature whose whole job is to send mail
-     * at 06:55 needs somewhere to answer "did it fire, and did it go out".
+     * No screen reads this yet, deliberately (alerts screen stays settings-only this PR) — exists so the mail pipeline is
+     * inspectable from outside the database (docs/BUSINESS-LOGIC.md §36).
      */
     Route::get('/alerts', AlertController::class)->name('alerts');
 
     /*
-     * The routes nobody is watching that turned out to be absurdly cheap —
-     * "Deals from your airports" on the search screen.
-     *
-     * A READ, IN THE READ GROUP, AND NOT THROTTLED, which is worth saying
-     * because everything about this feature upstream is metered. The sweep, the
-     * five window fetches and the Google checks all happen at 05:20 in
-     * App\Jobs\DiscoverDeals; by the time anybody GETs this it is one indexed
-     * query over about ten rows. That is exactly why it is precomputed — the
-     * on-demand version of this endpoint would put forty provider requests
-     * behind a tab tap, and would need a limiter tighter than `route-lookup`'s.
-     *
-     * NO `{code}` AND NO PARAMETERS. The whole set is the answer; see
-     * App\Http\Controllers\DiscoveryController for why there is nothing to page,
-     * filter or sort.
+     * Precomputed by App\Jobs\DiscoverDeals (05:20 sweep) — deliberately NOT throttled, since by request time it's one
+     * indexed query over ~10 rows, not a live provider call (docs/BUSINESS-LOGIC.md §36).
      */
     Route::get('/discoveries', DiscoveryController::class)->name('discoveries');
 });
 
 /*
-|--------------------------------------------------------------------------
-| The write API
-|--------------------------------------------------------------------------
-|
-| Everything the watchlist and alerts screens (design/README.md §5 and §6) can
-| change: which routes are watched, whether each one is paused, how the owner
-| wants to be told — and, since "look before you watch", which pairs Orbit has
-| gone and priced. Their shapes are docs/API.md, same as the reads.
-|
-| IN THE `web` GROUP, WHICH IS WHY THEY ARE CSRF-PROTECTED. That is the reason
-| this app has no routes/api.php at all: Laravel's `api` group has no CSRF
-| middleware because a token-authenticated client does not need one, and these
-| endpoints are called by a browser carrying a session cookie — exactly the
-| case CSRF exists for. `resources/js/lib/http.js` sends the XSRF header on
-| every request, so the protection costs the client nothing.
-|
-| A SEPARATE GROUP FROM THE READS ABOVE, and separate controllers behind it.
-| The read is the app's launch request and is tuned as one; these are one-row
-| operations behind a tap. Neither should have to grow the other's concerns.
-|
-*/
+ * The write API (docs/API.md). In the `web` group deliberately, for CSRF protection — `resources/js/lib/http.js` sends
+ * the XSRF header on every request, so it costs the client nothing (docs/BUSINESS-LOGIC.md §36).
+ */
 Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
     /*
-     * LOOK BEFORE YOU WATCH. Prices a pair the owner has not committed to,
-     * creating the route row if Orbit has never seen it and asking the provider
-     * right there when it has no fresh fares for it.
-     *
-     * A WRITE, AND IN THE WRITE GROUP, even though the client reads the answer
-     * like a detail screen: it can create a row and it can spend six or seven
-     * metered provider calls (App\Application\Routes\FareFreshness). A GET that
-     * does either is one a browser prefetch or a link preview will eventually
-     * do on somebody's behalf — which is also why this is not a `?refresh` flag
-     * on `GET /api/routes/{code}` above.
-     *
-     * THROTTLED, and it is the third route in this file to be. The rule parser
-     * is throttled because a keystroke can cost an Anthropic call; this is
-     * throttled because a TAP can cost the better part of a minute of
-     * Travelpayouts' hourly allowance. See the `route-lookup` limiter in
-     * App\Providers\AppServiceProvider for the arithmetic.
-     *
-     * NO `{code}` IN THE PATH, deliberately: the pair arrives in the body as
-     * `origin` and `destination`, the same two fields `POST /api/watchlist`
-     * takes, so both writes are validated by the same rules
-     * (App\Http\Requests\RoutePairRequest) and answer with the same sentences.
-     * A path segment would be a third spelling of a route code to keep in step.
+     * LOOK BEFORE YOU WATCH: prices+creates a route row. POST not GET, deliberately — a prefetch/preview must never trigger a paid provider call. No
+     * `{code}`: body shares RoutePairRequest validation with POST /api/watchlist (docs/BUSINESS-LOGIC.md §36).
      */
     Route::post('/routes/lookup', [RouteController::class, 'lookup'])
         ->middleware('throttle:route-lookup')
         ->name('routes.lookup');
 
     /*
-     * ⚠ The most expensive write in this file: one tap spends one SerpAPI
-     * search out of 250 a MONTH. No body, and the date is the server's
-     * (docs/BUSINESS-LOGIC.md §17).
+     * ⚠ Most expensive write here: one tap = one of 250 monthly SerpAPI searches.
+     * No body; the date is the server's (docs/BUSINESS-LOGIC.md §17).
      */
     Route::post('/routes/{code}/live-price', [RouteController::class, 'liveCheck'])
         ->where('code', '[A-Z]{3}-[A-Z]{3}')
@@ -308,11 +133,8 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
 
     Route::post('/watchlist', [WatchlistItemController::class, 'store'])->name('watchlist.store');
 
-    /*
-     * The same `[A-Z]{3}-[A-Z]{3}` constraint the reads carry, for the same
-     * reason: a code is either that shape or it is malformed, and a write is
-     * the last place to let a path segment reach a query unexamined.
-     */
+    // Same `[A-Z]{3}-[A-Z]{3}` route-code shape constraint as the reads above; malformed, not a miss.
+    // Why: docs/BUSINESS-LOGIC.md §36.
     Route::patch('/watchlist/{code}', [WatchlistItemController::class, 'update'])
         ->where('code', '[A-Z]{3}-[A-Z]{3}')
         ->name('watchlist.update');
@@ -322,29 +144,15 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
         ->name('watchlist.destroy');
 
     /*
-     * PUT rather than PATCH: the alerts screen sends the whole preferences
-     * object every time. See App\Http\Requests\UpdateSettingsRequest for why
-     * an optional boolean is a switch that cannot be turned off.
+     * PUT not PATCH: alerts screen always sends the whole preferences object (see App\Http\Requests\UpdateSettingsRequest
+     * — an optional boolean can't be turned off) (docs/BUSINESS-LOGIC.md §36).
      */
     Route::get('/settings', [SettingsController::class, 'show'])->name('settings.show');
     Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
 
     /*
-     * Reading a sentence back to the person typing it.
-     *
-     * A POST THAT WRITES NOTHING, which is deliberate: the rule is a
-     * 500-character free-text field and a GET would put the owner's sentence
-     * in every access log and browser history between here and the phone. It
-     * also takes exactly the body the create call below takes, so the create
-     * screen sends its last parse straight on.
-     *
-     * THE ONLY THROTTLED ROUTE IN THIS FILE BAR LOGIN. The create screen calls
-     * it on a 500 ms debounce while somebody types, and the moment an
-     * Anthropic key exists (config('orbit.nlp.parser')) every one of those
-     * keystrokes is a metered third-party request. Twenty a minute is roughly
-     * a minute of continuous typing and far more than a person produces in
-     * practice; adding the limiter on the day the key arrives would be a
-     * limiter tuned in a hurry, next to a bill.
+     * POST that writes nothing, deliberately: a GET would leak the owner's free-text sentence into access logs/history.
+     * Throttled (20/min) — becomes Anthropic-backed once `orbit.nlp.parser` is configured (docs/BUSINESS-LOGIC.md §36).
      */
     Route::post('/rules/parse', RuleParseController::class)
         ->middleware('throttle:rules-parse')
@@ -353,11 +161,8 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
     Route::post('/rules', [RuleController::class, 'store'])->name('rules.store');
 
     /*
-     * Numeric ids rather than a natural key, and the pattern says so. A rule
-     * has no code to be looked up by — two rules can be the same sentence with
-     * different chips removed — so this is the one place in this API that
-     * keys on a database id, and a path segment that is not a number is a
-     * malformed request rather than a miss.
+     * Numeric id, not a code: two rules can be the identical sentence with different chips removed, so there's no natural
+     * key. Non-numeric id is malformed, not a miss (docs/BUSINESS-LOGIC.md §36).
      */
     Route::patch('/rules/{id}', [RuleController::class, 'update'])
         ->whereNumber('id')
@@ -369,20 +174,8 @@ Route::middleware('auth:sanctum')->prefix('api')->group(function (): void {
 });
 
 /*
- * The SPA shell. Every path that is not one of the above is answered with the
- * same HTML, and vue-router decides what it means.
- *
- * The pattern is a NEGATIVE LOOKAHEAD rather than a list of screens, because
- * the screens are a client-side concern and this file should not need editing
- * every time one is added. What it must never swallow is a path the server
- * owns: `api` (JSON, and a 404 there has to stay a 404 rather than become a
- * 200 of HTML), `up` (the health endpoint registered by bootstrap/app.php) and
- * `horizon` (the queue dashboard, whose routes come from its own provider).
- *
- * `/sanctum/csrf-cookie` is NOT in the lookahead and does not need to be:
- * Sanctum's service provider registers it while the framework boots, which is
- * before this file is loaded, and the router matches in registration order.
- * AuthenticationTest asserts that it still answers 204.
+ * SPA catch-all. MUST keep `api`/`up`/`horizon` excluded from the lookahead (JSON 404s stay 404s, health check, queue dashboard) so this route never swallows them. `/sanctum/csrf-cookie` needs no
+ * exclusion: it registers before this file loads and routes match in registration order (docs/BUSINESS-LOGIC.md §36).
  */
 Route::get('/{any?}', fn () => view('app'))
     ->where('any', '^(?!api|up|horizon).*$')

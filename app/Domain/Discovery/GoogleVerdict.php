@@ -7,57 +7,14 @@ namespace App\Domain\Discovery;
 /**
  * What Google Flights says about a route and date, as a value Orbit can act on.
  *
- * Built by App\Infrastructure\Verify\GoogleFlightsCheck out of SerpAPI's
- * `price_insights` block. It is the SECOND OPINION in the funnel and the only
- * one that comes from outside Travelpayouts — which is the entire reason it is
- * worth a metered request: every other number in this feature descends from the
- * same cache, so a cache that is wrong is a funnel that is confidently wrong all
- * the way to the screen.
+ * Built from SerpAPI's `price_insights` — the only opinion in the funnel that doesn't descend from the same
+ * Travelpayouts cache everything else does.
  *
- * =============================================================================
- * ⚠ THE ONE DECISION IN THIS FILE, AND THE MEASUREMENT THAT FORCED IT
- * =============================================================================
- * The obvious rule for "did Google confirm this?" is: our candidate's price is
- * below Google's `typical_price_range` low. It is obvious, it is one comparison,
- * AND IT CONFIRMS EVERYTHING. Three real finalists were put to Google on
- * 2026-08-16, the same day the sweep was recorded:
+ * ⚠ Deliberately NOT "candidate price < Google's typical low" — that would confirm everything, including a measured 6x
+ * discrepancy.
  *
- *   route     Travelpayouts   Google's OWN cheapest   level     typical range
- *   DUS-AGP        €29                €70            typical      55 – 175
- *   DUS-RAK        €27               €168            typical     100 – 200
- *   EIN-VNO        €18                €30            typical      20 – 245
- *
- * Every one of those candidates is under its typical-range low. Every one would
- * have been stamped "✓ verified low by Google". And Google — asked for the same
- * airports on the same date — COULD NOT FIND A SEAT AT ANYTHING LIKE THE PRICE:
- * Marrakesh at €27 against a real market of €168 is not a bargain, it is a
- * six-fold discrepancy, and stamping it verified would be Orbit putting a second
- * company's name on its own stale cache entry.
- *
- * That is not a hypothetical failure. It is the SAME failure this app has
- * already shipped twice and written down twice: €36 shown for a date whose live
- * cheapest was €56 (App\Domain\Pricing\DatedFare), and DUS-AGP quoted at €29
- * against a Skyscanner cheapest of €68 (config/orbit.php, `booking`). The
- * candidate's own price is the number UNDER SUSPICION. Testing it against
- * Google's range asks the suspect to vouch for itself.
- *
- * SO THE VERDICT IS ABOUT GOOGLE'S MARKET, NOT ABOUT OUR NUMBER:
- *
- *     confirmed  ⇔  price_level is "low"  OR  Google's own lowest_price is at
- *                   or under its typical-range low
- *
- * Both halves are Google talking about what Google can sell today. It is
- * STRICTLY NARROWER than the candidate-price reading — nothing it confirms
- * would have been refused by the other rule — so it honours "only labelled
- * insane if" in the direction that word is meant to point. On the three
- * finalists above it confirms NOTHING, which is the correct answer and is what
- * the funnel is supposed to feel like: those three are shown as "great find",
- * unverified, with the age printed next to them.
- *
- * `lowest` IS CARRIED EVEN THOUGH THE RULE COULD BE EVALUATED WITHOUT IT,
- * because it is the most useful thing on the card for a person deciding whether
- * to trust a fare: "Orbit says €27, Google says €168" is a sentence the reader
- * can act on, and hiding it would be keeping the disagreement to ourselves.
+ * `lowest` is carried even though the rule doesn't need it — it's the most useful card fact for a reader deciding
+ * whether to trust a fare (docs/BUSINESS-LOGIC.md §16).
  */
 final readonly class GoogleVerdict
 {
@@ -77,12 +34,11 @@ final readonly class GoogleVerdict
     /**
      * Does Google's market agree that this route and date are cheap right now?
      *
-     * READ THE CLASS DOCBLOCK BEFORE CHANGING THIS. The absent candidate price
-     * in the signature is the decision, not an oversight.
+     * ⚠ Read the class docblock before changing this — the absent candidate price in the signature is the decision, not an
+     * oversight.
      *
-     * A VERDICT WITH NOTHING IN IT CONFIRMS NOTHING. Google answering without a
-     * `price_insights` block is common on thin routes, and it is a real answer
-     * — "no opinion" — rather than an error. It is also not permission.
+     * A verdict with nothing in it confirms nothing — no `price_insights` is a real "no opinion" answer, common on thin
+     * routes, not permission (docs/BUSINESS-LOGIC.md §16).
      */
     public function confirmsCheap(): bool
     {
@@ -100,13 +56,8 @@ final readonly class GoogleVerdict
     /**
      * The row's `google_verdict` column, or null when there is nothing to say.
      *
-     * STORED AS THE FACTS AND NOT AS THE CONCLUSION. `confirmed` is derivable
-     * from the other four and is written anyway, because the API resource and
-     * the badge both read it and a screen recomputing a verdict from parts is
-     * how two places come to disagree about one fare. If the rule above is ever
-     * retuned, the stored `confirmed` is what that day's cards actually claimed
-     * — the same reason App\Http\Resources\AlertResource reads the ledger's
-     * payload rather than today's statistics.
+     * `confirmed` is stored, not just derivable — a screen recomputing it from parts is how two places disagree; a retuned
+     * rule must not rewrite history (docs/BUSINESS-LOGIC.md §16).
      *
      * @return array{level: string|null, lowest: int|null, typical_low: int|null, typical_high: int|null, confirmed: bool}
      */

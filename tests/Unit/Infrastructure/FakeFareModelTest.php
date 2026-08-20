@@ -10,13 +10,8 @@ use PHPUnit\Framework\Attributes\Test;
 use App\Infrastructure\Pricing\FakeFareModel;
 
 /**
- * The pretend airline.
- *
- * WHAT IS WORTH ASSERTING ABOUT MADE-UP PRICES: not the prices themselves, but
- * the properties the rest of the app relies on. Determinism is the big one —
- * a feature test that asserts €44 and a deploy that shows €51 for the same
- * route would both be "working" if this were random, and neither could be
- * trusted.
+ * The pretend airline: these tests assert the properties the app relies on (determinism, price bands), not the made-up
+ * prices themselves (docs/BUSINESS-LOGIC.md §14).
  */
 final class FakeFareModelTest extends TestCase
 {
@@ -81,13 +76,8 @@ final class FakeFareModelTest extends TestCase
     }
 
     /**
-     * Friday and Sunday cost more than the Tuesday in between. This is what
-     * gives the calendar heatmap its stripes.
-     *
-     * ASSERTED OVER A WHOLE YEAR, not on one pair of dates: a route's sale
-     * windows are five consecutive days at 38% off, and a Friday inside one is
-     * genuinely cheaper than the Tuesday after it. The premium is a property of
-     * the distribution, and that is what is checked.
+     * Friday/Sunday cost more than Tuesday — asserted over a full year, since a Friday inside a sale window can be cheaper
+     * than a plain Tuesday (docs/BUSINESS-LOGIC.md §14).
      */
     #[Test]
     public function the_weekend_costs_more(): void
@@ -108,9 +98,8 @@ final class FakeFareModelTest extends TestCase
     }
 
     /**
-     * Without the occasional deep sale the deal score would never reach the
-     * "insane" tier on any route, and the alerting the app exists for would
-     * never be exercised.
+     * Without deep sales, no route would ever reach the "insane" deal-score tier the alerting exists to exercise
+     * (docs/BUSINESS-LOGIC.md §14).
      */
     #[Test]
     public function every_route_has_sale_windows_somewhere_in_the_year(): void
@@ -135,9 +124,8 @@ final class FakeFareModelTest extends TestCase
     }
 
     /**
-     * The same departure date, looked at on two different mornings, is a
-     * different price — which is the only reason our accruing history has a
-     * shape at all.
+     * Same departure date, different observation mornings, must price differently — that variance is the only reason price
+     * history has shape (docs/BUSINESS-LOGIC.md §14).
      */
     #[Test]
     public function the_price_moves_with_when_you_looked(): void

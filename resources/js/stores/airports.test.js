@@ -1,27 +1,12 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The world half of the typeahead
-// =============================================================================
-// stores/destinations.js is a list in memory and a pure ranking function, and
-// its tests live beside the box that uses it. This one is a NETWORK search, and
-// everything worth testing about it is a race:
+// The world half of the typeahead — a network search, so everything worth testing is a race (debounce, abort, sequence guard).
+// Why: docs/BUSINESS-LOGIC.md §36.
 //
-//   - the debounce, so a word is one request rather than five;
-//   - the abort, so the request it replaces is not left running;
-//   - the sequence guard, so an answer to a query somebody has typed past can
-//     never repaint the panel — which is the bug that survives a debounce and
-//     an abort, because aborting is a request to the network stack rather than
-//     a promise that nothing else lands.
+// Fake timers throughout: the debounce is 250ms, and waiting for it for real
+// would make this suite slow and flaky.
 //
-// FAKE TIMERS THROUGHOUT, because the debounce is 250 ms and a suite that waits
-// for it is a suite that takes a second per test and is flaky on a loaded box.
-//
-// IT IS A COMPOSABLE AND USED TO BE A PINIA STORE, which is why every test below
-// calls `useAirportSearch()` for itself rather than reaching for a singleton:
-// with two boxes on the search screen the results belong to the box that asked,
-// and each of these tests is one box. Called outside a component, so
-// `onScopeDispose` has nothing to attach to — hence `failSilently` in the source.
-// =============================================================================
+// A composable, not a singleton store — each test calls useAirportSearch() for its own box.
+// Why: docs/BUSINESS-LOGIC.md §36.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const get = vi.fn()
@@ -144,11 +129,8 @@ describe('the airport search', () => {
     })
 
     /**
-     * THE ONE THE DEBOUNCE AND THE ABORT BOTH MISS. A request that is already
-     * on the wire when it is replaced can still resolve — aborting asks the
-     * browser to stop, it does not undo a response that has arrived — and
-     * without the sequence guard "new" would repaint the panel over "newark"'s
-     * answer, which is the classic typeahead flicker.
+     * The one the debounce and the abort both miss — an in-flight request can still resolve after being replaced, so only
+     * the sequence guard stops flicker (docs/BUSINESS-LOGIC.md §36).
      */
     it('ignores an answer to a query that has been typed past', async () => {
         const slow = deferred()
@@ -187,9 +169,8 @@ describe('the airport search', () => {
     })
 
     /**
-     * An abort rejects exactly like a 500 does. Told apart by the sequence
-     * guard rather than by what axios calls a cancellation this year — so the
-     * box must not go to `failed` when it is the one that did the cancelling.
+     * An abort rejects exactly like a 500 does — told apart by the sequence
+     * guard, not by what axios calls a cancellation this year.
      */
     it('does not report its own cancellation as a failure', async () => {
         const cancelled = deferred()
@@ -225,14 +206,6 @@ describe('the airport search', () => {
     })
 })
 
-// -----------------------------------------------------------------------------
-// The join
-// -----------------------------------------------------------------------------
-
-// -----------------------------------------------------------------------------
-// The boundary
-// -----------------------------------------------------------------------------
-
 describe('toCode', () => {
     it('is what a box holds, turned into what a request takes', () => {
         expect(toCode('  lis ')).toBe('LIS')
@@ -241,9 +214,8 @@ describe('toCode', () => {
     })
 
     /*
-     * THREE LETTERS AND NOTHING ELSE. "por" is somebody halfway through typing
-     * Porto and "LISBON" is a city; only the middle case is a code, and both
-     * boxes and both buttons ask this question the same way.
+     * Three letters and nothing else — "por" is mid-typing, "LISBON" is a
+     * city name; only the middle case is a code.
      */
     it('recognises a finished code and nothing that merely looks like one', () => {
         expect(IATA.test(toCode('lis'))).toBe(true)
@@ -295,9 +267,8 @@ describe('mergeSuggestions', () => {
     })
 
     /*
-     * THE OTHER END OF THE PAIR, dropped from either half. A route from a place
-     * to itself is not a route, and the search screen's two boxes each exclude
-     * what the other one holds.
+     * The other end of the pair, dropped from either half — a route from a
+     * place to itself isn't a route.
      */
     it('never offers the airport the other box is holding', () => {
         const merged = mergeSuggestions([curatedRow(JFK)], [EWR, LGA], 'new', MAX_SUGGESTIONS, 'EWR')
@@ -307,9 +278,8 @@ describe('mergeSuggestions', () => {
     })
 
     /*
-     * AND IT IS DROPPED BEFORE THE CUT, not after. Filtering the sliced result
-     * would leave three suggestions on a panel with room for four — the excluded
-     * airport silently costing somebody a row it was never in.
+     * Dropped before the cut, not after — filtering the sliced result would
+     * silently leave one fewer row than the panel has room for.
      */
     it('still fills the panel when a row has been excluded', () => {
         const world = Array.from({ length: 10 }, (_, index) => ({ ...EWR, iata: `X${index}0` }))

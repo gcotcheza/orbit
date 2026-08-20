@@ -12,18 +12,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * The core every screen shows about a route: where it goes, what it costs, and
  * what Orbit thinks of that.
  *
- * ONE SHAPE, THREE SCREENS. The globe's spotlight card, the watchlist rows and
- * the head of the route detail all draw the same six facts, so they are
- * defined once here and the other two resources build on this. Four people
- * are writing those screens in parallel against docs/API.md; a `price` object
- * that meant something slightly different on one of them is the expensive kind
- * of mistake.
+ * One shape, three screens (spotlight card, watchlist row, detail header) build on this so `price` can't mean
+ * something different on one of them.
  *
- * NULLS ARE REAL ANSWERS in `price` and mean "not known yet" — a route added
- * this morning has no observation and no statistics. They are not zeroes, and
- * a screen that renders them as "€0" or "0% below usual" is stating something
- * false. `trackingDays` and `confident` are what a screen should branch on:
- * see the design's "tracking N days" note.
+ * Nulls in `price` are real answers ("not known yet"), not zeroes; a screen that renders them as €0 or 0% is stating
+ * something false (docs/BUSINESS-LOGIC.md §36).
  */
 class RouteSummaryResource extends JsonResource
 {
@@ -64,11 +57,8 @@ class RouteSummaryResource extends JsonResource
                 'tone' => $deal->verdict->tone,
             ],
 
-            /*
-             * Oldest first, so the last element is the price above it. Up to
-             * fourteen points and often fewer — a new route has what it has,
-             * and the chart is expected to draw whatever arrives.
-             */
+            // Oldest first (last element = price above it); up to 14 points, often fewer — the chart draws whatever a new route
+            // has (docs/BUSINESS-LOGIC.md §36).
             'sparkline' => array_map(
                 Euros::from(...),
                 $snapshot->history->lastDays((int) config('orbit.history.sparkline_days'))->cents(),
@@ -76,18 +66,11 @@ class RouteSummaryResource extends JsonResource
 
             'trackingDays' => $snapshot->trackingDays,
 
-            /*
-             * THE DAY THE PRICE IS FOR, and it is on the SUMMARY rather than on
-             * the detail alone because every screen that prints `price.current`
-             * was printing a fare with no date attached to it: a €75 that could
-             * be next Tuesday or in eleven weeks, which is not a fare anybody
-             * can act on. The detail sent this already; the three screens that
-             * read the summary could not.
-             *
-             * A DEPARTURE DATE, NOT AN OBSERVATION DATE — the other axis
-             * (docs/API.md). `null` before the first poll, and null is not
-             * "today": a screen with no date must print no date.
-             */
+            // On the summary, not just the detail: every screen printing `price.current` had a fare with no date attached, which
+            // nobody can act on (docs/BUSINESS-LOGIC.md §36).
+
+            // A departure date, not an observation date (the other axis, docs/API.md); null before the first poll, and null must
+            // print as no date, not "today" (docs/BUSINESS-LOGIC.md §36).
             'cheapest' => $snapshot->cheapest === null ? null : [
                 'date'  => $snapshot->cheapest->departureDate->format('Y-m-d'),
                 'price' => Euros::from($snapshot->cheapest->cents),

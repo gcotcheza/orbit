@@ -20,37 +20,11 @@ use App\Application\Alerts\RuleMatchNotice;
 /**
  * What the three Orbit mails actually look like when they are rendered.
  *
- * ===========================================================================
- * WHY A TEST AT ALL FOR SOMETHING THAT IS JUDGED BY LOOKING AT IT
+ * Tested despite being "judged by looking" because failures here are silent: wrong theme path, media queries stripped, or a banner pointing at localhost
+ * — all render valid HTML with the wrong thing, no error.
  *
- * Because almost everything that breaks an HTML mail breaks it SILENTLY. The
- * markdown mailer has three failure modes that all render perfectly valid HTML
- * containing the wrong thing, and every one of them was hit while this design
- * was being built:
- *
- *   - `mail.markdown.paths` unset, so resources/views/vendor/mail is ignored
- *     and Laravel's stock grey-box layout is sent instead. No error.
- *   - the theme file's own comments deleting the rule below them, because
- *     TijsVerkoyen's cleanup strips media queries with a regex that reaches to
- *     the first closing brace and does it before comments are removed. No error,
- *     just a mail with no font.
- *   - the banner resolved through `asset()`, which is http://localhost in a
- *     test and a staging host in staging — a permanently broken picture in a
- *     mail that has already been delivered. No error, ever.
- *
- * None of the three is visible in a screenshot of a happy path, so the checks
- * are here: the theme is reaching the markup, the media queries survived to the
- * reader, the picture is hosted where it will still be, and no mail has quietly
- * gone back to being a table.
- *
- * ===========================================================================
- * THE COPY ASSERTIONS ARE NOT DECORATION EITHER
- *
- * The subcopy quotes config('orbit.alerts.*') and the body quotes statistics
- * the reader is being asked to act on. A redesign is exactly the change most
- * likely to drop a sentence nobody notices is missing — "why am I getting
- * this" is not visible until somebody wants it — so the lines that make the
- * mail honest are asserted, in both the HTML part and the plain-text one.
+ * Copy assertions aren't decoration — a redesign is exactly the change likely to drop config-quoted copy nobody
+ * notices is missing (docs/BUSINESS-LOGIC.md §10).
  */
 final class MailRenderTest extends TestCase
 {
@@ -64,12 +38,6 @@ final class MailRenderTest extends TestCase
 
         $this->markdown = $this->app->make(Markdown::class);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | The wiring the design cannot work without
-    |--------------------------------------------------------------------------
-    */
 
     #[Test]
     public function the_mailer_is_pointed_at_the_published_orbit_theme(): void
@@ -114,9 +82,8 @@ final class MailRenderTest extends TestCase
 
             $this->assertStringContainsString(self::BANNER, $html, $mail);
 
-            /* APP_URL is http://localhost in this suite. A banner resolved
-             * through asset() would say so, and would say the staging host in
-             * staging — in a document that keeps fetching it for years. */
+            // APP_URL is http://localhost in this suite; a banner resolved via asset() would bake that in — broken forever once
+            // the mail is sent (docs/BUSINESS-LOGIC.md §10).
             $this->assertStringNotContainsString('localhost/mail/header.png', $html, $mail);
         }
     }
@@ -149,12 +116,7 @@ final class MailRenderTest extends TestCase
         }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | The subjects, which the redesign was not allowed to touch
-    |--------------------------------------------------------------------------
-    */
-
+    // The subjects — unchanged by the redesign.
     #[Test]
     public function the_subjects_are_unchanged(): void
     {
@@ -175,12 +137,6 @@ final class MailRenderTest extends TestCase
             $digest->toMail(new stdClass)->subject,
         );
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | The copy that makes each mail honest
-    |--------------------------------------------------------------------------
-    */
 
     #[Test]
     public function the_deal_alert_still_says_what_it_costs_and_what_that_means(): void
@@ -232,9 +188,8 @@ final class MailRenderTest extends TestCase
         $this->assertStringContainsString('Rotterdam → Tirana', $html);
         $this->assertStringContainsString('Not enough data yet', $html);
 
-        /* App\Domain\Pricing\DealScorer's "no opinion" is a score of 0. Printed,
-         * it reads as a verdict of "terrible" — which is the opposite of what it
-         * means, and was one of the four em-dashes in the old table's row. */
+        // App\Domain\Pricing\DealScorer's "no opinion" is a score of 0 — printed, that reads as "terrible", the opposite of
+        // what it means (docs/BUSINESS-LOGIC.md §10).
         $this->assertStringNotContainsString('0/100', $html);
 
         /* The sections that do have something to say still say it. */
@@ -267,12 +222,7 @@ final class MailRenderTest extends TestCase
         }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | The plain-text part, which is a mail and not a fallback
-    |--------------------------------------------------------------------------
-    */
-
+    // The plain-text part — a mail in its own right, not a fallback.
     #[Test]
     public function the_text_part_is_sentences_and_not_a_flattened_card(): void
     {
@@ -311,12 +261,6 @@ final class MailRenderTest extends TestCase
         $this->assertStringContainsString('Amsterdam → Faro (AMS→FAO) — €39', $text);
         $this->assertStringContainsString('…and 24 more at or under your cap', $text);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Fixtures
-    |--------------------------------------------------------------------------
-    */
 
     /**
      * @param  'route-deal'|'rule-match'|'weekly-digest'  $mail

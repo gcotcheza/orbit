@@ -11,15 +11,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * How and when this account wants to be told about a deal.
  *
- * ONE ROW PER ACCOUNT, CREATED ON FIRST READ — see for() below. There is no
- * seeder for it and deliberately so: a seeded row is a second place the
- * defaults live, and the one that is wrong after a deploy is always the copy.
- * The migration's column defaults are the only list, and this class re-reads
- * the row it just inserted rather than restating them.
+ * One row per account, created on first read (see for()); deliberately no seeder.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * READ BY THE ALERT ENGINE, not only by the settings screen. minimumScore()
- * is the whole point of `sensitivity`: PR11 asks this object what score is
- * worth a notification instead of switching on 0/1/2 itself.
+ * Read by the alert engine too — minimumScore() is what PR11 asks instead of
+ * switching on sensitivity itself.
  *
  * @property int $id
  * @property int $user_id
@@ -36,21 +32,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 final class UserSettings extends Model
 {
     /*
-     * Eloquent's pluraliser would very likely land on `user_settings` anyway —
-     * "settings" is already plural — but "very likely" is not a thing to leave
-     * a table name to, and every other model in this app with a name that is
-     * not its table says so out loud.
+     * Explicit, though Eloquent's pluraliser would likely guess right anyway —
+     * "very likely" is not something to leave a table name to.
      */
     protected $table = 'user_settings';
 
     /**
      * This account's settings, creating the row the first time anybody asks.
      *
-     * `first()` then `create()` rather than `firstOrCreate([...defaults])`,
-     * because the defaults belong to the migration and passing them here would
-     * copy them. The insert therefore carries nothing but the foreign key, the
-     * database fills the rest in, and refresh() reads back what it chose — one
-     * extra query, once per account, ever.
+     * `first()` then `create()`, not `firstOrCreate([...defaults])` — the defaults belong to the migration, not to this call.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     public static function for(User $user): self
     {
@@ -69,11 +60,8 @@ final class UserSettings extends Model
     /**
      * The deal score at or above which this account wants to hear about it.
      *
-     * THE MAPPING IS CONFIG, NOT CODE. `sensitivity` is an ordered scale and
-     * config/orbit.php names the tier each level fires on; the tier's actual
-     * number is `score.tiers`, which is also what the API publishes as `tier`.
-     * So the sensitivity a person picks and the badge they see on a route can
-     * never mean different things.
+     * The mapping is config, not code, tying sensitivity to the same tier the API publishes.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     public function minimumScore(): int
     {
@@ -93,12 +81,8 @@ final class UserSettings extends Model
     /**
      * The start of the quiet window as `HH:MM`.
      *
-     * TRIMMED RATHER THAN PARSED. Postgres hands a `time` column back as
-     * `22:00:00` and SQLite hands back whatever string was written to it, so
-     * the stored value has one of two precisions depending on which engine is
-     * underneath — the same difference App\Jobs\PollRoutePrices documents for
-     * dates. Cutting at five characters normalises both without inventing a
-     * date to hang the time off, which is what Carbon would have to do.
+     * Trimmed, not parsed — Postgres and SQLite return a `time` column at different precisions.
+     * Why: docs/BUSINESS-LOGIC.md §36.
      */
     public function quietStartAt(): string
     {

@@ -7,18 +7,8 @@ namespace App\Domain\Pricing;
 use InvalidArgumentException;
 
 /**
- * What a route normally costs — the five-number summary the deal score is
- * mostly made of.
- *
- * This is the "usual price" half of docs/PLAN.md's hybrid data model: our own
- * history says which way a fare is MOVING, and statistics like these say
- * whether it is LOW, which is a question our history cannot answer on day one.
- * The median is the "usual €84" the design's captions quote.
- *
- * The five numbers must be non-decreasing. That is not a style preference: the
- * whole class treats them as the knots of a monotone curve and interpolates
- * between them, so a p25 above the median would silently produce percentiles
- * that run backwards and a score that rewards expensive fares.
+ * The "usual price" half of docs/PLAN.md's hybrid pricing model; the five numbers must stay non-decreasing (treated as
+ * monotone-curve knots) (docs/BUSINESS-LOGIC.md §6).
  */
 final readonly class PriceStats
 {
@@ -46,14 +36,8 @@ final readonly class PriceStats
     }
 
     /**
-     * Build the summary from raw observations — the fake stats adapter's route
-     * in, and whatever a real provider that hands back samples rather than
-     * quartiles would use.
-     *
-     * NEAREST-RANK, not linear interpolation between neighbours. The samples
-     * are whole-cent fares that were actually quoted, so a percentile that is
-     * one of them is a price this route has really been; an interpolated
-     * 8437.5 is not.
+     * Build the summary from raw observations (e.g. the fake stats adapter). Nearest-rank, not interpolation: percentiles
+     * must be prices actually quoted (docs/BUSINESS-LOGIC.md §6).
      *
      * @param  list<int>  $cents
      */
@@ -89,9 +73,8 @@ final readonly class PriceStats
     }
 
     /**
-     * How far UNDER the usual price a fare is, as a whole percent; negative
-     * means above it. "38% below its usual €84" — the caption under every
-     * price in the design — is this number.
+     * How far UNDER the usual price a fare is, as a whole percent (negative
+     * means above); this is the "38% below its usual €84" design caption.
      */
     public function percentUnderUsual(int $cents): int
     {
@@ -105,17 +88,8 @@ final readonly class PriceStats
     }
 
     /**
-     * Where a price sits in this distribution, 0 (at or below the cheapest
-     * this route has been) to 1 (at or above the dearest).
-     *
-     * Piecewise-linear through the five knots, which is the most a five-number
-     * summary can honestly support — it knows a quarter of fares fall between
-     * min and p25 and nothing at all about their shape inside that band, so it
-     * spreads them evenly and says so.
-     *
-     * A DEGENERATE summary (every knot equal — a route whose price never
-     * moves) answers 0.5 for that price, because "exactly usual" is the only
-     * defensible reading, and 0 or 1 for anything outside it.
+     * 0 (cheapest seen) to 1 (dearest), piecewise-linear through the five knots; a degenerate summary (all knots equal)
+     * answers 0.5 (docs/BUSINESS-LOGIC.md §6).
      */
     public function percentileOf(int $cents): float
     {
@@ -152,9 +126,8 @@ final readonly class PriceStats
             }
 
             if ($highCents === $lowCents) {
-                // A band of zero width: the price is exactly on a repeated
-                // knot, so the two ranks that knot carries are both true.
-                // Their midpoint is the only answer that does not pick a side.
+                // Zero-width band: price sits on a repeated knot, so both
+                // ranks are true — the midpoint doesn't pick a side.
                 return ($lowRank + $highRank) / 2;
             }
 

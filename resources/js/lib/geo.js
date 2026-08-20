@@ -1,70 +1,36 @@
-// =============================================================================
-// The flight, as arithmetic
-// =============================================================================
-// Everything the globe's camera does between two airports is computed here, and
-// NOTHING in this file knows what a globe, a canvas or a DOM node is. That is
-// the point of it: the choreography in Components/globe is timers and WebGL
-// calls, which can only be judged by looking at them, while the numbers those
-// calls are fed are exactly the part that can be wrong in a way nobody notices
-// — a plane that flies the long way round the planet, a heading that points
-// backwards over the antimeridian, an altitude curve that dips below the
-// surface. Those live here, with tests beside them (geo.test.js).
-//
-// CONVENTIONS. Angles in DEGREES at the boundary, because that is what the API
-// hands us (`origin.lat` / `origin.lng`) and what globe.gl takes back;
-// radians only ever exist inside a function. Points are `{ lat, lng }` — the
-// API's spelling, so a route's endpoints can be passed straight in.
-//
-// The Earth is a sphere here. It is an ellipsoid in reality, and the difference
-// over a 2 000 km European hop is a few kilometres of ground track — invisible
-// at any altitude this camera flies, and not worth carrying WGS-84 for.
-// =============================================================================
+// Pure geometry: nothing here knows what a globe, canvas or DOM node is — that's what lets
+// the numbers (heading, altitude, great-circle path) be tested in isolation (geo.test.js).
+// Angles are DEGREES at the boundary (matches the API/globe.gl); the Earth is treated as a
+// sphere (ellipsoid error is invisible at this camera's altitude).
+// Why: docs/BUSINESS-LOGIC.md §36.
 
 const RAD = Math.PI / 180
 
 /**
- * The number of segments in a flight path.
- *
- * design/README.md §1: "the 72-point great-circle". Seventy-three points, then
- * — the fencepost is deliberate, so that both endpoints are ON the path and the
- * plane starts exactly over the origin airport rather than one segment past it.
+ * Segments in a flight path (design/README.md §1: "the 72-point great-circle" = 73 points).
+ * Fencepost is deliberate: both endpoints land ON the path.
  */
 export const FLIGHT_SEGMENTS = 72
 
 /**
- * The camera's altitude at eased progress `e` through a flight.
- *
- * design/README.md §1: `0.42 − 0.22·e + 0.4·sin(π·e)` — climb, cruise, and
- * descend DEEPER than the take-off altitude (0.20 at the end against 0.42 at
- * the start), which is what makes the landing read as arriving somewhere
- * rather than as the film simply stopping.
+ * Camera altitude at eased progress `e` (design/README.md §1). Descends DEEPER than the
+ * take-off altitude (0.20 end vs 0.42 start) so landing reads as arriving, not just stopping.
  */
 export function flightAltitude(e) {
     return 0.42 - 0.22 * e + 0.4 * Math.sin(Math.PI * e)
 }
 
 /**
- * Ease-in-out quad, the flight's own clock.
- *
- * Real aircraft do not start at cruise speed and neither does this camera. The
- * curve is symmetric, so `progress` and `1 - progress` accelerate and brake by
- * the same amount.
+ * Ease-in-out quad: real aircraft don't start at cruise speed. Symmetric curve, so
+ * progress and 1-progress accelerate/brake by the same amount.
  */
 export function easeInOutQuad(t) {
     return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2
 }
 
 /**
- * The initial bearing from one point to another, in degrees clockwise from
- * north, normalised to [0, 360).
- *
- * This is what the plane glyph is rotated by, and it is a BEARING rather than
- * the angle of the line on screen: on a globe those two are the same thing only
- * because the camera is directly above the plane, looking down, with north up.
- * It changes continuously along a great circle — a flight to Lisbon leaves
- * Amsterdam pointing one way and arrives pointing another — which is why the
- * choreography recomputes it per frame from the CURRENT segment instead of
- * once from the endpoints.
+ * Initial bearing (deg clockwise from north, [0, 360)) — a BEARING, not the on-screen line angle (same thing only because the camera looks straight
+ * down). Changes continuously along a great circle, so the choreography recomputes it per frame from the CURRENT segment (docs/BUSINESS-LOGIC.md §36).
  */
 export function bearing(from, to) {
     const fromLat = from.lat * RAD
@@ -78,18 +44,8 @@ export function bearing(from, to) {
 }
 
 /**
- * The great-circle path between two airports, as `segments + 1` points.
- *
- * Spherical linear interpolation between the two position vectors — the same
- * shape the arc that globe.gl draws under the plane takes, which is the whole
- * reason the camera follows THIS and not a straight line in lat/lng space. A
- * straight line in lat/lng is a rhumb line: it looks fine on a map of Europe
- * and visibly leaves the drawn arc on anything longer.
- *
- * Two points, one degenerate case: an origin and destination at the same place
- * (or antipodal, where every path is a shortest path) has no defined direction
- * to interpolate along, so the path collapses to the endpoints and the flight
- * becomes a very short one rather than a NaN.
+ * Great-circle path (segments + 1 points) via slerp — matches globe.gl's drawn arc, unlike a straight lat/lng line (a rhumb line, visibly off for
+ * anything longer than Europe). Degenerate case (same/antipodal points): collapses to the endpoints rather than NaN (docs/BUSINESS-LOGIC.md §36).
  */
 export function greatCirclePoints(from, to, segments = FLIGHT_SEGMENTS) {
     const a = toVector(from)
@@ -121,30 +77,16 @@ export function greatCirclePoints(from, to, segments = FLIGHT_SEGMENTS) {
 }
 
 /**
- * The point the fitted globe is centred on — the true middle of the path.
- *
- * Not the average of the two latitudes and longitudes. That is what the design
- * prototype used and it agrees with this to a fraction of a degree for a hop
- * across Europe, but it is wrong by hemispheres for anything crossing the
- * antimeridian (AMS→NRT would centre the camera on the Atlantic). Reading the
- * middle of a path we have already computed is both correct everywhere and one
- * line.
+ * True midpoint of the path, not the average of the two lat/lngs — the average is wrong by hemispheres crossing the
+ * antimeridian (AMS→NRT would centre on the Atlantic) (docs/BUSINESS-LOGIC.md §36).
  */
 export function pathMidpoint(path) {
     return path[Math.floor(path.length / 2)]
 }
 
 /**
- * Where the camera is, and which way the plane points, at raw progress `t`
- * through the flight.
- *
- * `t` is 0..1 of WALL CLOCK time; the easing is applied in here so that every
- * caller gets the same curve, and so that the altitude and the position can
- * never be computed from two different notions of "how far along we are".
- *
- * Longitude is interpolated through the shortest delta rather than numerically:
- * a segment stepping from 179.6° to −179.7° is 0.7° of flying, not 359.3°, and
- * a naive lerp puts the camera on the far side of the planet for one frame.
+ * Camera position/heading at raw progress `t` (0..1 wall-clock) — easing lives here so every caller shares one curve. Longitude uses the shortest delta,
+ * not a naive lerp: 179.6°→−179.7° is 0.7° of flying, not 359.3°, or the camera jumps to the far side for one frame (docs/BUSINESS-LOGIC.md §36).
  */
 export function flightPose(path, t) {
     const e = easeInOutQuad(clamp(t, 0, 1))
@@ -203,9 +145,8 @@ function toVector({ lat, lng }) {
 }
 
 function toPoint([x, y, z]) {
-    // Interpolated vectors drift off the unit sphere by a rounding error's
-    // worth; asin() of a magnitude fractionally over 1 is NaN, and one NaN
-    // frame is a camera that never comes back.
+    // Interpolated vectors drift off the unit sphere by rounding error; asin() of a magnitude
+    // over 1 is NaN, and one NaN frame is a camera that never comes back.
     const length = Math.hypot(x, y, z) || 1
 
     return {

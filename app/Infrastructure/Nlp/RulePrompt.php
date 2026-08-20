@@ -9,31 +9,19 @@ use App\Domain\Rules\RuleVocabulary;
 /**
  * What the model is asked, and the shape it must answer in.
  *
- * SEPARATE FROM THE ADAPTER, the same way health-tracker keeps its prompts
- * apart from the class that sends them: the prompt is the thing that gets
- * retuned, and a diff that only touches this file is a diff whose blast radius
- * is obvious. VERSION goes up whenever the wording does, so a log line can say
- * which prompt produced a bad rule.
+ * Separate from the adapter — the prompt is what gets retuned; VERSION bumps with wording so a log line can say which
+ * prompt produced a bad rule.
  *
- * THE SCHEMA IS BUILT FROM THE VOCABULARY rather than written out, so the
- * model is structurally incapable of answering with an airport this app does
- * not fly from or a vibe no destination carries. That is the whole reason for
- * structured output here: the alternative is validating the model's words
- * against the vocabulary afterwards and deciding what to do about "sunshine",
- * which is a branch nobody would remember to test.
+ * Schema built from the vocabulary, not written out — the model is structurally unable to answer with an airport or
+ * vibe that doesn't exist (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class RulePrompt
 {
     public const VERSION = 'v1';
 
     /**
-     * The instruction, sent AFTER the sentence it is about.
-     *
-     * ORDER IS THE PROMPT. Content blocks are ordered, and a question asked
-     * after the evidence is a different prompt from one asked before it. It is
-     * also the injection defence: the owner's sentence is untrusted input and
-     * never becomes part of this text, and our words are always the last ones
-     * in the message.
+     * The instruction, sent AFTER the sentence it is about — order is the prompt, and this ordering is also the injection
+     * defence (docs/BUSINESS-LOGIC.md §11).
      */
     public const TEXT = <<<'PROMPT'
         The text above is a flight-deal rule somebody typed into an app. Read it and
@@ -66,13 +54,11 @@ final readonly class RulePrompt
     /**
      * The schema the answer is constrained to.
      *
-     * NULLABLES ARE `anyOf` AND NOT A TYPE ARRAY: structured outputs support
-     * anyOf explicitly, and a `"type": ["integer", "null"]` is the kind of
-     * thing that either works or fails at request time depending on the day.
+     * Nullables are `anyOf`, not a type array — `"type": ["integer", "null"]` is the kind of thing that works or fails at
+     * request time depending on the day.
      *
-     * `additionalProperties: false` and a complete `required` list everywhere,
-     * because a schema that permits extra keys permits the model to answer a
-     * question nobody asked.
+     * `additionalProperties: false` everywhere — a schema permitting extra keys lets the model answer a question nobody
+     * asked.
      *
      * @return array<string, mixed>
      */

@@ -1,17 +1,13 @@
 <script setup>
 /*
  * "Fly to a route" — the horizontal rail of chips under the spotlight card
- * (design/README.md §1).
+ * (design/README.md §1). Tapping selects the route: parent replays the
+ * flight tour and re-draws the card.
  *
- * Tapping one selects that route: the parent moves the tour to it, which
- * replays the flight and re-draws the card. The active chip is the accent fill
- * with a glow; the rest are cards with a hairline border and a tone dot.
- *
- * IT IS A TAB LIST, semantically. The chips select which of several things the
- * screen is showing, and that is what `role="tablist"` means — so a screen
- * reader announces "AMS→LIS, selected, 1 of 6" instead of six unrelated
- * buttons. The globe and the card are the panel; they are not marked up as one,
- * because `aria-controls` pointing at a decorative canvas would be a lie.
+ * Tab list semantically (role="tablist"/"tab"): chips select which of
+ * several things the screen shows. Globe/card aren't aria-controls'd — that
+ * would lie about a decorative canvas being one panel.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 import { nextTick, useTemplateRef, watch } from 'vue'
 import { euro } from '@/lib/format'
@@ -27,32 +23,18 @@ defineEmits(['select'])
 const track = useTemplateRef('track')
 
 /*
- * =============================================================================
- * THE SELECTED CHIP HAS TO BE ON SCREEN
- * =============================================================================
- * The rail is a horizontal scroller and the selection is not always the user's:
- * the tour advances it every eleven seconds, and it advances it IN ORDER, so a
- * six-route watchlist spends most of its time with the accent-filled chip
- * somewhere off the right-hand edge. The screenshot the UX pass caught it in is
- * exact — the card says Naples, and the AMS→NAP chip is half over the edge of
- * the screen with two other routes filling the rail.
+ * Selected chip must stay on screen: the tour auto-advances it every ~11s,
+ * and off-screen the rail (the one control showing WHERE in the list the
+ * camera is) looks like it forgot which route is showing.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * It is worse than merely untidy, because the rail is the one control that says
- * WHERE IN THE LIST the camera currently is. Off screen, it says nothing, and
- * the screen looks like it has forgotten which route it is showing.
+ * `inline: 'center'` (not 'nearest'): edge-visible still reads as "end of
+ * list". `block: 'nearest'` stops the browser scrolling the whole PAGE to
+ * drag the 360px globe off-screen instead.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  *
- * `inline: 'center'` and NOT 'nearest': a chip nudged just inside the edge is
- * technically visible and reads as the end of the list rather than as the
- * selection. `block: 'nearest'` is the other half and is the important one — the
- * rail sits below a 360 px globe, and without it the browser is entitled to
- * scroll the PAGE vertically to bring the chip into view, which would drag the
- * globe off the top of the screen every eleven seconds.
- *
- * SMOOTH ONLY IF SMOOTH IS WANTED, which lib/motion.js answers for all three
- * screens that scroll on somebody's behalf.
- *
- * `nextTick` because the chip may not exist yet: the first selection lands in
- * the same tick the list is rendered in.
+ * Smooth only if wanted (lib/motion.js decides). `nextTick`: the first
+ * selection can land before the chip list has rendered.
  */
 watch(
   () => props.activeCode,
@@ -89,11 +71,8 @@ watch(
       >
         <span class="rail__dot" :data-tone="route.verdict.tone"></span>
 
-        <!-- THE CITY, under the codes. A rail of AMS→OPO, AMS→FAO, EIN→LIS is
-             a row of anagrams to anybody who does not already know them, and
-             "fly to a route" is exactly the moment somebody is choosing a
-             PLACE rather than a code. The pair is one column so the chip stays
-             one tap and the codes keep the line they had. -->
+        <!-- City under code: a rail of AMS-OPO/AMS-FAO/EIN-LIS reads as
+             anagrams to anyone who doesn't already know them (docs/BUSINESS-LOGIC.md §36). -->
         <span class="rail__where">
           <span>{{ route.origin.iata }}→{{ route.destination.iata }}</span>
           <span class="rail__city">{{ route.destination.city }}</span>
@@ -167,9 +146,9 @@ watch(
 .rail__chip--active {
   border-color: var(--accent);
   background: var(--accent);
-  /* White on the accent in BOTH themes — the accent is a saturated blue either
-     way, and --ink would be near-black on it in the light theme. That is what
-     --on-solid is, and the tab bar's centre button reads the same token. */
+  /* White on accent in both themes (--ink would be near-black on it in
+     light); --on-solid also used by the tab bar's centre button.
+     Why: docs/BUSINESS-LOGIC.md §36. */
   color: var(--on-solid);
   box-shadow: 0 6px 16px var(--accent-glow);
 }
@@ -182,11 +161,9 @@ watch(
 }
 
 /*
- * QUIETENED WITH OPACITY RATHER THAN WITH --muted, which is the same choice
- * `.rail__price` makes one rule below and for the same reason: the active chip
- * is a saturated accent fill, and a fixed grey on it is either invisible or a
- * second colour nobody chose. Inheriting the chip's own ink and stepping it
- * back works on the card and on the accent, in both themes.
+ * Opacity, not --muted (same as .rail__price below): a fixed grey is either
+ * invisible or a stray color on the accent-filled active chip.
+ * Why: docs/BUSINESS-LOGIC.md §36.
  */
 .rail__city {
   font-family: var(--font-body);
@@ -219,9 +196,9 @@ watch(
   background: var(--warn);
 }
 
-/* On the active chip the dot is the same white as the label: the tone is being
-   said by the card above, and a coloured dot on the accent fill reads as a
-   status light rather than as a bullet. */
+/* Active chip's dot matches the label (white): tone is already said by the
+   card above; a colored dot on the accent fill would read as a status light.
+   Why: docs/BUSINESS-LOGIC.md §36. */
 .rail__chip--active .rail__dot {
   background: var(--on-solid);
 }

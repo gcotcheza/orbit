@@ -11,18 +11,11 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * One row of the alert ledger: something Orbit decided to say, and whether it
- * has been said yet.
+ * One row of the alert ledger: something Orbit decided to say, and whether it has been said yet. Decisions live in
+ * AlertPolicy; writing lives in AlertLedger — this is just the row.
  *
- * PLAIN CRUD ON PURPOSE, like every other model here — docs/PLAN.md is explicit
- * that Eloquent is used directly for this half. The decisions live in
- * App\Domain\Alerts\AlertPolicy and the writing lives in
- * App\Application\Alerts\AlertLedger; this is the row.
- *
- * `type` IS CAST TO THE ENUM, so the four places that care about it — the
- * cooldown lookup, the mail adapter's per-setting gate, the digest's "this
- * week" filter and `GET /api/alerts` — all read the same value object rather
- * than four spellings of `rule_match`.
+ * `type` is cast to the enum so all four consumers (cooldown, mail gate, digest filter, GET /api/alerts) read one
+ * value object, not four strings (docs/BUSINESS-LOGIC.md §10).
  *
  * @property int $id
  * @property int $user_id
@@ -73,10 +66,8 @@ final class Alert extends Model
     }
 
     /**
-     * NAMED `rule` AND NOT `dealRule`, because that is the word the product
-     * uses everywhere else (design/README.md §4, `GET /api/rules`). The column
-     * has to be named for the table, so it is spelled out here rather than
-     * being guessed from the method name.
+     * Named `rule`, not `dealRule` — that's the product's word everywhere else
+     * (design/README.md §4). Column is spelled out since it can't be guessed.
      *
      * @return BelongsTo<DealRule, $this>
      */

@@ -14,21 +14,14 @@ use App\Infrastructure\Nlp\RegexRuleTextParser;
 /**
  * Reading English without a key.
  *
- * THE FIRST TEST IS THE CONTRACT. design/README.md §4 and its screenshot are a
- * specific sentence producing six specific chips, and this app ships that
- * sentence pre-typed into the textarea — so "the design's example works" is
- * not a nice-to-have, it is the first thing anybody sees on that screen. It is
- * asserted chip for chip, label included, en dashes included.
+ * The first test is the contract — design/README.md §4's example sentence must produce its six chips exactly; this app
+ * ships that sentence pre-typed.
  *
- * IT LOADS THE REAL config/orbit.php rather than a vocabulary written for the
- * test. The claim worth making is not "some regexes can read that sentence",
- * it is "the words this app actually ships can read that sentence" — a test
- * with its own vocabulary would keep passing after somebody edited the one
- * production uses.
+ * Loads the real config/orbit.php, not a test vocabulary — the claim is that production's words can read it, not just
+ * some regex can.
  *
- * A PLAIN PHPUnit TestCase and no database, which is the whole reason
- * App\Domain\Rules\RuleVocabulary exists: a parser that looked airports up in
- * a table would need a migration to prove it can read a sentence.
+ * A plain PHPUnit TestCase, no database — the whole reason App\Domain\Rules\RuleVocabulary exists
+ * (docs/BUSINESS-LOGIC.md §11).
  */
 final class RegexRuleTextParserTest extends TestCase
 {
@@ -81,18 +74,13 @@ final class RegexRuleTextParserTest extends TestCase
         $this->assertSame(8000, $criteria->maxPriceCents);
         $this->assertSame([2, 3], $criteria->tripLengthNights);
         $this->assertSame(['sunny'], $criteria->vibes);
-        /*
-         * FRIDAY ALONE. "weekend" on its own would be Friday and Saturday, but
-         * the sentence names a day and a named day refines the weekend rather
-         * than joining it — the design's chip says "Fridays".
-         */
+        // FRIDAY ALONE: a named day refines "weekend" rather than joining it, so weekend + Friday narrows to Friday, not
+        // Friday-and-Saturday (docs/BUSINESS-LOGIC.md §11).
         $this->assertSame([5], $criteria->departDows);
         $this->assertNotNull($criteria->dateWindow);
         $this->assertSame(3, $criteria->dateWindow->from);
         $this->assertSame(5, $criteria->dateWindow->to);
     }
-
-    // -- Prices --------------------------------------------------------------
 
     /**
      * @return array<string, array{string, int|null}>
@@ -108,11 +96,8 @@ final class RegexRuleTextParserTest extends TestCase
             'a bare symbol'            => ['ski trip €150', 15000],
             'a trailing currency word' => ['ski trip 150 euros', 15000],
 
-            /*
-             * A BARE NUMBER IS NEVER A PRICE. "3 nights" and "5 to 7 nights"
-             * live in the same sentences as prices do, and a reader that took
-             * any number would turn every trip length into a €3 ceiling.
-             */
+            // A BARE NUMBER IS NEVER A PRICE: "3 nights" shares sentences with real prices, so a naive reader would turn trip
+            // length into a price (docs/BUSINESS-LOGIC.md §11).
             'a night count is not a price'   => ['somewhere sunny for 3 nights', null],
             'a weekday is not a price'       => ['leaving Friday', null],
             'the word cheap is not a number' => ['somewhere cheap and sunny', null],
@@ -125,8 +110,6 @@ final class RegexRuleTextParserTest extends TestCase
     {
         $this->assertSame($cents, $this->parser->parse($text)->criteria()->maxPriceCents);
     }
-
-    // -- Where from ----------------------------------------------------------
 
     /**
      * @return array<string, array{string, list<string>}>
@@ -142,12 +125,8 @@ final class RegexRuleTextParserTest extends TestCase
             'two of them, in config order'    => ['city break from DUS or AMS', ['AMS', 'DUS']],
             'an umlaut somebody did not type' => ['ski from dusseldorf', ['DUS']],
 
-            /*
-             * Silence is not "all three chips". Empty means all three when the
-             * rule is MATCHED (RuleCriteria::originsOrAll), but "Here's what we
-             * understood" must not claim the sentence said something it did
-             * not — see RegexRuleTextParser::origins().
-             */
+            // Silence is not "all three chips": empty means all-three once MATCHED (RuleCriteria::originsOrAll), but understanding
+            // must not overclaim (docs/BUSINESS-LOGIC.md §11).
             'silence claims nothing'            => ['somewhere sunny under €80', []],
             'anywhere is about the destination' => ['fly anywhere under €50', []],
         ];
@@ -162,8 +141,6 @@ final class RegexRuleTextParserTest extends TestCase
     {
         $this->assertSame($origins, $this->parser->parse($text)->criteria()->origins);
     }
-
-    // -- When ----------------------------------------------------------------
 
     /**
      * @return array<string, array{string, array{int, int}|null}>
@@ -205,8 +182,6 @@ final class RegexRuleTextParserTest extends TestCase
         $this->assertSame($window, [$parsed->from, $parsed->to]);
     }
 
-    // -- How long, and which day --------------------------------------------
-
     /**
      * @return array<string, array{string, array{int, int}|null, list<int>}>
      */
@@ -242,8 +217,6 @@ final class RegexRuleTextParserTest extends TestCase
         $this->assertSame($dows, $criteria->departDows);
     }
 
-    // -- What for ------------------------------------------------------------
-
     /**
      * @return array<string, array{string, list<string>}>
      */
@@ -257,11 +230,8 @@ final class RegexRuleTextParserTest extends TestCase
             'snow means ski'                       => ['somewhere with snow', ['ski']],
             'several at once, in vocabulary order' => ['a sunny beach with nightlife', ['sunny', 'beach', 'party']],
 
-            /*
-             * "sun" is in the vocabulary and "sunny" contains it — whole-word
-             * matching is what keeps that from being two vibes. It also keeps
-             * "mar" out of "market".
-             */
+            // "sun" is vocabulary and "sunny" contains it — whole-word matching keeps that from being two vibes (and "mar" out of
+            // "market") (docs/BUSINESS-LOGIC.md §11).
             'a substring is not a word' => ['a trip to the supermarket', []],
             'silence'                   => ['under €80 from AMS', []],
         ];
@@ -276,8 +246,6 @@ final class RegexRuleTextParserTest extends TestCase
     {
         $this->assertSame($vibes, $this->parser->parse($text)->criteria()->vibes);
     }
-
-    // -- Nonsense ------------------------------------------------------------
 
     /**
      * @return array<string, array{string}>
