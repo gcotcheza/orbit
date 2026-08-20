@@ -14,25 +14,8 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
- * Turns routes into everything the screens read, in a fixed number of queries.
- *
- * FOUR QUERIES FOR ANY NUMBER OF ROUTES, and that is the whole reason this
- * class exists rather than a set of accessors on the model:
- *
- *   1. the routes, with their two airports and their statistics eager-loaded;
- *   2. the observations inside the chart window, for every route at once;
- *   3. one MIN(observed_on) per route — "tracking N days" has to look past the
- *      chart window or a route watched since March would claim 60 days;
- *   4. one cheapest calendar fare per route, for the booking link.
- *
- * The watchlist screen asks for six routes and gets four queries; it would
- * otherwise get twenty-five, and the number would grow with the watchlist.
- *
- * NOTHING IS CACHED. The inputs are two small indexed tables — sixty rows per
- * route — and the scoring is arithmetic on them, so the read is cheaper than
- * the invalidation would be. A cached score would also be a second place the
- * truth lives, and the one that is wrong after a stats refresh is always the
- * cached one.
+ * Turns routes into everything the screens read in four queries for any number of routes,
+ * and caches nothing (docs/BUSINESS-LOGIC.md §36).
  */
 final readonly class RouteSnapshots
 {
@@ -73,9 +56,8 @@ final readonly class RouteSnapshots
             ->groupBy('route_id');
 
         /*
-         * `toBase()` because `first_observed_on` is an aggregate alias and not
-         * a column on the model — Eloquent's pluck() is typed to model
-         * properties, and rightly so.
+         * `toBase()` because `first_observed_on` is an aggregate alias, not a column —
+         * Eloquent's pluck() is typed to model properties.
          */
         $firstSeen = PriceObservation::query()
             ->whereIn('route_id', $ids)
@@ -103,15 +85,8 @@ final readonly class RouteSnapshots
             $first = $firstSeen->get($route->id);
 
             /*
-             * BOTH ENDS PARSED IN THE OWNER'S TIMEZONE, or the difference comes
-             * back with a fraction on it: `observed_on` is a bare date, and
-             * reading it as UTC midnight against a local midnight leaves the
-             * two an offset apart. Inclusive of the first day, so a route
-             * polled once today is "tracking 1 day" rather than 0.
-             *
-             * COMPUTED BEFORE THE SCORE because the score now depends on it:
-             * App\Domain\Pricing\DealScorer declines to judge a route it has
-             * not watched for config('orbit.alerts.min_tracking_days') days.
+             * BOTH ENDS PARSED IN THE OWNER'S TIMEZONE or the difference comes back with a
+             * fraction; inclusive, and computed before the score, which now depends on it.
              */
             $trackingDays = $first === null
                 ? 0
@@ -134,35 +109,8 @@ final readonly class RouteSnapshots
     }
 
     /**
-     * The cheapest departure still on offer for each route, inside the near
-     * window.
-     *
-     * BOUNDED TO `orbit.poll.window_days`, WHICH IS AN API CONTRACT AND NOT A
-     * PREFERENCE. docs/API.md defines `cheapest` as "the day `price.current` is
-     * for", and `price.current` is the latest observation — which App\Jobs\
-     * PollRoutePrices takes as the minimum over the NEAR six months, whatever
-     * depth that morning's fetch went to. `calendar_fares` now runs eleven
-     * months deep (`orbit.poll.horizon_days`), so an unbounded MIN would find a
-     * cheaper March fare, publish it as `cheapest`, and leave the watchlist card
-     * printing "€120" beside "cheapest departure €78" — two numbers the API says
-     * are the same one, and a booking link aimed at a date the score was never
-     * computed from.
-     *
-     * THE FAR MONTHS ARE THE CALENDAR SCREEN'S, then, and only its: they are
-     * drawn, paged and tapped there, and every summary number in the app stays
-     * a statement about the six months it has always been about.
-     *
-     * A CORRELATED SUBQUERY rather than loading the window and taking the min
-     * in PHP: the window is a hundred and eighty rows per route and only one of
-     * them is ever used. It is written as raw SQL because neither Postgres'
-     * `DISTINCT ON` nor a window function is portable to the SQLite the test
-     * suite runs on, and this form is. THE ONE BINDING IS A DATE THIS APP
-     * COMPUTED from config and the clock — no value from the request reaches it,
-     * and it is bound rather than interpolated regardless.
-     *
-     * A route can come back with several rows when two dates tie on price;
-     * keying the result by route id keeps the FIRST, and the ordering below
-     * makes that the earliest date — the sooner of two equally cheap flights.
+     * The cheapest departure still on offer per route, BOUNDED TO `orbit.poll.window_days`
+     * — an API contract, not a preference (docs/BUSINESS-LOGIC.md §36).
      *
      * @param  list<int>  $ids
      * @return array<int, DatedFare>
@@ -170,16 +118,8 @@ final readonly class RouteSnapshots
     private function cheapestFares(array $ids): array
     {
         /*
-         * THE DAY AFTER THE EDGE, COMPARED WITH `<`, which is the same bound as
-         * `<= $edge` and is the one that survives both databases. Postgres holds
-         * a `date` column and coerces whatever it is given; SQLite stores the
-         * string it was handed, and this table is written two ways — App\Jobs\
-         * PollRoutePrices upserts a bare 'Y-m-d' while anything going through
-         * the model's cast writes 'Y-m-d H:i:s'. `<= '2027-02-14'` then drops a
-         * row stored as '2027-02-14 00:00:00', i.e. the last day of the window,
-         * on the database the test suite runs on and not on the one production
-         * uses. `whereDate` would fix the outer clause and cannot reach inside
-         * the raw subquery, so both halves use this form rather than two.
+         * THE DAY AFTER THE EDGE, COMPARED WITH `<`: this table is written both as a bare
+         * 'Y-m-d' and through the model's cast, and `<=` drops the last day on SQLite.
          */
         $edge = Date::now((string) config('orbit.timezone'))
             ->startOfDay()
@@ -203,11 +143,8 @@ final readonly class RouteSnapshots
                 $row->departure_date->toDateTimeImmutable(),
                 $row->price_cents,
                 /*
-                 * HOW OLD THIS PRICE IS, carried because two callers now need
-                 * it and neither can get it any other way: the route detail
-                 * prints it under the cheapest departure, and App\Domain\Alerts\
-                 * AlertPolicy refuses to mail about a stale fare near its
-                 * departure. Null stays null — see the `found_at` migration.
+                 * How old this price is: the detail screen prints it and AlertPolicy
+                 * refuses to mail a stale fare. Null stays null.
                  */
                 $row->found_at?->toDateTimeImmutable(),
             );

@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\Date;
 use App\Application\Ports\PriceStatsProvider;
 
 /**
- * "Usual price", computed from Orbit's own fares (no third-party statistics API exists any more). Blends a cross-sectional view (the near window's calendar) with a longitudinal one (daily observation
- * history) as maturity grows. Reads the database, unlike every other adapter here, because for this port the outside world is a table Orbit filled itself (docs/BUSINESS-LOGIC.md §23).
+ * "Usual price" from Orbit's own fares: a cross-sectional view blended with a longitudinal
+ * one as maturity grows. Reads the database, unlike its siblings (docs/BUSINESS-LOGIC.md §23).
  */
 final readonly class SelfStatsProvider implements PriceStatsProvider
 {
@@ -50,9 +50,8 @@ final readonly class SelfStatsProvider implements PriceStatsProvider
         }
 
         if ($crossSectional === null) {
-            // A route the provider stopped covering: history is all that's
-            // left and is real, so it answers alone rather than being
-            // blended down toward a window that no longer exists.
+            // A route the provider stopped covering: history is all that is left and is real,
+            // so it answers alone rather than blended toward a window that is gone.
             return $longitudinal;
         }
 
@@ -85,19 +84,15 @@ final readonly class SelfStatsProvider implements PriceStatsProvider
     }
 
     /**
-     * The route's calendar as far as the NEAR window reaches, unordered —
-     * PriceStats sorts. Deliberately bounded to six months, not the full
-     * eleven-month calendar — the far months are cache-thinned toward peak
-     * season and would skew "usual" upward. See §23. No freshness clause
-     * needed: PollRoutePrices already deletes stale/expired cells.
+     * The route's calendar as far as the NEAR window reaches (docs/BUSINESS-LOGIC.md §23).
+     * Bounded to six months: the far months are cache-thinned and skew "usual" upward.
      *
      * @return list<int>
      */
     private function windowFares(int $routeId): array
     {
-        // DO NOT replace whereDate with a bare <=: this table is written both
-        // as a bare 'Y-m-d' (upsert) and via the model cast ('Y-m-d H:i:s'),
-        // and a string comparison would silently drop the window's last day.
+        // DO NOT replace whereDate with a bare <=: this table is written both as a bare
+        // 'Y-m-d' and via the model cast, and a string compare drops the window's last day.
         $edge = Date::now((string) config('orbit.timezone'))
             ->startOfDay()
             ->addDays(max(1, $this->crossSectionDays))
@@ -112,9 +107,8 @@ final readonly class SelfStatsProvider implements PriceStatsProvider
     }
 
     /**
-     * The mornings inside the lookback. The cutoff is a bare date, so it's a
-     * day either side of exactly a year depending on the hour this runs —
-     * fine precision for a boundary that just means "a different market".
+     * The mornings inside the lookback. The cutoff is a bare date, so it is a day either
+     * side of exactly a year — fine for a boundary that means "a different market".
      *
      * @return list<int>
      */

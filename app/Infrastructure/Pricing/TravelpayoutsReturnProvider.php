@@ -16,10 +16,8 @@ use App\Application\Ports\ReturnTripProvider;
 use Illuminate\Contracts\Cache\Repository as Cache;
 
 /**
- * Real round-trip fares, from Travelpayouts' `/v2/prices/latest`.
- *
- * One request per route answers the whole ~year horizon (`period_type=year`). `one_way=false`, `limit=1000` (default 30 silently drops 91% of data), and
- * `trip_duration` (ignored by the API; band filtered here) are all load-bearing (docs/BUSINESS-LOGIC.md §15).
+ * Real round-trip fares from `/v2/prices/latest`: one request answers the whole year.
+ * `one_way=false`, `limit=1000`, `trip_duration` all load-bearing (docs/BUSINESS-LOGIC.md §15).
  */
 final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
 {
@@ -75,10 +73,8 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
         }
 
         /**
-         * Keyed 'Y-m-d|nights' so the cheapest-per-pair reduction and the
-         * promised ordering are both array operations. The reduction has
-         * never had anything to do (every recorded pair was unique) but the
-         * API documents no such guarantee.
+         * Keyed 'Y-m-d|nights' so the cheapest-per-pair reduction and the promised ordering
+         * are both array operations; the API documents no uniqueness guarantee.
          *
          * @var array<string, ReturnTrip> $cheapest
          */
@@ -212,9 +208,7 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
     /**
      * One entry, or null if it is not one we can believe.
      *
-     * @param  DateTimeImmutable  $reference  supplies the timezone, so a departure
-     *                                        date compares against the window it
-     *                                        came from rather than against UTC
+     * @param  DateTimeImmutable  $reference  supplies the timezone the departure compares in
      */
     private function trip(mixed $entry, DateTimeImmutable $reference): ?ReturnTrip
     {
@@ -244,9 +238,8 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
         $departure = $this->date($entry['depart_date'] ?? null, $reference);
         $return = $this->date($entry['return_date'] ?? null, $reference);
 
-        // DO NOT drop this null check: a missing return_date means a
-        // one-way fare leaked from the disjoint one_way=true cache -- keeping
-        // it would silently fill return_fares with one-way prices at 0 nights.
+        // DO NOT drop this null check: a missing return_date means a one-way fare leaked
+        // from the disjoint one_way=true cache, filling return_fares at 0 nights.
         if ($departure === null || $return === null) {
             return null;
         }
@@ -265,9 +258,8 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
     }
 
     /**
-     * A 'Y-m-d' from the API as a midnight in the window's own timezone, or
-     * null for anything else (including '', how this API spells "one way").
-     * The round-trip format comparison is what rejects '2026-02-31'.
+     * A 'Y-m-d' from the API as midnight in the window's timezone, or null for anything else
+     * (including '', how this API spells "one way"); the format compare rejects '2026-02-31'.
      */
     private function date(mixed $value, DateTimeImmutable $reference): ?DateTimeImmutable
     {
@@ -285,10 +277,8 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
     }
 
     /**
-     * When this price was found, per the provider, or null if it won't say.
-     * Two formats across this API, both UTC (with/without trailing `Z`) --
-     * both accepted. Pinned formats, not `new DateTimeImmutable($s)`: the
-     * loose parser accepts "tomorrow" and would fabricate a confident answer.
+     * When this price was found, per the provider, or null. Two UTC formats, both pinned:
+     * the loose parser accepts "tomorrow" and would fabricate a confident answer.
      *
      * @param  array<mixed>  $entry
      */
@@ -315,10 +305,8 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
     }
 
     /**
-     * Say that the provider is failing — at most once every `warn_every_minutes`.
-     * One key for the whole adapter, not per route, so one outage doesn't
-     * become a line per route. `add()`, not `has()`+`put()`, since it must be
-     * atomic across parallel Horizon workers.
+     * Say the provider is failing, at most once every `warn_every_minutes`. One key for
+     * the whole adapter; `add()` is atomic across parallel Horizon workers.
      *
      * @param  array<string, scalar>  $context
      */
