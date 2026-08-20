@@ -1,10 +1,5 @@
-// The rest of the world (3,270 airports) via `?q=` against `GET
-// /api/airports`; stores/destinations.js still covers the 184 curated ones.
-// Why: docs/BUSINESS-LOGIC.md §36.
-//
-// A composable, not a Pinia store — a store would share state globally,
-// but each search field (From/To) needs its own independent query.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The rest of the world (3,270 airports) via `?q=` against `GET /api/airports`. A composable,
+// not a Pinia store: each search field needs its own query (docs/BUSINESS-LOGIC.md §36).
 import { onScopeDispose, ref } from 'vue'
 import { http } from '@/lib/http'
 import { markRow, MAX_SUGGESTIONS } from '@/stores/destinations'
@@ -131,26 +126,16 @@ export function useAirportSearch() {
         }
     }
 
-    // A disposed box isn't waiting for an answer — without this, a stray
-    // debounced request could still fire into nothing. `failSilently`: also
-    // called from a unit test outside any component scope.
+    // A disposed box is not waiting for an answer. `failSilently`: also called from a unit
+    // test outside any component scope.
     onScopeDispose(cancel, true)
 
     return { results, status, search, clear }
 }
 
 /**
- * The two lists, shown as one: curated results always first (only they match the rule engine and have hand-picked
- * names/cities) (docs/BUSINESS-LOGIC.md §36).
- *
- * Deduped by code — the world endpoint searches the whole table, which includes the curated rows too (e.g. AMS would
- * otherwise appear twice) (docs/BUSINESS-LOGIC.md §36).
- *
- * `world: true` is the only thing added; means "Orbit prices this with no curated opinion" (docs/BUSINESS-LOGIC.md §1)
- * — draws one divider, not a badge (docs/BUSINESS-LOGIC.md §36).
- *
- * `exclude` is filtered here (not in the component) because it must happen BEFORE the `limit` cut, or a dropped row
- * silently shrinks the panel (docs/BUSINESS-LOGIC.md §36).
+ * The two lists shown as one: curated always first, deduped by code, `world: true` the only
+ * thing added, and `exclude` filtered BEFORE the limit cut (docs/BUSINESS-LOGIC.md §36).
  *
  * @param {Array<object>} curated already ranked and marked by searchDestinations
  * @param {Array<object>} world `GET /api/airports`'s rows, in the server's order

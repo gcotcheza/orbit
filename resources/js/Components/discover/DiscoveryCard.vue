@@ -1,10 +1,7 @@
 <script setup>
 /*
- * Sibling of SpotlightCard.vue, deliberately not a copy — a discovery has no history so
- * this card shows its working instead of a percentage. Badge label/verified come from the
- * server (verdict.label/verified), never composed client-side; unverified is the ordinary,
- * unmuted-not-warned state. It's a real <a> to /route/{code} — no booking/watch link of its own.
- * Why: docs/BUSINESS-LOGIC.md §16.
+ * Sibling of SpotlightCard.vue, deliberately not a copy: a discovery has no history, so this
+ * card shows its working. Badge and verdict come from the server (docs/BUSINESS-LOGIC.md §16).
  */
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -20,26 +17,20 @@ const price = computed(() => euro(props.discovery.price))
 const departure = computed(() => departureLabel(props.discovery.departureDate))
 
 /*
- * Age is always drawn when known (route detail only shows it past a threshold) — a
- * discovery is the least verified thing in the app, so age is part of the number here, not
- * just a caveat. Null renders as nothing, never as "fresh".
- * Why: docs/BUSINESS-LOGIC.md §16.
+ * Age is always drawn when known — a discovery is the least verified thing in the app, so age
+ * is part of the number here. Null renders as nothing, never as "fresh".
  */
 const seen = computed(() => seenLabel(props.discovery.foundAt))
 
 /*
- * Only a relative find gets the "for this route" line — an absolute find's price is already
- * the whole sentence, while a relative find is ordinary per km and needs the comparison
- * stated. Compared against the server's lane string, not a client-invented boolean.
- * Why: docs/BUSINESS-LOGIC.md §16.
+ * Only a relative find gets the "for this route" line; an absolute find's price is already the
+ * whole sentence. Compared against the server's lane string, not a client boolean.
  */
 const isRelative = computed(() => props.discovery.lane === 'relative')
 
 /**
- * One-line case for this card, or null when the server measured nothing (percentile/savings
- * null on an unfetchable window — a card with no line is honest, not broken). "Cheapest",
- * not "0th percentile" — a sentence under a price, not a report.
- * Why: docs/BUSINESS-LOGIC.md §16.
+ * One-line case for this card, or null when the server measured nothing — a card with no line
+ * is honest, not broken. "Cheapest", not "0th percentile" (docs/BUSINESS-LOGIC.md §16).
  */
 const evidence = computed(() => {
     const { percentile, savings } = props.discovery

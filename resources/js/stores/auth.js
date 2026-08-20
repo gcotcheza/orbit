@@ -1,11 +1,5 @@
-// One user, one session, one source of truth: router guard reads it, login
-// screen writes it, nothing else needs to know how auth works.
-// Why: docs/BUSINESS-LOGIC.md §36.
-//
-// `resolved` matters: cold boot means "don't know yet", a third state
-// distinct from guest. Routing before /api/me answers would flash the
-// login screen at an already-signed-in user on every launch.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// One user, one session, one source of truth. `resolved` matters: cold boot means "don't know
+// yet", a third state distinct from guest (docs/BUSINESS-LOGIC.md §36).
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { ensureCsrfCookie, http } from '@/lib/http'
@@ -24,10 +18,8 @@ export const useAuthStore = defineStore('auth', () => {
             const { data } = await http.get('/api/me')
             user.value = data.data
         } catch (error) {
-            // Non-401 errors (500, dropped connection, mid-deploy) are
-            // treated as "not signed in" so the app still draws, but logged —
-            // silent failures here read as phantom "logged me out" bugs.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // Non-401 errors (500, dropped connection, mid-deploy) are treated as "not signed in" so
+            // the app still draws, but logged: silent failures read as phantom logout bugs.
             if (error.response?.status !== 401) {
                 console.error('Could not determine the session state.', error)
             }
@@ -61,19 +53,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     /**
-     * Change the password of the account that is signed in.
-     *
-     * Here, not in the component: this is the third thing that knows how auth works, and the other two are in this file —
-     * ChangePassword.vue shouldn't need to know a URL or a session either (docs/BUSINESS-LOGIC.md §36).
-     *
-     * Throws, like `login`: the 422 is a per-rule sentence written by UpdatePasswordRequest for a person to read, not a
-     * boolean to swallow (docs/BUSINESS-LOGIC.md §36).
-     *
-     * Nothing in this store changes on success: session is rotated server-side via cookies; `user` (who's signed in)
-     * doesn't change (docs/BUSINESS-LOGIC.md §36).
-     *
-     * No `ensureCsrfCookie()` — unlike `login`, the caller already holds a
-     * current token from making authenticated requests.
+     * Change the password of the account that is signed in. Here, not in the component, and it
+     * throws like `login`; nothing in this store changes on success (docs/BUSINESS-LOGIC.md §36).
      */
     async function changePassword(fields) {
         await http.put('/api/profile/password', fields)

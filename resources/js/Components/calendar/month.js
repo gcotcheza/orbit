@@ -1,8 +1,5 @@
-// The calendar's date arithmetic, kept away from the components that draw it.
-// Everything is UTC, deliberately: parsing YYYY-MM-DD via `new Date()` reads
-// the viewer's own timezone on `getDay()`, shifting the whole grid for anyone
-// west of London. Locale is pinned to en-US to match the signed-off design.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The calendar's date arithmetic, kept away from the components that draw it. Everything is
+// UTC and the locale is pinned to en-US, deliberately (docs/BUSINESS-LOGIC.md §36).
 
 const LOCALE = 'en-US'
 
@@ -48,9 +45,8 @@ export function addMonths(key, delta) {
 }
 
 /**
- * The month the app opens on: the one we are in now, in the viewer's own
- * calendar. This is the ONE place a local date is the right answer — "which
- * month is it" is a question about the person holding the phone.
+ * The month the app opens on, in the viewer's own calendar — the ONE place a local date is the
+ * right answer, because "which month is it" is about the person holding the phone.
  */
 export function currentMonthKey(now = new Date()) {
     return monthKey(now.getFullYear(), now.getMonth() + 1)
@@ -95,11 +91,8 @@ function leadingBlanks(year, month) {
 }
 
 /**
- * The cells of one month, in reading order, ready for a 7-column grid. Built from the calendar, filled from the API — never the other way round: `days`
- * arrives with gaps missing entirely, so indexing into it would misalign every date after a gap (docs/BUSINESS-LOGIC.md §36).
- *
- * Blanks carry a key of their own because Vue needs one and their index is the
- * only thing that distinguishes them.
+ * The cells of one month, in reading order. Built from the calendar and filled from the API,
+ * never the other way round: `days` arrives with gaps missing entirely.
  */
 export function buildMonthGrid(key, days = []) {
     const { year, month } = parseMonth(key)
