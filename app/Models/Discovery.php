@@ -12,16 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * One route Orbit went and found on its own.
- *
- * The row behind App\Domain\Discovery\DealCandidate once verified; only the card's claim and its evidence survive, not
- * the raw sweep entry.
- *
- * Deliberately has no `route_id` — a discovery is an unwatched, often unpriced pair, named by airport key and `code`
- * until someone taps it.
- *
- * Deliberately has no user_id, unlike `alerts`/`watchlist_items` — a discovery is a fact about the world, not an
- * account's relationship to it (docs/BUSINESS-LOGIC.md §16).
+ * One route Orbit found on its own — no `route_id`, no `user_id` (docs/BUSINESS-LOGIC.md §16).
  *
  * @property int $id
  * @property int $origin_airport_id
@@ -48,8 +39,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 final class Discovery extends Model
 {
     /**
-     * Laravel would pluralise this to `discoverys` — overridden because the table name must agree with the migration, the
-     * prune, and three tests.
+     * Laravel would pluralise this to `discoverys`; the table name must agree with the
+     * migration, the prune and three tests.
      */
     protected $table = 'discoveries';
 
@@ -70,13 +61,8 @@ final class Discovery extends Model
     }
 
     /**
-     * The current set: still live, cheapest per kilometre first.
-     *
-     * A scope, not a controller query — these clauses are both the API's read and the prune's definition of "current";
-     * diverging spellings desync them.
-     *
-     * Ordered by €/km, not price — sorted by price this list is just the nearest airports; the reader sorts on instinct
-     * from the price shown (docs/BUSINESS-LOGIC.md §16).
+     * The current set: still live, cheapest per kilometre first (docs/BUSINESS-LOGIC.md §16).
+     * A scope, not a controller query: the API's read and the prune's definition must agree.
      *
      * @param  Builder<Discovery>  $query
      * @return Builder<Discovery>
@@ -85,18 +71,16 @@ final class Discovery extends Model
     {
         return $query
             ->where('expires_at', '>', $now)
-            // AND NOT a departure that has gone by: `expires_at` bounds find believability, this bounds flight takeability —
-            // different things (docs/BUSINESS-LOGIC.md §16).
+            // AND NOT a departure that has gone by: `expires_at` bounds find believability,
+            // this bounds flight takeability (docs/BUSINESS-LOGIC.md §16).
             ->whereDate('departure_date', '>=', $now->toDateString())
             ->orderBy('cents_per_km')
             ->orderBy('code');
     }
 
     /**
-     * Whether Google was asked and said yes.
-     *
-     * Read off the stored verdict, never recomputed — re-deriving from the other fields would let a retuned rule silently
-     * rewrite past claims (docs/BUSINESS-LOGIC.md §16).
+     * Whether Google was asked and said yes. Read off the stored verdict, never recomputed:
+     * a retuned rule must not rewrite past claims (docs/BUSINESS-LOGIC.md §16).
      */
     public function isVerified(): bool
     {
@@ -109,8 +93,8 @@ final class Discovery extends Model
     protected function casts(): array
     {
         return [
-            // THE ENUM IS THE CAST: nothing downstream compares a lane to a string literal. See App\Domain\Discovery\Lane for the
-            // two cases (docs/BUSINESS-LOGIC.md §16).
+            // THE ENUM IS THE CAST: nothing downstream compares a lane to a string literal.
+            // See App\Domain\Discovery\Lane (docs/BUSINESS-LOGIC.md §16).
             'lane'           => Lane::class,
             'departure_date' => 'immutable_date',
             'found_at'       => 'immutable_datetime',
