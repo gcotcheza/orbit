@@ -1,14 +1,5 @@
-// The calendar's heat scale (design/README.md §3): each day cell is painted
-// by where its fare sits between the month's cheapest and dearest, on a
-// five-stop green -> red ramp.
-//
-// Plain module, not a component — shared arithmetic for the grid, legend
-// and day sheet.
-// Why: docs/BUSINESS-LOGIC.md §36.
-//
-// Colours are literals, not tokens.css palette — a fixed data-viz ramp,
-// not a themed surface.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The calendar's heat scale (design/README.md §3): a five-stop green-to-red ramp, a plain
+// module, and the colours are literals — a data-viz ramp, not a themed surface.
 
 /**
  * The five stops, as RGB triples, in design/README.md's order. Exported so the legend builds its

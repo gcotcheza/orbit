@@ -1,18 +1,7 @@
 <script setup>
 /*
- * The pill-in-a-trough control design/README.md §6 uses for alert sensitivity
- * — and, on the same screen, for the theme.
- *
- * TWO USES, ONE COMPONENT, which is the whole reason it is a component: the
- * theme switch was written inline in this view in PR4 and the sensitivity
- * control would have been a second copy of the same eleven lines of CSS. The
- * options are data, so a two-option control and a three-option one are the
- * same code.
- *
- * `role="radiogroup"` and not a `<select>`: every option is visible at once and
- * choosing one is a single tap, which is the interaction the design draws. The
- * buttons are `role="radio"` with `aria-checked`, so a screen reader announces
- * "2 of 3" rather than "button".
+ * The pill-in-a-trough control (design/README.md §6), used twice — the options are data, so a
+ * two-option and a three-option control are the same code. `role="radiogroup"`, not a select.
  */
 defineProps({
   /** The chosen option's `value`. Compared with ===, so keep the types honest. */

@@ -1,17 +1,7 @@
 <script setup>
 /*
- * The deal-score ring (design/README.md §2).
- *
- * THIS IS NOT THE ALERT TIER. The API also sends `tier` — insane / great /
- * good / none — and that is the threshold the alert sensitivities in PR11 fire
- * on, at ≥80 / ≥65 / ≥50. The ring uses a DIFFERENT scale, the design's:
- * ≥80 good, ≥60 info, ≥45 warn, else bad. They are deliberately not the same
- * numbers, so the colour is computed here from `score` and the API sends none
- * (docs/API.md).
- *
- * 157 is the circumference: 2π × 25, the radius the design draws. Dashing the
- * whole ring and offsetting by the unfilled part is what turns one circle into
- * a progress arc.
+ * THIS IS NOT THE ALERT TIER: the ring uses the design's scale (≥80/≥60/≥45), computed here
+ * because the API sends no colour. 157 is 2π × 25, the radius the design draws.
  */
 import { computed } from 'vue'
 

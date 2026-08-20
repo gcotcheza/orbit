@@ -1,29 +1,7 @@
 <script setup>
 /*
- * The tone-tinted callout under the chart (design/README.md §2).
- *
- * ⚠ `advice` USUALLY mirrors `verdict`, but the server replaces it where the
- * document doubts its own headline (docs/API.md). Take the tone as given.
- */
-/*
- * =============================================================================
- * AND WHETHER ORBIT MEANT IT
- * =============================================================================
- * The glyph was a tick, always, for every one of the four tones — including the
- * one that exists to say Orbit has NO opinion. "Not enough data yet" arrived
- * under the same white checkmark as "Good price — book", on the screen a route
- * reaches on the day it is added, with a booking button underneath it. A tick is
- * the universal mark for "this has been checked and it is fine"; putting it on
- * an admission that nothing has been checked is the callout contradicting its
- * own sentence (the UX pass, screenshot 30-j3-new-route-detail).
- *
- * `confident` AND NOT THE TONE, because the tone cannot answer this. `normal` is
- * the tone of BOTH "Around normal" — a real verdict, arrived at from sixty days
- * of prices — and `DealScorer::noOpinion()`, which is the absence of one. They
- * are deliberately the same colour (colouring "we do not know" would itself be
- * an opinion) and they must not be the same glyph. The API already publishes the
- * flag that separates them and the deal-score gauge already reads it; this is
- * the second reader of the same fact.
+ * The tone-tinted callout under the chart (design/README.md §2). ⚠ `advice` usually mirrors
+ * `verdict`; take the tone as given. The glyph reads `confident`, not the tone (docs/API.md).
  */
 defineProps({
   title: { type: String, required: true },

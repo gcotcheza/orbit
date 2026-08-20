@@ -1,17 +1,7 @@
 <script setup>
 /*
- * The aeroplane over the globe.
- *
- * It never moves. The camera flies the arc and the plane sits at the exact
- * centre of the viewport, which is where the camera is pointing — so the Earth
- * slides underneath it and the only thing that changes here is the heading.
- * That is design/README.md §1's trick, and it is also the cheap way: one CSS
- * rotation per frame instead of a projected screen position that has to be
- * recomputed from the camera matrix.
- *
- * The path is the design bundle's own 24×24 glyph (§Assets), drawn nose-up, so
- * a rotation by the geographic bearing points it exactly where the flight is
- * going.
+ * The aeroplane over the globe. It never moves: the camera flies the arc and the plane sits at
+ * the viewport centre, so only the heading changes (design/README.md §1).
  */
 defineProps({
   /** Degrees clockwise from north — lib/geo.js's bearing(). */

@@ -1,18 +1,7 @@
 <script setup>
 /*
- * The Account card's one control: change the password, from the phone.
- *
- * Collapsed until asked for — three open password boxes under the alert
- * switches would be the loudest thing on a screen about alerts.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * Errors are the server's, word for word — UpdatePasswordRequest owns the
- * copy; restating it here is two copies to keep in step.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * No strength meter, no modal — the server enforces the rule; a second
- * opinion that can disagree with it is worse than none.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The Account card's one control, collapsed until asked for. Errors are the server's word for
+ * word, and there is no strength meter: a second opinion that can disagree is worse than none.
  */
 import { ref } from 'vue'
 import SettingRow from '@/Components/settings/SettingRow.vue'

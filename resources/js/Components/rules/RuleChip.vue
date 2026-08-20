@@ -1,17 +1,7 @@
 <script setup>
 /*
- * One thing Orbit understood, and the × that takes it back
- * (design/README.md §4).
- *
- * THE EYEBROW IS THE SERVER'S WORD. "From", "Max price", "Trip length" arrive
- * on the chip and are only upper-cased here, because the category names a
- * criteria field the back end owns — a hard-coded list in this file would be a
- * second vocabulary to keep in step, and the failure would be a chip labelled
- * for a field that no longer exists.
- *
- * A <button> INSIDE nothing else. The chip itself is not clickable — only the
- * × is — so there is exactly one thing here for a keyboard to reach and its
- * label says which chip it removes rather than "Remove".
+ * One thing Orbit understood, and the × that takes it back (design/README.md §4). THE EYEBROW
+ * IS THE SERVER'S WORD, and only the × is clickable, labelled with which chip it removes.
  */
 defineProps({
   /** One element of a parse's `chips`: { id, category, label }. */

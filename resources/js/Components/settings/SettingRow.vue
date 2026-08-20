@@ -1,16 +1,7 @@
 <script setup>
 /*
- * One line of a settings card: an optional tinted icon square, a title, a
- * sentence of explanation, and whatever control belongs on the right.
- *
- * design/README.md §6 draws five of these — email, push, quiet hours, weekly
- * digest, and the theme — and the only differences between them are the three
- * pieces this component takes. The hairline between rows is `--line2`, the
- * quieter divider tokens.css keeps for lines INSIDE a card, and it is drawn by
- * the parent rather than here so the last row of a card has none.
- *
- * The control is the default slot rather than a `switch` prop, because two of
- * the five are not switches.
+ * One line of a settings card (design/README.md §6). The hairline is drawn by the parent, so
+ * the last row of a card has none; the control is a slot, since two of the five are not switches.
  */
 defineProps({
   title: { type: String, required: true },

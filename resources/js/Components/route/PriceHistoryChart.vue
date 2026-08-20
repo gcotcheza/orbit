@@ -1,16 +1,7 @@
 <script setup>
 /*
- * "Price, last 60 days" (design/README.md §2) — hand-drawn SVG; a chart
- * library would be more code than this file.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * Plotted by date, not index — gaps in polling (docs/API.md) are real gaps
- * on the x axis, not flattened away.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * Reference line is kept inside the Y range on purpose — "usual €95" never
- * draws off the top of a cheap card; null median draws no line at all.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * "Price, last 60 days" (design/README.md §2), hand-drawn SVG, plotted by date so gaps stay
+ * gaps. The reference line is kept inside the Y range; a null median draws none.
  */
 import { computed, useId } from 'vue'
 import { euro } from '@/lib/format'
