@@ -1,9 +1,7 @@
 <script setup>
 /*
- * One airport box: type a place, get the airport. Shared machinery from AddRouteForm.vue for both search
- * fields; two-tier suggestions (curated then world); `open` is owned by the parent form, not this component;
- * ARIA 1.2 combobox pattern throughout.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One airport box: type a place, get the airport. Two-tier suggestions (curated then world),
+ * `open` owned by the parent form, ARIA 1.2 combobox (docs/BUSINESS-LOGIC.md §36).
  */
 import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -76,9 +74,8 @@ const suggestions = computed(() =>
 const worldStartsAt = computed(() => suggestions.value.findIndex((suggestion) => suggestion.world))
 
 /*
- * The did-you-mean guess: curated-list-only edit distance, shown only when nothing
- * matched and the world search isn't still in flight; never for the pair's excluded end.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The did-you-mean guess: curated-list edit distance (docs/BUSINESS-LOGIC.md §36).
+ * Shown only when nothing matched and the world search is done; never for the excluded end.
  */
 const didYouMean = computed(() => {
   if (suggestions.value.length > 0 || worldStatus.value === 'searching') {
@@ -123,10 +120,8 @@ const emptyText = computed(() => {
 const code = computed(() => toCode(value.value))
 
 /*
- * A code Orbit actually knows, not just three letters (checked against curated
- * destinations AND world suggestions) — so Enter doesn't submit a half-typed
- * code like "por"/"bar", and known codes outside Europe (e.g. JFK) still submit on one Enter.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * A code Orbit actually knows, not just three letters — checked against curated destinations
+ * AND world suggestions, so Enter never submits a half-typed "por" (docs/BUSINESS-LOGIC.md §36).
  */
 const isKnownCode = computed(() =>
   IATA.test(code.value)
@@ -143,14 +138,8 @@ onMounted(() => {
 })
 
 /*
- * Stripped as typed (not on submit): letters in any alphabet, spaces, and city-name punctuation
- * survive; digits do not — no place name contains one (docs/BUSINESS-LOGIC.md §36).
- */
-/*
- * v-model + a pre-flush watcher, not :value/@input — a hand-rolled binding can
- * leave rejected digits stuck in the DOM when the normalised value equals the
- * ref's current value, since that produces no re-render to overwrite it.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Digits are stripped as typed (no place name has one), via v-model + a pre-flush watcher:
+ * a hand-rolled binding can leave rejected digits stuck in the DOM (docs/BUSINESS-LOGIC.md §36).
  */
 watch(value, (typed) => {
   const cleaned = typed.replace(/[^\p{L} ’'.-]/gu, '').slice(0, 40)
@@ -161,10 +150,8 @@ watch(value, (typed) => {
 })
 
 /*
- * Watches the normalised value (runs after the strip watcher above), not typing
- * events — an `if (open)` guard would miss paste/autofill/fill(), where a single
- * input event can beat the panel-open flag; cancellation lives in choose() instead.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Watches the normalised value, not typing events — an `if (open)` guard would miss paste and
+ * autofill; cancellation lives in choose() instead (docs/BUSINESS-LOGIC.md §36).
  */
 watch(value, (typed) => {
   world.search(typed)
@@ -269,9 +256,8 @@ function scrollActiveIntoView() {
 }
 
 /**
- * Empties the box for the ✕ and the search screen's home pills; no explicit
- * cancellation needed since writing '' triggers the search watcher to drop below MIN_QUERY on its own.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Empties the box for the ✕ and the search screen's home pills. No explicit cancellation:
+ * writing '' drops the search watcher below MIN_QUERY on its own (docs/BUSINESS-LOGIC.md §36).
  */
 function clear() {
   value.value = ''
@@ -343,11 +329,11 @@ defineExpose({ clear })
       role="listbox"
       :aria-label="listLabel"
     >
-      <!-- @mousedown.prevent is the whole focus race: without it, tap blurs the input,
-           focusout closes the list, and the click lands on nothing (docs/BUSINESS-LOGIC.md §36). -->
+      <!-- @mousedown.prevent is the whole focus race: without it, tap blurs the input and the
+           click lands on nothing (docs/BUSINESS-LOGIC.md §36). -->
       <template v-for="(suggestion, index) in suggestions" :key="suggestion.iata">
-        <!-- Drawn only when both tiers are present (worldStartsAt > 0, not >= 0); role="presentation"
-             so it isn't announced as a selectable option (docs/BUSINESS-LOGIC.md §36). -->
+        <!-- Drawn only when both tiers are present (worldStartsAt > 0, not >= 0);
+             role="presentation", so it is not announced (docs/BUSINESS-LOGIC.md §36). -->
         <li v-if="index === worldStartsAt && worldStartsAt > 0" class="options__split" role="presentation">
           Everywhere else Orbit can price
         </li>
@@ -374,8 +360,8 @@ defineExpose({ clear })
         </li>
       </template>
 
-      <!-- A real option — tapping fills the box — but not arrow-reachable
-           (move() walks suggestions, not this), so Enter takes it instead (docs/BUSINESS-LOGIC.md §36). -->
+      <!-- A real option — tapping fills the box — but not arrow-reachable (move() walks
+           suggestions, not this), so Enter takes it instead (docs/BUSINESS-LOGIC.md §36). -->
       <li
         v-if="didYouMean"
         class="option option--guess"
