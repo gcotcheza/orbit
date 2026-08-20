@@ -8,7 +8,7 @@ use DateTimeImmutable;
 
 /**
  * Deterministic (crc32, no global random state) model shared by both fake adapters.
- * Drift is absent from the long-run stats, or nothing would score cheap (docs/BUSINESS-LOGIC.md §14).
+ * Drift is absent from long-run stats, or nothing would score cheap (docs/BUSINESS-LOGIC.md §14).
  */
 final readonly class FakeFareModel
 {
