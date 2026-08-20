@@ -7,17 +7,8 @@ namespace App\Application\Rules;
 use App\Domain\Pricing\DatedFare;
 
 /**
- * "6 trips match this right now — cheapest €34" (design/README.md §4), plus
- * the handful the screen can actually show.
- *
- * The count is of everything; the sample is what fits on a phone — capping the count itself would hide a rule that
- * needs tightening.
- *
- * Empty is a real answer, not an error: a rule created seconds ago, before App\Jobs\SweepRuleFares has priced any of
- * its routes, has no matches yet.
- *
- * A count can also be only a floor (`pending`): the sweep prices candidates over time, so "2 trips" before save and
- * "32" a minute after were both correct (docs/BUSINESS-LOGIC.md §11).
+ * "6 trips match this right now — cheapest €34" (design/README.md §4). The count is of
+ * everything and may be only a floor; the sample is what fits (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class RuleMatchSummary
 {
@@ -47,10 +38,8 @@ final readonly class RuleMatchSummary
     }
 
     /**
-     * Is the count below a floor rather than a total?
-     *
-     * True means "at least": count() is what Orbit holds, not what exists — the unqualified number is what makes people
-     * not save a rule (docs/BUSINESS-LOGIC.md §11).
+     * Is the count below a floor rather than a total? True means "at least": count() is what
+     * Orbit holds, not what exists (docs/BUSINESS-LOGIC.md §11).
      */
     public function partial(): bool
     {

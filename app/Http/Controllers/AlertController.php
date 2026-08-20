@@ -10,20 +10,8 @@ use Illuminate\Http\JsonResponse;
 use App\Http\Resources\AlertResource;
 
 /**
- * What Orbit has told this account, newest first.
- *
- * THE ONE ENDPOINT IN THIS API WITH NO SCREEN YET. design/README.md §6 is
- * settings-only and stays that way in this PR — this exists because the alert
- * pipeline is otherwise entirely invisible from outside the database, and
- * "did it fire, and did it go out" is the first question anybody asks of it.
- * The history screen that will read this is a later PR; the contract is
- * docs/API.md, written before the screen as everything else here was.
- *
- * A LIMIT AND NOT A PAGE NUMBER. The list is strictly newest-first and is read
- * as "what happened lately" rather than browsed — an offset into a table that
- * grows at the top is a page that shifts under the reader between two requests.
- * `meta.total` says how much there is, so a client can tell whether it is
- * looking at everything.
+ * What Orbit has told this account, newest first — the one endpoint with no screen yet.
+ * A limit, not a page number: an offset into a table that grows at the top shifts.
  */
 final class AlertController extends Controller
 {
@@ -33,9 +21,8 @@ final class AlertController extends Controller
     private const DEFAULT_LIMIT = 20;
 
     /**
-     * The most one request will return. Not a tuning knob in config/orbit.php:
-     * it is part of the published contract (docs/API.md), and a number a client
-     * is told it may send has to be the number the server actually accepts.
+     * The most one request will return. Not a tuning knob: it is part of the published
+     * contract (docs/API.md), and a client must be told the number the server accepts.
      */
     private const MAX_LIMIT = 50;
 

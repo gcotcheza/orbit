@@ -7,17 +7,12 @@ namespace App\Domain\Rules;
 use DateTimeImmutable;
 
 /**
- * "Mar – May", as a thing the matcher can use.
- *
- * Months, not dates — the whole design decision. A rule is a STANDING alert ("spring, under €80" means every spring), so dates would quietly expire;
- * `resolve()` turns two month numbers into the next real span each time.
- *
- * Wrapping is normal (winter = Dec-Feb): `to` < `from` is the ordinary case, not an error, and every method here must
- * mean the right thing then (docs/BUSINESS-LOGIC.md §11).
+ * "Mar – May", as a thing the matcher can use. Months, not dates, because a rule is a
+ * STANDING alert; wrapping (`to` < `from`) is ordinary, not an error (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class MonthWindow
 {
-    /** Jan..Dec, three letters, index 1-12. Not locale-aware on purpose: this is a label the API publishes, not prose. */
+    /** Jan..Dec, three letters, index 1-12. Not locale-aware: a published label, not prose. */
     private const NAMES = [
         1 => 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -31,8 +26,8 @@ final readonly class MonthWindow
     ) {}
 
     /**
-     * A window, or NULL if either end is not a month. Nullable rather than throwing: both callers parse untrusted input,
-     * and a month 13 is bad input, not a bug to crash on (docs/BUSINESS-LOGIC.md §11).
+     * A window, or NULL if either end is not a month. Nullable rather than throwing: both
+     * callers parse untrusted input, and a month 13 is bad input (docs/BUSINESS-LOGIC.md §11).
      */
     public static function of(int $from, int $to): ?self
     {
@@ -69,13 +64,8 @@ final readonly class MonthWindow
     }
 
     /**
-     * The next real span this window stands for, as of `$today`.
-     *
-     * Start may be in the past (deliberately): in April, "spring" is the spring we're in, not next March. Callers
-     * intersect with future fares anyway, so a past start costs nothing.
-     *
-     * Search starts a year back (matters only for wrapping windows): on 10 Jan, "winter" began last December — starting at
-     * the current year would answer next December, matching nothing for eleven months (docs/BUSINESS-LOGIC.md §11).
+     * The next real span this window stands for, as of `$today`. Start may be in the past, and
+     * the search starts a year back so a wrapping window resolves (docs/BUSINESS-LOGIC.md §11).
      *
      * @return array{DateTimeImmutable, DateTimeImmutable} [first day of `from`, last day of `to`]
      */

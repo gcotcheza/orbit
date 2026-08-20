@@ -7,14 +7,8 @@ namespace App\Application\Ports;
 use App\Domain\Discovery\SweptFare;
 
 /**
- * Where "what is cheap from here, to ANYWHERE" comes from — unlike the other fare ports, this one has no destination
- * in its signature ("surprise me").
- *
- * One request per origin covers every destination (measured ~1,177 candidate fares for 3 requests vs. 1,177
- * route-by-route); exactly one entry per destination, no duplicates, in every answer.
- *
- * DO NOT treat these as verified: unchecked finds, some up to a week stale (`SweptFare::$foundAt`); DiscoveryPolicy/DiscoverDeals do verification.
- * `asOf` is deliberately absent too — no real API answers about the past.
+ * "What is cheap from here, to ANYWHERE" — no destination in the signature, and DO NOT treat
+ * these as verified finds (docs/BUSINESS-LOGIC.md §16).
  */
 interface OriginSweepProvider
 {
@@ -22,9 +16,7 @@ interface OriginSweepProvider
      * The cheapest recent find from this origin to each destination.
      *
      * @param  string  $originIata  three-letter IATA code, upper case
-     * @return list<SweptFare> one entry per destination, no promised order —
-     *                         missing destinations are absent, not zero-priced.
-     *                         Why: docs/BUSINESS-LOGIC.md §16.
+     * @return list<SweptFare> one per destination, no promised order; missing means absent
      */
     public function cheapestFromOrigin(string $originIata): array;
 }
