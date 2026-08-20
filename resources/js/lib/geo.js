@@ -24,6 +24,7 @@ export function flightAltitude(e) {
 export function easeInOutQuad(t) {
     return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2
 }
+
 /**
  * Initial bearing (deg clockwise from north) — a BEARING, not the on-screen line angle. It
  * changes along a great circle, so the choreography recomputes it per frame.
