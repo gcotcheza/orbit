@@ -321,7 +321,8 @@ an ordinary assertion left in its place:
 5. End with `await shot(page, 'name')` if the screen is worth looking at.
 6. Reach for `toHaveScreenshot` only if the screen is genuinely static.
 
-Two selector traps this app has already hit:
+Three traps this app has already hit — two in what a selector resolves to,
+one in what a wait actually proves:
 
 - **The tab bar.** `getByRole('link', { name: 'Alerts' })` is ambiguous on Home:
   the round profile button's aria-label is "Alerts and settings" and accessible

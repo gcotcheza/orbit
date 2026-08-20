@@ -28,47 +28,56 @@ const created = ref(null)
 
 let timer = null
 
-/* Pending from the edit, not from the request: a × disabled mid-tap eats the
-   tap. Why: docs/BUSINESS-LOGIC.md §11. */
-const pending = ref(false)
+/* The text the reading on screen is of. Only the CTA waits on it; the chips'
+   × never does. Why: docs/BUSINESS-LOGIC.md §11. */
+const asked = ref(SEED)
 
-const parsing = computed(() => pending.value || parseStatus.value === 'parsing')
-const canCreate = computed(() => understood.value && !saving.value && !parsing.value)
+const parsing = computed(() => parseStatus.value === 'parsing')
+const readingStale = computed(() => parsing.value || text.value !== asked.value)
+const canCreate = computed(() => understood.value && !saving.value && !readingStale.value)
 
-onMounted(() => rules.parse(text.value, removed.value))
+/** Ask now, cancelling any wait — every chip change comes through here. */
+function ask() {
+  clearTimeout(timer)
+  asked.value = text.value
+  rules.parse(text.value, removed.value)
+}
+
+onMounted(ask)
 
 onBeforeUnmount(() => {
   clearTimeout(timer)
   rules.clearReading()
 })
 
-/* One watcher for both text and removed: two separate watchers would
-   race each other on the keystroke that follows a removal. */
-watch([text, removed], () => {
+/* Typing is the only thing debounced, and text back at the reading's own
+   cancels the wait rather than asking the same question twice. */
+watch(text, (value) => {
   clearTimeout(timer)
-  pending.value = true
-  timer = setTimeout(() => {
-    pending.value = false
-    rules.parse(text.value, removed.value)
-  }, DEBOUNCE_MS)
-}, { deep: true })
+
+  if (value !== asked.value) {
+    timer = setTimeout(ask, DEBOUNCE_MS)
+  }
+})
 
 function removeChip(id) {
   if (!removed.value.includes(id)) {
     removed.value = [...removed.value, id]
+    ask()
   }
 }
 
 /** Reset puts back everything the sentence says — it does not touch the text. */
 function reset() {
   removed.value = []
+  ask()
 }
 
 function startOver() {
   created.value = null
   text.value = ''
   removed.value = []
-  rules.parse('', [])
+  ask()
 }
 
 async function save() {
@@ -155,7 +164,6 @@ async function save() {
           v-for="chip in chips"
           :key="chip.id"
           :chip="chip"
-          :disabled="parsing"
           @remove="removeChip"
         />
       </div>
