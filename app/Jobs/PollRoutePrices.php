@@ -14,12 +14,8 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
- * Ask the provider what one route costs, and write down both answers:
- * `calendar_fares` (the heatmap) and `route_price_history` (one row, the
- * day's near-window minimum). Idempotent per day (both upserts). Takes a
- * route id (not a model — a removed watchlist row must not throw) and an
- * optional window depth, always passed in by the caller, never decided here.
- * Why: docs/BUSINESS-LOGIC.md §27.
+ * Ask the provider what one route costs, and write down both answers: `calendar_fares` (the heatmap) and `route_price_history` (one row, the day's near-window minimum). Idempotent per day (both
+ * upserts). Takes a route id (not a model — a removed watchlist row must not throw) and an optional window depth, always passed in by the caller, never decided here (docs/BUSINESS-LOGIC.md §27).
  */
 final class PollRoutePrices implements ShouldQueue
 {

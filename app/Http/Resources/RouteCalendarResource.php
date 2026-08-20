@@ -10,9 +10,8 @@ use App\Application\Routes\MonthCalendar;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * One month of the heatmap (design/README.md §3). Days with no fare are
- * absent, not null; `min`/`max` label the legend; `foundAt` is per-day.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One month of the heatmap (design/README.md §3). Days with no fare are absent, not null; `min`/`max` label the
+ * legend; `foundAt` is per-day (docs/BUSINESS-LOGIC.md §36).
  */
 final class RouteCalendarResource extends JsonResource
 {

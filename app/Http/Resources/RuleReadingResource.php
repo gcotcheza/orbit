@@ -11,9 +11,8 @@ use App\Application\Rules\RuleReading;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * A sentence as this app reads it: chips, criteria, matches. Backs
- * `POST /api/rules/parse` and every stored rule (RuleResource builds on it).
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * A sentence as this app reads it: chips, criteria, matches. Backs `POST /api/rules/parse` and every stored rule
+ * (RuleResource builds on it) (docs/BUSINESS-LOGIC.md §11).
  */
 final class RuleReadingResource extends JsonResource
 {
@@ -46,9 +45,8 @@ final class RuleReadingResource extends JsonResource
                 /* Every match, not just the sampled ones — the banner's number. */
                 'count' => $matches->count(),
                 /*
-                 * True means `count` is a floor the banner must say so —
-                 * some routes have no fare yet, so the number can only grow.
-                 * Why: docs/BUSINESS-LOGIC.md §36.
+                 * True means `count` is a floor the banner must say so — some routes have no fare yet, so the number can only grow
+                 * (docs/BUSINESS-LOGIC.md §11).
                  */
                 'partial' => $matches->partial(),
                 /* NULL when nothing matched: no trips is not a €0 trip. */

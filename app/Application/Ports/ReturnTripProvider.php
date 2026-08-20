@@ -9,21 +9,17 @@ use App\Domain\Pricing\NightsBand;
 use App\Domain\Pricing\ReturnTrip;
 
 /**
- * Where ROUND-TRIP fares come from — a sibling of PriceProvider, not a
- * replacement (a return trip is not derivable from a one-way price).
- * Coverage is sparse/uneven by API nature (not a bug); a missing pair means "no fare found," never €0; no `asOf` — answers are as of now only.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Where ROUND-TRIP fares come from — a sibling of PriceProvider, not a replacement (a return trip is not derivable from a one-way price). Coverage is sparse/uneven by API nature (not a bug); a missing
+ * pair means "no fare found," never €0; no `asOf` — answers are as of now only (docs/BUSINESS-LOGIC.md §15).
  */
 interface ReturnTripProvider
 {
     /**
-     * The cheapest round-trip per (departure date, stay length), for departures
-     * in [$from, $to].
-     * Band filters the response, it does not narrow the fetch — `trip_duration` is silently ignored by the API (verified byte-identical with/without it).
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * The cheapest round-trip per (departure date, stay length), for departures in [$from, $to]. Band filters the response, it does not narrow the fetch —
+     * `trip_duration` is silently ignored by the API (verified byte-identical with/without it) (docs/BUSINESS-LOGIC.md §15).
      *
      * Null keeps all stay lengths, the poll's own use — banding is left to whoever reads the table later.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §15.
      *
      * @param  string  $originIata  three-letter IATA code, upper case
      * @param  string  $destinationIata  three-letter IATA code, upper case

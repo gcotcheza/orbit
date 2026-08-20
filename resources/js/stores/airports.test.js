@@ -129,9 +129,8 @@ describe('the airport search', () => {
     })
 
     /**
-     * The one the debounce and the abort both miss — an in-flight request can
-     * still resolve after being replaced, so only the sequence guard stops flicker.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * The one the debounce and the abort both miss — an in-flight request can still resolve after being replaced, so only
+     * the sequence guard stops flicker (docs/BUSINESS-LOGIC.md §36).
      */
     it('ignores an answer to a query that has been typed past', async () => {
         const slow = deferred()

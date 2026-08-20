@@ -4,7 +4,7 @@
  * this card shows its working instead of a percentage. Badge label/verified come from the
  * server (verdict.label/verified), never composed client-side; unverified is the ordinary,
  * unmuted-not-warned state. It's a real <a> to /route/{code} — no booking/watch link of its own.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §16.
  */
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -23,7 +23,7 @@ const departure = computed(() => departureLabel(props.discovery.departureDate))
  * Age is always drawn when known (route detail only shows it past a threshold) — a
  * discovery is the least verified thing in the app, so age is part of the number here, not
  * just a caveat. Null renders as nothing, never as "fresh".
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §16.
  */
 const seen = computed(() => seenLabel(props.discovery.foundAt))
 
@@ -31,7 +31,7 @@ const seen = computed(() => seenLabel(props.discovery.foundAt))
  * Only a relative find gets the "for this route" line — an absolute find's price is already
  * the whole sentence, while a relative find is ordinary per km and needs the comparison
  * stated. Compared against the server's lane string, not a client-invented boolean.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §16.
  */
 const isRelative = computed(() => props.discovery.lane === 'relative')
 
@@ -39,7 +39,7 @@ const isRelative = computed(() => props.discovery.lane === 'relative')
  * One-line case for this card, or null when the server measured nothing (percentile/savings
  * null on an unfetchable window — a card with no line is honest, not broken). "Cheapest",
  * not "0th percentile" — a sentence under a price, not a report.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §16.
  */
 const evidence = computed(() => {
     const { percentile, savings } = props.discovery
@@ -63,10 +63,8 @@ const evidence = computed(() => {
   >
     <div class="find__head">
       <div class="find__where">
-        <!-- .find__from stays the route pair only — e2e/specs/search.spec.js reads this
-             element's text to derive the route to navigate to. The lane tag is a sibling,
-             not appended text.
-             Why: docs/BUSINESS-LOGIC.md §36. -->
+        <!-- .find__from stays route-pair-only — e2e reads it to navigate; the lane tag
+             is a sibling element, never appended text (docs/BUSINESS-LOGIC.md §16). -->
         <p class="find__from">{{ discovery.origin.iata }} → {{ discovery.destination.iata }}</p>
         <p v-if="isRelative" class="find__lane">Rare price for this route</p>
         <h3 class="find__city">{{ discovery.destination.city }}</h3>
@@ -138,7 +136,7 @@ const evidence = computed(() => {
 /* --info (not --good, not --warn): a relative find is a different kind, not a better or
    worse one. Both themes carry the token (resources/css/tokens.css), so no theme branch
    needed. No letter-spacing here, unlike .find__from's 0.13em label tracking.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+   Why: docs/BUSINESS-LOGIC.md §16. */
 .find__lane {
   display: inline-block;
   margin-top: 4px;
@@ -226,7 +224,7 @@ const evidence = computed(() => {
   color: var(--good-ink);
 }
 
-/* The ordinary state, not a warning (see docs/BUSINESS-LOGIC.md §36).
+/* The ordinary state, not a warning (see docs/BUSINESS-LOGIC.md §16).
    Muted on the card's own second surface: present, legible, unalarming. */
 .find__badge[data-verified='false'] {
   background: var(--card2);

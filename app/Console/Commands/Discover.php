@@ -12,21 +12,17 @@ use Illuminate\Support\Facades\Date;
 /**
  * Go and find the cheap routes nobody is watching.
  *
- * Scheduled daily at 05:20 (routes/console.php) because discovery has a
- * reader on day one: GET /api/discoveries and the search screen.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Scheduled daily at 05:20 (routes/console.php) because discovery has a reader on day one: GET /api/discoveries and
+ * the search screen (docs/BUSINESS-LOGIC.md §13).
  *
- * Safe to schedule, unlike the polls — nothing here can send mail; the
- * worst case is a disappointing card (docs/BUSINESS-LOGIC.md §16).
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Safe to schedule, unlike the polls — nothing here can send mail; the worst case is a disappointing card
+ * (docs/BUSINESS-LOGIC.md §16) (docs/BUSINESS-LOGIC.md §13).
  *
- * One job, not a fan-out: discovery is a RANKING across all three origins
- * and cannot be split per route. See App\Jobs\DiscoverDeals.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One job, not a fan-out: discovery is a RANKING across all three origins and cannot be split per route. See
+ * App\Jobs\DiscoverDeals (docs/BUSINESS-LOGIC.md §16).
  *
- * A command, not schedule-file code, because routes/console.php loads on
- * every artisan invocation, including against an empty database.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * A command, not schedule-file code, because routes/console.php loads on every artisan invocation, including against
+ * an empty database (docs/BUSINESS-LOGIC.md §13).
  */
 final class Discover extends Command
 {
@@ -69,9 +65,8 @@ final class Discover extends Command
 
         if ($discoveries->isEmpty()) {
             /*
-             * An empty answer is a real answer: no deals means an empty screen,
-             * not the least-mediocre thing available. See App\Domain\Discovery\DiscoveryPolicy.
-             * Why: docs/BUSINESS-LOGIC.md §36.
+             * An empty answer is a real answer: no deals means an empty screen, not the least-mediocre thing available. See
+             * App\Domain\Discovery\DiscoveryPolicy (docs/BUSINESS-LOGIC.md §16).
              */
             $this->components->warn('Nothing cleared the thresholds — no discoveries today.');
 

@@ -72,8 +72,7 @@ watch(
         <span class="rail__dot" :data-tone="route.verdict.tone"></span>
 
         <!-- City under code: a rail of AMS-OPO/AMS-FAO/EIN-LIS reads as
-             anagrams to anyone who doesn't already know them.
-             Why: docs/BUSINESS-LOGIC.md §36. -->
+             anagrams to anyone who doesn't already know them (docs/BUSINESS-LOGIC.md §36). -->
         <span class="rail__where">
           <span>{{ route.origin.iata }}→{{ route.destination.iata }}</span>
           <span class="rail__city">{{ route.destination.city }}</span>

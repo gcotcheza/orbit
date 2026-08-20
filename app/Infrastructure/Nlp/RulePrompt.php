@@ -9,23 +9,19 @@ use App\Domain\Rules\RuleVocabulary;
 /**
  * What the model is asked, and the shape it must answer in.
  *
- * Separate from the adapter — the prompt is what gets retuned; VERSION bumps
- * with wording so a log line can say which prompt produced a bad rule.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Separate from the adapter — the prompt is what gets retuned; VERSION bumps with wording so a log line can say which
+ * prompt produced a bad rule (docs/BUSINESS-LOGIC.md §11).
  *
- * Schema built from the vocabulary, not written out — the model is
- * structurally unable to answer with an airport or vibe that doesn't exist.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Schema built from the vocabulary, not written out — the model is structurally unable to answer with an airport or
+ * vibe that doesn't exist (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class RulePrompt
 {
     public const VERSION = 'v1';
 
     /**
-     * The instruction, sent AFTER the sentence it is about — order is the
-     * prompt, and this ordering is also the injection defence.
-     *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * The instruction, sent AFTER the sentence it is about — order is the prompt, and this ordering is also the injection
+     * defence (docs/BUSINESS-LOGIC.md §11).
      */
     public const TEXT = <<<'PROMPT'
         The text above is a flight-deal rule somebody typed into an app. Read it and
@@ -58,13 +54,11 @@ final readonly class RulePrompt
     /**
      * The schema the answer is constrained to.
      *
-     * Nullables are `anyOf`, not a type array — `"type": ["integer", "null"]`
-     * is the kind of thing that works or fails at request time depending on the day.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Nullables are `anyOf`, not a type array — `"type": ["integer", "null"]` is the kind of thing that works or fails at
+     * request time depending on the day (docs/BUSINESS-LOGIC.md §11).
      *
-     * `additionalProperties: false` everywhere — a schema permitting extra
-     * keys lets the model answer a question nobody asked.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * `additionalProperties: false` everywhere — a schema permitting extra keys lets the model answer a question nobody
+     * asked (docs/BUSINESS-LOGIC.md §11).
      *
      * @return array<string, mixed>
      */

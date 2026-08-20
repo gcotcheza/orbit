@@ -13,10 +13,8 @@ use App\Models\PriceObservation;
  * `php artisan orbit:reset-history --confirm` — throw away every price this app
  * has recorded, and start again from whatever provider is configured now.
  *
- * DO NOT touch the alert ledger or owner data (watchlist/rules/settings/routes)
- * — wiping the ledger would re-announce every deal already mailed. `--confirm`
- * (not `$this->confirm()`) is required: this runs over `docker compose exec -T`, non-interactive stdin.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * DO NOT touch the alert ledger or owner data (watchlist/rules/settings/routes) — wiping the ledger would re-announce every deal already mailed.
+ * `--confirm` (not `$this->confirm()`) is required: this runs over `docker compose exec -T`, non-interactive stdin (docs/BUSINESS-LOGIC.md §14).
  */
 final class ResetHistory extends Command
 {
@@ -28,7 +26,7 @@ final class ResetHistory extends Command
     public function handle(): int
     {
         // Model classes, not table names: a renamed table takes this command with it instead of silently truncating nothing.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §14.
         $tables = [
             'route_price_history' => PriceObservation::query()->count(),
             'calendar_fares'      => CalendarFare::query()->count(),
@@ -56,7 +54,7 @@ final class ResetHistory extends Command
         }
 
         // DELETE, not TRUNCATE: truncate takes an ACCESS EXCLUSIVE lock and cannot be rolled back on some engines — not worth it against a live box.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §14.
         PriceObservation::query()->delete();
         CalendarFare::query()->delete();
         RouteStats::query()->delete();
@@ -64,7 +62,7 @@ final class ResetHistory extends Command
         $this->components->info('Wiped. Re-populating from the configured provider.');
 
         // Reuses the ordinary commands (poll stagger, queueing) rather than a private copy that would drift; statistics run first since scores are percentiles against them.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §14.
         $this->call('orbit:refresh-stats');
         $this->call('orbit:poll-fares');
 

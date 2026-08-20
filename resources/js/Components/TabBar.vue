@@ -3,11 +3,7 @@
 
 <template>
   <nav class="tab-bar" aria-label="Primary">
-    <!--
-      Icons are written out, not v-for'd — only 4 of 5 share a shape, and the
-      loop would still special-case the accent button.
-      Why: docs/BUSINESS-LOGIC.md §36.
-    -->
+    <!-- Icons are written out, not v-for'd — only 4 of 5 share a shape (docs/BUSINESS-LOGIC.md §36). -->
     <RouterLink class="tab" :to="{ name: 'home' }">
       <svg class="tab__icon" width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
         <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1.6" />
@@ -25,35 +21,18 @@
       <span class="tab__label">Calendar</span>
     </RouterLink>
 
-    <!--
-      Centre item goes to /search, not rule creation — changed 2026-08-16 on
-      real usage; creation moved to Watch's "+ New rule", nothing deleted.
-      Why: docs/BUSINESS-LOGIC.md §36.
-    -->
-    <!--
-      No `aria-label` — a stale one here disagreed with the visible word and
-      broke e2e/fixtures.js's tab() lookup by name.
-      Why: docs/BUSINESS-LOGIC.md §36.
-    -->
+    <!-- Centre item goes to /search, not rule creation, since 2026-08-16 (docs/BUSINESS-LOGIC.md §36). -->
+    <!-- No aria-label — a stale one broke e2e tab() lookup by name (docs/BUSINESS-LOGIC.md §36). -->
     <RouterLink class="tab tab--search" :to="{ name: 'search' }">
       <span class="tab__button">
-        <!--
-          Stroked from the style block: --on-solid on the accent fill, and a
-          var() in a presentation attribute is not portable.
-
-          The handle is a separate `path` rather than a longer `d` so it can
-          carry `stroke-linecap` without rounding the circle it grows out of.
-        -->
+        <!-- Stroked from the style block, not a presentation attribute — var() isn't portable there.
+             The handle is a separate path so it alone can carry stroke-linecap. -->
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
           <circle cx="9.5" cy="9.5" r="5.5" stroke-width="2" />
           <path d="m13.7 13.7 3.8 3.8" stroke-width="2.2" stroke-linecap="round" />
         </svg>
       </span>
-      <!--
-        Labelled, like the four either side of it — the only unlabelled item
-        the app had. Word is "Search", the noun for the screen.
-        Why: docs/BUSINESS-LOGIC.md §36.
-      -->
+      <!-- Labelled like its neighbours — the only unlabelled item the app had (docs/BUSINESS-LOGIC.md §36). -->
       <span class="tab__label">Search</span>
     </RouterLink>
 

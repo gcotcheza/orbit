@@ -15,13 +15,11 @@ const LIGHT = { bg: '#edeefb', ink: 'rgb(13, 6, 48)' }
 /**
  * What the page is actually painted with, in two independent readings.
  *
- * `--bg` alone isn't enough — it resolves whether or not anything uses it;
- * `color` on <body> is a real painted property every word is drawn in.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `--bg` alone isn't enough — it resolves whether or not anything uses it; `color` on <body> is a real painted
+ * property every word is drawn in (docs/BUSINESS-LOGIC.md §36).
  *
- * `background-color` is deliberately excluded — light theme's `--bg-grad`
- * is a gradient, so the shorthand reads transparent in one theme only.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `background-color` is deliberately excluded — light theme's `--bg-grad` is a gradient, so the shorthand reads
+ * transparent in one theme only (docs/BUSINESS-LOGIC.md §36).
  */
 async function paletteOf(page) {
     return page.evaluate(() => ({
@@ -49,16 +47,14 @@ test('the alerts screen switches the whole palette, and remembers', async ({ pag
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
     expect(await paletteOf(page)).toEqual(LIGHT)
 
-    // The phone's browser chrome follows the app rather than staying dark
-    // behind a light screen — stores/theme.js reads it back so they can't drift.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // The phone's browser chrome follows the app rather than staying dark behind a light screen — stores/theme.js reads it
+    // back so they can't drift (docs/BUSINESS-LOGIC.md §36).
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#edeefb')
 
     await shot(page, 'settings-light')
 
-    // localStorage, applied before mount (app.js), so the first frame is
-    // already light — applied after mount, it'd flash white on every cold start.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // localStorage, applied before mount (app.js), so the first frame is already light — applied after mount, it'd flash
+    // white on every cold start (docs/BUSINESS-LOGIC.md §36).
     await page.reload()
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
     expect(await paletteOf(page)).toEqual(LIGHT)
@@ -71,20 +67,17 @@ test('the alerts screen switches the whole palette, and remembers', async ({ pag
 /**
  * The screen the centre tab opens on, in both palettes.
  *
- * Search's two boxes are the most palette-dependent thing in Orbit (card,
- * focus border, distinct suggestion surface, bolded match) — Home has none.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Search's two boxes are the most palette-dependent thing in Orbit (card, focus border, distinct suggestion surface,
+ * bolded match) — Home has none (docs/BUSINESS-LOGIC.md §36).
  *
- * The five tab labels are asserted here, not on Home — pinned to a test
- * that rasterises a 1.4 MB earth first, so on a loaded box it never ran.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The five tab labels are asserted here, not on Home — pinned to a test that rasterises a 1.4 MB earth first, so on a
+ * loaded box it never ran (docs/BUSINESS-LOGIC.md §36).
  */
 test('Search, both themes, photographed', async ({ page }) => {
     const labels = page.getByRole('navigation', { name: 'Primary' }).locator('.tab__label')
 
-    // FILLED IN, NOT EMPTY: an empty form photographs as a rectangle; a
-    // reviewer needs the panel open over the buttons it pushes down.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // FILLED IN, NOT EMPTY: an empty form photographs as a rectangle; a reviewer needs the panel open over the buttons it
+    // pushes down (docs/BUSINESS-LOGIC.md §36).
     const fill = async () => {
         await page.locator('#search-from').fill('BCN')
         await page.locator('#search-to').fill('lisb')
@@ -138,9 +131,8 @@ test('Home, both themes, photographed', async ({ page }) => {
 
     await tab(page, 'Orbit').click()
 
-    // THE GLOBE HAS TO BE RE-CHECKED, not assumed — Home is <KeepAlive>d, so
-    // it's a cache hit, and the atmosphere colour must still react to the theme.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // THE GLOBE HAS TO BE RE-CHECKED, not assumed — Home is <KeepAlive>d, so it's a cache hit, and the atmosphere colour
+    // must still react to the theme (docs/BUSINESS-LOGIC.md §36).
     await waitForGlobe(page)
     expect(await paletteOf(page)).toEqual(LIGHT)
 

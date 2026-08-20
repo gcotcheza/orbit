@@ -84,13 +84,11 @@ final class RouteCalendarApiTest extends TestCase
     }
 
     /**
-     * Only the client knows which day was tapped, so booking links go out as
-     * templates with holes, not as 62 URLs or nothing.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Only the client knows which day was tapped, so booking links go out as templates with holes, not as 62 URLs or
+     * nothing (docs/BUSINESS-LOGIC.md §36).
      *
-     * Two templates, holes named after their date formats — the two booking
-     * sites want date parts in different orders (docs/API.md).
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Two templates, holes named after their date formats — the two booking sites want date parts in different orders
+     * (docs/API.md) (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function the_meta_carries_both_booking_templates_for_the_tapped_day(): void
@@ -132,13 +130,11 @@ final class RouteCalendarApiTest extends TestCase
     }
 
     /**
-     * How old each price is, per day — the provider mixes fares found an hour
-     * ago with ones found last week, so freshness is per-day, not per-month.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * How old each price is, per day — the provider mixes fares found an hour ago with ones found last week, so freshness
+     * is per-day, not per-month (docs/BUSINESS-LOGIC.md §36).
      *
-     * Null where Orbit doesn't know (a pre-column row) — never substitutes
-     * `fetched_at`, which would manufacture a false "current" claim.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Null where Orbit doesn't know (a pre-column row) — never substitutes `fetched_at`, which would manufacture a false
+     * "current" claim (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function each_day_says_when_its_price_was_found(): void

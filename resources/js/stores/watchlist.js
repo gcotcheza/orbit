@@ -33,13 +33,11 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     /**
      * Fetch the list.
      *
-     * Deliberately not deduped or sequence-guarded — every caller awaits this
-     * and reads `routes`; it's one GET, running it twice costs one request.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Deliberately not deduped or sequence-guarded — every caller awaits this and reads `routes`; it's one GET, running it
+     * twice costs one request (docs/BUSINESS-LOGIC.md §36).
      *
-     * Rows are not cleared first — a screen showing this list shows a status
-     * too, so stale rows stay visible instead of the globe rebuilding for nothing.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Rows are not cleared first — a screen showing this list shows a status too, so stale rows stay visible instead of
+     * the globe rebuilding for nothing (docs/BUSINESS-LOGIC.md §36).
      */
     async function refresh() {
         status.value = 'loading'
@@ -105,13 +103,11 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     /**
      * Watch a new pair.
      *
-     * Throws rather than setting `error` — the one place this store differs
-     * from stores/rules.js; the add form phrases a failed 422 itself.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Throws rather than setting `error` — the one place this store differs from stores/rules.js; the add form phrases a
+     * failed 422 itself (docs/BUSINESS-LOGIC.md §36).
      *
-     * A new route arrives with no prices — that's correct, and WatchRow draws
-     * it rather than the screen waiting for the queued poll.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * A new route arrives with no prices — that's correct, and WatchRow draws it rather than the screen waiting for the
+     * queued poll (docs/BUSINESS-LOGIC.md §36).
      */
     async function add(origin, destination) {
         error.value = ''
@@ -124,9 +120,8 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     }
 
     /**
-     * Take in a row that some OTHER endpoint just created — promoting a rule
-     * match makes the same write `add` does, but from stores/rules.js.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Take in a row that some OTHER endpoint just created — promoting a rule match makes the same write `add` does, but
+     * from stores/rules.js (docs/BUSINESS-LOGIC.md §36).
      */
     function adopt(route) {
         routes.value.push(route)

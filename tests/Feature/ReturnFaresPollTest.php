@@ -28,13 +28,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
 
 /**
- * The round-trip foundation, end to end: the switch, the fake, the job, the
- * table and the command (the adapter itself is unit-tested separately).
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The round-trip foundation, end to end: the switch, the fake, the job, the table and the command (the adapter itself
+ * is unit-tested separately) (docs/BUSINESS-LOGIC.md §15).
  *
- * WARNING: the schedule TIME is asserted in ScheduleTest, not here — this
- * only guards that the `orbit:poll-returns` entry still exists.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * WARNING: the schedule TIME is asserted in ScheduleTest, not here — this only guards that the `orbit:poll-returns`
+ * entry still exists (docs/BUSINESS-LOGIC.md §15).
  */
 final class ReturnFaresPollTest extends TestCase
 {
@@ -129,9 +127,8 @@ final class ReturnFaresPollTest extends TestCase
     {
         $trips = $this->fakeTrips();
 
-        // Deliberately sparse, unlike the one-way fake (which answers every
-        // day): real round-trip coverage was 7.7%-33.5% of window dates.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Deliberately sparse, unlike the one-way fake (which answers every day): real round-trip coverage was 7.7%-33.5% of
+        // window dates (docs/BUSINESS-LOGIC.md §15).
         $dates = array_unique(array_map(fn (ReturnTrip $t): string => $t->departureDate->format('Y-m-d'), $trips));
 
         $this->assertLessThan(182, count($dates), 'A dense fake would hide every empty-state path.');
@@ -187,9 +184,8 @@ final class ReturnFaresPollTest extends TestCase
     #[Test]
     public function a_return_costs_more_than_a_one_way_and_less_than_two_of_them(): void
     {
-        // The measured relation (this milestone's premise): a return was
-        // 1.45x-1.74x the cheapest one-way on the routes recorded 2026-08-16.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // The measured relation (this milestone's premise): a return was 1.45x-1.74x the cheapest one-way on the routes
+        // recorded 2026-08-16 (docs/BUSINESS-LOGIC.md §15).
         $trips = $this->fakeTrips();
         $oneWay = $this->app->make(PriceProvider::class)->cheapestPerDay(
             'AMS',
@@ -442,7 +438,7 @@ final class ReturnFaresPollTest extends TestCase
         // This test used to assert the OPPOSITE — the daily poll (once run
         // by an outside cron) moved into this repo's own schedule. Time and
         // timezone details live in ScheduleTest; this only guards the entry exists.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §15.
         $commands = array_map(
             static fn (Event $event): string => (string) $event->command,
             app(Schedule::class)->events(),
@@ -460,7 +456,7 @@ final class ReturnFaresPollTest extends TestCase
         // The drift guard `selfstats.cross_section_days` also carries: two
         // different decisions that happen to agree, so widening one means
         // reconsidering the other.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §15.
         $this->assertSame(
             (int) config('orbit.poll.horizon_days'),
             (int) config('orbit.returns.window_days'),
@@ -554,11 +550,8 @@ final class ReturnFaresPollTest extends TestCase
     /**
      * A row that is already in the table when the poll runs.
      *
-     * WARNING: uses `insert` + a bare 'Y-m-d' — matches exactly what the
-     * job's upsert writes. `create()`'s date cast round-trips differently on
-     * SQLite (this suite's DB) than Postgres, silently breaking every
-     * `where('departure_date', ...)` below.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * WARNING: uses `insert` + a bare 'Y-m-d' — matches exactly what the job's upsert writes. `create()`'s date cast round-trips differently on SQLite (this
+     * suite's DB) than Postgres, silently breaking every `where('departure_date', ...)` below (docs/BUSINESS-LOGIC.md §15).
      */
     private function seedFare(Route $route, string $departure, int $nights, ?string $fetchedAt = null): void
     {

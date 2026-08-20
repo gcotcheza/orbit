@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Collection;
 /**
  * The `alerts` table, as the pipeline reads and writes it.
  *
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §10.
  */
 final class AlertLedger
 {
@@ -58,7 +58,7 @@ final class AlertLedger
     /**
      * What "the same alert as last time" means — the rule is part of the key.
      *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §10.
      */
     public static function key(AlertType $type, ?int $routeId, ?int $ruleId): string
     {
@@ -68,7 +68,7 @@ final class AlertLedger
     /**
      * Write down that Orbit decided to say this; `triggered_at` is the cooldown anchor.
      *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §10.
      *
      * @param  array<string, mixed>  $payload
      */
@@ -117,7 +117,7 @@ final class AlertLedger
     /**
      * The digest's "this week" callout — delivered rows only.
      *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §10.
      *
      * @return Collection<int, Alert>
      */

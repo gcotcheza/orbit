@@ -479,9 +479,8 @@ function goBack() {
       <div class="skeleton__block skeleton__block--chart"></div>
     </div>
 
-    <!-- Distinct from the skeleton above: this is an active provider call (a few
-         seconds), not a generic loading state — worth saying out loud.
-         Why: docs/BUSINESS-LOGIC.md §36. -->
+    <!-- Distinct from the skeleton above: an active provider call (a few seconds),
+         not generic loading — worth saying out loud (docs/BUSINESS-LOGIC.md §36). -->
     <div v-else-if="checking && detail === null" class="checking" role="status">
       <span class="checking__spinner" aria-hidden="true"></span>
       <p class="checking__title">Checking current fares…</p>
@@ -514,9 +513,8 @@ function goBack() {
         <p class="detail__where">{{ detail.destination.city }}, {{ detail.destination.country }}</p>
       </div>
 
-      <!-- Watchlist strip: only when NOT watched, placed between header and
-           price so it never competes with the Book button below.
-           Why: docs/BUSINESS-LOGIC.md §36. -->
+      <!-- Watchlist strip: only when NOT watched, between header and price so
+           it never competes with the Book button below (docs/BUSINESS-LOGIC.md §36). -->
       <div v-if="unwatched" class="watch">
         <p class="watch__text">Not on your watch list — Orbit is not pricing this every morning.</p>
         <button class="watch__action" type="button" :disabled="watching" @click="watchRoute">
@@ -611,8 +609,7 @@ function goBack() {
       />
 
       <!-- ⚠ Tone is the SERVER's alone — already accounts for a maybe-gone fare
-           and a contradicting live price. Add no conditions of its own here.
-           Why: docs/BUSINESS-LOGIC.md §36. -->
+           and a contradicting live price; add no conditions here (docs/BUSINESS-LOGIC.md §36). -->
       <BookingCta
         :aviasales-url="detail.booking.aviasales"
         :skyscanner-url="detail.booking.skyscanner"

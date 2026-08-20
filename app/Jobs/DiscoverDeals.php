@@ -32,18 +32,14 @@ use App\Infrastructure\Verify\GoogleFlightsCheck;
 /**
  * "Show me the insanely cheap routes I am NOT watching."
  *
- * Two-stage funnel: a cheap sweep+score narrows ~1,177 fares to a
- * shortlist; only verification (own-route window + optional Google) lets
- * a candidate reach the screen — a raw sweep rank has been wrong before.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Two-stage funnel: a cheap sweep+score narrows ~1,177 fares to a shortlist; only verification (own-route window + optional Google) lets a candidate
+ * reach the screen — a raw sweep rank has been wrong before (docs/BUSINESS-LOGIC.md §16).
  *
- * Writes rows only; never alerts (docs/BUSINESS-LOGIC.md §16) — a
- * discovery is the least verified data in the app and must not interrupt.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Writes rows only; never alerts (docs/BUSINESS-LOGIC.md §16) — a discovery is the least verified data in the app and
+ * must not interrupt (docs/BUSINESS-LOGIC.md §16).
  *
- * One job, not a fan-out: the shortlist is a ranking across all three
- * sweeps, and splitting it would need a rendezvous or shrink the budget.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One job, not a fan-out: the shortlist is a ranking across all three sweeps, and splitting it would need a rendezvous
+ * or shrink the budget (docs/BUSINESS-LOGIC.md §16).
  */
 final class DiscoverDeals implements ShouldQueue
 {
@@ -51,14 +47,13 @@ final class DiscoverDeals implements ShouldQueue
 
     /**
      * Long on purpose: ~40 sequential round trips at 05:20, nothing waiting.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §16.
      */
     public int $timeout = 900;
 
     /**
-     * ONE ATTEMPT: a retry would re-spend metered fetches and SerpAPI quota
-     * for a duplicate run; a failed run just leaves the previous set up.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * ONE ATTEMPT: a retry would re-spend metered fetches and SerpAPI quota for a duplicate run; a failed run just leaves
+     * the previous set up (docs/BUSINESS-LOGIC.md §16).
      */
     public int $tries = 1;
 
@@ -102,16 +97,15 @@ final class DiscoverDeals implements ShouldQueue
             // Splits how many relative slots came from a claim vs a
             // question — most exploration picks failing verification is
             // expected, not a red flag.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // Why: docs/BUSINESS-LOGIC.md §16.
             'relative_from_baseline' => count(array_filter(
                 $relative,
                 static fn (RelativePick $pick): bool => $pick->reason === PickReason::Baseline,
             )),
         ]);
 
-        // Google budget asked once, up front; zero on most boxes (no
-        // SERPAPI_KEY) is the normal case, not an error.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Google budget asked once, up front; zero on most boxes (no SERPAPI_KEY) is the normal case, not an error
+        // (docs/BUSINESS-LOGIC.md §16).
         $budget = $google->available();
         $spent = 0;
 
@@ -121,7 +115,7 @@ final class DiscoverDeals implements ShouldQueue
         // Absolute lane is queued before relative: it's the stronger,
         // older claim, so a quota shortfall degrades the newer feature
         // first, not the shipped one.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §16.
         $queue = [];
 
         foreach ($shortlist as $candidate) {
@@ -136,9 +130,8 @@ final class DiscoverDeals implements ShouldQueue
             $window = $this->windowFor($prices, $candidate, $now);
 
             /*
-             * ⚠ Baseline is written before the verification gate below — a
-             * candidate that fails still taught us its route's usual price.
-             * Why: docs/BUSINESS-LOGIC.md §36.
+             * ⚠ Baseline is written before the verification gate below — a candidate that fails still taught us its route's usual
+             * price (docs/BUSINESS-LOGIC.md §16).
              */
             if ($window !== []) {
                 $this->rememberBaseline($candidate, $window, $now);
@@ -156,16 +149,14 @@ final class DiscoverDeals implements ShouldQueue
                 // Cross-sectional gate: cheap €/km alone isn't a cheap
                 // fare, so both lanes face the same isRemarkable() check
                 // unmodified.
-                // Why: docs/BUSINESS-LOGIC.md §36.
+                // Why: docs/BUSINESS-LOGIC.md §16.
                 if (! $policy->isRemarkable($percentile, $savings ?? 0)) {
                     continue;
                 }
             } elseif ($lane === Lane::Relative) {
                 /*
-                 * ⚠ Empty window disqualifies a relative candidate (no
-                 * evidence for "rare for this route") but NOT an absolute
-                 * one — the two cards make different claims.
-                 * Why: docs/BUSINESS-LOGIC.md §36.
+                 * ⚠ Empty window disqualifies a relative candidate (no evidence for "rare for this route") but NOT an absolute one —
+                 * the two cards make different claims (docs/BUSINESS-LOGIC.md §16).
                  */
                 continue;
             }
@@ -173,7 +164,7 @@ final class DiscoverDeals implements ShouldQueue
             // Empty window is not a rejection for an absolute candidate —
             // Travelpayouts' calendar coverage is patchy and an obscure
             // route with no window is the ordinary case, not an outage.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // Why: docs/BUSINESS-LOGIC.md §16.
             $verdict = null;
 
             if ($spent < $budget) {
@@ -211,9 +202,8 @@ final class DiscoverDeals implements ShouldQueue
     /**
      * Every home origin swept and paired with a distance.
      *
-     * One airport query for the whole run, not one per code — ~1,177
-     * codes a night against a table that fits comfortably in memory.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * One airport query for the whole run, not one per code — ~1,177 codes a night against a table that fits comfortably
+     * in memory (docs/BUSINESS-LOGIC.md §16).
      *
      * @return list<DealCandidate>
      */
@@ -236,10 +226,8 @@ final class DiscoverDeals implements ShouldQueue
 
             if ($origin === null) {
                 /*
-                 * Home airport with no row is a seeding bug, not a sweep to
-                 * attempt — see tests/Feature/SeedersTest, which asserts
-                 * origins and the seeder agree.
-                 * Why: docs/BUSINESS-LOGIC.md §36.
+                 * Home airport with no row is a seeding bug, not a sweep to attempt — see tests/Feature/SeedersTest, which asserts
+                 * origins and the seeder agree (docs/BUSINESS-LOGIC.md §16).
                  */
                 $logger->warning('Discovery skipped an origin with no airport row.', ['origin' => $originIata]);
 
@@ -250,10 +238,8 @@ final class DiscoverDeals implements ShouldQueue
                 $destination = $airports[$fare->destinationIata] ?? null;
 
                 /*
-                 * City-level codes (LON, MOW, MIL, ...) are dropped here:
-                 * no coordinates for an honest €/km and no route code for
-                 * the card to open. See OriginSweepProvider, point 7.
-                 * Why: docs/BUSINESS-LOGIC.md §36.
+                 * City-level codes (LON, MOW, MIL, ...) are dropped here: no coordinates for an honest €/km and no route code for the
+                 * card to open. See OriginSweepProvider, point 7 (docs/BUSINESS-LOGIC.md §16).
                  */
                 if ($destination === null) {
                     $unknown++;
@@ -288,10 +274,8 @@ final class DiscoverDeals implements ShouldQueue
      * The relative lane's picks — candidates worth a window fetch because
      * of what they cost ON THEIR OWN ROUTE rather than per kilometre.
      *
-     * Pool is the sweep minus the absolute lane's five destinations, not
-     * its whole shortlist-eligible set — a route that just missed the
-     * absolute cut is still a fair relative candidate.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Pool is the sweep minus the absolute lane's five destinations, not its whole shortlist-eligible set — a route that
+     * just missed the absolute cut is still a fair relative candidate (docs/BUSINESS-LOGIC.md §16).
      *
      * @param  list<DealCandidate>  $candidates  everything swept
      * @param  list<DealCandidate>  $shortlist  the absolute lane's finalists
@@ -305,10 +289,8 @@ final class DiscoverDeals implements ShouldQueue
         DateTimeImmutable $now,
     ): array {
         /*
-         * Distance/freshness floors reuse the absolute lane's policy
-         * object; only the price ceiling is this lane's own, and
-         * maxCentsPerKilometre is deliberately absent — that's the point.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * Distance/freshness floors reuse the absolute lane's policy object; only the price ceiling is this lane's own, and
+         * maxCentsPerKilometre is deliberately absent — that's the point (docs/BUSINESS-LOGIC.md §16).
          */
         $pool = array_values(array_filter(
             $candidates,
@@ -322,9 +304,8 @@ final class DiscoverDeals implements ShouldQueue
         }
 
         /*
-         * One query for every baseline this run could read, keyed by code
-         * — same ask-once pattern as sweepAll's airport lookup.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * One query for every baseline this run could read, keyed by code — same ask-once pattern as sweepAll's airport lookup
+         * (docs/BUSINESS-LOGIC.md §16).
          */
         $codes = array_values(array_unique(array_map(
             static fn (DealCandidate $candidate): string => $candidate->routeCode(),
@@ -352,10 +333,8 @@ final class DiscoverDeals implements ShouldQueue
     /**
      * Write down what this route usually costs.
      *
-     * The only state that outlives a run — see the discovery_baselines
-     * migration for why it's its own table, and RelativeLanePolicy::
-     * $minBaselineDays for why the count travels with the median.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * The only state that outlives a run — see the discovery_baselines migration for why it's its own table, and
+     * RelativeLanePolicy:: $minBaselineDays for why the count travels with the median (docs/BUSINESS-LOGIC.md §16).
      *
      * @param  list<int>  $window
      */
@@ -368,10 +347,8 @@ final class DiscoverDeals implements ShouldQueue
         }
 
         /*
-         * ⚠ Converted to UTC before writing: upsert() bypasses the model's
-         * casts, so an unconverted owner-zone Carbon is stored two hours
-         * fast, in the direction that makes a baseline look fresher.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * ⚠ Converted to UTC before writing: upsert() bypasses the model's casts, so an unconverted owner-zone Carbon is
+         * stored two hours fast, in the direction that makes a baseline look fresher (docs/BUSINESS-LOGIC.md §16).
          */
         $measuredAt = $now->copy()->utc();
 
@@ -392,11 +369,8 @@ final class DiscoverDeals implements ShouldQueue
     /**
      * Every fare in a finalist's own near window, in cents.
      *
-     * Same PriceProvider port and shape as any watched route's calendar —
-     * a second lookup path would be a second definition of "current
-     * price". Near window, not the eleven-month horizon: matches
-     * selfstats.cross_section_days and roughly halves billed requests.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Same PriceProvider port and shape as any watched route's calendar — a second lookup path would be a second definition of "current price". Near window,
+     * not the eleven-month horizon: matches selfstats.cross_section_days and roughly halves billed requests (docs/BUSINESS-LOGIC.md §16).
      *
      * @return list<int>
      */
@@ -420,10 +394,8 @@ final class DiscoverDeals implements ShouldQueue
     /**
      * Write the survivors down.
      *
-     * One upsert keyed on (code, departure_date); discovered_at and
-     * expires_at refresh every run, which is what "still being found"
-     * means for a fare that keeps turning up.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * One upsert keyed on (code, departure_date); discovered_at and expires_at refresh every run, which is what "still
+     * being found" means for a fare that keeps turning up (docs/BUSINESS-LOGIC.md §16).
      *
      * @param  list<array{0: DealCandidate, 1: Lane, 2: float|null, 3: int|null, 4: GoogleVerdict|null}>  $verified
      */
@@ -437,10 +409,8 @@ final class DiscoverDeals implements ShouldQueue
         $ids = Airport::query()->pluck('id', 'iata')->all();
 
         /*
-         * ⚠ Converted to UTC before writing, same upsert()-bypasses-casts
-         * trap as rememberBaseline — otherwise every discovery outlives
-         * its expires_at by two hours, invisibly on a UTC box.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * ⚠ Converted to UTC before writing, same upsert()-bypasses-casts trap as rememberBaseline — otherwise every discovery
+         * outlives its expires_at by two hours, invisibly on a UTC box (docs/BUSINESS-LOGIC.md §16).
          */
         $discoveredAt = $now->copy()->utc();
         $expiresAt = $now->copy()->addHours($policy->expiresAfterHours)->utc();
@@ -476,18 +446,14 @@ final class DiscoverDeals implements ShouldQueue
             ['code', 'departure_date'],
             [
                 /*
-                 * `lane` is in the update list: a route can flip from
-                 * relative to absolute between runs, and the badge must
-                 * track why it's shown.
-                 * Why: docs/BUSINESS-LOGIC.md §36.
+                 * `lane` is in the update list: a route can flip from relative to absolute between runs, and the badge must track why
+                 * it's shown (docs/BUSINESS-LOGIC.md §16).
                  */
                 'lane',
                 'price_cents', 'cents_per_km', 'percentile', 'savings_cents',
                 /*
-                 * `google_verdict` is updatable both ways: a run without
-                 * quota must be able to take a verdict away, not just add
-                 * one.
-                 * Why: docs/BUSINESS-LOGIC.md §36.
+                 * `google_verdict` is updatable both ways: a run without quota must be able to take a verdict away, not just add one
+                 * (docs/BUSINESS-LOGIC.md §16).
                  */
                 'google_verdict',
                 'found_at', 'discovered_at', 'expires_at', 'updated_at',
@@ -508,10 +474,8 @@ final class DiscoverDeals implements ShouldQueue
         Discovery::query()->whereDate('departure_date', '<', $now->toDateString())->delete();
 
         /*
-         * 3. Superseded rows: same route found on an earlier run. Unique
-         * key is (code, departure_date), so a route on a new date doesn't
-         * collide — this clears yesterday's row for the same route.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * 3. Superseded rows: same route found on an earlier run. Unique key is (code, departure_date), so a route on a new
+         * date doesn't collide — this clears yesterday's row for the same route (docs/BUSINESS-LOGIC.md §16).
          */
         $thisRun = $now->copy()->utc();
 

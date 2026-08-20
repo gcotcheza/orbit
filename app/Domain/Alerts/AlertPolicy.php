@@ -10,9 +10,8 @@ use InvalidArgumentException;
 /**
  * Should Orbit interrupt somebody about this?
  *
- * Zero framework imports (docs/PLAN.md): checkable on paper. Five rules, in
- * this load-bearing order: maturity, threshold, freshness, cooldown, further
- * drop. Why: docs/BUSINESS-LOGIC.md §10.
+ * Zero framework imports (docs/PLAN.md): checkable on paper. Five rules, in this load-bearing order: maturity, threshold, freshness, cooldown, further
+ * drop (docs/BUSINESS-LOGIC.md §10).
  */
 final readonly class AlertPolicy
 {
@@ -99,10 +98,8 @@ final readonly class AlertPolicy
     }
 
     /**
-     * Is the evidence behind this alert too old to act on? Both conditions
-     * required (age AND near-departure); the one gate a rule match is NOT
-     * exempt from; null found_at is treated as fresh, deliberately.
-     * Why: docs/BUSINESS-LOGIC.md §10.
+     * Is the evidence behind this alert too old to act on? Both conditions required (age AND near-departure); the one gate
+     * a rule match is NOT exempt from; null found_at is treated as fresh, deliberately (docs/BUSINESS-LOGIC.md §10).
      */
     private function isStale(AlertCandidate $candidate, DateTimeImmutable $now): bool
     {

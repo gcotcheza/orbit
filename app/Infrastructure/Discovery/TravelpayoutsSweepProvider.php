@@ -28,7 +28,7 @@ use Illuminate\Contracts\Cache\Repository as Cache;
  * `distance` is deliberately not read (once wrong by 37x vs. Haversine).
  * City-only codes with no airport row are passed through unchanged, not
  * dropped, so the caller decides what to do with them.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §16.
  */
 final readonly class TravelpayoutsSweepProvider implements OriginSweepProvider
 {
@@ -96,7 +96,7 @@ final readonly class TravelpayoutsSweepProvider implements OriginSweepProvider
                 // off-by-one silently disabling the retry.
                 ->retry($this->retries + 1, $this->retryDelayMs, throw: false)
                 ->withHeaders([
-                    'X-Access-Token' => $this->token,
+                    'X-Access-Token'  => $this->token,
                     'Accept-Encoding' => 'gzip, deflate',
                 ])
                 ->acceptJson()
@@ -104,10 +104,10 @@ final readonly class TravelpayoutsSweepProvider implements OriginSweepProvider
                     'origin' => $origin,
                     // No `destination` -- its absence is what turns a
                     // one-route lookup into a sweep of everywhere.
-                    'currency' => self::CURRENCY,
-                    'one_way' => 'true',
+                    'currency'    => self::CURRENCY,
+                    'one_way'     => 'true',
                     'period_type' => 'year',
-                    'limit' => $this->limit,
+                    'limit'       => $this->limit,
                     // All prices, not just partner-link ones -- Orbit isn't
                     // monetising clicks, and the narrower set is thinner.
                     'show_to_affiliates' => 'false',
@@ -218,10 +218,8 @@ final readonly class TravelpayoutsSweepProvider implements OriginSweepProvider
     }
 
     /**
-     * When this price was found, per the provider, or null if it won't say.
-     * Two formats, both UTC; pinned rather than left to the loose
-     * `new DateTimeImmutable($s)` parser, which would fabricate a confident
-     * answer. Why: docs/BUSINESS-LOGIC.md §36.
+     * When this price was found, per the provider, or null if it won't say. Two formats, both UTC; pinned rather than left to the loose `new
+     * DateTimeImmutable($s)` parser, which would fabricate a confident answer (docs/BUSINESS-LOGIC.md §16).
      *
      * @param  array<mixed>  $entry
      */

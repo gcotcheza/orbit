@@ -180,9 +180,8 @@ describe('a month at the far end with no fares in it', () => {
     })
 })
 
-// Which month it opens on: the watched route's cheapest-departure month,
-// clamped into the eleven-month arrow window and never in the past.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Which month it opens on: the watched route's cheapest-departure month, clamped into the eleven-month arrow window
+// and never in the past (docs/BUSINESS-LOGIC.md §36).
 describe('which month it opens on', () => {
     /** One watched route whose cheapest departure is on `date`. */
     function watching(date) {

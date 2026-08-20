@@ -63,18 +63,14 @@ export const useAuthStore = defineStore('auth', () => {
     /**
      * Change the password of the account that is signed in.
      *
-     * Here, not in the component: this is the third thing that knows how
-     * auth works, and the other two are in this file — ChangePassword.vue
-     * shouldn't need to know a URL or a session either.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Here, not in the component: this is the third thing that knows how auth works, and the other two are in this file —
+     * ChangePassword.vue shouldn't need to know a URL or a session either (docs/BUSINESS-LOGIC.md §36).
      *
-     * Throws, like `login`: the 422 is a per-rule sentence written by
-     * UpdatePasswordRequest for a person to read, not a boolean to swallow.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Throws, like `login`: the 422 is a per-rule sentence written by UpdatePasswordRequest for a person to read, not a
+     * boolean to swallow (docs/BUSINESS-LOGIC.md §36).
      *
-     * Nothing in this store changes on success: session is rotated
-     * server-side via cookies; `user` (who's signed in) doesn't change.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Nothing in this store changes on success: session is rotated server-side via cookies; `user` (who's signed in)
+     * doesn't change (docs/BUSINESS-LOGIC.md §36).
      *
      * No `ensureCsrfCookie()` — unlike `login`, the caller already holds a
      * current token from making authenticated requests.
@@ -87,9 +83,8 @@ export const useAuthStore = defineStore('auth', () => {
         try {
             await http.post('/logout')
         } finally {
-            // Client clears its session regardless of server response — a
-            // logout that fails and still looks signed in is worse.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // Client clears its session regardless of server response — a logout that fails and still looks signed in is worse
+            // (docs/BUSINESS-LOGIC.md §36).
             user.value = null
         }
     }

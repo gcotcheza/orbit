@@ -51,7 +51,7 @@ onMounted(settingsStore.load)
 /*
  * Scroll to #account only once settings settle (ready/failed), not via router
  * `scrollBehavior` — mid-fetch it fires before layout above it is final.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §10.
  */
 const route = useRoute()
 const accountHeading = useTemplateRef('accountHeading')
@@ -77,7 +77,7 @@ function save(patch) {
 /*
  * Empty string from a cleared time input isn't valid (server 422s); ignore it
  * and keep the previous value instead of saving.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §10.
  */
 function saveTime(field, value) {
   if (value !== '') {
@@ -153,9 +153,8 @@ async function signOut() {
           label="Alert sensitivity"
           @update:model-value="save({ sensitivity: $event })"
         />
-        <!-- Blurb (incl. score number) comes from server/config score.tiers,
-             never hardcoded, so a retuned tier can't go stale here.
-             Why: docs/BUSINESS-LOGIC.md §36. -->
+        <!-- Blurb (incl. score number) comes from server/config score.tiers, never
+             hardcoded, so a retuned tier can't go stale here (docs/BUSINESS-LOGIC.md §10). -->
         <p class="blurb">{{ chosenSensitivity?.blurb }}</p>
       </section>
 
@@ -170,7 +169,7 @@ async function signOut() {
         </SettingRow>
 
         <!-- Shown only while quiet hours is on; values persist while hidden.
-             Why: docs/BUSINESS-LOGIC.md §36. -->
+             Why: docs/BUSINESS-LOGIC.md §10. -->
         <div v-if="settings.quietHours" class="window card__row">
           <label class="window__field">
             <span class="window__label">From</span>
@@ -204,12 +203,10 @@ async function signOut() {
     </template>
 
     <!-- Account card is here because there's nowhere else: this is the only
-         settings surface the tab bar reaches. Ordered by how often each is touched.
-         Why: docs/BUSINESS-LOGIC.md §36. -->
+         settings surface the tab bar reaches (docs/BUSINESS-LOGIC.md §10). -->
     <h2 id="account" ref="accountHeading" class="section">Account</h2>
     <section class="card">
-      <!-- Name/email read-only: they're the seeder's, no edit endpoint exists.
-           Why: docs/BUSINESS-LOGIC.md §36. -->
+      <!-- Name/email read-only: they're the seeder's, no edit endpoint exists (docs/BUSINESS-LOGIC.md §10). -->
       <div class="account card__row">
         <p class="account__name">{{ user?.name }}</p>
         <p class="account__email">{{ user?.email }}</p>
@@ -218,9 +215,8 @@ async function signOut() {
       <ChangePassword />
     </section>
 
-    <!-- Theme + sign-out aren't leftovers: kept here deliberately as the only
-         screen touching the theme store and the session.
-         Why: docs/BUSINESS-LOGIC.md §36. -->
+    <!-- Theme + sign-out aren't leftovers: kept here as the only screen touching
+         the theme store and the session (docs/BUSINESS-LOGIC.md §10). -->
     <h2 class="section">This app</h2>
     <section class="card card--padded">
       <SegmentedControl :model-value="theme" :options="THEMES" label="Theme" @update:model-value="themeStore.set" />

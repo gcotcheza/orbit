@@ -27,16 +27,14 @@ describe('bearing', () => {
     })
 
     it('points Amsterdam at Lisbon, south-west', () => {
-        // 220.93° — quoted, not recomputed: a test that reruns the same
-        // formula only proves the machine is deterministic.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // 220.93° — quoted, not recomputed: a test that reruns the same formula only proves the machine is deterministic
+        // (docs/BUSINESS-LOGIC.md §36).
         expect(bearing(AMS, LIS)).toBeCloseTo(220.93, 2)
     })
 
     it('is not simply the reverse bearing plus 180', () => {
-        // Meridians converge — a bearing computed once and reused for the
-        // whole flight would drift; flightPose() recomputes it per segment.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Meridians converge — a bearing computed once and reused for the whole flight would drift; flightPose() recomputes it
+        // per segment (docs/BUSINESS-LOGIC.md §36).
         expect(bearing(LIS, AMS)).toBeCloseTo(30.92, 2)
     })
 
@@ -59,9 +57,8 @@ describe('greatCirclePoints', () => {
     })
 
     it('bulges polewards of the straight lat/lng line, as a great circle does', () => {
-        // Simple averaging gives 45.54°N; the sphere's shortest path runs a
-        // touch further north — same effect that routes over Greenland.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Simple averaging gives 45.54°N; the sphere's shortest path runs a touch further north — same effect that routes over
+        // Greenland (docs/BUSINESS-LOGIC.md §36).
         const middle = pathMidpoint(greatCirclePoints(AMS, LIS))
 
         expect(middle.lat).toBeCloseTo(45.75, 2)
@@ -77,9 +74,8 @@ describe('greatCirclePoints', () => {
     })
 
     it('degrades to the two endpoints when there is no path to interpolate', () => {
-        // Same airport twice: the watchlist can't produce it, but a future
-        // rounding error could. Answer is a short flight, not div-by-zero.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Same airport twice: the watchlist can't produce it, but a future rounding error could. Answer is a short flight, not
+        // div-by-zero (docs/BUSINESS-LOGIC.md §36).
         expect(greatCirclePoints(AMS, { ...AMS })).toHaveLength(2)
     })
 })
@@ -147,9 +143,8 @@ describe('flightPose', () => {
     })
 
     it('holds the camera still outside the flight rather than extrapolating', () => {
-        // rAF doesn't fire exactly at the duration's end, so raw `t` often
-        // overshoots 1 — clamped here so callers don't have to remember to.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // rAF doesn't fire exactly at the duration's end, so raw `t` often overshoots 1 — clamped here so callers don't have
+        // to remember to (docs/BUSINESS-LOGIC.md §36).
         expect(flightPose(path, 1.4)).toEqual(flightPose(path, 1))
         expect(flightPose(path, -0.2)).toEqual(flightPose(path, 0))
     })

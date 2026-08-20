@@ -24,10 +24,8 @@ use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * `orbit:reset-history` — the one-day command. The tests that matter are the
- * two negatives: no run without `--confirm`, nothing owner-decided touched.
- *
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `orbit:reset-history` — the one-day command. The tests that matter are the two negatives: no run without
+ * `--confirm`, nothing owner-decided touched (docs/BUSINESS-LOGIC.md §14).
  */
 final class ResetHistoryTest extends TestCase
 {
@@ -69,9 +67,8 @@ final class ResetHistoryTest extends TestCase
         $this->history();
 
         /*
-         * The numbers are the safety feature — a dry run is how somebody
-         * learns they're on the box with five thousand rows, not zero.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * The numbers are the safety feature — a dry run is how somebody learns they're on the box with five thousand rows,
+         * not zero (docs/BUSINESS-LOGIC.md §14).
          */
         $this->runCommand('orbit:reset-history')
             ->expectsOutputToContain('3 rows')
@@ -95,10 +92,8 @@ final class ResetHistoryTest extends TestCase
     }
 
     /**
-     * Everything the owner decided survives — what makes this safe on a live
-     * box, unlike `migrate:fresh --seed`.
-     *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Everything the owner decided survives — what makes this safe on a live box, unlike `migrate:fresh --seed`
+     * (docs/BUSINESS-LOGIC.md §14).
      */
     #[Test]
     public function it_leaves_the_watchlist_the_rules_and_the_alert_ledger_alone(): void
@@ -137,9 +132,8 @@ final class ResetHistoryTest extends TestCase
         $this->assertSame(1, User::query()->count());
 
         /*
-         * The ledger especially: the 24-hour cooldown (AlertPolicy) reads it,
-         * so wiping it would re-announce every deal already mailed.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * The ledger especially: the 24-hour cooldown (AlertPolicy) reads it, so wiping it would re-announce every deal
+         * already mailed (docs/BUSINESS-LOGIC.md §14).
          */
         $this->assertSame(1, Alert::query()->count());
     }
@@ -180,10 +174,8 @@ final class ResetHistoryTest extends TestCase
     }
 
     /**
-     * One route, three tables, a different count each — a mixed-up delete
-     * shows up as a wrong number, not as zero.
-     *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * One route, three tables, a different count each — a mixed-up delete shows up as a wrong number, not as zero
+     * (docs/BUSINESS-LOGIC.md §14).
      */
     private function history(): Route
     {

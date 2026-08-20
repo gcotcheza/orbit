@@ -1,17 +1,14 @@
 // @vitest-environment jsdom
 // WatchRow: the boarding-pass card's link, switch and remove button.
 
-// Added the missing hand-off into the route's detail screen (the switch and bin existed;
-// opening the route from the card did not).
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Added the missing hand-off into the route's detail screen (the switch and bin existed; opening the route from the
+// card did not) (docs/BUSINESS-LOGIC.md §36).
 
-// Tests assert the link/controls boundary as structure, not behaviour — the risk is a
-// link that swallowed the switch, or a stopPropagation that silently breaks the toggle.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Tests assert the link/controls boundary as structure, not behaviour — the risk is a link that swallowed the switch,
+// or a stopPropagation that silently breaks the toggle (docs/BUSINESS-LOGIC.md §36).
 
-// RouterLinkStub, not a real router (as Home.test.js does for the spotlight card):
-// asserts the `to` prop this component hands the router, not vue-router itself.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// RouterLinkStub, not a real router (as Home.test.js does for the spotlight card): asserts the `to` prop this
+// component hands the router, not vue-router itself (docs/BUSINESS-LOGIC.md §36).
 import { describe, expect, it } from 'vitest'
 import { RouterLinkStub, mount } from '@vue/test-utils'
 
@@ -47,9 +44,8 @@ describe('opening the route', () => {
     })
 
     it('opens a paused route as readily as a watched one', () => {
-        // Paused rows stay dimmed but tappable (Watchlist.vue); losing that would hide
-        // the detail screen behind the switch going off.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Paused rows stay dimmed but tappable (Watchlist.vue); losing that would hide the detail screen behind the switch
+        // going off (docs/BUSINESS-LOGIC.md §36).
         const wrapper = pass({ active: false })
 
         expect(link(wrapper).props('to')).toEqual({ name: 'route-detail', params: { id: 'AMS-LIS' } })
@@ -69,9 +65,8 @@ describe('the controls are not in the link', () => {
         const wrapper = pass()
         const open = wrapper.get('.pass__open')
 
-        // The whole point: nested interactives — a switch inside the link — would let one tap
-        // both flip the route and navigate away.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // The whole point: nested interactives — a switch inside the link — would let one tap both flip the route and navigate
+        // away (docs/BUSINESS-LOGIC.md §36).
         expect(open.find('[role="switch"]').exists()).toBe(false)
         expect(open.find('.stub__remove').exists()).toBe(false)
         // There is only ever one link on the card.
@@ -108,9 +103,8 @@ describe('the controls still work', () => {
     })
 })
 
-// The barcode is set dressing; the tracking-text slot is the only place the row says
-// what's happening — a paused route previously said nothing (just a dimmed switch).
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The barcode is set dressing; the tracking-text slot is the only place the row says what's happening — a paused route
+// previously said nothing (just a dimmed switch) (docs/BUSINESS-LOGIC.md §36).
 describe('what the stub says', () => {
     it('says nothing but the barcode once a route is established', () => {
         const wrapper = pass()
@@ -132,9 +126,8 @@ describe('what the stub says', () => {
         expect(wrapper.find('.stub__barcode').exists()).toBe(false)
     })
 
-    // Paused-and-day-one both apply here; "Paused" wins since "Tracking 1 day" promises a
-    // morning check a paused route won't run.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Paused-and-day-one both apply here; "Paused" wins since "Tracking 1 day" promises a morning check a paused route
+    // won't run (docs/BUSINESS-LOGIC.md §36).
     it('says "Paused" rather than counting days a paused route will not have', () => {
         expect(pass({ active: false, trackingDays: 1 }).get('.stub__tracking').text()).toBe('Paused')
     })

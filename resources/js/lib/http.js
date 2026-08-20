@@ -19,11 +19,8 @@ export const http = axios.create({
 })
 
 /*
- * DO NOT make these imports static (circular with stores/auth.js -> router,
- * which fails silently as `undefined`, not loudly). This interceptor is the
- * one place a dead session redirects to login; `/api/me` and `/login` are
- * exempt since a 401 from either is expected, not an expired session.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * DO NOT make these imports static (circular with stores/auth.js -> router, which fails silently as `undefined`, not loudly). This interceptor is the one place a dead session redirects to login;
+ * `/api/me` and `/login` are exempt since a 401 from either is expected, not an expired session (docs/BUSINESS-LOGIC.md §36).
  */
 const SESSION_EXEMPT = ['/api/me', '/login']
 
@@ -59,9 +56,8 @@ http.interceptors.response.use(null, async (error) => {
 })
 
 /**
- * Ask the server for a fresh CSRF cookie.
- * Called before signing in: a login form left open for hours can outlive the shell's original cookie, turning an uninterpretable 419 into a working sign-in.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Ask the server for a fresh CSRF cookie. Called before signing in: a login form left open for hours can outlive the
+ * shell's original cookie, turning an uninterpretable 419 into a working sign-in (docs/BUSINESS-LOGIC.md §36).
  */
 export function ensureCsrfCookie() {
     return http.get('/sanctum/csrf-cookie')

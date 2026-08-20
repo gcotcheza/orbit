@@ -1,6 +1,5 @@
-// `seenLabel` prints a fare's age; failure modes are quiet ones (off-by-one,
-// fabricated ages, NaN), so the clock is injected and pinned here in hours.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// `seenLabel` prints a fare's age; failure modes are quiet ones (off-by-one, fabricated ages, NaN), so the clock is
+// injected and pinned here in hours (docs/BUSINESS-LOGIC.md §36).
 import { describe, expect, it } from 'vitest'
 
 import { hoursSince, seenLabel, withDateTokens } from './format'

@@ -11,14 +11,11 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * One row of the alert ledger: something Orbit decided to say, and whether
- * it has been said yet. Decisions live in AlertPolicy; writing lives in
- * AlertLedger — this is just the row.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One row of the alert ledger: something Orbit decided to say, and whether it has been said yet. Decisions live in
+ * AlertPolicy; writing lives in AlertLedger — this is just the row (docs/BUSINESS-LOGIC.md §10).
  *
- * `type` is cast to the enum so all four consumers (cooldown, mail gate,
- * digest filter, GET /api/alerts) read one value object, not four strings.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `type` is cast to the enum so all four consumers (cooldown, mail gate, digest filter, GET /api/alerts) read one
+ * value object, not four strings (docs/BUSINESS-LOGIC.md §10).
  *
  * @property int $id
  * @property int $user_id

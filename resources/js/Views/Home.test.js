@@ -193,9 +193,8 @@ describe('a route we know nothing about yet', () => {
 
 describe('nothing to show', () => {
     /*
-     * Day one is still this app's screen: the globe now draws with NOTHING ON
-     * IT (empty routes) rather than not being drawn at all.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Day one is still this app's screen: the globe now draws with NOTHING ON IT (empty routes) rather than not being
+     * drawn at all (docs/BUSINESS-LOGIC.md §36).
      */
     it('draws an empty globe and one way out of the empty state', async () => {
         const wrapper = await mountHome([PAUSED])

@@ -7,9 +7,8 @@ namespace App\Domain\Pricing;
 use InvalidArgumentException;
 
 /**
- * The "usual price" half of docs/PLAN.md's hybrid pricing model; the five
- * numbers must stay non-decreasing (treated as monotone-curve knots).
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The "usual price" half of docs/PLAN.md's hybrid pricing model; the five numbers must stay non-decreasing (treated as
+ * monotone-curve knots) (docs/BUSINESS-LOGIC.md §6).
  */
 final readonly class PriceStats
 {
@@ -37,9 +36,8 @@ final readonly class PriceStats
     }
 
     /**
-     * Build the summary from raw observations (e.g. the fake stats adapter).
-     * Nearest-rank, not interpolation: percentiles must be prices actually quoted.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Build the summary from raw observations (e.g. the fake stats adapter). Nearest-rank, not interpolation: percentiles
+     * must be prices actually quoted (docs/BUSINESS-LOGIC.md §6).
      *
      * @param  list<int>  $cents
      */
@@ -90,9 +88,8 @@ final readonly class PriceStats
     }
 
     /**
-     * 0 (cheapest seen) to 1 (dearest), piecewise-linear through the five
-     * knots; a degenerate summary (all knots equal) answers 0.5.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * 0 (cheapest seen) to 1 (dearest), piecewise-linear through the five knots; a degenerate summary (all knots equal)
+     * answers 0.5 (docs/BUSINESS-LOGIC.md §6).
      */
     public function percentileOf(int $cents): float
     {

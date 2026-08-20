@@ -7,20 +7,14 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
 /**
- * When the FARE was found, as distinct from when Orbit fetched it — the two
- * are not the same fact; conflating them is the bug this column fixes.
+ * When the FARE was found, as distinct from when Orbit fetched it — the two are not the same fact; conflating them is
+ * the bug this column fixes (docs/BUSINESS-LOGIC.md §2).
  *
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Nullable, and existing rows stay null — there is no honest value to backfill, and `fetched_at` is NOT a substitute
+ * for it (docs/BUSINESS-LOGIC.md §2).
  *
- * Nullable, and existing rows stay null — there is no honest value to
- * backfill, and `fetched_at` is NOT a substitute for it.
- *
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * Not indexed: nothing filters or sorts on it; the staleness sweep keys on
- * `fetched_at` instead.
- *
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Not indexed: nothing filters or sorts on it; the staleness sweep keys on `fetched_at` instead
+ * (docs/BUSINESS-LOGIC.md §2).
  */
 return new class extends Migration
 {
@@ -28,9 +22,7 @@ return new class extends Migration
     {
         Schema::table('calendar_fares', function (Blueprint $table): void {
             /*
-             * AFTER `fetched_at` — read side by side; ignored by SQLite,
-             * matters for Postgres.
-             * Why: docs/BUSINESS-LOGIC.md §36.
+             * AFTER `fetched_at` — read side by side; ignored by SQLite, matters for Postgres (docs/BUSINESS-LOGIC.md §2).
              */
             $table->timestamp('found_at')->nullable()->after('fetched_at');
         });

@@ -20,9 +20,8 @@ use App\Application\Alerts\RouteDealNotice;
 use App\Application\Alerts\RuleMatchNotice;
 
 /**
- * The mail adapter behind App\Application\Ports\DealNotifier. Transport is
- * config-driven (MAIL_MAILER); the per-channel settings gate lives here.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The mail adapter behind App\Application\Ports\DealNotifier. Transport is config-driven (MAIL_MAILER); the
+ * per-channel settings gate lives here (docs/BUSINESS-LOGIC.md §10).
  */
 final readonly class MailDealNotifier implements DealNotifier
 {
@@ -42,10 +41,8 @@ final readonly class MailDealNotifier implements DealNotifier
         $notification = self::notificationFor($notice, $alertIds);
 
         /*
-         * Quiet hours as a queue delay: the notification is ShouldQueue so
-         * this line means something. The instant was already settled by
-         * App\Application\Alerts\DeliveryWindow.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * Quiet hours as a queue delay: the notification is ShouldQueue so this line means something. The instant was already
+         * settled by App\Application\Alerts\DeliveryWindow (docs/BUSINESS-LOGIC.md §10).
          */
         if ($notBefore !== null) {
             $notification->delay($notBefore);
@@ -68,9 +65,8 @@ final readonly class MailDealNotifier implements DealNotifier
     }
 
     /**
-     * Unknown notice types throw rather than fail silently — a silently
-     * undelivered alert is this app's worst failure mode (see AppServiceProvider).
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Unknown notice types throw rather than fail silently — a silently undelivered alert is this app's worst failure mode
+     * (see AppServiceProvider) (docs/BUSINESS-LOGIC.md §10).
      *
      * @param  list<int>  $alertIds
      */

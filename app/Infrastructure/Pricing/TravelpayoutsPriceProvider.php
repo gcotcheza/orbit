@@ -23,7 +23,7 @@ use Illuminate\Contracts\Cache\Repository as Cache;
  * silently answers round-trip instead, which would make every route look
  * expensive without ever failing loudly. `found_at` is the price's age, not
  * the request's -- Orbit is reading a cache of other searches.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §2.
  */
 final readonly class TravelpayoutsPriceProvider implements PriceProvider
 {
@@ -154,7 +154,7 @@ final readonly class TravelpayoutsPriceProvider implements PriceProvider
                 // off-by-one silently disabling the retry.
                 ->retry($this->retries + 1, $this->retryDelayMs, throw: false)
                 ->withHeaders([
-                    'X-Access-Token' => $this->token,
+                    'X-Access-Token'  => $this->token,
                     'Accept-Encoding' => 'gzip, deflate',
                 ])
                 ->acceptJson()

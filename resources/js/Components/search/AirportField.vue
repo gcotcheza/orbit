@@ -306,11 +306,8 @@ defineExpose({ clear })
 
     <slot name="quick" />
 
-    <!--
-      Input and ✕ share their own line; the panel stays a sibling rather than a
-      child, so positioning the ✕ isn't against the panel's height too.
-      Why: docs/BUSINESS-LOGIC.md §36.
-    -->
+    <!-- Input and ✕ share their own line; the panel is a sibling, not a child, so
+         positioning the ✕ isn't against the panel's height too (docs/BUSINESS-LOGIC.md §36). -->
     <div class="field__box">
       <input
         :id="id"
@@ -336,11 +333,8 @@ defineExpose({ clear })
         @keydown.enter="onEnter"
       >
 
-      <!--
-        Shown only when there's something to clear; @mousedown.prevent keeps
-        focus (and the caret) in the box, same as the suggestion rows.
-        Why: docs/BUSINESS-LOGIC.md §36.
-      -->
+      <!-- Shown only when there's something to clear; @mousedown.prevent keeps focus
+           (and the caret) in the box, same as the suggestion rows (docs/BUSINESS-LOGIC.md §36). -->
       <button
         v-if="clearLabel && filled"
         type="button"
@@ -357,11 +351,8 @@ defineExpose({ clear })
       </button>
     </div>
 
-    <!--
-      v-show, not v-if: the listbox id aria-controls names must exist in the DOM
-      even while empty, or it announces as broken.
-      Why: docs/BUSINESS-LOGIC.md §36.
-    -->
+    <!-- v-show, not v-if: the id aria-controls names must exist in the DOM even
+         while empty, or it announces as broken (docs/BUSINESS-LOGIC.md §36). -->
     <ul
       v-show="showing"
       :id="`${id}-list`"
@@ -370,17 +361,11 @@ defineExpose({ clear })
       role="listbox"
       :aria-label="listLabel"
     >
-      <!--
-        @mousedown.prevent is the whole focus race: without it, tap blurs the
-        input, focusout closes the list, and the click lands on nothing.
-        Why: docs/BUSINESS-LOGIC.md §36.
-      -->
+      <!-- @mousedown.prevent is the whole focus race: without it, tap blurs the input,
+           focusout closes the list, and the click lands on nothing (docs/BUSINESS-LOGIC.md §36). -->
       <template v-for="(suggestion, index) in suggestions" :key="suggestion.iata">
-        <!--
-          Drawn only when both tiers are present (`worldStartsAt > 0`, not `>= 0`);
-          role="presentation" so it isn't announced as a selectable option.
-          Why: docs/BUSINESS-LOGIC.md §36.
-        -->
+        <!-- Drawn only when both tiers are present (worldStartsAt > 0, not >= 0); role="presentation"
+             so it isn't announced as a selectable option (docs/BUSINESS-LOGIC.md §36). -->
         <li v-if="index === worldStartsAt && worldStartsAt > 0" class="options__split" role="presentation">
           Everywhere else Orbit can price
         </li>
@@ -407,11 +392,8 @@ defineExpose({ clear })
         </li>
       </template>
 
-      <!--
-        A real option — tapping fills the box like any suggestion — but not
-        arrow-reachable (`move()` walks `suggestions`, not this), so Enter takes it instead.
-        Why: docs/BUSINESS-LOGIC.md §36.
-      -->
+      <!-- A real option — tapping fills the box — but not arrow-reachable
+           (move() walks suggestions, not this), so Enter takes it instead (docs/BUSINESS-LOGIC.md §36). -->
       <li
         v-if="didYouMean"
         class="option option--guess"
@@ -424,11 +406,8 @@ defineExpose({ clear })
         <span class="option__code">{{ didYouMean.iata }}</span>
       </li>
 
-      <!--
-        Not role="option" — nothing to choose. "Searching…" isn't a spinner, it's
-        the absence of a wrong answer while the world search is still in flight.
-        Why: docs/BUSINESS-LOGIC.md §36.
-      -->
+      <!-- Not role="option" — nothing to choose. "Searching…" is the absence of a wrong
+           answer while the world search is still in flight (docs/BUSINESS-LOGIC.md §36). -->
       <li v-if="suggestions.length === 0 && !didYouMean" class="option option--empty">
         {{ emptyText }}
       </li>

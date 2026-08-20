@@ -10,14 +10,11 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * The catch-all, and the four things it must never swallow: a route that
- * is one regex character too greedy turns /up, /api or /horizon into a
- * 200 of HTML that reads as success.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The catch-all, and the four things it must never swallow: a route that is one regex character too greedy turns /up,
+ * /api or /horizon into a 200 of HTML that reads as success (docs/BUSINESS-LOGIC.md §36).
  *
- * `withoutVite()` throughout — these tests are about routing, not about
- * requiring a prior `npm run build`.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `withoutVite()` throughout — these tests are about routing, not about requiring a prior `npm run build`
+ * (docs/BUSINESS-LOGIC.md §36).
  */
 final class SpaShellTest extends TestCase
 {

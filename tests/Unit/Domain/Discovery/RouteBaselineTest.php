@@ -10,9 +10,8 @@ use PHPUnit\Framework\Attributes\Test;
 use App\Domain\Discovery\RouteBaseline;
 
 /**
- * The relative lane's arithmetic, hand-computed. Plain PHPUnit TestCase (not
- * Tests\TestCase) — no framework/DB, since RouteBaseline is a pure value.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The relative lane's arithmetic, hand-computed. Plain PHPUnit TestCase (not Tests\TestCase) — no framework/DB, since
+ * RouteBaseline is a pure value (docs/BUSINESS-LOGIC.md §16).
  */
 final class RouteBaselineTest extends TestCase
 {
@@ -32,9 +31,8 @@ final class RouteBaselineTest extends TestCase
     public function the_measured_malaga_find_is_sixty_three_percent_off(): void
     {
         /*
-         * DUS-AGP 2026-08-16 real fare: upper of the two cases the 0.40
-         * verification threshold sits below.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * DUS-AGP 2026-08-16 real fare: upper of the two cases the 0.40 verification threshold sits below
+         * (docs/BUSINESS-LOGIC.md §16).
          */
         $this->assertEqualsWithDelta(0.628, $this->baseline(7800)->discountOf(2900), 0.001);
     }
@@ -46,10 +44,8 @@ final class RouteBaselineTest extends TestCase
     }
 
     /**
-     * DO NOT remove: this killed the band-median design. AMS-DUB is the
-     * MEDIAN fare for its distance, so a sweep-drawn baseline could never
-     * surface it — this lane keeps the route's own window instead (see Lane).
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * DO NOT remove: this killed the band-median design. AMS-DUB is the MEDIAN fare for its distance, so a sweep-drawn baseline could never surface it —
+     * this lane keeps the route's own window instead (see Lane) (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_fare_dearer_than_its_baseline_scores_negative_and_is_not_clamped(): void
@@ -61,9 +57,8 @@ final class RouteBaselineTest extends TestCase
     }
 
     /**
-     * DO NOT remove the zero-median guard: it can't arise in practice, but
-     * without it the alternative is INF, which sorts to the TOP of rankings.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * DO NOT remove the zero-median guard: it can't arise in practice, but without it the alternative is INF, which sorts
+     * to the TOP of rankings (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_zero_median_cannot_produce_an_infinite_discount(): void
@@ -78,9 +73,8 @@ final class RouteBaselineTest extends TestCase
     }
 
     /**
-     * Saving clamps at 0 (discount doesn't): discount is a ranking key that
-     * must keep its sign, but "€-12 under its usual" can't print on a card.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Saving clamps at 0 (discount doesn't): discount is a ranking key that must keep its sign, but "€-12 under its usual"
+     * can't print on a card (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_dearer_fare_saves_nothing_rather_than_a_negative_amount(): void

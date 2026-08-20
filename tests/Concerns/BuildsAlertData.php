@@ -17,7 +17,7 @@ use Illuminate\Mail\Transport\ArrayTransport;
 /**
  * Fixtures for the alert pipeline's tests, sharing one set of price knots.
  *
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §10.
  */
 trait BuildsAlertData
 {
@@ -39,10 +39,8 @@ trait BuildsAlertData
     protected const ORDINARY_CENTS = 9300;
 
     /**
-     * A route this account watches, priced at `$cents` today — one price,
-     * deliberately, not a trend series.
-     *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * A route this account watches, priced at `$cents` today — one price, deliberately, not a trend series
+     * (docs/BUSINESS-LOGIC.md §10).
      */
     protected function watchedRoute(User $user, string $destination, int $cents, bool $active = true): Route
     {
@@ -64,10 +62,8 @@ trait BuildsAlertData
     }
 
     /**
-     * Today's price on a route old enough to have a score — `trackedSince()`
-     * is what clears the maturity gate.
-     *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Today's price on a route old enough to have a score — `trackedSince()` is what clears the maturity gate
+     * (docs/BUSINESS-LOGIC.md §10).
      */
     protected function priceRoute(Route $route, int $cents, string $departure = '2026-09-04'): void
     {
@@ -129,10 +125,8 @@ trait BuildsAlertData
     }
 
     /**
-     * Everything that actually reached the transport — array mailer, not
-     * `Mail::fake()`, so `delivered_at` assertions still work.
-     *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Everything that actually reached the transport — array mailer, not `Mail::fake()`, so `delivered_at` assertions
+     * still work (docs/BUSINESS-LOGIC.md §10).
      *
      * @return list<Email>
      */

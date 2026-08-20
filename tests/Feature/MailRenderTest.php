@@ -20,14 +20,11 @@ use App\Application\Alerts\RuleMatchNotice;
 /**
  * What the three Orbit mails actually look like when they are rendered.
  *
- * Tested despite being "judged by looking" because failures here are
- * silent: wrong theme path, media queries stripped, or a banner pointing
- * at localhost — all render valid HTML with the wrong thing, no error.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Tested despite being "judged by looking" because failures here are silent: wrong theme path, media queries stripped, or a banner pointing at localhost
+ * — all render valid HTML with the wrong thing, no error (docs/BUSINESS-LOGIC.md §10).
  *
- * Copy assertions aren't decoration — a redesign is exactly the change
- * likely to drop config-quoted copy nobody notices is missing.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Copy assertions aren't decoration — a redesign is exactly the change likely to drop config-quoted copy nobody
+ * notices is missing (docs/BUSINESS-LOGIC.md §10).
  */
 final class MailRenderTest extends TestCase
 {
@@ -85,9 +82,8 @@ final class MailRenderTest extends TestCase
 
             $this->assertStringContainsString(self::BANNER, $html, $mail);
 
-            // APP_URL is http://localhost in this suite; a banner resolved via
-            // asset() would bake that in — broken forever once the mail is sent.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // APP_URL is http://localhost in this suite; a banner resolved via asset() would bake that in — broken forever once
+            // the mail is sent (docs/BUSINESS-LOGIC.md §10).
             $this->assertStringNotContainsString('localhost/mail/header.png', $html, $mail);
         }
     }
@@ -192,9 +188,8 @@ final class MailRenderTest extends TestCase
         $this->assertStringContainsString('Rotterdam → Tirana', $html);
         $this->assertStringContainsString('Not enough data yet', $html);
 
-        // App\Domain\Pricing\DealScorer's "no opinion" is a score of 0 — printed,
-        // that reads as "terrible", the opposite of what it means.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // App\Domain\Pricing\DealScorer's "no opinion" is a score of 0 — printed, that reads as "terrible", the opposite of
+        // what it means (docs/BUSINESS-LOGIC.md §10).
         $this->assertStringNotContainsString('0/100', $html);
 
         /* The sections that do have something to say still say it. */

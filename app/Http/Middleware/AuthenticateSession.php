@@ -24,9 +24,8 @@ final class AuthenticateSession extends FrameworkAuthenticateSession
     }
 
     /**
-     * Store the hash under this middleware's own key as well as the framework's.
-     * Copied, not recomputed, from `password_hash_sanctum` to `password_hash_web` — whatever format the framework used stays intact in both keys.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Store the hash under this middleware's own key as well as the framework's. Copied, not recomputed, from `password_hash_sanctum` to `password_hash_web`
+     * — whatever format the framework used stays intact in both keys (docs/BUSINESS-LOGIC.md §36).
      *
      * @param  Request  $request
      */

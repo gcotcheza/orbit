@@ -63,10 +63,8 @@ function confirmRemove() {
 
 <template>
   <article class="pass">
-    <!--
-      aria-label overrides this link's own text (the flight number is set dressing).
-      Why: docs/BUSINESS-LOGIC.md §36.
-    -->
+    <!-- aria-label overrides this link's own text — the flight number is set
+         dressing, not the accessible name (docs/BUSINESS-LOGIC.md §36). -->
     <RouterLink
       class="pass__open"
       :to="{ name: 'route-detail', params: { id: route.code } }"
@@ -107,10 +105,7 @@ function confirmRemove() {
           </p>
         </div>
 
-        <!--
-          Same chevron affordance as SpotlightCard.vue, sized to this row.
-          Why: docs/BUSINESS-LOGIC.md §36.
-        -->
+        <!-- Same chevron affordance as SpotlightCard.vue, sized to this row (docs/BUSINESS-LOGIC.md §36). -->
         <svg class="chevron" width="15" height="15" viewBox="0 0 18 18" fill="none" aria-hidden="true">
           <path d="M6 4l5 5-5 5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
         </svg>

@@ -7,14 +7,11 @@ namespace App\Domain\Rules;
 /**
  * What a rule actually asks for, once the English has been read.
  *
- * Every nullable/empty field means "no opinion", not "no results" (empty
- * origins = all airports, null maxPriceCents = any price) — removing a chip
- * WIDENS the rule rather than narrowing it to nothing.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Every nullable/empty field means "no opinion", not "no results" (empty origins = all airports, null maxPriceCents =
+ * any price) — removing a chip WIDENS the rule rather than narrowing it to nothing (docs/BUSINESS-LOGIC.md §11).
  *
- * Persisted as `deal_rules.criteria`; `from()` must survive JSON an older
- * version wrote. Unreadable fields are dropped, not thrown on.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Persisted as `deal_rules.criteria`; `from()` must survive JSON an older version wrote. Unreadable fields are
+ * dropped, not thrown on (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class RuleCriteria
 {
@@ -49,9 +46,8 @@ final readonly class RuleCriteria
     }
 
     /**
-     * Shape `from()` reads, `deal_rules.criteria` stores, and docs/API.md
-     * publishes field-for-field — one definition, not three.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Shape `from()` reads, `deal_rules.criteria` stores, and docs/API.md publishes field-for-field — one definition, not
+     * three (docs/BUSINESS-LOGIC.md §11).
      *
      * @return array<string, mixed>
      */
@@ -72,9 +68,8 @@ final readonly class RuleCriteria
     }
 
     /**
-     * Nothing understood (empty sentence, or garbage). Create screen branches
-     * on this rather than an empty chip list — same criteria, different message.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Nothing understood (empty sentence, or garbage). Create screen branches on this rather than an empty chip list —
+     * same criteria, different message (docs/BUSINESS-LOGIC.md §11).
      */
     public function isEmpty(): bool
     {

@@ -12,12 +12,8 @@ use Illuminate\Support\Facades\Date;
 use App\Application\Ports\PriceStatsProvider;
 
 /**
- * "Usual price", computed from Orbit's own fares (no third-party statistics
- * API exists any more). Blends a cross-sectional view (the near window's
- * calendar) with a longitudinal one (daily observation history) as maturity
- * grows. Reads the database, unlike every other adapter here, because for
- * this port the outside world is a table Orbit filled itself.
- * Why: docs/BUSINESS-LOGIC.md §23.
+ * "Usual price", computed from Orbit's own fares (no third-party statistics API exists any more). Blends a cross-sectional view (the near window's calendar) with a longitudinal one (daily observation
+ * history) as maturity grows. Reads the database, unlike every other adapter here, because for this port the outside world is a table Orbit filled itself (docs/BUSINESS-LOGIC.md §23).
  */
 final readonly class SelfStatsProvider implements PriceStatsProvider
 {

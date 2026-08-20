@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Rules;
 
 /**
- * The words this app knows, handed to parts not allowed to call config() —
- * App\Domain is pure PHP (docs/PLAN.md). Built once in AppServiceProvider.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The words this app knows, handed to parts not allowed to call config() — App\Domain is pure PHP (docs/PLAN.md).
+ * Built once in AppServiceProvider (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class RuleVocabulary
 {

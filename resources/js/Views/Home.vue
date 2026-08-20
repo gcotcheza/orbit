@@ -107,11 +107,8 @@ onActivated(() => {
         <h1 class="home__greeting">{{ greeting }}</h1>
       </div>
 
-      <!--
-        Alerts is the nearest real destination for this icon; the hash lands on
-        #account rather than the top of that screen (a past UX finding).
-        Why: docs/BUSINESS-LOGIC.md §36.
-      -->
+      <!-- Alerts is the nearest real destination for this icon; the hash lands
+           on #account, not the top of that screen (docs/BUSINESS-LOGIC.md §36). -->
       <RouterLink
         class="home__profile"
         :to="{ name: 'alerts', hash: '#account' }"
@@ -138,10 +135,8 @@ onActivated(() => {
       <button class="home__retry" type="button" @click="load">Try again</button>
     </div>
 
-    <!--
-      Day one: the empty globe still draws (no placeholder card); GlobeStage with no routes costs textures but no camera work.
-      Why: docs/BUSINESS-LOGIC.md §36.
-    -->
+    <!-- Day one: the empty globe still draws, no placeholder card — it costs
+         textures but no camera work (docs/BUSINESS-LOGIC.md §36). -->
     <div v-else-if="activeRoutes.length === 0" class="home__day1">
       <GlobeStage
         v-if="globeAvailable"

@@ -24,9 +24,8 @@ const scene = {
 
 const createGlobeScene = vi.fn(async () => scene)
 
-// vi.mock is hoisted above imports, so this factory runs before the two
-// consts above exist — both references are deferred in functions because of it.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// vi.mock is hoisted above imports, so this factory runs before the two consts above exist — both references are
+// deferred in functions because of it (docs/BUSINESS-LOGIC.md §36).
 vi.mock('./globeScene', () => ({
     hasWebgl: () => true,
     createGlobeScene: (...args) => createGlobeScene(...args),
@@ -65,10 +64,8 @@ function stubBrowserApis() {
 }
 
 /**
- * Mount the stage and let its async globe.gl import settle. Wrapper is
- * remembered for afterEach: jsdom's document outlives the test, so a stage
- * left mounted keeps answering visibilitychange for every test after it.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Mount the stage and let its async globe.gl import settle. Wrapper is remembered for afterEach: jsdom's document outlives the test, so a stage left
+ * mounted keeps answering visibilitychange for every test after it (docs/BUSINESS-LOGIC.md §36).
  */
 let stage = null
 
@@ -146,9 +143,8 @@ describe('the sequence', () => {
     it('shows the plane only while it is in the air, pointed where it is going', async () => {
         const wrapper = await mountStage()
 
-        // v-show read off style attr, not VTU's isVisible(): it has opinions
-        // about SVG in a detached tree.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // v-show read off style attr, not VTU's isVisible(): it has opinions about SVG in a detached tree
+        // (docs/BUSINESS-LOGIC.md §36).
         const planeStyle = () => wrapper.find('.plane').attributes('style')
 
         expect(planeStyle()).toContain('display: none')
@@ -221,9 +217,8 @@ describe('cancellation', () => {
     })
 
     it('is born asleep when the screen was hidden while the globe was loading', async () => {
-        // Import can be backgrounded before it settles, so pause() may run
-        // before there's anything to pause.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Import can be backgrounded before it settles, so pause() may run before there's anything to pause
+        // (docs/BUSINESS-LOGIC.md §36).
         stage = mount(GlobeStage, { props: { routes: [AMS_LIS], activeCode: AMS_LIS.code } })
 
         Object.defineProperty(document, 'hidden', { value: true, configurable: true })

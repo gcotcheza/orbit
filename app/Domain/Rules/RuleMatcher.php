@@ -11,10 +11,10 @@ use App\Domain\Pricing\DatedFare;
  * Which places a rule is about, and which fares it would fire on.
  *
  * Pure PHP, zero queries (docs/PLAN.md) — kept as two functions so SweepRuleFares can ask "where" before there are fares.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §11.
  *
  * Trip length is parsed but not matched on, deliberately — PriceProvider has no return-leg fact yet to filter on.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §11.
  */
 final readonly class RuleMatcher
 {
@@ -31,7 +31,7 @@ final readonly class RuleMatcher
      * The destinations a rule is asking about, best fit first.
      *
      * Two filters (vibe, climate) then a deterministic sort — see config/orbit.php for the climate rule.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §11.
      *
      * @param  list<DestinationProfile>  $destinations
      * @return list<DestinationProfile>
@@ -91,7 +91,7 @@ final readonly class RuleMatcher
 
             /*
              * Strictly cheaper, so a tie keeps the earlier date — same rule RouteSnapshots picks by.
-             * Why: docs/BUSINESS-LOGIC.md §36.
+             * Why: docs/BUSINESS-LOGIC.md §11.
              */
             if ($cheapest === null || $fare->cents < $cheapest->cents) {
                 $cheapest = $fare;

@@ -10,9 +10,8 @@ use App\Models\UserSettings;
 use App\Domain\Alerts\QuietHours;
 
 /**
- * When this account may be interrupted — the one place quiet hours stop
- * being a wall clock and become an instant, computed once, here.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * When this account may be interrupted — the one place quiet hours stop being a wall clock and become an instant,
+ * computed once, here (docs/BUSINESS-LOGIC.md §10).
  */
 final readonly class DeliveryWindow
 {

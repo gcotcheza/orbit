@@ -101,9 +101,8 @@ function leadingBlanks(year, month) {
 }
 
 /**
- * The cells of one month, in reading order, ready for a 7-column grid.
- * Built from the calendar, filled from the API — never the other way round: `days` arrives with gaps missing entirely, so indexing into it would misalign every date after a gap.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The cells of one month, in reading order, ready for a 7-column grid. Built from the calendar, filled from the API — never the other way round: `days`
+ * arrives with gaps missing entirely, so indexing into it would misalign every date after a gap (docs/BUSINESS-LOGIC.md §36).
  *
  * Blanks carry a key of their own because Vue needs one and their index is the
  * only thing that distinguishes them.

@@ -9,10 +9,10 @@ namespace App\Domain\Rules;
  * add up to.
  *
  * One direction only: criteria in, chips out, criteria back — nothing builds chips by hand.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §11.
  *
  * `without()` re-derives criteria from the remaining chips rather than re-parsing text.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §11.
  */
 final readonly class ParsedRule
 {
@@ -84,7 +84,7 @@ final readonly class ParsedRule
      * The same parse with some chips taken off.
      *
      * Unknown ids are ignored, not rejected — normal while the client re-parses text as somebody types.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §11.
      *
      * @param  list<string>  $removedIds
      */

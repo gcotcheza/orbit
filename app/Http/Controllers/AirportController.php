@@ -11,9 +11,8 @@ use App\Http\Requests\SearchAirportsRequest;
 use App\Http\Resources\DestinationOptionResource;
 
 /**
- * Every airport Orbit will price, searched (the add-route form's typeahead).
- * Unlike GET /api/destinations: includes origins, shares its ranking, no accent folding.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Every airport Orbit will price, searched (the add-route form's typeahead). Unlike GET /api/destinations: includes
+ * origins, shares its ranking, no accent folding (docs/BUSINESS-LOGIC.md §36).
  */
 final class AirportController extends Controller
 {
@@ -64,14 +63,11 @@ final class AirportController extends Controller
     }
 
     /**
-     * Best match first: the code, then the city, then the airport's own name,
-     * then the country, then anything that merely contains what was typed.
-     * Order matches destinations.js's curated-list ranking — shown as one merged list.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Best match first: the code, then the city, then the airport's own name, then the country, then anything that merely contains what was typed. Order
+     * matches destinations.js's curated-list ranking — shown as one merged list (docs/BUSINESS-LOGIC.md §36).
      *
-     * Every value in the CASE expression is a bound `?`; the literal-string
-     * return type proves no typed input reaches orderByRaw() as text.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Every value in the CASE expression is a bound `?`; the literal-string return type proves no typed input reaches
+     * orderByRaw() as text (docs/BUSINESS-LOGIC.md §36).
      *
      * @return literal-string
      */

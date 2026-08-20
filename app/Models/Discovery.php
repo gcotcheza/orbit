@@ -14,17 +14,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * One route Orbit went and found on its own.
  *
- * The row behind App\Domain\Discovery\DealCandidate once verified; only
- * the card's claim and its evidence survive, not the raw sweep entry.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The row behind App\Domain\Discovery\DealCandidate once verified; only the card's claim and its evidence survive, not
+ * the raw sweep entry (docs/BUSINESS-LOGIC.md §16).
  *
- * Deliberately has no `route_id` — a discovery is an unwatched, often
- * unpriced pair, named by airport key and `code` until someone taps it.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Deliberately has no `route_id` — a discovery is an unwatched, often unpriced pair, named by airport key and `code`
+ * until someone taps it (docs/BUSINESS-LOGIC.md §16).
  *
- * Deliberately has no user_id, unlike `alerts`/`watchlist_items` — a
- * discovery is a fact about the world, not an account's relationship to it.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Deliberately has no user_id, unlike `alerts`/`watchlist_items` — a discovery is a fact about the world, not an
+ * account's relationship to it (docs/BUSINESS-LOGIC.md §16).
  *
  * @property int $id
  * @property int $origin_airport_id
@@ -51,9 +48,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 final class Discovery extends Model
 {
     /**
-     * Laravel would pluralise this to `discoverys` — overridden because the
-     * table name must agree with the migration, the prune, and three tests.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Laravel would pluralise this to `discoverys` — overridden because the table name must agree with the migration, the
+     * prune, and three tests (docs/BUSINESS-LOGIC.md §16).
      */
     protected $table = 'discoveries';
 
@@ -76,13 +72,11 @@ final class Discovery extends Model
     /**
      * The current set: still live, cheapest per kilometre first.
      *
-     * A scope, not a controller query — these clauses are both the API's read
-     * and the prune's definition of "current"; diverging spellings desync them.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * A scope, not a controller query — these clauses are both the API's read and the prune's definition of "current";
+     * diverging spellings desync them (docs/BUSINESS-LOGIC.md §16).
      *
-     * Ordered by €/km, not price — sorted by price this list is just the
-     * nearest airports; the reader sorts on instinct from the price shown.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Ordered by €/km, not price — sorted by price this list is just the nearest airports; the reader sorts on instinct
+     * from the price shown (docs/BUSINESS-LOGIC.md §16).
      *
      * @param  Builder<Discovery>  $query
      * @return Builder<Discovery>
@@ -91,9 +85,8 @@ final class Discovery extends Model
     {
         return $query
             ->where('expires_at', '>', $now)
-            // AND NOT a departure that has gone by: `expires_at` bounds find
-            // believability, this bounds flight takeability — different things.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // AND NOT a departure that has gone by: `expires_at` bounds find believability, this bounds flight takeability —
+            // different things (docs/BUSINESS-LOGIC.md §16).
             ->whereDate('departure_date', '>=', $now->toDateString())
             ->orderBy('cents_per_km')
             ->orderBy('code');
@@ -102,9 +95,8 @@ final class Discovery extends Model
     /**
      * Whether Google was asked and said yes.
      *
-     * Read off the stored verdict, never recomputed — re-deriving from the
-     * other fields would let a retuned rule silently rewrite past claims.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Read off the stored verdict, never recomputed — re-deriving from the other fields would let a retuned rule silently
+     * rewrite past claims (docs/BUSINESS-LOGIC.md §16).
      */
     public function isVerified(): bool
     {
@@ -117,9 +109,8 @@ final class Discovery extends Model
     protected function casts(): array
     {
         return [
-            // THE ENUM IS THE CAST: nothing downstream compares a lane to a string
-            // literal. See App\Domain\Discovery\Lane for the two cases.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // THE ENUM IS THE CAST: nothing downstream compares a lane to a string literal. See App\Domain\Discovery\Lane for the
+            // two cases (docs/BUSINESS-LOGIC.md §16).
             'lane'           => Lane::class,
             'departure_date' => 'immutable_date',
             'found_at'       => 'immutable_datetime',

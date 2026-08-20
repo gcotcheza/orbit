@@ -164,9 +164,8 @@ final class GoogleFlightsCheckTest extends TestCase
             $this->assertSame('DUS', $query['departure_id']);
             $this->assertSame('AGP', $query['arrival_id']);
             $this->assertSame('2026-10-24', $query['outbound_date']);
-            // ONE WAY: every price in the funnel is one-way; a round trip would
-            // compare a €29 one-way against a €200 return and call it a discrepancy.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // ONE WAY: every price in the funnel is one-way; a round trip would compare a €29 one-way against a €200 return and
+            // call it a discrepancy (docs/BUSINESS-LOGIC.md §17).
             $this->assertSame('2', $query['type']);
             $this->assertSame('EUR', $query['currency']);
             $this->assertSame('nl', $query['gl']);
@@ -220,9 +219,8 @@ final class GoogleFlightsCheckTest extends TestCase
     }
 
     /**
-     * ⚠ `ask()` says which kind: SerpAPI billed a search that found nothing to
-     * say; one it never ran was not — callers must tell those apart.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * ⚠ `ask()` says which kind: SerpAPI billed a search that found nothing to say; one it never ran was not — callers
+     * must tell those apart (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_route_google_has_no_opinion_about_was_still_billed(): void
@@ -248,9 +246,8 @@ final class GoogleFlightsCheckTest extends TestCase
     }
 
     /**
-     * ⚠ A body not echoing EUR, or an unfinished search, is not an answer —
-     * dollars would read as a bargain, partial results as a real market.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * ⚠ A body not echoing EUR, or an unfinished search, is not an answer — dollars would read as a bargain, partial
+     * results as a real market (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_body_that_is_not_a_finished_euro_search_is_no_answer(): void

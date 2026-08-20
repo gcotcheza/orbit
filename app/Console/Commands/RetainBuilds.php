@@ -8,9 +8,8 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 
 /**
- * `php artisan build:retain` — keep the last few builds' assets on disk,
- * delete the rest via a per-build ledger (mtime can't identify a build).
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `php artisan build:retain` — keep the last few builds' assets on disk, delete the rest via a per-build ledger (mtime
+ * can't identify a build) (docs/BUSINESS-LOGIC.md §36).
  *
  * Default `--keep=3`: balances phone cache staleness against build count.
  * Why: docs/BUSINESS-LOGIC.md §36.
@@ -41,9 +40,8 @@ final class RetainBuilds extends Command
         $manifestPath = $dir.'/manifest.json';
 
         if (! File::exists($manifestPath)) {
-            // Not an error: deploy runs this right after build; a missing
-            // manifest means build already failed and reported it.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // Not an error: deploy runs this right after build; a missing manifest means build already failed and reported it
+            // (docs/BUSINESS-LOGIC.md §36).
             $this->components->warn("No build manifest at {$manifestPath} — nothing to retain.");
 
             return self::SUCCESS;
@@ -128,9 +126,8 @@ final class RetainBuilds extends Command
     /**
      * Write the snapshot for this build, unless one already exists.
      *
-     * Not overwritten on rerun: `recorded_at` orders the ledger, so
-     * refreshing would bump this run ahead of a genuinely newer build.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Not overwritten on rerun: `recorded_at` orders the ledger, so refreshing would bump this run ahead of a genuinely
+     * newer build (docs/BUSINESS-LOGIC.md §36).
      *
      * @param  list<string>  $files
      * @return bool whether a new snapshot was written
@@ -150,9 +147,8 @@ final class RetainBuilds extends Command
         File::put($path, (string) json_encode([
             'version' => $version,
 
-            // MICROSECONDS matter: two deploys can land in the same second;
-            // at that resolution the sort ties and retention drops the wrong build.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // MICROSECONDS matter: two deploys can land in the same second; at that resolution the sort ties and retention drops
+            // the wrong build (docs/BUSINESS-LOGIC.md §36).
             'recorded_at' => now()->format('Y-m-d\TH:i:s.uP'),
 
             'files' => $files,
@@ -206,9 +202,8 @@ final class RetainBuilds extends Command
     /**
      * Delete everything in `assets/` that no retained snapshot names.
      *
-     * Scoped to `assets/` only — `public/build` also holds manifest.json
-     * and the ledger; walking the whole tree risks deleting our own bookkeeping.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Scoped to `assets/` only — `public/build` also holds manifest.json and the ledger; walking the whole tree risks
+     * deleting our own bookkeeping (docs/BUSINESS-LOGIC.md §36).
      *
      * A kept file also keeps its `.map` (Vite omits maps from the manifest).
      * Why: docs/BUSINESS-LOGIC.md §36.

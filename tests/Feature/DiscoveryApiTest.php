@@ -107,10 +107,8 @@ final class DiscoveryApiTest extends TestCase
     }
 
     /**
-     * The lane is published as the enum's string: the client's sentence per lane is
-     * a claim about evidence — a relative price needs "rare for this route" or it
-     * looks arbitrary next to an absolute one.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * The lane is published as the enum's string: the client's sentence per lane is a claim about evidence — a relative
+     * price needs "rare for this route" or it looks arbitrary next to an absolute one (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_relative_find_publishes_its_lane(): void
@@ -198,9 +196,8 @@ final class DiscoveryApiTest extends TestCase
     }
 
     /**
-     * A box with no sweep provider, or a week where nothing was remarkable; every
-     * threshold is a floor, not a quota, precisely so this can happen.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * A box with no sweep provider, or a week where nothing was remarkable; every threshold is a floor, not a quota,
+     * precisely so this can happen (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function an_empty_set_is_a_real_and_common_answer(): void

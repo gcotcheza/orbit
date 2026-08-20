@@ -127,11 +127,8 @@ export function flagFor(countryCode) {
 }
 
 /**
- * The `FW###` in the boarding pass eyebrow, derived from the route code.
- * No real flight — set dressing for the card. Derived, not random, so AMS-LIS
- * shows the same number on every render/device/reload (a changing number would
- * give the fiction away). Hash is the design prototype's own 31-multiplier sum.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The `FW###` in the boarding pass eyebrow, derived from the route code. No real flight — set dressing for the card. Derived, not random, so AMS-LIS shows the same number on every render/device/reload
+ * (a changing number would give the fiction away). Hash is the design prototype's own 31-multiplier sum (docs/BUSINESS-LOGIC.md §36).
  *
  * @param {string} code "AMS-LIS"
  * @returns {string} "FW304"

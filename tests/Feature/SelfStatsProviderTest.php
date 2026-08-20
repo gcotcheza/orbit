@@ -21,7 +21,7 @@ use App\Infrastructure\Pricing\SelfStatsProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 // Feature test (not unit) because the provider reads tables; all expected numbers below are hand-computed from the fixed WINDOW/MORNINGS fixtures, not copied from a run.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Why: docs/BUSINESS-LOGIC.md §6.
 final class SelfStatsProviderTest extends TestCase
 {
     use RefreshDatabase;
@@ -70,7 +70,7 @@ final class SelfStatsProviderTest extends TestCase
     }
 
     // Cross-section uses the near window (`orbit.selfstats.cross_section_days`), not the full 11-month calendar: sparse far-future fares skew toward peak season and would inflate the score.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §6.
     #[Test]
     public function fares_beyond_the_near_window_are_not_part_of_what_a_route_usually_costs(): void
     {
@@ -118,7 +118,7 @@ final class SelfStatsProviderTest extends TestCase
     }
 
     // Drift guard: `orbit.poll.window_days` and `orbit.selfstats.cross_section_days` must stay equal, or the pool (typical) and the poll (best fare, PollRoutePrices) are scored over different spans.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §6.
     #[Test]
     public function the_statistical_pool_and_the_near_poll_window_are_the_same_span(): void
     {
@@ -230,7 +230,7 @@ final class SelfStatsProviderTest extends TestCase
     }
 
     // A route that lost provider coverage falls back to history alone rather than blending toward a window that no longer exists.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §6.
     #[Test]
     public function a_route_the_provider_has_stopped_covering_falls_back_to_its_history(): void
     {
@@ -244,7 +244,7 @@ final class SelfStatsProviderTest extends TestCase
     }
 
     // A single morning is a degenerate summary (every knot equal); PriceStats scores it 0.5 ("exactly usual") and must not throw or fake a spread.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §6.
     #[Test]
     public function a_single_morning_and_nothing_else_is_not_a_crash(): void
     {
@@ -289,7 +289,7 @@ final class SelfStatsProviderTest extends TestCase
     }
 
     // The Monday-morning case: a route polled once (182 cells, 1 observation) must refresh into a usable stats row, not nothing, the day the feature switches on.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §6.
     #[Test]
     public function a_refresh_straight_after_the_first_poll_writes_sane_statistics(): void
     {
@@ -308,7 +308,7 @@ final class SelfStatsProviderTest extends TestCase
         $this->assertLessThanOrEqual($stats->max_cents, $stats->p75_cents);
 
         // With 1 observation against maturity 30, the window carries 29/30 of the weight, so both min/max sit inside the polled window's own range.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §6.
         $window = CalendarFare::query()->where('route_id', $route->id);
 
         $this->assertGreaterThanOrEqual((int) (clone $window)->min('price_cents'), $stats->min_cents);
@@ -317,7 +317,7 @@ final class SelfStatsProviderTest extends TestCase
     }
 
     // Null is a real answer: RefreshRouteStats writes no row rather than a row of zeroes, which would score every fare on the route as astronomically expensive.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §6.
     #[Test]
     public function a_refresh_of_a_route_with_no_fares_writes_nothing(): void
     {

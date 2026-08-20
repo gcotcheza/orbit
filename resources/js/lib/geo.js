@@ -29,10 +29,8 @@ export function easeInOutQuad(t) {
 }
 
 /**
- * Initial bearing (deg clockwise from north, [0, 360)) — a BEARING, not the on-screen line
- * angle (same thing only because the camera looks straight down). Changes continuously along
- * a great circle, so the choreography recomputes it per frame from the CURRENT segment.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Initial bearing (deg clockwise from north, [0, 360)) — a BEARING, not the on-screen line angle (same thing only because the camera looks straight
+ * down). Changes continuously along a great circle, so the choreography recomputes it per frame from the CURRENT segment (docs/BUSINESS-LOGIC.md §36).
  */
 export function bearing(from, to) {
     const fromLat = from.lat * RAD
@@ -46,10 +44,8 @@ export function bearing(from, to) {
 }
 
 /**
- * Great-circle path (segments + 1 points) via slerp — matches globe.gl's drawn arc, unlike
- * a straight lat/lng line (a rhumb line, visibly off for anything longer than Europe).
- * Degenerate case (same/antipodal points): collapses to the endpoints rather than NaN.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Great-circle path (segments + 1 points) via slerp — matches globe.gl's drawn arc, unlike a straight lat/lng line (a rhumb line, visibly off for
+ * anything longer than Europe). Degenerate case (same/antipodal points): collapses to the endpoints rather than NaN (docs/BUSINESS-LOGIC.md §36).
  */
 export function greatCirclePoints(from, to, segments = FLIGHT_SEGMENTS) {
     const a = toVector(from)
@@ -81,19 +77,16 @@ export function greatCirclePoints(from, to, segments = FLIGHT_SEGMENTS) {
 }
 
 /**
- * True midpoint of the path, not the average of the two lat/lngs — the average is wrong by
- * hemispheres crossing the antimeridian (AMS→NRT would centre on the Atlantic).
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * True midpoint of the path, not the average of the two lat/lngs — the average is wrong by hemispheres crossing the
+ * antimeridian (AMS→NRT would centre on the Atlantic) (docs/BUSINESS-LOGIC.md §36).
  */
 export function pathMidpoint(path) {
     return path[Math.floor(path.length / 2)]
 }
 
 /**
- * Camera position/heading at raw progress `t` (0..1 wall-clock) — easing lives here so every
- * caller shares one curve. Longitude uses the shortest delta, not a naive lerp: 179.6°→−179.7°
- * is 0.7° of flying, not 359.3°, or the camera jumps to the far side for one frame.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Camera position/heading at raw progress `t` (0..1 wall-clock) — easing lives here so every caller shares one curve. Longitude uses the shortest delta,
+ * not a naive lerp: 179.6°→−179.7° is 0.7° of flying, not 359.3°, or the camera jumps to the far side for one frame (docs/BUSINESS-LOGIC.md §36).
  */
 export function flightPose(path, t) {
     const e = easeInOutQuad(clamp(t, 0, 1))

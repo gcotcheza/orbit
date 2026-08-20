@@ -13,11 +13,8 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Contracts\Cache\Repository as Cache;
 
 /**
- * Route freshness + fetch-on-demand for POST /api/routes/lookup: freshness is read off
- * calendar_fares.fetched_at (no extra bookkeeping), a cache add() remembers both "asked and
- * got nothing" and guards against a fetch stampede, and both jobs run dispatchSync so a
- * looked-up route never sits watchable-but-empty.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Route freshness + fetch-on-demand for POST /api/routes/lookup: freshness is read off calendar_fares.fetched_at (no extra bookkeeping), a cache add() remembers both "asked and got nothing" and guards
+ * against a fetch stampede, and both jobs run dispatchSync so a looked-up route never sits watchable-but-empty (docs/BUSINESS-LOGIC.md §1).
  */
 final readonly class FareFreshness
 {
@@ -30,9 +27,8 @@ final readonly class FareFreshness
     public function lastFetchedAt(Route $route): ?CarbonImmutable
     {
         /**
-         * Row, not max('fetched_at'): max() returns a driver-native value (string on SQLite,
-         * timestamp on Postgres) that would need hand-parsing — the model cast handles it.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * Row, not max('fetched_at'): max() returns a driver-native value (string on SQLite, timestamp on Postgres) that would
+         * need hand-parsing — the model cast handles it (docs/BUSINESS-LOGIC.md §1).
          */
         return CalendarFare::query()
             ->where('route_id', $route->id)
@@ -69,24 +65,20 @@ final readonly class FareFreshness
         }
 
         // Cache add(): remembers "asked and got nothing" and guards a duplicate simultaneous fetch.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §1.
         if (! $this->cache->add(self::key($route), true, self::hours() * 3600)) {
             return false;
         }
 
         /**
-         * window_days (6mo), not horizon_days (11mo): a lookup's calls are sequential with
-         * somebody waiting, and the throttle is priced off this window — a looked-up route
-         * lacks months 7-11 until the weekly poll fills them in. dispatchSync runs handle()
-         * inline: no serialization, no retry, an exception here is this request's.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * window_days (6mo), not horizon_days (11mo): a lookup's calls are sequential with somebody waiting, and the throttle is priced off this window — a looked-up route lacks months 7-11 until the weekly
+         * poll fills them in. dispatchSync runs handle() inline: no serialization, no retry, an exception here is this request's (docs/BUSINESS-LOGIC.md §1).
          */
         PollRoutePrices::dispatchSync($route->id, (int) config('orbit.poll.window_days'));
 
         /**
-         * Self statistics computed from the two tables the poll just wrote — local
-         * arithmetic, not a second provider call — else the screen has no "usual €93" to compare.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * Self statistics computed from the two tables the poll just wrote — local arithmetic, not a second provider call —
+         * else the screen has no "usual €93" to compare (docs/BUSINESS-LOGIC.md §1).
          */
         RefreshRouteStats::dispatchSync($route->id);
 

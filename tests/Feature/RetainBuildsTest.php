@@ -10,13 +10,11 @@ use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
- * `build:retain` — the half of `emptyOutDir: false` that stops the disk
- * filling: keep files a phone might still need, delete what nothing can.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `build:retain` — the half of `emptyOutDir: false` that stops the disk filling: keep files a phone might still need,
+ * delete what nothing can (docs/BUSINESS-LOGIC.md §36).
  *
- * Runs against a temp dir, not public/build, so a prune bug can't delete the
- * assets the rest of the suite is served from.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Runs against a temp dir, not public/build, so a prune bug can't delete the assets the rest of the suite is served
+ * from (docs/BUSINESS-LOGIC.md §36).
  */
 final class RetainBuildsTest extends TestCase
 {
@@ -64,9 +62,8 @@ final class RetainBuildsTest extends TestCase
     }
 
     /**
-     * `$this->artisan()` is typed `PendingCommand|int`; narrowed here for
-     * readable assertion chains and honest static analysis.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * `$this->artisan()` is typed `PendingCommand|int`; narrowed here for readable assertion chains and honest static
+     * analysis (docs/BUSINESS-LOGIC.md §36).
      *
      * @param  array<string, mixed>  $parameters
      */
@@ -100,9 +97,8 @@ final class RetainBuildsTest extends TestCase
     }
 
     /**
-     * DO NOT refresh `recorded_at` on a no-op run, or a daily run would make
-     * the oldest build look like the newest.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * DO NOT refresh `recorded_at` on a no-op run, or a daily run would make the oldest build look like the newest
+     * (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function running_twice_without_a_build_changes_nothing(): void
@@ -126,9 +122,8 @@ final class RetainBuildsTest extends TestCase
     }
 
     /**
-     * The command's core behavior: keep 3 builds (a phone can miss 3 deploys
-     * and still be rescued), prune the rest.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * The command's core behavior: keep 3 builds (a phone can miss 3 deploys and still be rescued), prune the rest
+     * (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function the_newest_builds_survive_and_older_assets_are_deleted(): void
@@ -151,9 +146,8 @@ final class RetainBuildsTest extends TestCase
     }
 
     /**
-     * DO NOT prune by mtime: an unchanged chunk keeps its name across builds,
-     * so it looks old but is still current.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * DO NOT prune by mtime: an unchanged chunk keeps its name across builds, so it looks old but is still current
+     * (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_file_shared_by_a_retained_build_is_kept(): void
@@ -182,9 +176,8 @@ final class RetainBuildsTest extends TestCase
     }
 
     /**
-     * Runs right after `npm run build` in deploy; a failed build already
-     * errored, so this must warn (not fail) or it buries the real error.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Runs right after `npm run build` in deploy; a failed build already errored, so this must warn (not fail) or it
+     * buries the real error (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_checkout_with_no_build_is_a_warning_and_not_a_failure(): void
@@ -195,9 +188,8 @@ final class RetainBuildsTest extends TestCase
     }
 
     /**
-     * DO NOT delete outside `assets/`: the build dir also holds the manifest
-     * and ledger, one glob away if the prune walked the whole tree.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * DO NOT delete outside `assets/`: the build dir also holds the manifest and ledger, one glob away if the prune walked
+     * the whole tree (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function it_never_deletes_outside_the_assets_directory(): void

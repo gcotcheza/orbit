@@ -1,16 +1,13 @@
 // Routes
 
-// createWebHistory, not hashes: every route gets a real, shareable URL (and a PWA
-// launch target); routes/web.php answers every non-API path with the same shell.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// createWebHistory, not hashes: every route gets a real, shareable URL (and a PWA launch target); routes/web.php
+// answers every non-API path with the same shell (docs/BUSINESS-LOGIC.md §36).
 
-// meta.layout ('tabs' or 'bare') is a string, not a swappable layout component —
-// swapping components would remount the tree and drop the globe's <KeepAlive> cache.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// meta.layout ('tabs' or 'bare') is a string, not a swappable layout component — swapping components would remount the
+// tree and drop the globe's <KeepAlive> cache (docs/BUSINESS-LOGIC.md §36).
 
-// meta.guestOnly mirrors the server's auth split and is opt-in: a route without it
-// needs a session, so screens are private by default.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// meta.guestOnly mirrors the server's auth split and is opt-in: a route without it needs a session, so screens are
+// private by default (docs/BUSINESS-LOGIC.md §36).
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -31,18 +28,16 @@ export const router = createRouter({
             meta: { layout: 'tabs' },
         },
         {
-            // The centre tab, with a bottom bar like the other four: you come back from a
-            // search with a route, and the bar is the way back.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // The centre tab, with a bottom bar like the other four: you come back from a search with a route, and the bar is the
+            // way back (docs/BUSINESS-LOGIC.md §36).
             path: '/search',
             name: 'search',
             component: () => import('@/Views/Search.vue'),
             meta: { layout: 'tabs' },
         },
         {
-            // Still a tabbed screen, though no longer a tab: create lost the centre seat to
-            // search but kept its bar; reached from watch's "+ New rule" button.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // Still a tabbed screen, though no longer a tab: create lost the centre seat to search but kept its bar; reached from
+            // watch's "+ New rule" button (docs/BUSINESS-LOGIC.md §36).
             path: '/create',
             name: 'create',
             component: () => import('@/Views/Create.vue'),
@@ -76,9 +71,8 @@ export const router = createRouter({
             meta: { layout: 'bare', guestOnly: true },
         },
         {
-            // The server hands the shell to any path it doesn't own; home is the honest
-            // answer since there's no content at an unknown URL to apologise for.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // The server hands the shell to any path it doesn't own; home is the honest answer since there's no content at an
+            // unknown URL to apologise for (docs/BUSINESS-LOGIC.md §36).
             path: '/:pathMatch(.*)*',
             redirect: { name: 'home' },
         },

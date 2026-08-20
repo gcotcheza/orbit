@@ -14,13 +14,11 @@ use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * The seeder that creates Orbit's one account. Idempotence is the point:
- * getting it wrong silently rotates the owner's password on a deploy.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The seeder that creates Orbit's one account. Idempotence is the point: getting it wrong silently rotates the owner's
+ * password on a deploy (docs/BUSINESS-LOGIC.md §36).
  *
- * Driven through config('orbit.seed.*'), not env vars directly — that's
- * what the seeder reads, so `config:cache` can't quietly empty it.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Driven through config('orbit.seed.*'), not env vars directly — that's what the seeder reads, so `config:cache` can't
+ * quietly empty it (docs/BUSINESS-LOGIC.md §36).
  */
 final class SingleUserSeederTest extends TestCase
 {
@@ -72,10 +70,8 @@ final class SingleUserSeederTest extends TestCase
     }
 
     /**
-     * `.env`'s empty `SEED_USER_PASSWORD=` becomes an empty string, not null —
-     * config/orbit.php is where that collapse is caught, so it's loaded raw here
-     * rather than asserting on setUp()'s already-loaded config.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * `.env`'s empty `SEED_USER_PASSWORD=` becomes an empty string, not null — config/orbit.php is where that collapse is caught, so it's loaded raw here
+     * rather than asserting on setUp()'s already-loaded config (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function an_empty_password_variable_is_read_as_absent(): void
@@ -121,9 +117,8 @@ final class SingleUserSeederTest extends TestCase
     }
 
     /**
-     * A generated password is printed once — the bcrypt hash is its only other
-     * copy. A supplied password is never echoed; the caller already has it.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * A generated password is printed once — the bcrypt hash is its only other copy. A supplied password is never echoed;
+     * the caller already has it (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_generated_password_is_printed_and_a_supplied_one_is_not(): void

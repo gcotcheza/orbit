@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 // Unit test, not browser: scripts/e2e.sh can't stage two builds served from
 // one origin with a worker installing between them while a page outlives both.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Why: docs/BUSINESS-LOGIC.md §35.
 //
 // Tests the CONTRACT with navigator.serviceWorker (which events mean a newer
 // build); the registration is a fake made of real EventTargets.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Why: docs/BUSINESS-LOGIC.md §35.
 //
 // Core assertion is negative: nothing reloads unless the button was pressed,
 // even though `controllerchange` fires on its own as the new worker activates.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Why: docs/BUSINESS-LOGIC.md §35.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /** A worker, as far as this module is concerned: a state and a postMessage. */
@@ -45,9 +45,8 @@ class FakeRegistration extends EventTarget {
 }
 
 /**
- * Fresh copy of the module per test: it holds module-level state on purpose
- * (one registration, one "asked", one "already reloading") that must not leak.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Fresh copy of the module per test: it holds module-level state on purpose (one registration, one "asked", one
+ * "already reloading") that must not leak (docs/BUSINESS-LOGIC.md §35).
  */
 async function load({ controller = {} } = {}) {
     vi.resetModules()
@@ -72,9 +71,8 @@ beforeEach(() => {
 
 describe('finding out that a newer build has arrived', () => {
     it('says nothing on a page that has just been given its first worker', async () => {
-        // No controller = this worker IS the first one; offering to reload
-        // would be reloading a page somebody just opened.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // No controller = this worker IS the first one; offering to reload would be reloading a page somebody just opened
+        // (docs/BUSINESS-LOGIC.md §35).
         const { pwa } = await load({ controller: null })
         const registration = new FakeRegistration()
 
@@ -105,9 +103,8 @@ describe('finding out that a newer build has arrived', () => {
     })
 
     it('announces a worker that was already parked when the page loaded', async () => {
-        // Installed while app closed. Orbit's worker skips waiting so it
-        // doesn't actually park — tested here as a property of pwa.js regardless.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Installed while app closed. Orbit's worker skips waiting so it doesn't actually park — tested here as a property of
+        // pwa.js regardless (docs/BUSINESS-LOGIC.md §35).
         const { pwa } = await load()
 
         pwa.watchForUpdate(new FakeRegistration({ waiting: new FakeWorker('installed') }))
@@ -209,9 +206,8 @@ describe('looking for a deploy without being navigated', () => {
     })
 
     it('does not ask again on every app switch', async () => {
-        // `visibilitychange` fires on every app switch; a request per flick
-        // would be rude for news that changes a few times a day.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // `visibilitychange` fires on every app switch; a request per flick would be rude for news that changes a few times a
+        // day (docs/BUSINESS-LOGIC.md §35).
         const { pwa } = await load()
         const registration = new FakeRegistration()
 

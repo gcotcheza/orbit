@@ -19,9 +19,8 @@ use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * The three writes behind the watchlist screen (design/README.md §5): the
- * toggle, the remove action and the add-route form.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The three writes behind the watchlist screen (design/README.md §5): the toggle, the remove action and the add-route
+ * form (docs/BUSINESS-LOGIC.md §1).
  */
 final class WatchlistWritesTest extends TestCase
 {
@@ -307,9 +306,8 @@ final class WatchlistWritesTest extends TestCase
     }
 
     /**
-     * Origins are no longer restricted to the three home airports here (inverted
-     * 2026-08-16); the rule engine's home-only restriction is unaffected.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Origins are no longer restricted to the three home airports here (inverted 2026-08-16); the rule engine's home-only
+     * restriction is unaffected (docs/BUSINESS-LOGIC.md §1).
      */
     #[Test]
     public function a_route_may_start_anywhere_orbit_knows_an_airport(): void
@@ -329,7 +327,7 @@ final class WatchlistWritesTest extends TestCase
 
     /**
      * `is_origin` is a rule-engine flag, not a constraint this endpoint checks.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §1.
      */
     #[Test]
     public function an_origin_that_is_not_an_airport_at_all_is_still_refused(): void

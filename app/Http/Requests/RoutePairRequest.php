@@ -10,25 +10,20 @@ use Illuminate\Foundation\Http\FormRequest;
 /**
  * A city pair, named by two IATA codes — the body of both writes that take one.
  *
- * Three ways to get it wrong (unknown airport, same code twice, not three
- * letters), each answered with its own sentence, not a generic one.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Three ways to get it wrong (unknown airport, same code twice, not three letters), each answered with its own
+ * sentence, not a generic one (docs/BUSINESS-LOGIC.md §36).
  *
- * The origin is no longer restricted to the three home airports (removed
- * 2026-08-16) — both ends are now plain `exists:airports,iata`.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The origin is no longer restricted to the three home airports (removed 2026-08-16) — both ends are now plain
+ * `exists:airports,iata` (docs/BUSINESS-LOGIC.md §36).
  *
- * `config('orbit.origins')` is untouched and MUST STAY that way — it still
- * bounds the nightly sweep's budget; widening this request never widens a sweep.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `config('orbit.origins')` is untouched and MUST STAY that way — it still bounds the nightly sweep's budget; widening
+ * this request never widens a sweep (docs/BUSINESS-LOGIC.md §36).
  *
- * Input is upper-cased before any rule runs (prepareForValidation), so the
- * `exists` lookup, subclass checks, and the stored row all agree.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Input is upper-cased before any rule runs (prepareForValidation), so the `exists` lookup, subclass checks, and the
+ * stored row all agree (docs/BUSINESS-LOGIC.md §36).
  *
- * Two subclasses, and the difference IS the feature: AddWatchedRouteRequest
- * refuses a duplicate watch; LookupRouteRequest refuses nothing.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Two subclasses, and the difference IS the feature: AddWatchedRouteRequest refuses a duplicate watch;
+ * LookupRouteRequest refuses nothing (docs/BUSINESS-LOGIC.md §36).
  */
 abstract class RoutePairRequest extends FormRequest
 {
@@ -83,9 +78,8 @@ abstract class RoutePairRequest extends FormRequest
     /**
      * The airport row behind one of the two fields.
      *
-     * `firstOrFail`, not a polite abort — validation already established it
-     * exists, so reaching here unknown would be a bug in the rules above.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * `firstOrFail`, not a polite abort — validation already established it exists, so reaching here unknown would be a
+     * bug in the rules above (docs/BUSINESS-LOGIC.md §36).
      */
     public function airport(string $field): Airport
     {

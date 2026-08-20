@@ -9,26 +9,17 @@ use InvalidArgumentException;
 /**
  * How long you would stay, as a range — "a long weekend", "a fortnight".
  *
- * A type, not two nullable ints, so a reversed or negative pair is caught once
- * here rather than silently matching nothing (or fares that don't exist).
+ * A type, not two nullable ints, so a reversed or negative pair is caught once here rather than silently matching
+ * nothing (or fares that don't exist) (docs/BUSINESS-LOGIC.md §15).
  *
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Nights, never days — config/orbit.php, `return_fares.nights` and RuleCriteria::$tripLengthNights all count nights;
+ * an off-by-one here silently answers the neighbouring question (docs/BUSINESS-LOGIC.md §15).
  *
- * Nights, never days — config/orbit.php, `return_fares.nights` and
- * RuleCriteria::$tripLengthNights all count nights; an off-by-one here
- * silently answers the neighbouring question.
+ * Zero is a legal minimum, not a degenerate case — same-day returns are real fares the live cache serves. See
+ * App\Domain\Pricing\ReturnTrip (docs/BUSINESS-LOGIC.md §15).
  *
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * Zero is a legal minimum, not a degenerate case — same-day returns are real
- * fares the live cache serves. See App\Domain\Pricing\ReturnTrip.
- *
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * Inclusive at both ends, matching how RuleCriteria::$tripLengthNights already
- * documents "[min, max]" to read.
- *
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Inclusive at both ends, matching how RuleCriteria::$tripLengthNights already documents "[min, max]" to read
+ * (docs/BUSINESS-LOGIC.md §15).
  */
 final readonly class NightsBand
 {
@@ -48,10 +39,8 @@ final readonly class NightsBand
     }
 
     /**
-     * The `[min, max]` pair shape from config/orbit.php's `returns.durations`
-     * and RuleCriteria::$tripLengthNights.
-     *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * The `[min, max]` pair shape from config/orbit.php's `returns.durations` and RuleCriteria::$tripLengthNights
+     * (docs/BUSINESS-LOGIC.md §15).
      *
      * @param  array{int, int}  $pair
      */

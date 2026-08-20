@@ -10,9 +10,8 @@ import { http } from '@/lib/http'
 import { markRow, MAX_SUGGESTIONS } from '@/stores/destinations'
 
 /**
- * A finished airport code. Upper-cased at the request boundary (here), not
- * per keystroke in the field — see AirportField.vue.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * A finished airport code. Upper-cased at the request boundary (here), not per keystroke in the field — see
+ * AirportField.vue (docs/BUSINESS-LOGIC.md §36).
  */
 export const IATA = /^[A-Z]{3}$/
 
@@ -25,9 +24,8 @@ export function toCode(value) {
 }
 
 /**
- * Below this, don't ask — a single letter matches ~1/3 of the table for ten
- * arbitrary rows. SearchAirportsRequest enforces the same floor server-side.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Below this, don't ask — a single letter matches ~1/3 of the table for ten arbitrary rows. SearchAirportsRequest
+ * enforces the same floor server-side (docs/BUSINESS-LOGIC.md §36).
  */
 export const MIN_QUERY = 2
 
@@ -143,21 +141,17 @@ export function useAirportSearch() {
 }
 
 /**
- * The two lists, shown as one: curated results always first (only they
- * match the rule engine and have hand-picked names/cities).
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The two lists, shown as one: curated results always first (only they match the rule engine and have hand-picked
+ * names/cities) (docs/BUSINESS-LOGIC.md §36).
  *
- * Deduped by code — the world endpoint searches the whole table, which
- * includes the curated rows too (e.g. AMS would otherwise appear twice).
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Deduped by code — the world endpoint searches the whole table, which includes the curated rows too (e.g. AMS would
+ * otherwise appear twice) (docs/BUSINESS-LOGIC.md §36).
  *
- * `world: true` is the only thing added; means "Orbit prices this with no
- * curated opinion" (docs/BUSINESS-LOGIC.md §1) — draws one divider, not a badge.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `world: true` is the only thing added; means "Orbit prices this with no curated opinion" (docs/BUSINESS-LOGIC.md §1)
+ * — draws one divider, not a badge (docs/BUSINESS-LOGIC.md §36).
  *
- * `exclude` is filtered here (not in the component) because it must happen
- * BEFORE the `limit` cut, or a dropped row silently shrinks the panel.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `exclude` is filtered here (not in the component) because it must happen BEFORE the `limit` cut, or a dropped row
+ * silently shrinks the panel (docs/BUSINESS-LOGIC.md §36).
  *
  * @param {Array<object>} curated already ranked and marked by searchDestinations
  * @param {Array<object>} world `GET /api/airports`'s rows, in the server's order

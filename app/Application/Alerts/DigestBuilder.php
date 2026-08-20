@@ -16,15 +16,11 @@ use App\Application\Routes\RouteSnapshots;
 /**
  * Sunday morning: everything at once, and nothing urgent.
  *
- * Opposite of an alert, by design: ignores cooldown/sensitivity/every other
- * interrupt rule, since the digest isn't an interruption — a route suppressed
- * all week still belongs in Sunday's mail.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Opposite of an alert, by design: ignores cooldown/sensitivity/every other interrupt rule, since the digest isn't an
+ * interruption — a route suppressed all week still belongs in Sunday's mail (docs/BUSINESS-LOGIC.md §10).
  *
- * Reads and writes nothing else: every number comes from the same classes
- * the screens read (RouteSnapshots, RuleViews) plus the ledger, so the
- * digest can't disagree with what tapping through shows.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Reads and writes nothing else: every number comes from the same classes the screens read (RouteSnapshots, RuleViews)
+ * plus the ledger, so the digest can't disagree with what tapping through shows (docs/BUSINESS-LOGIC.md §10).
  */
 final readonly class DigestBuilder
 {
@@ -66,9 +62,8 @@ final readonly class DigestBuilder
 
         foreach ($this->snapshots->for($routes) as $snapshot) {
             /*
-             * No observation yet = no price, score 0 means "no opinion" —
-             * that's the "tracking N days" note on-screen, not a mail verdict.
-             * Why: docs/BUSINESS-LOGIC.md §36.
+             * No observation yet = no price, score 0 means "no opinion" — that's the "tracking N days" note on-screen, not a mail
+             * verdict (docs/BUSINESS-LOGIC.md §10).
              */
             if ($snapshot->currentCents === null) {
                 continue;
@@ -78,10 +73,8 @@ final readonly class DigestBuilder
         }
 
         /*
-         * Best first, not watchlist order: mail is read top-down once, so
-         * the first line should be worth acting on. Ties break on price for
-         * a stable order week to week.
-         * Why: docs/BUSINESS-LOGIC.md §36.
+         * Best first, not watchlist order: mail is read top-down once, so the first line should be worth acting on. Ties break
+         * on price for a stable order week to week (docs/BUSINESS-LOGIC.md §10).
          */
         usort($deals, static fn (DealSummary $a, DealSummary $b): int => ($b->score ?? 0) <=> ($a->score ?? 0)
             ?: $a->priceCents <=> $b->priceCents);
@@ -107,10 +100,8 @@ final readonly class DigestBuilder
             $matches = $this->views->of($rule, $user)->reading->matches;
 
             /*
-             * Rule with nothing to show is left out, not listed as "0
-             * matches" — same principle docs/API.md states for the create
-             * screen: say it in words, or say nothing.
-             * Why: docs/BUSINESS-LOGIC.md §36.
+             * Rule with nothing to show is left out, not listed as "0 matches" — same principle docs/API.md states for the create
+             * screen: say it in words, or say nothing (docs/BUSINESS-LOGIC.md §10).
              */
             if ($matches->count() === 0) {
                 continue;
@@ -132,10 +123,8 @@ final readonly class DigestBuilder
     /**
      * What Orbit actually sent this week, straight out of the ledger.
      *
-     * From the STORED payload, not re-derived: a fare that rose since is
-     * still what was flagged — recomputing would turn history into a copy
-     * of the present.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * From the STORED payload, not re-derived: a fare that rose since is still what was flagged — recomputing would turn
+     * history into a copy of the present (docs/BUSINESS-LOGIC.md §10).
      *
      * @return list<DealSummary>
      */

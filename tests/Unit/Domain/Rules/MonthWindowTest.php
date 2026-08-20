@@ -10,9 +10,8 @@ use App\Domain\Rules\MonthWindow;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
- * "Mar – May", and what it means on a given morning. The wrapping case
- * (winter is 12→2, `to` < `from`) is why this file exists — untested, it hangs.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * "Mar – May", and what it means on a given morning. The wrapping case (winter is 12→2, `to` < `from`) is why this
+ * file exists — untested, it hangs (docs/BUSINESS-LOGIC.md §11).
  */
 final class MonthWindowTest extends TestCase
 {

@@ -9,9 +9,8 @@ import { expect, shot, test } from '../fixtures.js'
 const CODE = 'AMS-LIS'
 
 /**
- * ⚠ Also ages `advice`: RouteDetailResource wouldn't pair `mayBeGone: true` with a
- * "lock it in" callout, so the fixture can't either.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * ⚠ Also ages `advice`: RouteDetailResource wouldn't pair `mayBeGone: true` with a "lock it in" callout, so the
+ * fixture can't either (docs/BUSINESS-LOGIC.md §36).
  */
 function ageTheCheapestFare(body) {
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 3_600_000).toISOString()
@@ -51,9 +50,8 @@ test('a stale, far-below-usual fare is demoted instead of shouted', async ({ pag
     /* The plain "Seen 3 days ago" line is REPLACED rather than joined. */
     await expect(page.locator('.price__seen')).toHaveCount(0)
 
-    // ⚠ Checks computed style, not just the class: a class with no matching CSS would
-    // pass toHaveClass while changing nothing a person sees.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // ⚠ Checks computed style, not just the class: a class with no matching CSS would pass toHaveClass while changing
+    // nothing a person sees (docs/BUSINESS-LOGIC.md §36).
     const headline = await page.evaluate(() => {
         const style = getComputedStyle(document.querySelector('.price__value'))
 
@@ -139,9 +137,8 @@ test('the live price takes the headline and Orbit’s own becomes context', asyn
 })
 
 /**
- * ⚠ A check that couldn't be made costs nothing, so the button stays: no row written,
- * no cooldown started, when SerpAPI itself is unreachable.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * ⚠ A check that couldn't be made costs nothing, so the button stays: no row written, no cooldown started, when
+ * SerpAPI itself is unreachable (docs/BUSINESS-LOGIC.md §36).
  */
 test('a Google that could not be reached leaves the offer standing', async ({ page, browserConsole }) => {
     browserConsole.allow(/Failed to load resource.*status of 503/)

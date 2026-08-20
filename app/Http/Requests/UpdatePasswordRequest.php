@@ -35,9 +35,8 @@ final class UpdatePasswordRequest extends FormRequest
     }
 
     /**
-     * Sentences, because that is what appears under the box.
-     * Shown verbatim (ChangePassword.vue renders the 422 message as-is) — each must name its field and say what to do.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Sentences, because that is what appears under the box. Shown verbatim (ChangePassword.vue renders the 422 message
+     * as-is) — each must name its field and say what to do (docs/BUSINESS-LOGIC.md §36).
      *
      * @return array<string, string>
      */

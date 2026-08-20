@@ -20,7 +20,7 @@ use App\Infrastructure\Discovery\FakeSweepProvider;
 use App\Infrastructure\Discovery\TravelpayoutsSweepProvider;
 
 // Fixtures (latest-sweep-*.json) are real trimmed 2026-08-16 API responses, not synthesised, so assertions are facts about what Travelpayouts actually sends.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Why: docs/BUSINESS-LOGIC.md §16.
 final class OriginSweepTest extends TestCase
 {
     use RefreshDatabase;
@@ -104,7 +104,7 @@ final class OriginSweepTest extends TestCase
     }
 
     // The `found_at` trap: `/v2/prices/latest` has no trailing Z, `/v2/prices/month-matrix` does; copying the price adapter's single format would make DiscoveryPolicy treat every fare as too old — an empty screen with no error.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §16.
     #[Test]
     public function it_reads_the_zoneless_timestamp_this_endpoint_uses(): void
     {
@@ -162,7 +162,7 @@ final class OriginSweepTest extends TestCase
         }
 
         // Kept with no age (QQQ/WWW): the adapter refuses to invent a timestamp but doesn't decide what an unknown age disqualifies — DiscoveryPolicy calls that, opposite to AlertPolicy's call on the same fact.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §16.
         $this->assertSame(['AGP', 'QQQ', 'WWW'], $codes);
 
         foreach ($fares as $fare) {
@@ -276,7 +276,7 @@ final class OriginSweepTest extends TestCase
     }
 
     // The sweep provider defaults to whatever the fare provider is set to, unlike the other three switches: a real-fares/fake-sweep mismatch would invent routes verified against a real calendar they have nothing to do with.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §16.
     #[Test]
     public function the_sweep_follows_the_fare_provider_unless_it_is_pinned(): void
     {
@@ -331,7 +331,7 @@ final class OriginSweepTest extends TestCase
     public function the_fake_is_sparse_deterministic_and_dated(): void
     {
         // Both seeders needed: WorldAirportSeeder skips curated codes (AMS included), so it alone leaves no origin to sweep from — see the_fake_answers_nothing_without_airports for that case.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §16.
         $this->seed(DestinationSeeder::class);
         $this->seed(WorldAirportSeeder::class);
 
@@ -351,7 +351,7 @@ final class OriginSweepTest extends TestCase
         $this->assertLessThan(1000, count($first));
 
         // Bounded by distance, not price: a distance-blind €29-180 band ranks by distance alone (see provider's docblock), so €12 fares to Hokitika etc. are plausible; the assertion is reach, not cost.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §16.
         $ams = Airport::query()->where('iata', 'AMS')->sole();
 
         $reach = Airport::query()

@@ -7,10 +7,8 @@ namespace App\Infrastructure\Pricing;
 use DateTimeImmutable;
 
 /**
- * Deterministic (crc32, no global random state) model shared by both fake adapters so
- * they draw from one distribution; drift (observed-date swing) is deliberately absent from
- * the long-run stats, or it would cancel against today's price and nothing would score cheap.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Deterministic (crc32, no global random state) model shared by both fake adapters so they draw from one distribution; drift (observed-date swing) is
+ * deliberately absent from the long-run stats, or it would cancel against today's price and nothing would score cheap (docs/BUSINESS-LOGIC.md §14).
  */
 final readonly class FakeFareModel
 {
@@ -44,10 +42,8 @@ final readonly class FakeFareModel
     }
 
     /**
-     * A year of this route's fares as a stats provider would see them — the inner loop
-     * spreads the observation moment so the summary has width; sampling only "as of now"
-     * would freeze the current fare's percentile and the deal score would learn nothing.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * A year of this route's fares as a stats provider would see them — the inner loop spreads the observation moment so the summary has width; sampling
+     * only "as of now" would freeze the current fare's percentile and the deal score would learn nothing (docs/BUSINESS-LOGIC.md §14).
      *
      * @return list<int>
      */
@@ -82,10 +78,8 @@ final readonly class FakeFareModel
     }
 
     /**
-     * Seasonal sine, ±14%, peaks in late July / bottoms in late January — amplitude kept
-     * small on purpose: a bigger swing would make every route look like a 40%-off deal,
-     * leaving the score no room to distinguish them.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Seasonal sine, ±14%, peaks in late July / bottoms in late January — amplitude kept small on purpose: a bigger swing would make every route look like a
+     * 40%-off deal, leaving the score no room to distinguish them (docs/BUSINESS-LOGIC.md §14).
      */
     private function season(int $dayOfYear): float
     {
@@ -112,9 +106,8 @@ final readonly class FakeFareModel
     }
 
     /**
-     * Two 5-day sale windows/year at 38% off — puts an occasional route into the "insane"
-     * tier so the score isn't tested only against a polite band around 60.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Two 5-day sale windows/year at 38% off — puts an occasional route into the "insane" tier so the score isn't tested
+     * only against a polite band around 60 (docs/BUSINESS-LOGIC.md §14).
      */
     private function sale(string $routeCode, int $dayOfYear): float
     {
@@ -139,10 +132,8 @@ final readonly class FakeFareModel
     }
 
     /**
-     * Slow swing (amplitude 10–30%, period 60–150 days, phase fixed per route) — the only
-     * term that moves with the observation date, which is why the price history is a curve
-     * and why routes polled the same morning spread across the score range instead of clustering.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Slow swing (amplitude 10–30%, period 60–150 days, phase fixed per route) — the only term that moves with the observation date, which is why the price
+     * history is a curve and why routes polled the same morning spread across the score range instead of clustering (docs/BUSINESS-LOGIC.md §14).
      */
     private function drift(string $routeCode, DateTimeImmutable $observedAt): float
     {

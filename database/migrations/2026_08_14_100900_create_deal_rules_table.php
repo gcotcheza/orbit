@@ -7,9 +7,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
 /**
- * A trip somebody described in English, and what this app read out of it.
- * Both `raw_text` and `criteria` are stored, and neither is derivable from the other.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * A trip somebody described in English, and what this app read out of it. Both `raw_text` and `criteria` are stored,
+ * and neither is derivable from the other (docs/BUSINESS-LOGIC.md §11).
  */
 return new class extends Migration
 {

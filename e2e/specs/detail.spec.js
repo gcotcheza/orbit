@@ -38,9 +38,8 @@ test('the price, the gauge, the chart and the booking link are all really there'
         /^Cheapest departure · (Mon|Tue|Wed|Thu|Fri|Sat|Sun), \w{3} \d{1,2}$/,
     )
 
-    // No freshness line is the correct answer here (fares are hours old) —
-    // proves the "Seen N days ago" threshold exists, not just its format.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // No freshness line is the correct answer here (fares are hours old) — proves the "Seen N days ago" threshold exists,
+    // not just its format (docs/BUSINESS-LOGIC.md §36).
     await expect(page.locator('.price__seen')).toHaveCount(0)
 
     // The ring's dash-offset IS the score — asserting both the number and
@@ -65,9 +64,8 @@ test('the price, the gauge, the chart and the booking link are all really there'
     expect(path).toMatch(/^M[\d.\-\s,]+L/)
     expect(path.match(/L/g).length, 'the price line has almost no points on it').toBeGreaterThan(10)
 
-    // `toHaveCount` + attributes, not `toBeVisible` — a horizontal SVG
-    // <line> has a zero-height bbox, so Playwright reports it "hidden" though visible.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // `toHaveCount` + attributes, not `toBeVisible` — a horizontal SVG <line> has a zero-height bbox, so Playwright
+    // reports it "hidden" though visible (docs/BUSINESS-LOGIC.md §36).
     const usual = page.locator('svg.chart line.chart__usual')
     await expect(usual).toHaveCount(1)
 
@@ -77,9 +75,8 @@ test('the price, the gauge, the chart and the booking link are all really there'
 
     await expect(page.locator('svg.chart circle.chart__dot')).toBeVisible()
 
-    // Two links; Aviasales is the primary CTA (Orbit's fares come from its
-    // Travelpayouts cache) — format: `{ORIGIN}{DDMM}{DEST}1` via BookingLink.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Two links; Aviasales is the primary CTA (Orbit's fares come from its Travelpayouts cache) — format:
+    // `{ORIGIN}{DDMM}{DEST}1` via BookingLink (docs/BUSINESS-LOGIC.md §36).
     const booking = page.getByRole('link', { name: /see this fare on aviasales/i })
     await expect(booking).toBeVisible()
 
@@ -89,9 +86,8 @@ test('the price, the gauge, the chart and the booking link are all really there'
         ),
     )
 
-    // Skyscanner "second opinion" is now a real button (was a sub-44px text
-    // link nobody could tell was tappable) — side by side, Aviasales primary.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Skyscanner "second opinion" is now a real button (was a sub-44px text link nobody could tell was tappable) — side by
+    // side, Aviasales primary (docs/BUSINESS-LOGIC.md §36).
     const compare = page.getByRole('link', { name: /compare on skyscanner/i })
 
     const layout = await page.evaluate(() => {
@@ -128,9 +124,8 @@ test('the price, the gauge, the chart and the booking link are all really there'
     )
     await expect(page.getByText("We don't sell tickets")).toHaveCount(0)
 
-    // The booking CTA's variant mirrors the callout's own tone so the two can
-    // never disagree ("wait" advice + a glowing primary Book button).
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // The booking CTA's variant mirrors the callout's own tone so the two can never disagree ("wait" advice + a glowing
+    // primary Book button) (docs/BUSINESS-LOGIC.md §36).
     const warned = (await page.locator('.callout').getAttribute('class')).includes('callout--warn')
 
     await expect(booking).toHaveClass(warned ? /booking__cta--secondary/ : /booking__cta--primary/)
@@ -139,10 +134,8 @@ test('the price, the gauge, the chart and the booking link are all really there'
 })
 
 /*
- * The app must never contradict itself (a "wait" callout under a glowing
- * primary Book button). Skips rather than naming a route — which one is
- * "waiting" is the fake provider's arithmetic against today's date.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The app must never contradict itself (a "wait" callout under a glowing primary Book button). Skips rather than naming a route — which one is "waiting"
+ * is the fake provider's arithmetic against today's date (docs/BUSINESS-LOGIC.md §36).
  */
 test('a route the app says to wait on gets the quiet Book button', async ({ page }) => {
     await page.goto('/watch')
@@ -194,10 +187,8 @@ test('Back returns to the globe', async ({ page }) => {
 })
 
 /*
- * A route with no row at all: the watch form's "Look up" navigates here
- * directly, so this screen owns the (real, 2-3s) fetch. EIN-VIE is unseeded,
- * exercising the real path: 404 → lookup creates + prices it → screen fills in.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * A route with no row at all: the watch form's "Look up" navigates here directly, so this screen owns the (real, 2-3s) fetch. EIN-VIE is unseeded,
+ * exercising the real path: 404 → lookup creates + prices it → screen fills in (docs/BUSINESS-LOGIC.md §36).
  */
 test('says what it is doing while it prices a route for the first time', async ({ page, browserConsole }) => {
     // The read that says "never priced" — see the note in watchlist.spec.js.

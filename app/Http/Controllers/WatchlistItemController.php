@@ -19,12 +19,8 @@ use App\Http\Resources\WatchlistRouteResource;
 use App\Http\Requests\UpdateWatchedRouteRequest;
 
 /**
- * Adding, pausing and dropping a watched route (design/README.md §5).
- * Separate from WatchlistController (the tuned read stays untouched by writes).
- * Every write answers in the list's own row shape (WatchlistRouteResource), so
- * the screen replaces rather than re-fetches. Keyed on route code, not row id —
- * the client already has `code` for every row.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Adding, pausing and dropping a watched route (design/README.md §5). Separate from WatchlistController (the tuned read stays untouched by writes). Every write answers in the list's own row shape
+ * (WatchlistRouteResource), so the screen replaces rather than re-fetches. Keyed on route code, not row id — the client already has `code` for every row (docs/BUSINESS-LOGIC.md §36).
  */
 final class WatchlistItemController extends Controller
 {
@@ -84,9 +80,8 @@ final class WatchlistItemController extends Controller
     }
 
     /**
-     * Stop watching. 204 — there is nothing left to describe.
-     * The route and its history survive — only the watchlist row goes; nothing else in the app treats an unwatched route as deleted.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Stop watching. 204 — there is nothing left to describe. The route and its history survive — only the watchlist row
+     * goes; nothing else in the app treats an unwatched route as deleted (docs/BUSINESS-LOGIC.md §36).
      */
     public function destroy(Request $request, string $code): JsonResponse
     {
@@ -99,9 +94,8 @@ final class WatchlistItemController extends Controller
     }
 
     /**
-     * This account's watchlist row for a route code, or a 404 that says so.
-     * Scoped to the user, not merely filtered by code — "whose is it" must never be assumed on a write.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * This account's watchlist row for a route code, or a 404 that says so. Scoped to the user, not merely filtered by
+     * code — "whose is it" must never be assumed on a write (docs/BUSINESS-LOGIC.md §36).
      */
     private static function item(User $user, string $code): WatchlistItem
     {

@@ -221,12 +221,8 @@ test('a route can be watched straight from the search screen', async ({ page }) 
 })
 
 /*
- * Moved from watchlist.spec.js with the box it's about: curated matches
- * paint instantly, world matches arrive from GET /api/airports?q= under a
- * divider. Browser-only: AirportField.test.js already covers the merge
- * against a mock — this proves the real endpoint/ranking/table agree, and
- * that the panel growing a second time doesn't reflow anything unpressable.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Moved from watchlist.spec.js with the box it's about: curated matches paint instantly, world matches arrive from GET /api/airports?q= under a divider. Browser-only: AirportField.test.js already covers
+ * the merge against a mock — this proves the real endpoint/ranking/table agree, and that the panel growing a second time doesn't reflow anything unpressable (docs/BUSINESS-LOGIC.md §36).
  */
 test('the destination box finds a city by name, and the world under a divider', async ({ page }) => {
     await page.goto('/search')

@@ -47,9 +47,8 @@ return [
     | Fare providers
     |--------------------------------------------------------------------------
     |
-    | Three ports (PriceProvider, PriceStatsProvider, ReturnTripProvider) plus
-    | a sweep switch, chosen by name and bound in AppServiceProvider. Why four
-    | switches, why `fake` is still the default: docs/BUSINESS-LOGIC.md §21.
+    | Three ports plus a sweep switch, chosen by name, bound in AppServiceProvider.
+    | Why four switches, why `fake` is still the default: docs/BUSINESS-LOGIC.md §21.
     |
     */
 
@@ -151,9 +150,8 @@ return [
     | Alerts
     |--------------------------------------------------------------------------
     |
-    | When Orbit is allowed to interrupt somebody. App\Domain\Alerts\AlertPolicy's
-    | whole rule book, read once and handed to it. Why each number, and why
-    | `blurb`/`tier` live here rather than in the Vue component: docs/BUSINESS-LOGIC.md §26.
+    | When Orbit is allowed to interrupt somebody — AlertPolicy's rule book, read once.
+    | Why each number, and why `blurb`/`tier` live here: docs/BUSINESS-LOGIC.md §26.
     |
     */
 
@@ -201,9 +199,8 @@ return [
     | Polling — eleven months, at two speeds
     |--------------------------------------------------------------------------
     |
-    | `window_days` (near, daily) vs `horizon_days` (far, weekly) answer two
-    | different questions -- widening one does not move the other. Full budget
-    | table and staleness reasoning: docs/BUSINESS-LOGIC.md §27.
+    | `window_days` (near, daily) vs `horizon_days` (far, weekly) answer two questions.
+    | Full budget table and staleness reasoning: docs/BUSINESS-LOGIC.md §27.
     |
     */
 
@@ -221,9 +218,8 @@ return [
     | Round trips — going and coming back
     |--------------------------------------------------------------------------
     |
-    | Every price elsewhere in this app is one-way; this is the round-trip
-    | table nothing reads yet (polled daily since the foundation PR). Budget,
-    | schedule reasoning and the duration bands: docs/BUSINESS-LOGIC.md §28.
+    | The round-trip table nothing reads yet (polled daily since the foundation PR).
+    | Budget, schedule reasoning and the duration bands: docs/BUSINESS-LOGIC.md §28.
     |
     */
 
@@ -249,10 +245,8 @@ return [
     | Looking a route up before watching it
     |--------------------------------------------------------------------------
     |
-    | `POST /api/routes/lookup` may fetch synchronously while somebody waits.
-    | `fresh_for_hours` is deliberately one number covering both "is the data
-    | fresh" and "did we already ask" -- why, and why the near window rather
-    | than the eleven-month horizon: docs/BUSINESS-LOGIC.md §29.
+    | `fresh_for_hours` covers both "is the data fresh" and "did we already ask".
+    | Why, and why the near window not the horizon: docs/BUSINESS-LOGIC.md §29.
     |
     */
 
@@ -265,11 +259,8 @@ return [
     | Discovery — the insanely cheap routes nobody is watching
     |--------------------------------------------------------------------------
     |
-    | Read once into App\Domain\Discovery\DiscoveryPolicy. "Surprise me," not
-    | "find cheap fares" -- every default below was read off one real 2026-08-16
-    | measurement, and the two-stage budget is why verification is separate
-    | from the sweep. Full reasoning, every threshold, the second lane's
-    | flywheel: docs/BUSINESS-LOGIC.md §30.
+    | "Surprise me," not "find cheap fares" -- every default read off one real run.
+    | Full reasoning, every threshold, the second lane's flywheel: docs/BUSINESS-LOGIC.md §30.
     |
     */
 
@@ -300,9 +291,8 @@ return [
         // is tests/Feature/DiscoveryRunTest. See §30.
         'verify_window_days' => 181,
 
-        // Lane B: "cheap for THIS route" rather than "cheap, period" -- why a
-        // free distance-band baseline doesn't work, and the flywheel that
-        // makes the expensive version pay for itself: docs/BUSINESS-LOGIC.md §30.
+        // Lane B: "cheap for THIS route," not "cheap, period" -- why a free
+        // distance-band baseline fails, and the flywheel: docs/BUSINESS-LOGIC.md §30.
         'lanes' => [
             'relative' => [
                 'max_price_eur' => 150,
@@ -323,9 +313,8 @@ return [
     | SerpAPI — asking Google whether we are telling the truth
     |--------------------------------------------------------------------------
     |
-    | `key` defaults to null and the feature degrades to "skip the check".
-    | What the verdict actually compares (not "is it below Google's range"),
-    | and the four non-negotiable spend guardrails: docs/BUSINESS-LOGIC.md §31.
+    | `key` defaults to null; the feature degrades to "skip the check".
+    | What the verdict compares, and the spend guardrails: docs/BUSINESS-LOGIC.md §31.
     |
     */
 
@@ -353,10 +342,8 @@ return [
     | "Seen 3 days ago — may be gone", and the way to find out
     |--------------------------------------------------------------------------
     |
-    | The demotion needs BOTH halves (48 h old and 20% under usual), the
-    | cooldown is how long one paid answer is worth, and `contradiction_percent`
-    | is how far above the cached fare Google has to be before the callout says
-    | the fare is gone. The reasoning: docs/BUSINESS-LOGIC.md §17.
+    | The demotion needs BOTH halves (48h old, 20% under usual); the cooldown
+    | is how long one paid answer is worth. The reasoning: docs/BUSINESS-LOGIC.md §17.
     |
     */
 
@@ -407,9 +394,8 @@ return [
     | Booking
     |--------------------------------------------------------------------------
     |
-    | No booking API, deep links only. Aviasales is the primary hand-off
-    | (fares are its cache) with Skyscanner as second opinion; only the hosts
-    | live here, path shapes belong to BookingLink. Why: docs/BUSINESS-LOGIC.md §32.
+    | No booking API, deep links only — Aviasales primary, Skyscanner second opinion.
+    | Only the hosts live here; path shapes belong to BookingLink: docs/BUSINESS-LOGIC.md §32.
     |
     */
 
@@ -426,10 +412,8 @@ return [
     | Reading a rule written in English
     |--------------------------------------------------------------------------
     |
-    | Two adapters answer RuleTextParser. `parser` defaults to the regex one
-    | (works without a key); Anthropic takes over the moment a key lands in
-    | .env, composing regex as its own fallback. Why, and why Haiku:
-    | docs/BUSINESS-LOGIC.md §33.
+    | `parser` defaults to regex; Anthropic takes over once a key lands in .env,
+    | composing regex as its own fallback. Why, and why Haiku: docs/BUSINESS-LOGIC.md §33.
     |
     */
 
@@ -499,10 +483,8 @@ return [
     | Matching a rule against the world
     |--------------------------------------------------------------------------
     |
-    | `warm_at`/`warm_vibes` gate on the best month in the rule's window, not
-    | every month. `sweep_cap` and `sweep_horizon_days` (89, deliberately
-    | shorter than `poll.window_days`) are the request budget for speculative
-    | rule sweeps. Full arithmetic: docs/BUSINESS-LOGIC.md §34.
+    | `warm_at`/`warm_vibes` gate on the rule window's best month. `sweep_cap` and
+    | `sweep_horizon_days` are the sweep's request budget. Full arithmetic: docs/BUSINESS-LOGIC.md §34.
     |
     */
 
@@ -511,7 +493,7 @@ return [
         'warm_vibes'         => ['sunny', 'beach'],
         'sweep_cap'          => 30,
         'sweep_horizon_days' => 89,
-        'sample' => 6,
+        'sample'             => 6,
     ],
 
     /*
@@ -519,9 +501,8 @@ return [
     | The installed app
     |--------------------------------------------------------------------------
     |
-    | Manifest and the meta tag both read from here so the colour never drifts
-    | between them. No env() -- staging and production must look identical.
-    | Why the colours are dark by default: docs/BUSINESS-LOGIC.md §35.
+    | Manifest and meta tag both read from here so the colour never drifts.
+    | No env() -- staging and production must look identical: docs/BUSINESS-LOGIC.md §35.
     |
     */
 

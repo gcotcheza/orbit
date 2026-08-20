@@ -320,10 +320,8 @@ final class LivePriceCheckTest extends TestCase
     }
 
     /**
-     * Billed vs not billed: Google answering without price_insights on a thin route still
-     * counted as a billed search, so the row is written and cooldown covers it — everything
-     * below is a search that never happened (no row, button still there).
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Billed vs not billed: Google answering without price_insights on a thin route still counted as a billed search, so the row is written and cooldown
+     * covers it — everything below is a search that never happened (no row, button still there) (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_silent_answer_is_recorded_rather_than_re_bought(): void
@@ -416,10 +414,8 @@ final class LivePriceCheckTest extends TestCase
     }
 
     /**
-     * ⚠ Two taps that race: a paid answer must never come back as a 500. Both spend a
-     * search; the unique key lets exactly one row through — the listener below mimics the
-     * other request committing mid-flight.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * ⚠ Two taps that race: a paid answer must never come back as a 500. Both spend a search; the unique key lets exactly
+     * one row through — the listener below mimics the other request committing mid-flight (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_tap_that_loses_the_race_serves_the_winners_answer(): void

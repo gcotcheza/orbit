@@ -9,9 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * One line of the alert history, as `GET /api/alerts` publishes it. Reads
- * from `payload`, not the relations — the ledger records what was SAID.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One line of the alert history, as `GET /api/alerts` publishes it. Reads from `payload`, not the relations — the
+ * ledger records what was SAID (docs/BUSINESS-LOGIC.md §10).
  */
 final class AlertResource extends JsonResource
 {

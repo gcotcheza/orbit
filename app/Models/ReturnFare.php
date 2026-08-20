@@ -12,17 +12,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * The cheapest round-trip found for one (departure date, stay length).
  *
- * Row behind App\Domain\Pricing\ReturnTrip; sibling of CalendarFare (one-way).
- * Never compare the two directly — a long-haul one-way reads ~2/3 of the return.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Row behind App\Domain\Pricing\ReturnTrip; sibling of CalendarFare (one-way). Never compare the two directly — a
+ * long-haul one-way reads ~2/3 of the return (docs/BUSINESS-LOGIC.md §15).
  *
- * `return_date` is NOT a column — derived from `nights` via `returnDate()`,
- * to avoid one fact stored (and drifting) twice.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `return_date` is NOT a column — derived from `nights` via `returnDate()`, to avoid one fact stored (and drifting)
+ * twice (docs/BUSINESS-LOGIC.md §15).
  *
- * `fetched_at` (Orbit asked) vs `found_at` (price was found) are not
- * interchangeable; the gap is wider here than on the one-way table.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `fetched_at` (Orbit asked) vs `found_at` (price was found) are not interchangeable; the gap is wider here than on
+ * the one-way table (docs/BUSINESS-LOGIC.md §15).
  *
  * @property int $id
  * @property int $route_id
@@ -45,10 +42,8 @@ final class ReturnFare extends Model
     }
 
     /**
-     * Day you'd fly home — derived, never stored. Deliberately NOT an
-     * Attribute/accessor: that would leak into toArray()/API and invite
-     * treating a derived value as a real column.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Day you'd fly home — derived, never stored. Deliberately NOT an Attribute/accessor: that would leak into
+     * toArray()/API and invite treating a derived value as a real column (docs/BUSINESS-LOGIC.md §15).
      */
     public function returnDate(): CarbonImmutable
     {
@@ -56,10 +51,8 @@ final class ReturnFare extends Model
     }
 
     /*
-     * DELIBERATELY no duration-band scope yet — would guess at a shape no
-     * caller has asked for. Migration's (route_id, nights, departure_date)
-     * index already records the intent for whoever adds it.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * DELIBERATELY no duration-band scope yet — would guess at a shape no caller has asked for. Migration's (route_id,
+     * nights, departure_date) index already records the intent for whoever adds it (docs/BUSINESS-LOGIC.md §15).
      */
 
     /**

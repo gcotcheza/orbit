@@ -24,7 +24,7 @@ use App\Application\Ports\PriceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 // `POST /api/routes/lookup`: creates a route (never a watchlist row), fetches inline (not queued), dedupes within `orbit.lookup.fresh_for_hours`, and is throttled.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Why: docs/BUSINESS-LOGIC.md §1.
 final class RouteLookupTest extends TestCase
 {
     use BuildsRouteData, RefreshDatabase;
@@ -68,7 +68,7 @@ final class RouteLookupTest extends TestCase
     }
 
     // Error wording is shared with POST /api/watchlist via RoutePairRequest and is part of the API contract (docs/API.md).
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function it_refuses_a_pair_it_cannot_price_and_says_which_half_is_wrong(): void
     {
@@ -103,7 +103,7 @@ final class RouteLookupTest extends TestCase
     }
 
     // Any airport can be looked up (not just AMS/EIN/DUS) since 2026-08-16; asserts the full path — route created, provider called, watchlist untouched.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function it_prices_a_pair_that_starts_nowhere_near_home(): void
     {
@@ -119,7 +119,7 @@ final class RouteLookupTest extends TestCase
     }
 
     // The origin restriction now belongs to the rule engine (config/orbit.php); this endpoint no longer reads it.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function the_origin_config_is_no_longer_consulted_by_this_endpoint(): void
     {
@@ -131,7 +131,7 @@ final class RouteLookupTest extends TestCase
     }
 
     // Looking up an already-watched pair is allowed; the ADD endpoint's "already watching" guard is deliberately not inherited here.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function looking_up_a_route_that_is_already_watched_is_allowed(): void
     {
@@ -184,7 +184,7 @@ final class RouteLookupTest extends TestCase
     }
 
     // One fetch covers the full `orbit.poll.window_days` window (same as a watched route) and writes both the calendar and the day's observation, mirroring the morning poll.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function it_prices_a_route_nobody_has_ever_looked_at(): void
     {
@@ -223,7 +223,7 @@ final class RouteLookupTest extends TestCase
     }
 
     // Fresh fares are not re-fetched: gated by `orbit.lookup.fresh_for_hours` against the calendar's `fetched_at`.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function it_does_not_call_the_provider_for_a_route_priced_this_morning(): void
     {
@@ -263,7 +263,7 @@ final class RouteLookupTest extends TestCase
     }
 
     // Empty answers write no rows, so a naive "has fresh fares" check would say no forever and re-ask the provider on every view; the cache flag plugs that.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function a_pair_with_no_fares_at_all_is_asked_about_once(): void
     {
@@ -285,7 +285,7 @@ final class RouteLookupTest extends TestCase
     }
 
     // Provider downtime returns the route as-is (no 500); PollRoutePrices leaves existing data alone and `meta.fares.fresh` stays false so the client won't claim otherwise.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §1.
     #[Test]
     public function a_provider_with_nothing_to_say_is_not_an_error(): void
     {

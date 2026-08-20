@@ -10,16 +10,16 @@ use DateTimeImmutable;
  * What one route USUALLY costs, as Orbit last measured it.
  *
  * Can't be derived from the sweep (only one Dublin row exists), so it's remembered here.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §16.
  *
  * A window median, not an average — a long right tail would inflate every discount.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §16.
  *
  * `sampleDays` travels with the median always; RelativeLanePolicy::admits() judges if it's enough.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §16.
  *
  * `measuredAt` is what stops a baseline becoming a fossil claim about a route that has moved on.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §16.
  */
 final readonly class RouteBaseline
 {
@@ -38,10 +38,10 @@ final readonly class RouteBaseline
      * price.
      *
      * Negative is a real answer, not clamped — the selector filters on the sign.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §16.
      *
      * A zero/negative median answers 0.0 rather than dividing into INF.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §16.
      */
     public function discountOf(int $cents): float
     {
@@ -56,7 +56,7 @@ final readonly class RouteBaseline
      * How much cheaper than usual, in cents — the euro figure the card prints.
      *
      * Clamped to never negative, deliberately asymmetric with discountOf().
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §16.
      */
     public function savingOf(int $cents): int
     {

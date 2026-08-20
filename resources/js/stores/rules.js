@@ -1,6 +1,5 @@
-// The trips the owner described in English (design/README.md §4), and the
-// reading of the one they are typing right now.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The trips the owner described in English (design/README.md §4), and the reading of the one they are typing right now
+// (docs/BUSINESS-LOGIC.md §11).
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { http } from '@/lib/http'
@@ -29,16 +28,14 @@ export const useRulesStore = defineStore('rules', () => {
     const matches = computed(() => reading.value?.matches ?? { count: 0, cheapest: null, sample: [] })
 
     /**
-     * Whether the current parse found anything at all.
-     * Checked via `chips`, not the raw text — server treats "unreadable" and "empty" the same.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Whether the current parse found anything at all. Checked via `chips`, not the raw text — server treats "unreadable"
+     * and "empty" the same (docs/BUSINESS-LOGIC.md §11).
      */
     const understood = computed(() => chips.value.length > 0)
 
     /**
-     * Read a sentence back.
-     * Debounce lives in Create.vue (a textarea concern); this only refuses stale responses.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Read a sentence back. Debounce lives in Create.vue (a textarea concern); this only refuses stale responses
+     * (docs/BUSINESS-LOGIC.md §11).
      */
     async function parse(text, removed = []) {
         parseStatus.value = 'parsing'
@@ -99,9 +96,8 @@ export const useRulesStore = defineStore('rules', () => {
     }
 
     /**
-     * Save the rule currently on the create screen.
-     * Returns the row (the created state names it) and throws on failure so the form is left as-is.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Save the rule currently on the create screen. Returns the row (the created state names it) and throws on failure so
+     * the form is left as-is (docs/BUSINESS-LOGIC.md §11).
      */
     async function create(text, removed = []) {
         error.value = ''
@@ -164,9 +160,8 @@ export const useRulesStore = defineStore('rules', () => {
     }
 
     /**
-     * Start watching one of a rule's matches.
-     * Reuses the add-route watchlist endpoint (a rule never adds on its own) and returns the new row for the list to splice in.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Start watching one of a rule's matches. Reuses the add-route watchlist endpoint (a rule never adds on its own) and
+     * returns the new row for the list to splice in (docs/BUSINESS-LOGIC.md §11).
      */
     async function watch(match) {
         error.value = ''
@@ -211,9 +206,8 @@ export const useRulesStore = defineStore('rules', () => {
 })
 
 /**
- * One sentence somebody can act on, out of whatever went wrong.
- * 422 uses the server's own message (RuleController) rather than a client copy of it.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One sentence somebody can act on, out of whatever went wrong. 422 uses the server's own message (RuleController)
+ * rather than a client copy of it (docs/BUSINESS-LOGIC.md §11).
  */
 function messageFor(failure, fallback) {
     const response = failure.response

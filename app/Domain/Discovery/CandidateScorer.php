@@ -8,7 +8,7 @@ use DateTimeImmutable;
 
 /**
  * The cheap half of the funnel: ranks swept fares without spending requests.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §16.
  */
 final readonly class CandidateScorer
 {
@@ -16,7 +16,7 @@ final readonly class CandidateScorer
 
     /**
      * Every candidate worth considering, cheapest per kilometre first.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §16.
      *
      * @param  list<DealCandidate>  $candidates
      * @return list<DealCandidate>
@@ -29,7 +29,7 @@ final readonly class CandidateScorer
         ));
 
         // Route code breaks ties deliberately: usort() stability is not something to depend on here.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §16.
         usort($admitted, static function (DealCandidate $a, DealCandidate $b): int {
             return $a->centsPerKilometre() <=> $b->centsPerKilometre()
                 ?: strcmp($a->routeCode(), $b->routeCode());
@@ -40,7 +40,7 @@ final readonly class CandidateScorer
 
     /**
      * The few that are worth spending requests on.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Why: docs/BUSINESS-LOGIC.md §16.
      *
      * @param  list<DealCandidate>  $candidates  as returned by `admit()`
      * @return list<DealCandidate>
@@ -67,9 +67,8 @@ final readonly class CandidateScorer
     }
 
     /**
-     * Where `$cents` falls among the fares of its own window, as a percentage.
-     * Strictly-cheaper share (0 = cheapest); an empty window scores 100, not 0, so missing data can't masquerade as a bargain.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Where `$cents` falls among the fares of its own window, as a percentage. Strictly-cheaper share (0 = cheapest); an
+     * empty window scores 100, not 0, so missing data can't masquerade as a bargain (docs/BUSINESS-LOGIC.md §16).
      *
      * @param  list<int>  $windowCents
      */
@@ -87,9 +86,8 @@ final readonly class CandidateScorer
     }
 
     /**
-     * The middle fare of a window, in cents — or null if there is no window.
-     * Median, not mean (long right tail skews it); lower of two middles on an even count, so the result is a fare someone was actually offered.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * The middle fare of a window, in cents — or null if there is no window. Median, not mean (long right tail skews it); lower of two middles on an even
+     * count, so the result is a fare someone was actually offered (docs/BUSINESS-LOGIC.md §16).
      *
      * @param  list<int>  $windowCents
      */

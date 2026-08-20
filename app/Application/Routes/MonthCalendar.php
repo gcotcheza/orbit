@@ -10,14 +10,11 @@ use App\Domain\Pricing\DatedFare;
 /**
  * One month of the price heatmap, with each day already judged.
  *
- * Verdict computed here, not in the browser — design/README.md §3's rule is
- * also what a future "cheap day" alert would need; two implementations would
- * eventually disagree.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Verdict computed here, not in the browser — design/README.md §3's rule is also what a future "cheap day" alert would
+ * need; two implementations would eventually disagree (docs/BUSINESS-LOGIC.md §36).
  *
- * Range is the month's own low/high, not the route's yearly stats — a dear
- * June should still colour its cheapest Tuesday green.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Range is the month's own low/high, not the route's yearly stats — a dear June should still colour its cheapest
+ * Tuesday green (docs/BUSINESS-LOGIC.md §36).
  */
 final readonly class MonthCalendar
 {
@@ -56,9 +53,8 @@ final readonly class MonthCalendar
 
         foreach ($fares as $fare) {
             /*
-             * A month with one price has zero range — "mid" is the only
-             * honest colour, and it keeps the division below off zero.
-             * Why: docs/BUSINESS-LOGIC.md §36.
+             * A month with one price has zero range — "mid" is the only honest colour, and it keeps the division below off zero
+             * (docs/BUSINESS-LOGIC.md §36).
              */
             $position = $range > 0 ? ($fare->cents - $low) / $range : 0.5;
 
@@ -71,9 +67,8 @@ final readonly class MonthCalendar
                     default                => self::MID,
                 },
                 /*
-                 * Carried through untouched, deliberately not folded into the
-                 * verdict — age and cheapness are independent facts.
-                 * Why: docs/BUSINESS-LOGIC.md §36.
+                 * Carried through untouched, deliberately not folded into the verdict — age and cheapness are independent facts
+                 * (docs/BUSINESS-LOGIC.md §36).
                  */
                 'foundAt' => $fare->foundAt,
             ];

@@ -15,11 +15,8 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
- * Go and find out what a rule is worth.
- * Queued on rule creation and daily after the watchlist poll, so a new rule
- * isn't empty on day one. Creates `routes` rows for unwatched pairs on purpose,
- * and caps + shortens the horizon to protect the provider's rate limit.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Go and find out what a rule is worth. Queued on rule creation and daily after the watchlist poll, so a new rule isn't empty on day one. Creates
+ * `routes` rows for unwatched pairs on purpose, and caps + shortens the horizon to protect the provider's rate limit (docs/BUSINESS-LOGIC.md §11).
  */
 final class SweepRuleFares implements ShouldQueue
 {
@@ -44,7 +41,7 @@ final class SweepRuleFares implements ShouldQueue
         $fresh = $this->pricedToday($codes);
 
         // Fresh-today codes are filtered out BEFORE the cap, not after — otherwise a rule overlapping the watchlist would never reach its own tail.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §11.
         $wanted = array_values(array_filter($codes, static fn (string $code): bool => ! isset($fresh[$code])));
 
         $cap = (int) config('orbit.rules.sweep_cap');

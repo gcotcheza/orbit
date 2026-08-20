@@ -9,9 +9,8 @@ use App\Services\Pwa\BuildAssets;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
- * Precache list tested against a real (trimmed) Vite manifest fixture, since
- * this decides how much a phone downloads on first launch after a deploy.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Precache list tested against a real (trimmed) Vite manifest fixture, since this decides how much a phone downloads
+ * on first launch after a deploy (docs/BUSINESS-LOGIC.md §35).
  */
 final class BuildAssetsTest extends TestCase
 {
@@ -31,9 +30,8 @@ final class BuildAssetsTest extends TestCase
     }
 
     /**
-     * Entry chunk's statically-imported chunks must precache too, or caching
-     * the entry alone still costs a network round trip for the rest.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Entry chunk's statically-imported chunks must precache too, or caching the entry alone still costs a network round
+     * trip for the rest (docs/BUSINESS-LOGIC.md §35).
      */
     #[Test]
     public function chunks_the_entry_imports_statically_are_precached_too(): void
@@ -45,9 +43,8 @@ final class BuildAssetsTest extends TestCase
     }
 
     /**
-     * DO NOT precache dynamic imports (globe.gl, lazy views): walk `imports`
-     * only, never `dynamicImports`, or installs balloon by ~1.9 MB on mobile.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * DO NOT precache dynamic imports (globe.gl, lazy views): walk `imports` only, never `dynamicImports`, or installs
+     * balloon by ~1.9 MB on mobile (docs/BUSINESS-LOGIC.md §35).
      */
     #[Test]
     public function the_globe_and_the_lazy_views_are_not_precached(): void
@@ -60,9 +57,8 @@ final class BuildAssetsTest extends TestCase
     }
 
     /**
-     * woff2 only: every browser that can run a service worker reads woff2,
-     * so caching the .woff fallback doubles font install cost for nothing.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * woff2 only: every browser that can run a service worker reads woff2, so caching the .woff fallback doubles font
+     * install cost for nothing (docs/BUSINESS-LOGIC.md §35).
      */
     #[Test]
     public function fonts_are_precached_in_one_format(): void
@@ -74,9 +70,8 @@ final class BuildAssetsTest extends TestCase
     }
 
     /**
-     * Stylesheet is both its own entry and a `css` entry on the script (fonts
-     * hang off both); must dedupe or the worker double-fetches on install.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Stylesheet is both its own entry and a `css` entry on the script (fonts hang off both); must dedupe or the worker
+     * double-fetches on install (docs/BUSINESS-LOGIC.md §35).
      */
     #[Test]
     public function nothing_is_listed_twice(): void
@@ -115,9 +110,8 @@ final class BuildAssetsTest extends TestCase
     }
 
     /**
-     * No build yet (fresh checkout) must still serve a coherent worker: the
-     * precache list falls back to the static shell instead of throwing.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * No build yet (fresh checkout) must still serve a coherent worker: the precache list falls back to the static shell
+     * instead of throwing (docs/BUSINESS-LOGIC.md §35).
      */
     #[Test]
     public function a_checkout_with_no_build_is_not_an_error(): void
@@ -130,9 +124,8 @@ final class BuildAssetsTest extends TestCase
     }
 
     /**
-     * Untrusted manifest content must never 500 /sw.js: a build killed
-     * halfway can leave a truncated file, read live at request time.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Untrusted manifest content must never 500 /sw.js: a build killed halfway can leave a truncated file, read live at
+     * request time (docs/BUSINESS-LOGIC.md §35).
      */
     #[Test]
     public function a_manifest_that_is_not_a_manifest_yields_the_static_shell(): void

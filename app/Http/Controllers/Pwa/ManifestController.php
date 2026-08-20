@@ -11,10 +11,10 @@ use App\Http\Controllers\Controller;
  * `GET /manifest.webmanifest` — what "Add to Home Screen" reads.
  *
  * A route, not a static file — nginx has no mime type for .webmanifest.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §35.
  *
  * Most keys here are inert on iOS (this app's only real target); declared anyway for Android/desktop.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Why: docs/BUSINESS-LOGIC.md §35.
  */
 final class ManifestController extends Controller
 {
@@ -27,7 +27,7 @@ final class ManifestController extends Controller
 
             /*
              * `/` — the globe. No `?source=pwa` tracking param, deliberately.
-             * Why: docs/BUSINESS-LOGIC.md §36.
+             * Why: docs/BUSINESS-LOGIC.md §35.
              */
             'start_url' => '/',
             'scope'     => '/',
@@ -37,7 +37,7 @@ final class ManifestController extends Controller
 
             /*
              * Portrait — design/README.md's frame and camera choreography assume it.
-             * Why: docs/BUSINESS-LOGIC.md §36.
+             * Why: docs/BUSINESS-LOGIC.md §35.
              */
             'orientation' => 'portrait',
 
@@ -69,7 +69,7 @@ final class ManifestController extends Controller
                 ],
                 /*
                  * A separate rendering, not the same file tagged twice — maskable needs a smaller glyph to survive the crop.
-                 * Why: docs/BUSINESS-LOGIC.md §36.
+                 * Why: docs/BUSINESS-LOGIC.md §35.
                  */
                 [
                     'src'     => '/icons/icon-maskable-192.png',
@@ -93,7 +93,7 @@ final class ManifestController extends Controller
 
                 /*
                  * An hour, not longer — icon paths could rename in a bad deploy, and this response carries no session.
-                 * Why: docs/BUSINESS-LOGIC.md §36.
+                 * Why: docs/BUSINESS-LOGIC.md §35.
                  */
                 'Cache-Control' => 'public, max-age=3600',
             ], JSON_UNESCAPED_SLASHES);

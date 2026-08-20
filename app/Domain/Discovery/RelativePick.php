@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Discovery;
 
 /**
- * One candidate the relative lane chose, and WHY — a `Baseline` pick claims
- * savings a remembered median predicted; an `Exploration` pick has none.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One candidate the relative lane chose, and WHY — a `Baseline` pick claims savings a remembered median predicted; an
+ * `Exploration` pick has none (docs/BUSINESS-LOGIC.md §16).
  */
 final readonly class RelativePick
 {
@@ -26,9 +25,8 @@ final readonly class RelativePick
     ) {}
 
     /**
-     * The pre-fetch prediction, not the result — the card prints from the
-     * freshly fetched window instead. Deliberately not stored on the row.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * The pre-fetch prediction, not the result — the card prints from the freshly fetched window instead. Deliberately not
+     * stored on the row (docs/BUSINESS-LOGIC.md §16).
      */
     public function expectedDiscount(): ?float
     {

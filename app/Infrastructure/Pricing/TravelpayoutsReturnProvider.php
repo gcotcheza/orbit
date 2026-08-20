@@ -18,10 +18,8 @@ use Illuminate\Contracts\Cache\Repository as Cache;
 /**
  * Real round-trip fares, from Travelpayouts' `/v2/prices/latest`.
  *
- * One request per route answers the whole ~year horizon (`period_type=year`).
- * `one_way=false`, `limit=1000` (default 30 silently drops 91% of data), and
- * `trip_duration` (ignored by the API; band filtered here) are all load-bearing.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One request per route answers the whole ~year horizon (`period_type=year`). `one_way=false`, `limit=1000` (default 30 silently drops 91% of data), and
+ * `trip_duration` (ignored by the API; band filtered here) are all load-bearing (docs/BUSINESS-LOGIC.md §15).
  */
 final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
 {

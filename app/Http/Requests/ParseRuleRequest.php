@@ -10,17 +10,14 @@ use Illuminate\Foundation\Http\FormRequest;
  * `POST /api/rules/parse` and `POST /api/rules` — the sentence, and the
  * chips the owner took off it.
  *
- * One request class for both: they share the same two fields, and a second
- * class differing only in name is two places to add the next field to.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One request class for both: they share the same two fields, and a second class differing only in name is two places
+ * to add the next field to (docs/BUSINESS-LOGIC.md §11).
  *
- * `text` may be empty on parse but not on create — that's the create
- * endpoint's rule, not this class's. See App\Http\Controllers\RuleController.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `text` may be empty on parse but not on create — that's the create endpoint's rule, not this class's. See
+ * App\Http\Controllers\RuleController (docs/BUSINESS-LOGIC.md §11).
  *
- * `removed` accepts unknown chip ids deliberately — the client holds them
- * across re-parses of a sentence still being edited.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `removed` accepts unknown chip ids deliberately — the client holds them across re-parses of a sentence still being
+ * edited (docs/BUSINESS-LOGIC.md §11).
  */
 final class ParseRuleRequest extends FormRequest
 {
@@ -35,9 +32,8 @@ final class ParseRuleRequest extends FormRequest
              * may reach a metered API one day (config('orbit.nlp.parser')).
              */
             /*
-             * `nullable` next to `present` isn't a contradiction: Laravel's
-             * ConvertEmptyStringsToNull turns an empty textarea into NULL first.
-             * Why: docs/BUSINESS-LOGIC.md §36.
+             * `nullable` next to `present` isn't a contradiction: Laravel's ConvertEmptyStringsToNull turns an empty textarea into
+             * NULL first (docs/BUSINESS-LOGIC.md §11).
              */
             'text'      => ['present', 'nullable', 'string', 'max:500'],
             'removed'   => ['sometimes', 'array', 'max:50'],

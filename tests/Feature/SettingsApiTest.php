@@ -14,9 +14,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
  * `GET` and `PUT /api/settings` — the alerts screen (design/README.md §6) and
  * the table PR11's alert engine reads.
  *
- * Defaults are asserted as hardcoded facts (docs/PLAN.md's decisions), not read
- * back from config, so a migration that moves one fails this test, not silently.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Defaults are asserted as hardcoded facts (docs/PLAN.md's decisions), not read back from config, so a migration that
+ * moves one fails this test, not silently (docs/BUSINESS-LOGIC.md §10).
  */
 final class SettingsApiTest extends TestCase
 {
@@ -103,9 +102,8 @@ final class SettingsApiTest extends TestCase
     /**
      * The three positions of the segmented control, and the sentence under it.
      *
-     * `minimumScore` comes from `score.tiers`, the same source the API's route `tier`
-     * uses, so the level picked and the badge shown can't mean different numbers.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * `minimumScore` comes from `score.tiers`, the same source the API's route `tier` uses, so the level picked and the
+     * badge shown can't mean different numbers (docs/BUSINESS-LOGIC.md §10).
      */
     #[Test]
     public function the_meta_describes_the_three_sensitivity_levels(): void

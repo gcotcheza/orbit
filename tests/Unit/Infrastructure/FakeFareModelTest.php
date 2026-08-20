@@ -10,10 +10,8 @@ use PHPUnit\Framework\Attributes\Test;
 use App\Infrastructure\Pricing\FakeFareModel;
 
 /**
- * The pretend airline: these tests assert the properties the app relies on
- * (determinism, price bands), not the made-up prices themselves.
- *
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The pretend airline: these tests assert the properties the app relies on (determinism, price bands), not the made-up
+ * prices themselves (docs/BUSINESS-LOGIC.md §14).
  */
 final class FakeFareModelTest extends TestCase
 {
@@ -78,10 +76,8 @@ final class FakeFareModelTest extends TestCase
     }
 
     /**
-     * Friday/Sunday cost more than Tuesday — asserted over a full year, since
-     * a Friday inside a sale window can be cheaper than a plain Tuesday.
-     *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Friday/Sunday cost more than Tuesday — asserted over a full year, since a Friday inside a sale window can be cheaper
+     * than a plain Tuesday (docs/BUSINESS-LOGIC.md §14).
      */
     #[Test]
     public function the_weekend_costs_more(): void
@@ -102,10 +98,8 @@ final class FakeFareModelTest extends TestCase
     }
 
     /**
-     * Without deep sales, no route would ever reach the "insane" deal-score
-     * tier the alerting exists to exercise.
-     *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Without deep sales, no route would ever reach the "insane" deal-score tier the alerting exists to exercise
+     * (docs/BUSINESS-LOGIC.md §14).
      */
     #[Test]
     public function every_route_has_sale_windows_somewhere_in_the_year(): void
@@ -130,10 +124,8 @@ final class FakeFareModelTest extends TestCase
     }
 
     /**
-     * Same departure date, different observation mornings, must price
-     * differently — that variance is the only reason price history has shape.
-     *
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * Same departure date, different observation mornings, must price differently — that variance is the only reason price
+     * history has shape (docs/BUSINESS-LOGIC.md §14).
      */
     #[Test]
     public function the_price_moves_with_when_you_looked(): void

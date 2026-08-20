@@ -5,17 +5,17 @@ declare(strict_types=1);
 namespace App\Domain\Pricing;
 
 // Deal score = weighted blend of percentile (60), trend (25), absolute-floor (15) components (config/orbit.php), each renormalised over what's computable; missing/insufficient history (below `$policy->minTrackingDays`) returns noOpinion() rather than a false-confident 100.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Why: docs/BUSINESS-LOGIC.md §7.
 final readonly class DealScorer
 {
     public function __construct(private ScoringPolicy $policy = new ScoringPolicy) {}
 
     // The "can't judge yet" answer, distinct from score(0,...) (0 cents would score 100); the same sentence covers zero history and a few days of it, per SpotlightCard.vue's `verdict.label` contract. "Pricing" not "Watching" since PR #29 (lookup can reach this without watching).
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §7.
     public function noOpinion(): DealScore
     {
         // Pill label is 'New', not 'Normal': "no data yet" and "judged ordinary" used to share a label and were indistinguishable on the watchlist. 'New' is a state, not a verdict, so tone stays TONE_NORMAL.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §7.
         $verdict = new Verdict('Not enough data yet', 'New', Verdict::TONE_NORMAL);
 
         return new DealScore(
@@ -41,7 +41,7 @@ final readonly class DealScorer
     public function score(int $currentCents, ?PriceStats $stats, PriceHistory $history, int $trackingDays): DealScore
     {
         // `$trackingDays` is required, not defaulted: a default would silently claim an uncounted caller was looking at a mature route — the exact bug this guard prevents.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Why: docs/BUSINESS-LOGIC.md §7.
         if ($trackingDays < $this->policy->minTrackingDays) {
             return $this->noOpinion();
         }
@@ -83,14 +83,14 @@ final readonly class DealScorer
     }
 
     // Trend component is linear (50=flat, saturating to 0/100): a curve would claim knowledge about fare behaviour this app doesn't have.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §7.
     private function trendComponent(float $drift): float
     {
         return max(0.0, min(100.0, 50.0 - ($drift / $this->policy->trendSaturationPerDay) * 50.0));
     }
 
     // 100 at the floor, 0 at usual price and above, NULL when floor==usual (not a division guard — an answer meaning "nothing to measure", so weight falls to other components).
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §7.
     private function absoluteComponent(int $currentCents, PriceStats $stats): ?float
     {
         $span = $stats->medianCents - $stats->minCents;
@@ -103,7 +103,7 @@ final readonly class DealScorer
     }
 
     // Threshold is tied to trendSaturationPerDay, not its own constant, so tuning trend sensitivity can't make the word "falling" disagree with the number shown beside it.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Why: docs/BUSINESS-LOGIC.md §7.
     private function isFalling(?float $drift): bool
     {
         return $drift !== null && $drift <= -0.2 * $this->policy->trendSaturationPerDay;

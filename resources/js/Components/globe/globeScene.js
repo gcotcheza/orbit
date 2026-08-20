@@ -1,6 +1,5 @@
-// All globe.gl/Three.js code lives in this file, kept out of Vue's reactivity (GlobeStage.vue calls its verbs; lib/geo.js supplies the numbers).
-// Textures are served locally, not from a CDN (CSP), and every colour is read from tokens.css via token() rather than hard-coded.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// All globe.gl/Three.js code lives in this file, kept out of Vue's reactivity (GlobeStage.vue calls its verbs; lib/geo.js supplies the numbers). Textures are served locally, not from a CDN (CSP), and
+// every colour is read from tokens.css via token() rather than hard-coded (docs/BUSINESS-LOGIC.md §36).
 
 // The Earth, as photographed. `night` is a candidate user setting, vendored here so switching to it is one argument, not one download.
 // Why: docs/BUSINESS-LOGIC.md §36.
