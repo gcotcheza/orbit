@@ -33,9 +33,8 @@ final class Destination extends Model
     public function warmthIn(int $month): int
     {
         /*
-         * KEYED BY INT, not by the '1'..'12' strings the JSON column holds:
-         * json_decode turns numeric object keys back into PHP integers, so the
-         * array that comes out of the cast is not the shape that went in.
+         * KEYED BY INT, not by the '1'..'12' strings the JSON column holds: json_decode turns
+         * numeric object keys back into PHP integers, so the cast changes the shape.
          */
         return $this->warmth[$month] ?? 0;
     }

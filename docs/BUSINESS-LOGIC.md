@@ -2287,6 +2287,8 @@ by anyone.
 - **A watched route may now start anywhere** (2026-08-16), and that is a poll every morning for a pair the owner cannot necessarily fly. It is deliberate and the owner's to decide: watching is an explicit act on a route somebody has just been shown the price of, the watchlist is six rows long, and a list that refused BCN-PMI would refuse the one route somebody actually wanted to follow. What is **not** widened is the rule engine, which watches on its own — `config('orbit.origins')` still bounds the nightly sweep's budget.
 - **`airports.iata` is the real key and the surrogate id is a convenience**: the code is what the URL carries (`/route/AMS-LIS`), what the provider APIs speak, and what the design prints on the boarding-pass rows. It is unique so a second "AMS" cannot be created by a careless seeder run and quietly split a route's history in two. `lat`/`lng` are **doubles, not decimals** — they are read straight into the globe's camera and great-circle maths, where they are floats anyway, and a decimal column would only mean Eloquent handing the client a string JavaScript has to parse back.
 
+- **Neither `discoveries` nor `discovery_baselines` carries a `user_id`**, unlike `alerts` and `watchlist_items` — what a route usually costs, and the fact that it is cheap this morning, are facts about the world rather than about an account's relationship to it. `discovery_baselines` also stays one number per route rather than growing into a `routes`-keyed window (the migration says what breaks if it does).
+
 ### Auth and security
 
 - **`LoginController` has no registration, reset or verification** — Orbit has exactly one seeded user, and a route that doesn't exist can't be misconfigured.

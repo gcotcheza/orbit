@@ -8,14 +8,8 @@ use App\Application\Alerts\RuleMatchNotice;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * What one standing rule found this morning — all of it, in one mail.
- *
- * THE LIST IS TRIMMED AND THE REST ARE COUNTED. A rule that matched thirty
- * routes is not thirty lines somebody reads; it is the cheapest handful
- * (config('orbit.alerts.mail_deals')) and "and 24 more", which is both shorter
- * and more honest about what the rule is doing. Every one of the thirty is in
- * the ledger regardless — see App\Application\Alerts\AlertEvaluation for why
- * that is what makes tomorrow's mail correct.
+ * What one standing rule found this morning, all in one mail. THE LIST IS TRIMMED AND THE
+ * REST ARE COUNTED; every match is in the ledger regardless (docs/BUSINESS-LOGIC.md §10).
  */
 final class RuleMatchAlert extends AlertNotification
 {
