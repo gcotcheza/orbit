@@ -12,47 +12,14 @@ use App\Domain\Rules\RuleVocabulary;
 use App\Application\Ports\RuleTextParser;
 
 /**
- * Reading the sentence without asking anybody.
- *
- * THIS IS THE ADAPTER PRODUCTION RUNS, not a stub for one. docs/PLAN.md still
- * lists "dedicated Anthropic API key" as a pending owner action, so until one
- * exists this class IS the rule parser — the same relationship
- * App\Infrastructure\Pricing\FakePriceProvider has to Travelpayouts. It is
- * written to that standard: it reads the design's own sentence exactly, and
- * about a dozen ways of saying the same things.
- *
- * IT IS ALSO THE FALLBACK FOREVER AFTER. AnthropicRuleTextParser composes this
- * one and hands over whenever the model refuses, runs out of room, or cannot
- * be reached — so this file is what stands between a bad afternoon at a third
- * party and a create screen that does nothing.
- *
- * ---------------------------------------------------------------------------
- * WHAT IT DELIBERATELY DOES NOT DO
- *
- * It does not try to be a parser in the computer-science sense. There is no
- * grammar, no tokeniser and no ambiguity resolution — six independent readers
- * each look for the one thing they know about and say nothing when they do not
- * find it. That is why garbage input is `ParsedRule::nothing()` rather than a
- * wrong rule: a reader that finds nothing contributes nothing.
- *
- * The one place order matters is inside a reader (a month RANGE has to be
- * tried before a single month, or "march to may" reads as "march"), and each
- * one says so where it happens.
- * ---------------------------------------------------------------------------
+ * Reading the sentence without asking anybody — the adapter production runs today,
+ * and AnthropicRuleTextParser's fallback forever after (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class RegexRuleTextParser implements RuleTextParser
 {
     /**
-     * Phrases that name the whole origin SET rather than one airport.
-     *
-     * Not aliases, which is why they are here and not in config: "any NL
-     * airport" does not mean an airport, it means all of them, and putting it
-     * in the alias map would make it a fourth airport that does not exist.
-     *
-     * A BARE "anywhere" IS NOT ON THE LIST, deliberately. In "fly anywhere
-     * under €50" it is the DESTINATION being left open, and reading it as an
-     * origin would draw three "From" chips for a sentence that never mentioned
-     * where to leave from.
+     * Phrases naming the whole origin SET, not one airport — not aliases, so not in config.
+     * A bare "anywhere" is deliberately absent: there it is the destination left open.
      */
     private const ALL_ORIGINS = '/\b(?:any(?:where)?\s+(?:nl|dutch|netherlands)|(?:nl|dutch|netherlands)\s+airports?|(?:any|all|either|every)\s+airports?)\b/u';
 
@@ -64,10 +31,8 @@ final readonly class RegexRuleTextParser implements RuleTextParser
         5 => ['friday', 'fridays', 'fri'],
         6 => ['saturday', 'saturdays', 'sat'],
         /*
-         * NO "sun" ABBREVIATION, unlike every other day. It is also the vibe
-         * word for warm weather, and "a week in the sun" is a sentence about
-         * sunshine rather than about Sundays. Losing an abbreviation nobody
-         * types is cheaper than reading that one wrong.
+         * No "sun" abbreviation, unlike every other day: it is also the vibe word for
+         * warm weather, and "a week in the sun" is not about Sundays.
          */
         7 => ['sunday', 'sundays'],
     ];
@@ -101,9 +66,8 @@ final readonly class RegexRuleTextParser implements RuleTextParser
     public function parse(string $text): ParsedRule
     {
         /*
-         * Lower-cased once, and with the multibyte function: the alias map has
-         * "düsseldorf" in it and strtolower() would leave the umlaut alone
-         * while lowering the D, producing a word neither spelling matches.
+         * mb_strtolower, not strtolower: the alias map has "düsseldorf" and the umlaut
+         * would survive while the D lowered, matching neither spelling.
          */
         $text = mb_strtolower(trim($text));
 
@@ -120,11 +84,8 @@ final readonly class RegexRuleTextParser implements RuleTextParser
                 maxPriceCents: $this->maxPriceCents($text),
                 tripLengthNights: $this->nights($text) ?? ($weekend ? [2, 3] : null),
                 /*
-                 * A NAMED DAY BEATS THE WEEKEND DEFAULT rather than joining
-                 * it. "weekend ... leaving Friday" is one instruction refining
-                 * another, not two: answering Friday AND Saturday would be
-                 * reading a preference the sentence contradicts — and it is
-                 * the design's own example sentence, whose chip says Fridays.
+                 * A named day BEATS the weekend default rather than joining it:
+                 * "weekend ... leaving Friday" is one instruction refining another.
                  */
                 departDows: $days !== [] ? $days : ($weekend ? [5, 6] : []),
                 dateWindow: $this->dateWindow($text),
@@ -135,14 +96,8 @@ final readonly class RegexRuleTextParser implements RuleTextParser
     }
 
     /**
-     * Which airports to leave from.
-     *
-     * EMPTY WHEN THE SENTENCE SAYS NOTHING, and empty means all three (see
-     * RuleCriteria::originsOrAll). The design prototype always drew three
-     * "From" chips even for a sentence that never mentioned an airport; this
-     * does not, because "Here's what we understood" has to be a claim about
-     * what was written. A chip nobody can explain is one somebody removes to
-     * see what it does.
+     * Which airports to leave from. EMPTY WHEN THE SENTENCE SAYS NOTHING, and empty
+     * means all three (RuleCriteria::originsOrAll) — a chip must be a claim about the text.
      *
      * @return list<string>
      */
@@ -158,10 +113,8 @@ final readonly class RegexRuleTextParser implements RuleTextParser
 
         if (preg_match(self::ALL_ORIGINS, $text) === 1) {
             /*
-             * The SET wins over anything named alongside it, and keeps
-             * config's order rather than the order somebody typed — the design
-             * draws AMS, EIN, DUS in that order (§4) because that is the order
-             * they are offered in everywhere else in the app.
+             * The SET wins over anything named alongside it, and keeps config's order
+             * rather than the typed order — AMS, EIN, DUS everywhere (design/README.md §4).
              */
             return $this->vocabulary->origins;
         }
@@ -173,13 +126,8 @@ final readonly class RegexRuleTextParser implements RuleTextParser
     }
 
     /**
-     * "under €80", "below 80 euros", "max €80", "€80", "80 eur".
-     *
-     * THREE PATTERNS AND THE FIRST ONE THAT HITS, most explicit first. A bare
-     * number is never a price: "2 nights" and "3 to 5 nights" are in the same
-     * sentences, and a reader that took any two-digit number would turn every
-     * trip length into a €3 ceiling. Something has to say "money" — a
-     * comparison word, a currency symbol, or the word euro.
+     * "under €80", "below 80 euros", "max €80", "€80", "80 eur" — most explicit first.
+     * A bare number is never a price; "2 nights" would otherwise become a €2 ceiling.
      */
     private function maxPriceCents(string $text): ?int
     {
@@ -225,14 +173,8 @@ final readonly class RegexRuleTextParser implements RuleTextParser
         }
 
         /*
-         * A BARE "week" IS SEVEN NIGHTS — "a ski week", "a week in the sun" —
-         * but only when nothing in front of it turns it into a date instead.
-         * "next week" is when somebody wants to leave, not how long they want
-         * to stay, and reading it as a length would quietly put a 7-night
-         * filter on a rule about next Tuesday.
-         *
-         * `\bweek\b` does not match "weekend"; the trailing boundary is what
-         * keeps the design's own sentence at 2–3 nights.
+         * A bare "week" is seven nights, but "next week" is a departure, not a length.
+         * `\bweek\b` does not match "weekend" — that boundary keeps the design at 2–3 nights.
          */
         if (preg_match('/\bweeks?\b/u', $text) === 1 && preg_match('/\b(?:next|this|last|per)\s+weeks?\b/u', $text) !== 1) {
             return [7, 7];
@@ -261,9 +203,7 @@ final readonly class RegexRuleTextParser implements RuleTextParser
 
     /**
      * "spring", "in june", "march to may", "next month".
-     *
-     * RANGES BEFORE SINGLE MONTHS, for the same reason the night patterns are
-     * ordered: "march to may" contains "march".
+     * RANGES BEFORE SINGLE MONTHS: "march to may" contains "march".
      */
     private function dateWindow(string $text): ?MonthWindow
     {
@@ -325,9 +265,8 @@ final readonly class RegexRuleTextParser implements RuleTextParser
                 }
 
                 /*
-                 * The one that appears FIRST in the sentence, not the one with
-                 * the lowest month number: "a trip in October, or maybe March"
-                 * is about October.
+                 * The month that appears FIRST in the sentence, not the lowest number:
+                 * "a trip in October, or maybe March" is about October.
                  */
                 $offset = (int) $match[0][1];
 
@@ -360,13 +299,8 @@ final readonly class RegexRuleTextParser implements RuleTextParser
     }
 
     /**
-     * Whole words only, never substrings.
-     *
-     * `\b` IS DOING REAL WORK HERE and not being careful for its own sake: the
-     * vibe list has "sun" in it and the text has "sunny" in it, "ski" is
-     * inside "skiing" but also inside nothing else this app should react to,
-     * and "mar" is inside "market". A substring search would read the design's
-     * own example sentence wrong.
+     * Whole words only, never substrings: "sun" is inside "sunny", "ski" inside
+     * "skiing", "mar" inside "market" — a substring search misreads the design's sentence.
      *
      * @param  list<string>  $words
      */

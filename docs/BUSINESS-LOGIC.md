@@ -365,6 +365,10 @@ holds**, inclusive — not since the route was added. A route polled once today 
 "tracking 1 day". Both ends are parsed in the owner's timezone, or the
 difference comes back with a fraction on it.
 
+**The row is a near-window minimum, whatever that morning's run actually fetched.** `PollRoutePrices` bounds the day's observation to `poll.window_days` even on the weekly `--far` run, which reaches eleven months. Taken over the depth of the fetch instead, a Saturday's row would be the cheapest fare in the next *eleven* months — lower on most routes for no reason but how deep the run looked — and the series would dip every Saturday and recover every Sunday. The trend component would read that sawtooth as a fall and a recovery, and the percentile would score an ordinary Saturday as the cheapest morning of the month. The near-window filter compares `'Y-m-d'` strings rather than `DateTimeImmutable`s, because the near edge is midnight in the owner's timezone while a provider's departure date carries whatever zone the adapter built it in — two instants for the same calendar day can be hours apart. If a run somehow fetched nothing inside the near window at all, no row is written: yesterday's row is a better answer than an invented one.
+
+**The write is an `upsert` with the date as a bare `'Y-m-d'` string, and `updateOrCreate` is the trap it avoids.** `updateOrCreate` runs the value through the model's date cast on the way *in* but not on the way to the `WHERE` clause, so the lookup compares `'2026-08-14'` against a stored `'2026-08-14 00:00:00'`. Postgres coerces both to its `date` column and never notices; SQLite, which the test suite runs on, stores the string it is given, the two do not match, and every poll inserts a duplicate that hits the unique index. `observed_on` is stamped in the **owner's** timezone rather than UTC for the same class of reason: the poll runs at 06:10 Amsterdam, where both zones agree, but a retry landing at 00:30 local is still yesterday in UTC and would overwrite yesterday's observation with today's price.
+
 ---
 
 ## 6. Statistics — what a route "usually" costs
@@ -874,7 +878,7 @@ no observation are skipped (not scored 0), rules with 0 matches are omitted
 rather than shown as "0 matches", and `week()` reads the stored payload rather
 than re-deriving it. An unknown alert-notice type throws rather than being
 dropped — an alert that silently goes nowhere is the worst failure this app
-has, because everything still looks like it's working.
+has, because everything still looks like it's working. `AlertEvaluation` reads the quiet window and the cooldown ledger **once per run**, not per route — the window cannot move while a run is in flight, and a per-route ledger read would be thirty round trips inside a job meant to be short. Its log line carries `routes_too_new` and none of the other three held reasons, because that one explains a *morning* rather than a route: a watchlist filled in yesterday sends nothing today, and `route_alerts: 0` on its own reads like a broken poller. The freshness guard is asked about the fare the mail **points at** — the cheapest calendar fare — not the observation the score came from, the same split `DealSummary::forRoute()` makes: what the reader clicks is what has to be real.
 
 ---
 
@@ -1755,6 +1759,10 @@ parameterless read behind `auth:sanctum`, on the owner's clock. In the sandbox,
 `MAX_SWEEP_KM = 4000` since `FakeFareModel` is distance-blind) and
 `SALE_IN_HUNDREDTHS` (22%) is tuned to fill the shortlist, not to match the real
 funnel's ~4.9% pass rate.
+
+The exploration rotation is **deterministic on purpose**: `RelativeLaneSelector` orders the unknown pool by a `crc32` hash of the day and the route code, never `rand()`. A shuffle would make the lane untestable (a feature test could assert only that *something* was explored) and would make two runs on the same morning disagree, which matters because the job is idempotent by design and a hand-run of `orbit:discover` is meant to reproduce the scheduled one. The **day** is in the seed so the rotation moves — hashing the route alone would explore the same three routes every morning forever, a flywheel turning three cogs — and it is the **owner's** day, already resolved to `orbit.timezone` by `DiscoverDeals`, so a 05:20 Amsterdam run seeds on the date the owner would call today. The route code breaks a hash collision, since 32 bits over a few dozen candidates is unlikely but not impossible and the order still has to be total. **One destination appears only once across both lanes and across origins** — Málaga turned up in both the DUS and EIN sweeps on 2026-08-16, and spending an absolute slot *and* a relative slot on the same city pays twice to name one place.
+
+The relative lane's `maxFareCents` is **deliberately above the absolute lane's €120**: a relative find is by construction *not* remarkable per kilometre — that is what makes it this lane's — so a ceiling tuned for €/km outliers would reject the whole population, and €120 leaves no room for mid-haul routes whose usual is genuinely high. €150 is still a ceiling and is there on purpose, because a percentage is scale-free: a €400 long-haul at half its €800 usual is a real discount but a different product, a trip somebody plans around rather than a fare they book on a Tuesday. Its `minSavingsCents` is the same €15 as `DiscoveryPolicy`'s but is passed in separately rather than read off that object, so the two can be retuned apart. Its `minDiscount = 0.40` sits below both measured cases with margin (DUS-AGP at 62.8%, the owner's Dublin ask at 50%) and comfortably clear of the 20–30% an ordinary route's window spans between its cheap Tuesdays and its median — the thing this must never fire on. Three picks is the only number in the class that costs anything (≤21 requests) and it adds no Google search at all: `serpapi.max_per_run` stays at five, shared across both lanes, absolute first.
 
 ---
 
