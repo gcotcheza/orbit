@@ -14,8 +14,8 @@ use App\Http\Controllers\Pwa\ManifestController;
 use App\Http\Controllers\Pwa\ServiceWorkerController;
 
 /**
- * The three routes that make Orbit installable, and the three silent ways they can break (shadowed, sessioned, stale
- * precache) — invisible once installed (docs/BUSINESS-LOGIC.md §35).
+ * The three routes that make Orbit installable, and the three silent ways
+ * they break — invisible once installed (docs/BUSINESS-LOGIC.md §36).
  */
 final class PwaShellTest extends TestCase
 {
@@ -56,8 +56,8 @@ final class PwaShellTest extends TestCase
     }
 
     /**
-     * SPA catch-all registers before these routes (bootstrap/app.php `then:`), so without fallback demotion there every
-     * one is a 200 of HTML.
+     * SPA catch-all registers before these routes — without fallback demotion
+     * every one is a 200 of HTML (docs/BUSINESS-LOGIC.md §36).
      *
      * @param  class-string  $controller
      */
@@ -77,8 +77,8 @@ final class PwaShellTest extends TestCase
     }
 
     /**
-     * None of the three is in the `web` group, so none may start a session — a Set-Cookie here means a `sessions` row per
-     * nav and no edge caching.
+     * None of the three is in the `web` group — a Set-Cookie here means a
+     * `sessions` row per nav and no edge caching (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     #[DataProvider('pwaPaths')]
@@ -101,8 +101,8 @@ final class PwaShellTest extends TestCase
         // fall back to: that is a download rather than an install.
         $this->assertSame('application/manifest+json', $response->headers->get('Content-Type'));
 
-        // Asserted directive by directive: Symfony reorders the header string, so comparing it whole would test formatting,
-        // not policy (docs/BUSINESS-LOGIC.md §35).
+        // Asserted directive by directive: Symfony reorders the header string,
+        // so comparing it whole tests formatting, not policy (docs/BUSINESS-LOGIC.md §36).
         $this->assertTrue($response->headers->hasCacheControlDirective('public'));
         $this->assertSame('3600', $response->headers->getCacheControlDirective('max-age'));
     }
@@ -138,8 +138,8 @@ final class PwaShellTest extends TestCase
     }
 
     /**
-     * Five icons: SVG, two PNGs, and two SEPARATE maskable renderings — one file declared `any maskable` is clipped on
-     * Android or wastefully small elsewhere (docs/BUSINESS-LOGIC.md §35).
+     * Five icons, two SEPARATE maskable renderings — one file declared `any
+     * maskable` is clipped on Android or wastefully small (docs/BUSINESS-LOGIC.md §35).
      */
     #[Test]
     public function the_manifest_declares_icons_that_exist_on_disk(): void
@@ -217,8 +217,8 @@ final class PwaShellTest extends TestCase
     }
 
     /**
-     * The update check a browser makes on EVERY navigation — with the ETag it's an empty 304; without it, this whole file,
-     * repeatedly (docs/BUSINESS-LOGIC.md §35).
+     * The update check a browser makes on EVERY navigation — with the ETag
+     * it's an empty 304, without it this whole file, repeatedly.
      */
     #[Test]
     public function the_service_worker_answers_a_revalidation_with_304(): void
@@ -266,8 +266,8 @@ final class PwaShellTest extends TestCase
         $response->assertOk();
         $response->assertSee('You&rsquo;re offline', false);
 
-        // No bundle, font, image, or script on this page: each is unavailable in exactly the conditions offline exists for;
-        // CSP also forbids inline script (docs/BUSINESS-LOGIC.md §35).
+        // No bundle, font, image, or script here: each is unavailable in
+        // exactly the conditions offline exists for (docs/BUSINESS-LOGIC.md §35).
         $response->assertDontSee('/build/', false);
         $response->assertDontSee('<script', false);
     }
