@@ -19,8 +19,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Infrastructure\Discovery\FakeSweepProvider;
 use App\Infrastructure\Discovery\TravelpayoutsSweepProvider;
 
-// Fixtures (latest-sweep-*.json) are real trimmed 2026-08-16 API responses, not synthesised, so assertions are facts about what Travelpayouts actually sends.
-// Why: docs/BUSINESS-LOGIC.md §16.
+// Fixtures are real trimmed 2026-08-16 API responses, not synthesised
+// (docs/BUSINESS-LOGIC.md §16, docs/BUSINESS-LOGIC.md §36).
 final class OriginSweepTest extends TestCase
 {
     use RefreshDatabase;
@@ -103,8 +103,8 @@ final class OriginSweepTest extends TestCase
         $this->assertSame('2026-08-25', $agp->departureDate->format('Y-m-d'));
     }
 
-    // The `found_at` trap: `/v2/prices/latest` has no trailing Z, `/v2/prices/month-matrix` does; copying the price adapter's single format would make DiscoveryPolicy treat every fare as too old — an empty screen with no error.
-    // Why: docs/BUSINESS-LOGIC.md §16.
+    // The `found_at` trap: this endpoint has no trailing Z, unlike its siblings
+    // — one shared format would age every fare out silently (docs/BUSINESS-LOGIC.md §16).
     #[Test]
     public function it_reads_the_zoneless_timestamp_this_endpoint_uses(): void
     {
@@ -156,13 +156,14 @@ final class OriginSweepTest extends TestCase
 
         $codes = array_map(static fn (SweptFare $f): string => $f->destinationIata, $fares);
 
-        // Refused outright: a free/negative fare, a withdrawn price, an unparseable date, a null code, or a non-object row.
+        // Refused outright: free/negative, withdrawn, unparseable date, null
+        // code, or a non-object row.
         foreach (['XXX', 'YYY', 'ZZZ', 'VVV'] as $refused) {
             $this->assertNotContains($refused, $codes);
         }
 
-        // Kept with no age (QQQ/WWW): the adapter refuses to invent a timestamp but doesn't decide what an unknown age disqualifies — DiscoveryPolicy calls that, opposite to AlertPolicy's call on the same fact.
-        // Why: docs/BUSINESS-LOGIC.md §16.
+        // Kept with no age (QQQ/WWW): the adapter refuses to invent a timestamp
+        // but leaves what an unknown age disqualifies to the caller (docs/BUSINESS-LOGIC.md §16).
         $this->assertSame(['AGP', 'QQQ', 'WWW'], $codes);
 
         foreach ($fares as $fare) {
@@ -275,8 +276,8 @@ final class OriginSweepTest extends TestCase
         $this->assertInstanceOf(TravelpayoutsSweepProvider::class, $this->app->make(OriginSweepProvider::class));
     }
 
-    // The sweep provider defaults to whatever the fare provider is set to, unlike the other three switches: a real-fares/fake-sweep mismatch would invent routes verified against a real calendar they have nothing to do with.
-    // Why: docs/BUSINESS-LOGIC.md §16.
+    // The sweep provider defaults to whatever the fare provider is set to —
+    // a real-fares/fake-sweep mismatch would invent unrelated routes (docs/BUSINESS-LOGIC.md §16).
     #[Test]
     public function the_sweep_follows_the_fare_provider_unless_it_is_pinned(): void
     {
@@ -330,8 +331,8 @@ final class OriginSweepTest extends TestCase
     #[Test]
     public function the_fake_is_sparse_deterministic_and_dated(): void
     {
-        // Both seeders needed: WorldAirportSeeder skips curated codes (AMS included), so it alone leaves no origin to sweep from — see the_fake_answers_nothing_without_airports for that case.
-        // Why: docs/BUSINESS-LOGIC.md §16.
+        // Both seeders needed: WorldAirportSeeder skips curated codes, so it
+        // alone leaves no origin to sweep from (docs/BUSINESS-LOGIC.md §16).
         $this->seed(DestinationSeeder::class);
         $this->seed(WorldAirportSeeder::class);
 
@@ -350,8 +351,8 @@ final class OriginSweepTest extends TestCase
         /* Sparse, like the real thing: nowhere near every airport. */
         $this->assertLessThan(1000, count($first));
 
-        // Bounded by distance, not price: a distance-blind €29-180 band ranks by distance alone (see provider's docblock), so €12 fares to Hokitika etc. are plausible; the assertion is reach, not cost.
-        // Why: docs/BUSINESS-LOGIC.md §16.
+        // Bounded by distance, not price — the fake ranks by distance alone,
+        // so a €12 far-flung fare is plausible (docs/BUSINESS-LOGIC.md §16).
         $ams = Airport::query()->where('iata', 'AMS')->sole();
 
         $reach = Airport::query()
