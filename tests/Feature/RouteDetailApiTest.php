@@ -169,10 +169,8 @@ final class RouteDetailApiTest extends TestCase
     }
 
     /**
-     * BOTH LINKS ARE AIMED AT THE SAME DEPARTURE, and they encode the date
-     * differently — `0309` is 3 September day-first for Aviasales, `260903` is
-     * year-first for Skyscanner. A link that opens perfectly and searches the
-     * wrong day is the failure this catches.
+     * Both links are aimed at the same departure, encoded differently —
+     * a link that opens and searches the wrong day (docs/BUSINESS-LOGIC.md §12).
      */
     #[Test]
     public function both_booking_links_point_at_that_departure(): void
@@ -187,9 +185,8 @@ final class RouteDetailApiTest extends TestCase
     }
 
     /**
-     * A route with no fares has no day to show results for, so the primary link
-     * lands on Aviasales' PRE-FILLED SEARCH FORM rather than on an empty results
-     * page — the reader gets the box with the route already in it.
+     * No day to show results for, so the primary link is Aviasales' pre-filled
+     * search form, not empty results (docs/BUSINESS-LOGIC.md §12).
      */
     #[Test]
     public function a_route_with_no_fares_still_gets_usable_links(): void
@@ -203,13 +200,8 @@ final class RouteDetailApiTest extends TestCase
     }
 
     /**
-     * HOW OLD THE HEADLINE FARE IS — the detail's one addition to the shared
-     * `cheapest` shape, and the reason it is not on the summary: the three
-     * screens that read the summary print a fare in a space with room for a
-     * number and nothing else.
-     *
-     * NULL WHEN ORBIT DOES NOT KNOW, which the screen renders as no line rather
-     * than as a reassurance.
+     * How old the headline fare is — the detail's one addition to the shared
+     * `cheapest` shape; null renders as no line, never a reassurance.
      */
     #[Test]
     public function the_cheapest_fare_says_when_it_was_found(): void
@@ -235,18 +227,8 @@ final class RouteDetailApiTest extends TestCase
     }
 
     /**
-     * =========================================================================
-     * ⚠ `mayBeGone` — WHETHER THIS SCREEN SHOULD BE SHOUTING ITS HEADLINE
-     * =========================================================================
-     * The fare that bought this field: DUS→VCE at €36 against a usual €62,
-     * "Seen 3 days ago", when the live market was about $150 and nothing was on
-     * sale within sight of it. Every number was true and the headline was a
-     * fare nobody could buy.
-     *
-     * THE RULE IS OLD **AND** WELL UNDER USUAL, and the four tests below are
-     * its four corners. Age alone would demote half the app on a quiet week;
-     * cheapness alone would demote the feature. config/orbit.php `live_check`
-     * carries the argument and both numbers (48 hours, 20%).
+     * ⚠ `mayBeGone`: old AND well under usual, four tests below are its four
+     * corners — either alone demotes the wrong thing (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function an_old_and_far_below_usual_fare_is_demoted(): void
@@ -263,9 +245,8 @@ final class RouteDetailApiTest extends TestCase
     }
 
     /**
-     * ⚠ AND THE CALLOUT STOPS RECOMMENDING IT. "A solid time to lock it in"
-     * under a fare the same document has just doubted is the page arguing with
-     * itself, and the client must not have to compose the qualification.
+     * ⚠ And the callout stops recommending it — the page must never argue
+     * with itself (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_demoted_fare_takes_the_callout_down_with_it(): void
@@ -309,9 +290,8 @@ final class RouteDetailApiTest extends TestCase
         $this->summarise($route, 4000, 6000, 8000, 11000, 16000);
         $this->trackedSince($route, 9000);
 
-        /* €78 against a usual €80, three days old. Nobody is going to be
-           disappointed by that, and greying it out would teach the reader that
-           the treatment means nothing. */
+        // €78 against a usual €80, three days old — greying it out would
+        // teach the reader the treatment means nothing.
         $this->offer($route, ['2026-09-03' => 7800], foundAt: '2026-08-11 09:00:00');
 
         $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
@@ -319,10 +299,8 @@ final class RouteDetailApiTest extends TestCase
     }
 
     /**
-     * A NULL `found_at` IS NEVER DEMOTED. It means "we do not know how old this
-     * is" — every row written before that column existed, and any provider that
-     * will not say — and demoting on not-knowing would have greyed out the whole
-     * database on the morning this shipped. The same reading AlertPolicy takes.
+     * A null `found_at` is never demoted — "we don't know" is not "it's old"
+     * (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_fare_of_unknown_age_is_never_demoted(): void
@@ -337,9 +315,8 @@ final class RouteDetailApiTest extends TestCase
     }
 
     /**
-     * NOBODY HAS ASKED GOOGLE, so there is nothing to publish — and `null` is
-     * what the screen draws its "Check live price" button from. Its filled
-     * shape is tests/Feature/LivePriceCheckTest.
+     * Nobody has asked Google — `null` is what draws the "Check live price"
+     * button (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function the_live_check_is_null_until_somebody_makes_one(): void
@@ -361,9 +338,8 @@ final class RouteDetailApiTest extends TestCase
     }
 
     /**
-     * The route pattern is `[A-Z]{3}-[A-Z]{3}`, so anything else never reaches
-     * the controller — and must not be swallowed by the SPA catch-all either,
-     * which would answer a bad API call with 200 and a page of HTML.
+     * `[A-Z]{3}-[A-Z]{3}` at the router — must not be swallowed by the SPA
+     * catch-all as 200 of HTML (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_malformed_code_never_becomes_the_spa_shell(): void
@@ -385,17 +361,8 @@ final class RouteDetailApiTest extends TestCase
         $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')->assertOk();
     }
 
-    /*
-     * -------------------------------------------------------------------------
-     * `meta` — the two facts about the ASKING rather than about the route
-     * -------------------------------------------------------------------------
-     * Both arrived with "look before you watch". `watched` is what draws the
-     * "Add to watchlist" button, and its absence is what keeps a watched
-     * route's detail screen exactly the screen it always was; `fares.fresh` is
-     * what lets that screen decide to ask for a price rather than draw a stale
-     * one and say nothing. Neither belongs in `data`, which is the shared route
-     * summary four screens read whole.
-     */
+    // `meta` — two facts about the ASKING, not the route: neither belongs in
+    // `data`, the shared summary four screens read whole.
 
     #[Test]
     public function it_says_whether_this_account_watches_the_route(): void
@@ -431,9 +398,8 @@ final class RouteDetailApiTest extends TestCase
     {
         $this->seedRoute();
 
-        // seedRoute() offers fares as of now, and now is 09:00 UTC — which is
-        // 11:00 where the owner lives, because this is the one timestamp in the
-        // API and it is sent in their timezone.
+        // 09:00 UTC is 11:00 where the owner lives — the one timestamp in the
+        // API, sent in their timezone.
         $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
             ->assertJsonPath('meta.fares.fetchedAt', '2026-08-14T11:00:00+02:00')
             ->assertJsonPath('meta.fares.fresh', true);
