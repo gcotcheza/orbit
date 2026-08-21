@@ -9,8 +9,8 @@ use Symfony\Component\Yaml\Yaml;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
- * The deployment invariants, asserted rather than remembered: silent docker-compose.yml misconfigurations (capabilities, exposed ports, uid drift) are
- * invisible at runtime until the day someone reads the file (docs/BUSINESS-LOGIC.md §36).
+ * The deployment invariants, asserted rather than remembered — silent
+ * docker-compose.yml drift is invisible at runtime (docs/BUSINESS-LOGIC.md §36).
  */
 final class DeploymentInvariantsTest extends TestCase
 {
