@@ -1,7 +1,5 @@
-/*
- * Search is the centre tab; most of this file moved from watchlist.spec.js unchanged, plus the FROM box.
- * Why: docs/BUSINESS-LOGIC.md §36.
- */
+// Search is the centre tab; most of this file moved from watchlist.spec.js
+// unchanged, plus the FROM box (docs/BUSINESS-LOGIC.md §36).
 import { expect, shot, tab, test } from '../fixtures.js'
 
 test.describe.configure({ mode: 'serial' })
@@ -12,15 +10,11 @@ const TO = '#search-to'
 /** The suggestion panel belonging to one of the two boxes. */
 const listbox = (page, name) => page.getByRole('listbox', { name })
 
-/*
- * Journey test uses NRN (Weeze), an airport with no origin config, so typing it into From was a 422 before this screen.
- * Why: docs/BUSINESS-LOGIC.md §36.
- */
+// Uses NRN (Weeze), an airport with no origin config — typing it into From
+// was a 422 before this screen (docs/BUSINESS-LOGIC.md §36).
 test('an airport nobody flies from is searched, priced, and then watched', async ({ page, browserConsole }) => {
-    /*
-     * The 404 from GET /api/routes/NRN-AGP is expected, not a fault — RouteDetail.vue doesn't log it, Chromium's network log does.
-     * Why: docs/BUSINESS-LOGIC.md §36.
-     */
+    // The 404 is expected, not a fault — RouteDetail.vue doesn't log it,
+    // Chromium's network log does.
     browserConsole.allow(/Failed to load resource.*404/)
 
     await page.goto('/watch')
@@ -43,10 +37,8 @@ test('an airport nobody flies from is searched, priced, and then watched', async
     const origins = listbox(page, 'Origin suggestions')
     const weeze = origins.getByRole('option').filter({ hasText: 'NRN' })
 
-    /*
-     * Weeze only appears via GET /api/airports?q=wee, not the 184 curated places — this row proves the world typeahead worked.
-     * Why: docs/BUSINESS-LOGIC.md §36.
-     */
+    // Weeze only appears via the world search, not the 184 curated places —
+    // this row proves the world typeahead worked.
     await expect(weeze).toHaveCount(1)
     await expect(weeze).toContainText('Weeze')
     await expect(weeze).toContainText('Germany')
@@ -106,10 +98,8 @@ test('an airport nobody flies from is searched, priced, and then watched', async
     await expect(page.locator('.pass')).toHaveCount(6)
 })
 
-/*
- * Browser-only: the clear (x) needs real layout, must survive mousedown while a panel is open (@mousedown.prevent).
- * Why: docs/BUSINESS-LOGIC.md §36.
- */
+// Browser-only: the clear (x) needs real layout, must survive mousedown
+// while a panel is open (docs/BUSINESS-LOGIC.md §36).
 test('the origin is three pills and a box for anywhere else', async ({ page }) => {
     await page.goto('/search')
 
@@ -165,10 +155,8 @@ test('the origin is three pills and a box for anywhere else', async ({ page }) =
     await expect(page.locator(FROM)).toHaveValue('')
     await expect(lit).toHaveText('DUS')
 
-    /*
-     * Matched on the code element, not the row: Playwright's `hasText` is a case-insensitive substring, and "Dushanbe" contains "dus".
-     * Why: docs/BUSINESS-LOGIC.md §36.
-     */
+    // Matched on the code element, not the row: `hasText` is a
+    // case-insensitive substring, and "Dushanbe" contains "dus".
     await page.locator(TO).fill('DUS')
 
     const codes = page.locator('#search-to-list .option__code')
@@ -183,10 +171,8 @@ test('the origin is three pills and a box for anywhere else', async ({ page }) =
     await expect(page.locator('.search__error')).toHaveText('A route needs two different airports.')
 })
 
-/*
- * "Add to watch" stays on the search screen rather than navigating to the emptiest detail page a route can have.
- * Why: docs/BUSINESS-LOGIC.md §36.
- */
+// "Add to watch" stays on the search screen rather than navigating to the
+// emptiest detail page a route can have (docs/BUSINESS-LOGIC.md §36).
 test('a route can be watched straight from the search screen', async ({ page }) => {
     await page.goto('/search')
 
@@ -220,10 +206,8 @@ test('a route can be watched straight from the search screen', async ({ page }) 
     await expect(page.locator('.pass')).toHaveCount(6)
 })
 
-/*
- * Moved from watchlist.spec.js with the box it's about: curated matches paint instantly, world matches arrive from GET /api/airports?q= under a divider. Browser-only: AirportField.test.js already covers
- * the merge against a mock — this proves the real endpoint/ranking/table agree, and that the panel growing a second time doesn't reflow anything unpressable (docs/BUSINESS-LOGIC.md §36).
- */
+// Browser-only: AirportField.test.js covers the merge against a mock — this
+// proves the real endpoint/ranking/table agree (docs/BUSINESS-LOGIC.md §36).
 test('the destination box finds a city by name, and the world under a divider', async ({ page }) => {
     await page.goto('/search')
 
@@ -295,10 +279,8 @@ test('only one suggestion list is open at a time', async ({ page }) => {
     await expect(origins).toBeVisible()
     await expect(destinations).toBeHidden()
 
-    /*
-     * Neither box offers what the other holds (no self-route) — "barcel" matches both BCN and BLA in the seed, so this proves exclusion, not a broken search.
-     * Why: docs/BUSINESS-LOGIC.md §36.
-     */
+    // Neither box offers what the other holds (no self-route) — "barcel"
+    // matches both BCN and BLA, proving exclusion, not a broken search.
     await page.locator(FROM).fill('BCN')
     await page.locator(TO).fill('barcel')
 
@@ -307,10 +289,8 @@ test('only one suggestion list is open at a time', async ({ page }) => {
 })
 
 test('a code Orbit has no airport for is refused, beside the boxes', async ({ page, browserConsole }) => {
-    /*
-     * The one waived app-level console.error in the suite: Search.vue's `add` both shows and logs the refusal deliberately.
-     * Why: docs/BUSINESS-LOGIC.md §36.
-     */
+    // The one waived app-level console.error in the suite — Search.vue's
+    // `add` both shows and logs the refusal deliberately (docs/BUSINESS-LOGIC.md §36).
     browserConsole.allow(/Could not add a route/, /Failed to load resource.*422/)
 
     await page.goto('/search')
@@ -320,10 +300,8 @@ test('a code Orbit has no airport for is refused, beside the boxes', async ({ pa
     await page.locator(TO).fill('12')
     await expect(page.getByRole('button', { name: 'Add to watch' })).toBeDisabled()
 
-    /*
-     * A hand-rolled :value/@input binding could leave stale digits in the element with no reactive change to catch it — hence a browser test, not vitest.
-     * Why: docs/BUSINESS-LOGIC.md §36.
-     */
+    // A hand-rolled :value/@input binding could leave stale digits with no
+    // reactive change to catch it — hence a browser test, not vitest.
     await expect(page.locator(TO)).toHaveValue('')
 
     // And the ordinary path still works: letters are kept, as typed.
@@ -351,10 +329,8 @@ test('a code Orbit has no airport for is refused, beside the boxes', async ({ pa
     await expect(page.locator('.pass')).toHaveCount(6)
 })
 
-/*
- * Field used to uppercase every keystroke, wrong once it grew a typeahead; browser-only since `autocapitalize` isn't visible to vitest.
- * Why: docs/BUSINESS-LOGIC.md §36.
- */
+// Field used to uppercase every keystroke, wrong once it grew a typeahead;
+// browser-only since `autocapitalize` isn't visible to vitest.
 test('typing a city name does not shout it back, at either end', async ({ page }) => {
     await page.goto('/search')
 
@@ -376,10 +352,8 @@ test('typing a city name does not shout it back, at either end', async ({ page }
     await expect(page.getByRole('button', { name: 'Look up' })).toBeEnabled()
 })
 
-/*
- * Discoveries are seeded via DiscoverySeeder, which runs the real DiscoverDeals job against fake providers, not fixture rows.
- * Why: docs/BUSINESS-LOGIC.md §36.
- */
+// Discoveries are seeded via DiscoverySeeder, which runs the real
+// DiscoverDeals job against fake providers, not fixture rows.
 test.describe('deals from your airports', () => {
     test('the strip renders what the funnel actually found, in both themes', async ({ page }) => {
         await page.goto('/search')
@@ -428,10 +402,8 @@ test.describe('deals from your airports', () => {
         await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     })
 
-    /*
-     * A verified badge needs a real metered Google search (250/month), so /api/discoveries is stubbed here rather than the verdict written to the database.
-     * Why: docs/BUSINESS-LOGIC.md §36.
-     */
+    // A verified badge needs a real metered Google search — /api/discoveries
+    // is stubbed here rather than the verdict written to the database.
     test('an earned badge looks earned, and an unearned one stays quiet', async ({ page }) => {
         await page.route('**/api/discoveries', async (route) => {
             const response = await route.fetch()
@@ -515,10 +487,8 @@ test.describe('deals from your airports', () => {
         await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     })
 
-    /*
-     * Relative lane reads REMEMBERED baselines: DiscoverySeeder measures a real sample of routes through PriceProvider before running the job.
-     * Why: docs/BUSINESS-LOGIC.md §36.
-     */
+    // Relative lane reads REMEMBERED baselines: DiscoverySeeder measures a
+    // real sample of routes before running the job (docs/BUSINESS-LOGIC.md §16).
     test('a relative find explains itself, in both themes', async ({ page }) => {
         await page.goto('/search')
 
