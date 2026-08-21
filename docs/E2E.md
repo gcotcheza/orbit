@@ -194,6 +194,12 @@ region is *not* the single commonest one. A photographic earth measures in the
 thousands of colours; a black planet, a failed texture or a lost context
 measures in single digits. There is nothing in between to tune a tolerance for.
 
+`waitForGlobe()` polls `sampleCanvas()` rather than waiting for the earth
+texture's network response, because the texture is 1.4 MB with a week-long
+`Cache-Control` (docker/web/nginx.conf) — the second screen in a run that
+visits Home twice never requests it again, and a helper built on
+`waitForResponse` would hang there forever.
+
 ---
 
 ## The console guard
