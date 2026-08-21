@@ -145,9 +145,6 @@ describe('the caption under the price', () => {
     })
 })
 
-// This screen owns the on-demand fetch for a pair with no route row at all
-// (docs/BUSINESS-LOGIC.md, RouteDetail.vue).
-
 /** Mounted by hand, so a test can hold the lookup open and look at the screen. */
 function mountDetail() {
     return mount(RouteDetail, { props: { id: 'AMS-LIS' }, global: { plugins: [createPinia()] } })
@@ -155,6 +152,8 @@ function mountDetail() {
 
 const FRESH = { watched: false, fares: { fetchedAt: '2026-08-14T09:00:00+02:00', fresh: true } }
 
+// This screen owns the on-demand fetch for a pair with no route row at all
+// (docs/BUSINESS-LOGIC.md, RouteDetail.vue).
 describe('a route Orbit has never priced', () => {
     it('says what it is doing, and draws the fares it gets back', async () => {
         neverPriced()

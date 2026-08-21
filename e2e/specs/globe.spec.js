@@ -72,6 +72,8 @@ test('the globe caption is drawn where it can be read, not under the card', asyn
         }
     })
 
+    // Loose on purpose: `.stage__caption` is pointer-events: none, so the hit
+    // test finds the globe underneath it, never the caption itself.
     expect(layout.inStage, `something outside the globe covers the caption: "${layout.covering}"`).toBe(true)
     expect(layout.clearance, 'the caption is not clear of the spotlight card').toBeGreaterThan(0)
 })

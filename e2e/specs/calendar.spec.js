@@ -264,7 +264,8 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
     const [, origin, destination] = await chipCode(page)
     const shownDate = await sheet.locator('.sheet__date').textContent()
 
-    // Aviasales is the primary, a correctness matter (docs/BUSINESS-LOGIC.md §12).
+    // Aviasales is primary (docs/BUSINESS-LOGIC.md §12); `?marker=` is
+    // optional here (no sandbox TRAVELPAYOUTS_MARKER) — see BookingLinkTest.php.
     const book = sheet.getByRole('link', { name: 'See this fare on Aviasales' })
 
     expect(await book.getAttribute('href')).toMatch(
