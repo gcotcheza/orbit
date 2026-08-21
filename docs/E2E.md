@@ -336,6 +336,15 @@ one in what a wait actually proves:
 - **Live class selectors.** `.chip:not(.chip--active)` re-evaluates after the
   click and then resolves to a *different* element. Capture the text first and
   re-find by it.
+- **A dated premise that expires.** `rules.spec.js`'s `monthWithNoFares()`
+  needs a date window that matches nothing; it used to say "spring" on the
+  argument that the fake provider's 90-day window couldn't reach March in
+  August — true then, false the moment the calendar rolled far enough, and a
+  test that goes red on a date rather than a change takes an afternoon to
+  diagnose. It now asks the app: it walks `GET /api/routes/{code}/calendar`
+  forward until a month comes back `days: []`, so the premise is stated
+  directly rather than inferred from a constant that has already drifted once
+  (`poll.window_days` widened from three months to six).
 - **A wait that is already over.** `toHaveCount(0)` on a screen that has not
   fetched anything yet passes in 5 ms, and `toHaveCount(8)` passes on the
   *previous* sentence's eight chips 400 ms before the debounce for yours has
