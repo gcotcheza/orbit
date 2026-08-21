@@ -18,18 +18,8 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use App\Infrastructure\Pricing\TravelpayoutsPriceProvider;
 
 /**
- * The real fare adapter, against recorded answers.
- *
- * EVERY RESPONSE IN HERE WAS RECORDED FROM THE LIVE API on 2026-08-15 and lives
- * in tests/Fixtures/travelpayouts/. Nothing in this suite may reach the
- * network: a test that calls Travelpayouts spends somebody's rate limit, fails
- * whenever a cached fare expires, and is therefore a test that gets deleted six
- * months from now. `Http::preventStrayRequests()` in setUp is what makes that a
- * rule rather than an intention — an un-faked URL fails the test instead of
- * dialling out.
- *
- * The one hand-written fixture is `month-matrix-malformed`, and it says so at
- * the top of itself.
+ * The real fare adapter, against answers recorded from the live API on
+ * 2026-08-15 (docs/BUSINESS-LOGIC.md §4).
  */
 final class TravelpayoutsPriceProviderTest extends TestCase
 {
@@ -43,8 +33,6 @@ final class TravelpayoutsPriceProviderTest extends TestCase
 
         Http::preventStrayRequests();
     }
-
-    // ------------------------------------------------------------- the happy path
 
     #[Test]
     public function it_turns_a_recorded_month_into_dated_fares_in_euro_cents(): void
@@ -70,20 +58,9 @@ final class TravelpayoutsPriceProviderTest extends TestCase
         $this->assertSame(15100, $fares[0]->cents);
     }
 
-    // ------------------------------------------------------- how old the price is
-
     /**
-     * `found_at` IS CARRIED THROUGH, AND IT IS NOT `fetched_at`.
-     *
-     * This endpoint serves a CACHE of other people's searches, so the moment a
-     * price was found can be days behind the moment Orbit asked for it. The app
-     * showed €36 for a date whose live cheapest was €56 — both true, one of them
-     * four days old — because nothing carried this field out of the adapter.
-     *
-     * THE ASSERTION IS AGAINST THE RECORDING'S OWN VALUE, read out of the
-     * fixture rather than restated here: what is under test is that the
-     * adapter passes the API's answer along unchanged, and a hard-coded string
-     * would pass just as well if the parser were returning a constant.
+     * `found_at` is carried through and it is not `fetched_at` — read out of
+     * the fixture, not restated (docs/BUSINESS-LOGIC.md §2).
      */
     #[Test]
     public function it_carries_the_moment_the_provider_found_each_price(): void
@@ -109,10 +86,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * EVERY RECORDED ENTRY HAS ONE, so a null anywhere in a real month is the
-     * parser rejecting something it should have accepted rather than the API
-     * being sparse. This is the assertion that would have caught a format
-     * pinned to the wrong shape.
+     * Every recorded entry has one, so a null anywhere is the parser
+     * rejecting something it should have accepted.
      */
     #[Test]
     public function every_fare_in_a_recorded_month_knows_when_it_was_found(): void
@@ -134,17 +109,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * AND AN ENTRY WITHOUT ONE IS NULL RATHER THAN A GUESS.
-     *
-     * `month-matrix-malformed` is the hand-written fixture and none of its rows
-     * carries `found_at`, which makes it the natural test of the path an older
-     * API answer — or a future one that drops the field — would take. The one
-     * good row in it must come back priced and with its age UNKNOWN.
-     *
-     * NULL AND NOT `now()`, which is the whole discipline: the screens render a
-     * null age as no line at all, and substituting the current clock would
-     * manufacture exactly the "this price is current" claim this field exists
-     * to stop making.
+     * And an entry without one is null rather than a guess — never `now()`
+     * (docs/BUSINESS-LOGIC.md §2).
      */
     #[Test]
     public function a_fare_the_api_gives_no_find_time_for_has_none_rather_than_now(): void
@@ -164,14 +130,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * A `found_at` THAT IS NOT A TIMESTAMP COSTS THE AGE, NOT THE FARE.
-     *
-     * The price is still good — it is the one thing the entry is really for —
-     * so a garbled find time degrades to "we do not know how old this is"
-     * rather than throwing the row away. The loose `new DateTimeImmutable($s)`
-     * this deliberately avoids would accept every one of these: "tomorrow" and
-     * "+3 days" are valid inputs to it, and "13:51" is dated to TODAY, which
-     * would make an unparseable value look like the freshest fare in the app.
+     * A `found_at` that is not a timestamp costs the age, not the fare — a
+     * loose `new DateTimeImmutable($s)` would accept "tomorrow" as fresh.
      */
     #[Test]
     #[DataProvider('unusableFindTimes')]
@@ -277,8 +237,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * THE CREDENTIAL DOES NOT GO IN THE URL. A query string is the one part of
-     * a request that ends up in an access log and an exception report.
+     * The credential does not go in the URL — a query string ends up in an
+     * access log and an exception report.
      */
     #[Test]
     public function the_token_travels_in_a_header_and_never_in_the_url(): void
@@ -295,16 +255,11 @@ final class TravelpayoutsPriceProviderTest extends TestCase
         });
     }
 
-    // ------------------------------------------------------------- window arithmetic
-
     #[Test]
     public function departures_outside_the_window_are_dropped(): void
     {
-        /*
-         * A month request answers for the whole month whatever the window says,
-         * so the last call of a poll always over-reaches. October's recording
-         * runs to the 31st; this window stops on the 20th.
-         */
+        // A month request answers for the whole month whatever the window
+        // says, so the last call of a poll always over-reaches.
         Http::fake([self::ENDPOINT => Http::response($this->fixture('month-matrix-ams-lis-2026-10'))]);
 
         $fares = $this->provider()->cheapestPerDay(
@@ -356,9 +311,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * The port says a date with no fare is ABSENT rather than zero-priced, and
-     * with a real provider that is the common case, not the edge one: this
-     * route had nine priced days in the whole of September.
+     * The port says a date with no fare is ABSENT rather than zero-priced —
+     * the common case with a real provider, not the edge one.
      */
     #[Test]
     public function days_the_provider_has_no_fare_for_are_simply_missing(): void
@@ -399,16 +353,11 @@ final class TravelpayoutsPriceProviderTest extends TestCase
         $this->assertSame(8800, $fares[0]->cents);
     }
 
-    // ------------------------------------------------------------- bad data
-
     #[Test]
     public function entries_that_cannot_be_believed_are_ignored_one_by_one(): void
     {
-        /*
-         * Eight entries: one good, and one each of a non-numeric price, a
-         * missing date, an unparseable date, a zero, a negative, a stale
-         * (`actual: false`) price and a bare string where an object belongs.
-         */
+        // Eight entries: one good, one each of a non-numeric price, a missing
+        // date, an unparseable date, a zero, a negative, a stale, a bare string.
         Http::fake([self::ENDPOINT => Http::response($this->fixture('month-matrix-malformed'))]);
 
         $fares = $this->provider()->cheapestPerDay('AMS', 'LIS', new DateTimeImmutable('2026-09-01'), new DateTimeImmutable('2026-09-30'));
@@ -433,9 +382,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * THE MOST EXPENSIVE FAILURE AVAILABLE HERE, and the only one that is
-     * silent: roubles are this API's default currency, and ₽92 read as €92 is a
-     * fare Orbit would rate insane and mail about.
+     * The most expensive failure available here, and the only silent one —
+     * roubles read as euros is a fare Orbit would mail about.
      */
     #[Test]
     public function a_response_in_the_wrong_currency_is_refused_entirely(): void
@@ -461,8 +409,6 @@ final class TravelpayoutsPriceProviderTest extends TestCase
             $this->provider()->cheapestPerDay('AMS', 'LIS', new DateTimeImmutable('2026-09-01'), new DateTimeImmutable('2026-09-30')),
         );
     }
-
-    // ------------------------------------------------------------- failure paths
 
     #[Test]
     public function a_server_error_yields_no_fares_rather_than_an_exception(): void
@@ -543,9 +489,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * PARTIAL IS BETTER THAN NOTHING. App\Jobs\PollRoutePrices upserts, so three
-     * good months still refresh three months of calendar; the fourth keeps
-     * yesterday's figures rather than becoming a hole.
+     * Partial is better than nothing — three good months still refresh three
+     * months of calendar (docs/BUSINESS-LOGIC.md §4).
      */
     #[Test]
     public function one_month_failing_does_not_lose_the_others(): void
@@ -596,21 +541,9 @@ final class TravelpayoutsPriceProviderTest extends TestCase
         $this->assertSame(15, $log->warnings()[0]['context']['further_warnings_suppressed_for_minutes'] ?? null);
     }
 
-    // ------------------------------------------------------------- the budget
-
     /**
-     * WHAT THE THREE CONFIGURED WINDOWS COST, COUNTED BY THE THING THAT SPENDS
-     * IT. This endpoint bills per calendar MONTH, so a window's price steps up
-     * at a month boundary and not at a day — which is why
-     * `orbit.poll.window_days` is 181, `orbit.poll.horizon_days` is 334 and
-     * `orbit.rules.sweep_horizon_days` is 89 rather than the round numbers
-     * either side of them. 183 days reaches an eighth month, 335 a thirteenth,
-     * and 90 a fifth, on the mornings a window opens late in a long month.
-     *
-     * THE DATES ARE THE EXTREMES, not a sample: a window that opens on the 30th
-     * or 31st of a 31-day month runs through the shortest possible run of
-     * following months, which is where the extra request appears. February is
-     * in the list for the leap year on the other side of it.
+     * What the three configured windows cost, counted by the thing that
+     * spends it — bills per calendar MONTH (docs/BUSINESS-LOGIC.md §4).
      */
     #[Test]
     public function no_configured_window_costs_more_requests_than_the_budget_allows(): void
@@ -638,11 +571,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
                 $requests[$start] = count(Http::recorded()) - $before;
             }
 
-            /*
-             * EQUAL, NOT AT MOST: the worst case has to be BOTH within the
-             * ceiling and actually reached by one of these dates, or the day
-             * somebody widens the window this assertion goes quietly slack.
-             */
+            // EQUAL, not at most: the worst case must be BOTH within the
+            // ceiling and actually reached, or this assertion goes slack.
             $this->assertSame(
                 $ceiling,
                 max($requests),
@@ -652,25 +582,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * AND THE ARITHMETIC THOSE CEILINGS FEED, which is the number that actually
-     * has to hold: Travelpayouts allows ~200 requests an hour per IP, and two
-     * scheduled runs share the 06:00 clock hour.
-     *
-     *     an ordinary morning   poll      9 watched × ≤7   =  63
-     *                           sweep    30 capped  × ≤4   = 120
-     *                                                        ---
-     *                                                        183
-     *
-     *     the far morning       far poll  9 watched × ≤12  = 108, alone in the
-     *                                                        04:00 hour
-     *
-     * THE FAR RUN IS THE CHEAP ONE, in the only sense that matters: it costs
-     * more requests and shares its hour with nothing, so the ELEVEN MONTHS ADD
-     * NOTHING TO THE WORST HOUR. What breaches first is the ordinary morning, at
-     * twelve watched routes — 7 × 12 + 120 = 204 — where the far run has room to
-     * sixteen. This test is where that stops being a comment: it fails if a
-     * window widens, if the sweep's cap moves, or if the watchlist this app is
-     * budgeted for grows past what the schedule can pay for.
+     * The arithmetic those ceilings feed — the number that actually has to
+     * hold (docs/BUSINESS-LOGIC.md §4 "The request budget").
      */
     #[Test]
     public function the_two_mornings_both_fit_inside_the_providers_hourly_limit(): void
@@ -689,18 +602,12 @@ final class TravelpayoutsPriceProviderTest extends TestCase
         $this->assertLessThan($perHour, $watched * $near + $sweep, 'The ordinary morning is over the hourly limit.');
         $this->assertLessThan($perHour, $watched * $far, 'The weekly far run is over the hourly limit.');
 
-        /*
-         * THE SCALING LIMIT, ASSERTED RATHER THAN REMEMBERED. The ordinary
-         * morning is the binding constraint and the far run is not; both halves
-         * are pinned so that a future change that inverts them is a failure here
-         * rather than a rate-limit error at 06:40 one Tuesday.
-         */
+        // The scaling limit, asserted rather than remembered: the ordinary
+        // morning is the binding constraint and the far run is not.
         $this->assertLessThan($perHour, 11 * $near + $sweep, 'Eleven watched routes must still fit.');
         $this->assertGreaterThan($perHour, 12 * $near + $sweep, 'The documented breach is at twelve, not later.');
         $this->assertLessThan($perHour, 16 * $far, 'The far run must have more headroom than the morning.');
     }
-
-    // ------------------------------------------------------------- configuration
 
     #[Test]
     public function it_refuses_to_exist_without_a_token(): void
@@ -712,11 +619,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * A FIXTURE-INTEGRITY TEST, and the claim it is guarding is the whole reason
-     * this endpoint was chosen over `/v1/prices/calendar`: month-matrix answers
-     * with ONE-WAY prices. If a future re-recording ever comes back carrying
-     * return dates, these are round-trip fares and every threshold in the app
-     * is wrong by a factor of two.
+     * A fixture-integrity test: month-matrix answers with ONE-WAY prices. A
+     * future re-recording with return dates is wrong by a factor of two.
      */
     #[Test]
     public function every_recorded_fare_is_one_way(): void
@@ -735,8 +639,6 @@ final class TravelpayoutsPriceProviderTest extends TestCase
 
         $this->assertSame(88, $entries, 'The recordings changed; re-check what they are of.');
     }
-
-    // ------------------------------------------------------------- helpers
 
     private function provider(?RecordingLogger $logger = null, string $token = 'test-token'): TravelpayoutsPriceProvider
     {
@@ -767,12 +669,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * The `found_at` a recording actually holds for one departure date.
-     *
-     * READ OUT OF THE FIXTURE rather than restated in the test, so what is
-     * asserted is that the adapter passes the API's own answer along unchanged
-     * — a hard-coded string would be satisfied just as well by a parser that
-     * returned a constant.
+     * The `found_at` a recording actually holds — read out of the fixture,
+     * not restated as a literal.
      */
     private function recordedFindTime(string $fixture, string $departDate): string
     {
@@ -809,9 +707,8 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * A logger that keeps what it was told. What the adapter SAYS when it fails
-     * is half of what it is for: a queued poll at 06:10 has no other surface,
-     * and "it went quiet" is the failure this app would notice last.
+     * A logger that keeps what it was told — a queued poll at 06:10 has no
+     * other surface, and "it went quiet" is the failure noticed last.
      */
     private function spyLogger(): RecordingLogger
     {
