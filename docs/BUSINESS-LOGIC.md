@@ -874,7 +874,11 @@ no observation are skipped (not scored 0), rules with 0 matches are omitted
 rather than shown as "0 matches", and `week()` reads the stored payload rather
 than re-deriving it. An unknown alert-notice type throws rather than being
 dropped — an alert that silently goes nowhere is the worst failure this app
-has, because everything still looks like it's working.
+has, because everything still looks like it's working. The profile button's
+`#account` entrance scrolls only once the settings have settled (`ready` or
+`failed`) — `idle` and `loading` are both "the four cards above it have not
+rendered", and scrolling then lands the reader in the middle of quiet hours a
+moment later.
 
 ---
 
@@ -944,6 +948,22 @@ re-reading edited text, so taking "From EIN" off leaves every other chip exactly
 where it was and Reset is the same parse again. Unknown removed-ids are ignored,
 because the client holds its removed list across re-parses of a sentence
 somebody is still typing.
+
+**A chip's × is never disabled, and a removal never waits.** `Create.vue`
+debounces typing by 500 ms, but disabling the × for that window — or for the
+POST that follows it — is what makes a removal fail: the button is live when
+the finger goes down and inert when it comes up, and the browser then fires no
+`click` at all. So removing a chip cancels the pending wait and asks
+immediately, with the text exactly as it stands; a second removal a moment
+later does the same, and the store keeps only the newest answer
+(`stores/rules.js`). Removals are safe mid-parse because the server drops them
+by chip id rather than by position, so the reading a removal is issued against
+does not have to be the one that comes back.
+
+**"Create rule" is the one thing that waits.** It is disabled while the
+textarea differs from the text the reading on screen is of, or while a parse is
+in flight — a rule saved against a sentence the owner has already moved past is
+a rule they never described. Nothing else on the screen is gated on it.
 
 **A stored rule's chips are rebuilt from its criteria, never from its text**
 (`RuleViews`). Re-parsing `raw_text` would put back every chip the owner

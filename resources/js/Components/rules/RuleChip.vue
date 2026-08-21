@@ -12,13 +12,13 @@
  * A <button> INSIDE nothing else. The chip itself is not clickable — only the
  * × is — so there is exactly one thing here for a keyboard to reach and its
  * label says which chip it removes rather than "Remove".
+ *
+ * The × is never disabled: one that goes inert under the finger eats the tap.
+ * Why: docs/BUSINESS-LOGIC.md §11.
  */
 defineProps({
   /** One element of a parse's `chips`: { id, category, label }. */
   chip: { type: Object, required: true },
-
-  /** Chips go inert while the parse that would replace them is in flight. */
-  disabled: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['remove'])
@@ -34,7 +34,6 @@ const emit = defineEmits(['remove'])
     <button
       type="button"
       class="chip__remove"
-      :disabled="disabled"
       :aria-label="`Remove ${chip.category} ${chip.label}`"
       @click="emit('remove', chip.id)"
     >
@@ -98,15 +97,10 @@ const emit = defineEmits(['remove'])
   transition: color 0.15s ease, background 0.15s ease;
 }
 
-.chip__remove:hover:not(:disabled),
-.chip__remove:focus-visible:not(:disabled) {
+.chip__remove:hover,
+.chip__remove:focus-visible {
   color: var(--warn-ink);
   background: var(--warn-bg);
-}
-
-.chip__remove:disabled {
-  opacity: 0.5;
-  cursor: progress;
 }
 
 @keyframes chip-in {
