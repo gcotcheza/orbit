@@ -15,20 +15,8 @@ use Illuminate\Support\Facades\Session;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * `PUT /api/profile/password` — the owner rotating their own password.
- *
- * THE ENDPOINT IS THREE PROMISES AND THIS FILE HOLDS ALL THREE. That the old
- * password stops working and the new one starts (the point), that the device
- * which made the change is still signed in when it lands (the thing that makes
- * it usable from a phone), and that every OTHER live session is over (the thing
- * somebody is actually asking for when they rotate a password they think
- * somebody else has). A password change that logs the owner out of the screen
- * they changed it on is a bug that reads as a security feature; one that leaves
- * a stranger's session open is the reverse, and reads as nothing at all.
- *
- * The guard-level facts — that the current password is required, that it is
- * checked rather than merely present — are asserted through the HTTP surface,
- * because that is where a refactor breaks them.
+ * `PUT /api/profile/password` — three promises: the old password stops
+ * working, this device stays in, every other device is out (docs/BUSINESS-LOGIC.md §36).
  */
 final class PasswordChangeTest extends TestCase
 {
@@ -73,8 +61,6 @@ final class PasswordChangeTest extends TestCase
         return $this->actingAs($this->owner)->putJson('/api/profile/password', $body);
     }
 
-    // ------------------------------------------------------------- who may call
-
     #[Test]
     public function a_guest_is_refused_with_json_and_changes_nothing(): void
     {
@@ -88,10 +74,8 @@ final class PasswordChangeTest extends TestCase
     }
 
     /**
-     * Asserted with a plain `put` as well, deliberately: bootstrap/app.php
-     * renders `api/*` as JSON on the path prefix alone, so a caller that forgot
-     * to ask for JSON still gets a 401 body rather than a redirect to the login
-     * screen — which fetch() would follow and hand back as a 200 of HTML.
+     * Plain `put`, deliberately: `bootstrap/app.php` renders `api/*` as JSON
+     * on the path prefix alone (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_guest_is_told_no_in_json_rather_than_redirected(): void
@@ -102,14 +86,9 @@ final class PasswordChangeTest extends TestCase
         $response->assertHeader('content-type', 'application/json');
     }
 
-    // ------------------------------------------------------------- the refusals
-
     /**
-     * The wrong current password is a 422 in Laravel's standard shape and NOT a
-     * 401. The distinction is the whole reason this is worth asserting: a 401
-     * would send resources/js/lib/http.js's interceptor to the login screen and
-     * throw away a form the owner is halfway through, because that interceptor
-     * reads a 401 as "the session ended" — which here it has not.
+     * 422, not 401 — a 401 would send `http.js`'s interceptor to the login
+     * screen and lose a half-filled form (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function the_wrong_current_password_is_a_validation_error_not_a_401(): void
@@ -168,10 +147,8 @@ final class PasswordChangeTest extends TestCase
     }
 
     /**
-     * Re-submitting the password it already has is refused, which is what makes
-     * this a CHANGE. Accepting it would report success for a rotation that did
-     * not happen — the worst possible answer to somebody changing a password
-     * because they think somebody else has it.
+     * Re-submitting the same password is refused — accepting it would report
+     * success for a rotation that did not happen.
      */
     #[Test]
     public function the_current_password_cannot_be_chosen_again(): void
@@ -182,8 +159,6 @@ final class PasswordChangeTest extends TestCase
 
         $this->assertPasswordUnchanged();
     }
-
-    // -------------------------------------------------------------- the success
 
     #[Test]
     public function a_valid_change_replaces_the_hash_and_says_so(): void
@@ -221,14 +196,8 @@ final class PasswordChangeTest extends TestCase
     {
         $this->change(self::body())->assertOk();
 
-        /*
-         * Back to being a guest before asking the login route anything. The test
-         * client keeps ONE session store across calls and merges into it rather
-         * than replacing it, so without this the sign-in attempts below arrive at
-         * `guest` middleware already authenticated — from `actingAs`, and from
-         * the re-login the controller performs — and are answered with a 302
-         * instead of ever reaching the credentials check.
-         */
+        // Back to being a guest first — the test client keeps ONE session store
+        // across calls, or the sign-in attempts below arrive already authenticated.
         $this->flushSession();
         Auth::forgetGuards();
 
@@ -242,17 +211,8 @@ final class PasswordChangeTest extends TestCase
     }
 
     /**
-     * THE DEVICE THAT MADE THE CHANGE STAYS SIGNED IN, and its session id is a
-     * different one afterwards. Both halves matter and they pull in opposite
-     * directions — the naive rotation (`invalidate()`, or a
-     * `logoutOtherDevices()` that also caught this device) ends the session, and
-     * the naive "keep them signed in" leaves the pre-change session id valid.
-     *
-     * DRIVEN THROUGH THE REAL COOKIE, not through `actingAs`. The session id is
-     * only observable across requests if the request actually carries one, so
-     * this signs in for real, hands the encrypted session cookie back to the
-     * next call, and compares what comes out. Under `actingAs` the guard answers
-     * from memory and this test would pass without the endpoint doing anything.
+     * The device that made the change stays signed in, with a new session id —
+     * driven through the real cookie, not `actingAs` (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function the_session_is_rotated_and_the_caller_stays_signed_in(): void
@@ -285,22 +245,8 @@ final class PasswordChangeTest extends TestCase
     }
 
     /**
-     * EVERY OTHER DEVICE IS SIGNED OUT, which is the promise the endpoint could
-     * not keep until Illuminate\Session\Middleware\AuthenticateSession was
-     * registered in the `web` group (bootstrap/app.php). Before that, a session
-     * open on a phone in somebody else's pocket sailed through the change: the
-     * only code that reads a session's copy of the password hash is that
-     * middleware, and it ran nowhere.
-     *
-     * THE OTHER DEVICE'S SESSION IS CAPTURED, NOT CONSTRUCTED. What is replayed
-     * below is the bag the middleware itself wrote on an ordinary authenticated
-     * request — key name, hash format and all — so this test cannot pass by
-     * agreeing with a hand-built fake of the value it is supposed to be
-     * checking. It is replayed rather than held because the test session driver
-     * is `array` (phpunit.xml), which is one in-memory bag shared by every
-     * request in a test: two genuinely separate sessions do not exist here, so
-     * the second device is a snapshot taken before the change and put back
-     * afterwards.
+     * Every other device is signed out — its session is captured from a real
+     * authenticated request, not hand-built (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_session_on_another_device_stops_working_after_the_change(): void
@@ -330,17 +276,8 @@ final class PasswordChangeTest extends TestCase
     }
 
     /**
-     * Put back the three pieces of state php-fpm throws away between requests
-     * and the test client keeps: the session bag, the resolved guards, and —
-     * the one that bites — the DEFAULT GUARD NAME.
-     *
-     * `auth:sanctum` calls `Auth::shouldUse('sanctum')` the moment it
-     * authenticates somebody, and that writes into `auth.defaults.guard`, i.e.
-     * into the config repository, which this process shares across every request
-     * in the test. Left alone, the next request's `current_password` rule asks
-     * Sanctum's RequestGuard to validate a password — something it has no
-     * implementation of — and a correct password is refused. Production reads
-     * that key back off disk for every request and never sees it.
+     * Puts back what php-fpm resets between requests but this test process
+     * shares: session, guards, and the DEFAULT GUARD NAME (docs/BUSINESS-LOGIC.md §36).
      */
     private function asANewProcessWould(): void
     {
@@ -351,9 +288,8 @@ final class PasswordChangeTest extends TestCase
     }
 
     /**
-     * The XSRF cookie the SPA's NEXT write will send back. `regenerate()` also
-     * regenerates the CSRF token, so without this cookie riding along on the
-     * response every subsequent write from the still-open page would be a 419.
+     * The XSRF cookie the SPA's next write needs — `regenerate()` also rotates
+     * the CSRF token.
      */
     #[Test]
     public function the_response_hands_back_a_csrf_token_to_carry_on_with(): void
@@ -364,10 +300,8 @@ final class PasswordChangeTest extends TestCase
     }
 
     /**
-     * Every recaller cookie in existence stops validating, including the ones on
-     * devices this request has never seen. See PasswordController: the cookie is
-     * checked against this column and not against the password, so leaving it
-     * alone would change the secret without changing who can get in.
+     * Every recall-me cookie stops validating — it's checked against this
+     * column, not the password (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function every_remember_me_cookie_is_invalidated(): void
@@ -379,12 +313,9 @@ final class PasswordChangeTest extends TestCase
         $this->assertNotSame('the-token-every-device-holds', $this->owner->fresh()?->getRememberToken());
     }
 
-    // ------------------------------------------------------------- the throttle
-
     /**
-     * Five a minute, keyed on the account — see AppServiceProvider. The endpoint
-     * checks a secret, so a session left open on an unattended phone must not be
-     * a place to guess the current password at machine speed.
+     * Five a minute, keyed on the account — a secret behind a session left
+     * open on an unattended phone (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function the_sixth_attempt_in_a_minute_is_throttled(): void

@@ -2377,6 +2377,15 @@ the ledger itself; a kept file also keeps its `.map` (Vite omits maps from the
 manifest, so a manifest-only prune would delete every sourcemap on its first
 post-deploy run).
 
+**`PollRoutePrices::$windowDays` must keep its `?? config(...)` fallback — a
+DO-NOT-REMOVE landmine.** Redis holds `serialize($job)`, and a payload written
+before this property existed carries no `windowDays` at all, leaving the
+promoted property UNINITIALISED rather than null (a constructor default is a
+parameter default, not a property one). Reading it directly throws "must not
+be accessed before initialization" in a worker, on the deploy, for every poll
+queued in the seconds before it; `?? config(...)` works because `isset()` on
+an uninitialised typed property is false rather than an error.
+
 **`DeploymentInvariantsTest`** unit-tests `docker-compose.yml` itself, because
 a stray capability, an exposed port or a drifted uid break nothing at runtime
 — they're found by someone reading the file, and the cost of the test (thirty
@@ -2521,6 +2530,7 @@ by anyone.
 
 ### Tests, seeders and fixtures
 
+- **`PasswordChangeTest::asANewProcessWould()` resets state php-fpm resets between requests but a test process shares** — session, resolved guards, and the DEFAULT GUARD NAME. `auth:sanctum` calls `Auth::shouldUse('sanctum')` on authentication, writing into `auth.defaults.guard` in the shared config repository; left alone, the next request's `current_password` rule asks Sanctum's guard to validate a password, which it cannot do, and a correct password is refused. Production reads that key off disk fresh every request and never sees it.
 - **`AuthenticationTest` checks the absent multi-user routes against the route table, not against a 404** — `routes/web.php` answers every unclaimed GET with the SPA shell, so `GET /register` is a 200 regardless; asserting nothing is *registered* at that path fails immediately and names the route if a starter kit or refactor ever adds one, where a status-code check would only notice once the response happened to change. The POST half is 405, not 404, for the same reason: the catch-all claims the URI for GET, so the router refuses the verb rather than the path.
 - **`SingleUserSeederTest` cares about idempotence above all** — this seeder runs on every deploy, and getting the "already exists" path wrong silently rotates the owner's password during a release, discovered only as a locked-out login.
 - **`SeedersTest` asserts three separate drift guards**: config origins vs. the seeder's `is_origin` flags, the NLP parser's vibe vocabulary vs. the seeder's actual tags, and every origin alias resolving to a real origin — each a silent-forever bug if it drifts.
