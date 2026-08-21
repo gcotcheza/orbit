@@ -65,8 +65,6 @@ const onStillnessChange = (event) => {
  */
 const touring = computed(() => props.routes.length > 0 && !reducedMotion.value)
 
-// --- The scene and its cancellation ----------------------------------------
-
 let scene = null
 let token = 0
 let timers = []
@@ -196,7 +194,6 @@ function flyArc(durationMs, mine) {
   frame = requestAnimationFrame(tick)
 }
 
-// --- Not being looked at ----------------------------------------------------
 // `paused` is a latch, not a counter: the three ways overlap and must not need two resumes.
 
 function pause() {
@@ -228,8 +225,6 @@ const onVisibilityChange = () => {
     resume()
   }
 }
-
-// --- Lifecycle --------------------------------------------------------------
 
 onMounted(async () => {
   document.addEventListener('visibilitychange', onVisibilityChange)
