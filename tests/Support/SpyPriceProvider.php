@@ -9,21 +9,8 @@ use App\Domain\Pricing\DatedFare;
 use App\Application\Ports\PriceProvider;
 
 /**
- * A fare provider that answers whatever a test tells it to, and remembers being
- * asked.
- *
- * WHY NOT App\Infrastructure\Pricing\FakePriceProvider, which is what
- * `.env.testing` binds and what every other poller test runs on. That one is a
- * deterministic MODEL of a fare market — it answers for every day of the window
- * with plausible prices — and it is exactly right for tests about what the app
- * does with fares. It cannot answer the question tests/Feature/RouteLookupTest
- * is actually asking, which is HOW MANY TIMES the provider was called: a lookup
- * that quietly re-fetched a route it had priced an hour ago would look identical
- * through the fake, and would be six or seven metered requests a day per curious
- * tap in production.
- *
- * SO THE COUNTER IS THE POINT, and the fares are whatever the test needs to make
- * the assertion after it readable.
+ * A fare provider that answers whatever a test tells it to, and remembers
+ * being asked — the counter is the point (docs/BUSINESS-LOGIC.md §36).
  */
 final class SpyPriceProvider implements PriceProvider
 {

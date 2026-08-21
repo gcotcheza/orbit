@@ -8,17 +8,8 @@ use Stringable;
 use Psr\Log\AbstractLogger;
 
 /**
- * A logger that remembers, for the tests that are about what an adapter SAYS.
- *
- * WHY NOT `Log::spy()`. Mockery's spy answers `shouldHaveReceived('warning')`
- * and stops there — it cannot say "exactly once across nine failed requests",
- * which is the assertion App\Infrastructure\Pricing\TravelpayoutsPriceProvider
- * actually needs, because the rate limit on its warning is a feature and not an
- * implementation detail. A list of what was said is a better fixture than a
- * mock's expectation grammar, and it reads as one.
- *
- * `AbstractLogger` supplies the eight level methods on top of `log()`, so this
- * is the one method that matters plus the array it fills.
+ * A logger that remembers, for tests about what an adapter SAYS — not
+ * `Log::spy()`, which cannot count (docs/BUSINESS-LOGIC.md §36).
  */
 final class RecordingLogger extends AbstractLogger
 {
