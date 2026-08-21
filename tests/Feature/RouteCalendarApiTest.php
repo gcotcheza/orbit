@@ -13,9 +13,8 @@ use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * GET /api/routes/{code}/calendar — the heatmap, a month at a time.
- *
- * Verdict boundaries: design/README.md §3's 28%/66% thresholds worked out for this test's €40-100 month.
+ * GET /api/routes/{code}/calendar — the heatmap, a month at a time. Verdict
+ * boundaries: design/README.md §3's 28%/66% worked out for this €40-100 month.
  */
 final class RouteCalendarApiTest extends TestCase
 {
@@ -43,12 +42,12 @@ final class RouteCalendarApiTest extends TestCase
         $route = $this->makeRoute('AMS', 'FAO');
 
         $this->offer($route, [
-            '2026-09-01' => 4000,  // the month's floor
-            '2026-09-02' => 5000,  // still inside 28%
-            '2026-09-03' => 6000,  // mid
-            '2026-09-04' => 7000,  // mid
-            '2026-09-05' => 8000,  // past 66%
-            '2026-09-06' => 10000, // the month's ceiling
+            '2026-09-01' => 4000,
+            '2026-09-02' => 5000,
+            '2026-09-03' => 6000,
+            '2026-09-04' => 7000,
+            '2026-09-05' => 8000,
+            '2026-09-06' => 10000,
             // A neighbouring month, which must not leak into September.
             '2026-10-04' => 3000,
         ]);
@@ -83,11 +82,8 @@ final class RouteCalendarApiTest extends TestCase
     }
 
     /**
-     * Only the client knows which day was tapped, so booking links go out as templates with holes, not as 62 URLs or
-     * nothing.
-     *
-     * Two templates, holes named after their date formats — the two booking sites want date parts in different orders
-     * (docs/API.md) (docs/BUSINESS-LOGIC.md §36).
+     * Only the client knows which day was tapped, so booking links go out as
+     * templates with holes, not as 62 URLs (docs/BUSINESS-LOGIC.md §12).
      */
     #[Test]
     public function the_meta_carries_both_booking_templates_for_the_tapped_day(): void
@@ -129,11 +125,8 @@ final class RouteCalendarApiTest extends TestCase
     }
 
     /**
-     * How old each price is, per day — the provider mixes fares found an hour ago with ones found last week, so freshness
-     * is per-day, not per-month.
-     *
-     * Null where Orbit doesn't know (a pre-column row) — never substitutes `fetched_at`, which would manufacture a false
-     * "current" claim (docs/BUSINESS-LOGIC.md §36).
+     * How old each price is, per day, not per month — null where Orbit
+     * doesn't know, never `fetched_at` (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function each_day_says_when_its_price_was_found(): void
