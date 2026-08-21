@@ -1,17 +1,6 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The create screen's conversation
-// =============================================================================
-// The chips are the whole interaction (design/README.md §4), and the part that
-// is easy to get subtly wrong is not drawing them — it is what happens to a
-// REMOVAL when the sentence is edited afterwards. Every keystroke re-parses,
-// so a removed chip has to survive a parse it did not ask for, and the ids
-// have to keep meaning the same chip across it.
-//
-// The parser is the server's; `/api/rules/parse` is stubbed with the shape
-// docs/API.md publishes. What is under test is the screen's side of the
-// exchange: the debounce, the removal list, Reset, and the CTA's honesty.
-// =============================================================================
+// The create screen's conversation: a removal must survive a parse it did
+// not ask for, since every keystroke re-parses (docs/BUSINESS-LOGIC.md §11).
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
@@ -127,10 +116,7 @@ describe('Create', () => {
         expect(wrapper.find('.banner').text()).not.toContain('0 trips')
     })
 
-    /*
-     * The sentence is not edited — the id is sent to be left out, and the
-     * words stay exactly as they were typed.
-     */
+    // The sentence is not edited — the id is sent to be left out.
     it('re-parses the same sentence without a removed chip', async () => {
         const wrapper = await screen()
 
@@ -144,12 +130,8 @@ describe('Create', () => {
         })
     })
 
-    /*
-     * The load-bearing one. A chip removed before a typo is fixed must stay
-     * removed after — chip ids are stable across parses precisely so this
-     * works, and an index-based id would silently start removing a different
-     * chip here.
-     */
+    // The load-bearing one: an index-based id would silently remove the
+    // wrong chip here (docs/BUSINESS-LOGIC.md §11).
     it('keeps a removal when the sentence is edited afterwards', async () => {
         const wrapper = await screen()
 
@@ -246,8 +228,7 @@ describe('Create', () => {
         expect(wrapper.findComponent(RouterLinkStub).props().to).toEqual({ name: 'watch' })
     })
 
-    // Live when the finger goes down, inert when it comes up = no `click` at
-    // all. Why: docs/BUSINESS-LOGIC.md §11.
+    // Live down, inert up = no `click` at all (docs/BUSINESS-LOGIC.md §11).
     it('leaves every × live through the debounce and through the parse', async () => {
         const wrapper = await screen()
 
@@ -306,8 +287,7 @@ describe('Create', () => {
         expect(lastParse().removed).toEqual(['max_price', 'depart'])
     })
 
-    /* The CTA is the one thing that does wait: a rule saved against a reading
-       the text has moved past is a rule nobody described. */
+    // The CTA is the one thing that does wait for a fresh reading.
     it('will not create against a reading the text has moved past', async () => {
         const wrapper = await screen()
 
@@ -331,8 +311,7 @@ describe('Create', () => {
         expect(wrapper.find('.cta').attributes('disabled')).toBeUndefined()
     })
 
-    /* A failed parse read nothing, so the same string typed again is a new
-       question — not the one already on screen. */
+    // A failed parse read nothing, so the same string retyped is a new question.
     it('re-asks after a failed parse when the text is retyped', async () => {
         const wrapper = await screen()
 

@@ -1,16 +1,6 @@
 // @vitest-environment jsdom
-// The home screen's four states, and the tour it drives. GlobeStage.test.js
-// covers the camera; this covers the screen's decisions — loading, failure,
-// empty, and that the spotlight, rail and tour agree on THE SAME ROUTE.
-//
-// Fixtures come from docs/API.md's example payload and the shapes it warns
-// about (paused route, day-one route with nulls).
-// Why: docs/BUSINESS-LOGIC.md §36.
-//
-// The globe is stubbed — it has its own tests and needs a GPU.
-//
-// A Pinia instance per mount, so one test's routes can't leak into the next.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The home screen's four states — loading, failure, empty, and that the
+// spotlight, rail and tour agree on THE SAME ROUTE (docs/BUSINESS-LOGIC.md §36).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia } from 'pinia'
 import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
@@ -192,10 +182,7 @@ describe('a route we know nothing about yet', () => {
 })
 
 describe('nothing to show', () => {
-    /*
-     * Day one is still this app's screen: the globe now draws with NOTHING ON IT (empty routes) rather than not being
-     * drawn at all (docs/BUSINESS-LOGIC.md §36).
-     */
+    // Day one is still this app's screen (docs/BUSINESS-LOGIC.md §36).
     it('draws an empty globe and one way out of the empty state', async () => {
         const wrapper = await mountHome([PAUSED])
 
