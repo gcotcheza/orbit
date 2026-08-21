@@ -7,12 +7,8 @@ namespace Tests\Concerns;
 use Illuminate\Testing\PendingCommand;
 
 /**
- * Running an artisan command and being allowed to assert about it.
- *
- * `$this->artisan()` is typed `PendingCommand|int` — it answers an int when
- * console output is not being mocked — so the assertion helpers exist on only
- * one of the two, and every call site otherwise has to narrow it. Narrowed
- * once, here.
+ * `artisan()` returns `PendingCommand|int`; narrows it once so call sites
+ * don't have to (docs/BUSINESS-LOGIC.md §36).
  */
 trait RunsCommands
 {

@@ -16,13 +16,8 @@ use Database\Seeders\WorldAirportSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * `GET /api/airports?q=` — the other half of the add-route typeahead.
- *
- * `GET /api/destinations` sends 184 curated places whole; this searches all 3,270 and sends ten — same four fields,
- * same ranking, one panel.
- *
- * The seeded tests at the bottom matter most — everything above proves the SQL on factory rows; those two prove it
- * against the real snapshot (docs/BUSINESS-LOGIC.md §36).
+ * `GET /api/airports?q=` — the other half of the add-route typeahead
+ * (docs/BUSINESS-LOGIC.md §36).
  */
 final class AirportSearchTest extends TestCase
 {
@@ -98,8 +93,8 @@ final class AirportSearchTest extends TestCase
     }
 
     /**
-     * The same order resources/js/stores/destinations.js ranks the curated list with (code > place > country > substring)
-     * — one panel, one order (docs/BUSINESS-LOGIC.md §36).
+     * Same order resources/js/stores/destinations.js ranks the curated list with
+     * (code > place > country > substring) — one order (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function the_code_beats_the_city_and_the_city_beats_the_country(): void
@@ -131,8 +126,8 @@ final class AirportSearchTest extends TestCase
     }
 
     /**
-     * `%`/`_` are LIKE wildcards, both escaped — the one injection-shaped thing a search endpoint has; `%` must not match
-     * all 3,270 rows (docs/BUSINESS-LOGIC.md §36).
+     * `%`/`_` are LIKE wildcards, both escaped — the one injection-shaped thing a
+     * search endpoint has; `%` must not match all 3,270 rows (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_like_wildcard_is_a_character_somebody_typed(): void
@@ -146,8 +141,8 @@ final class AirportSearchTest extends TestCase
     }
 
     /**
-     * Deliberately differs from `GET /api/destinations` — Amsterdam is a valid origin here since RoutePairRequest accepts
-     * DUS-AMS (docs/BUSINESS-LOGIC.md §36).
+     * Deliberately differs from `GET /api/destinations` — Amsterdam is a valid
+     * origin here since RoutePairRequest accepts DUS-AMS (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function an_origin_is_an_airport_like_any_other(): void
@@ -168,8 +163,8 @@ final class AirportSearchTest extends TestCase
     }
 
     /**
-     * Sixty a minute, keyed on the account — guards against a client bug, not a cost. See the `airport-search` limiter in
-     * AppServiceProvider (docs/BUSINESS-LOGIC.md §36).
+     * Sixty a minute, keyed on the account — guards a client bug, not a cost.
+     * See the `airport-search` limiter in AppServiceProvider (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function the_sixty_first_search_in_a_minute_is_refused(): void
@@ -188,8 +183,8 @@ final class AirportSearchTest extends TestCase
     {
         $this->seedTheWorld();
 
-        // TOKYO IS HANEDA, NOT NARITA — a fact about the OurAirports snapshot (NRT files under its own municipality), not this
-        // endpoint (docs/BUSINESS-LOGIC.md §36).
+        // TOKYO IS HANEDA, NOT NARITA — a fact about the OurAirports snapshot, not
+        // this endpoint (docs/BUSINESS-LOGIC.md §36).
         $this->assertSame(['HND'], $this->codes($this->search('tokyo')));
         $this->assertSame(['NRT'], $this->codes($this->search('narita')));
 

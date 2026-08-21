@@ -13,10 +13,8 @@ use Database\Seeders\DestinationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * `GET /api/destinations` — what the add-route form offers.
- *
- * Keys off the `destinations` table (not `is_origin`) to separate 184 curated destinations from 3 origins and 3,083
- * unrelated OurAirports rows (docs/BUSINESS-LOGIC.md §36).
+ * `GET /api/destinations` — what the add-route form offers. Keys off the
+ * `destinations` table, not `is_origin` (docs/BUSINESS-LOGIC.md §36).
  */
 final class DestinationsApiTest extends TestCase
 {
@@ -107,8 +105,8 @@ final class DestinationsApiTest extends TestCase
     }
 
     /**
-     * 184 destinations, 187 airports — deliberate, not a red-test bump; see the European-vs-world-flights seeding
-     * breakdown (docs/BUSINESS-LOGIC.md §36).
+     * 184 destinations, 187 airports — deliberate, not a red-test bump
+     * (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function it_offers_every_seeded_destination_and_only_those(): void

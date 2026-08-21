@@ -22,8 +22,8 @@ use App\Infrastructure\Nlp\RegexRuleTextParser;
 use App\Infrastructure\Nlp\AnthropicRuleTextParser;
 
 /**
- * The parser that will run the day a key exists. No real call: driven through a mock PSR-18 transporter so the SDK's own deserialiser is exercised, not
- * a mock of `messages->create()`. Every failure falls back — there is no useful error to show mid-keystroke (docs/BUSINESS-LOGIC.md §11).
+ * The parser that will run the day a key exists — every failure falls back
+ * (docs/BUSINESS-LOGIC.md §11, docs/BUSINESS-LOGIC.md §36).
  */
 final class AnthropicRuleParserTest extends TestCase
 {
@@ -130,8 +130,8 @@ final class AnthropicRuleParserTest extends TestCase
         $this->assertSame([], $this->parser([])->parse('   ')->chips);
     }
 
-    // A refusal is HTTP 200 with empty content — `stop_reason` must be checked before `content` is indexed, or the crash case is the one most needing to survive.
-    // Why: docs/BUSINESS-LOGIC.md §11.
+    // A refusal is HTTP 200 with empty content — `stop_reason` must be
+    // checked before `content` is indexed (docs/BUSINESS-LOGIC.md §11).
     #[Test]
     public function a_refusal_falls_back_to_the_regex_parser(): void
     {
@@ -214,8 +214,8 @@ final class AnthropicRuleParserTest extends TestCase
         $this->assertSame(8000, $criteria->maxPriceCents);
     }
 
-    // Still an answer, never an exception — RuleTextParser implementations never throw; the create screen is asked about half-finished English constantly.
-    // Why: docs/BUSINESS-LOGIC.md §11.
+    // Still an answer, never an exception — RuleTextParser implementations
+    // never throw (docs/BUSINESS-LOGIC.md §11).
     #[Test]
     public function a_failure_on_a_sentence_nobody_can_read_is_still_not_an_exception(): void
     {
@@ -241,8 +241,8 @@ final class AnthropicRuleParserTest extends TestCase
         $this->assertInstanceOf(AnthropicRuleTextParser::class, $this->app->make(RuleTextParser::class));
     }
 
-    // A typo in .env must not silently downgrade the parser — same rule the fare providers are bound under: quietly doing something dumber looks like working.
-    // Why: docs/BUSINESS-LOGIC.md §11.
+    // A typo in .env must not silently downgrade the parser — same rule the
+    // fare providers are bound under (docs/BUSINESS-LOGIC.md §11).
     #[Test]
     public function an_unknown_parser_name_throws_rather_than_falling_back(): void
     {
@@ -253,8 +253,8 @@ final class AnthropicRuleParserTest extends TestCase
         $this->app->make(RuleTextParser::class);
     }
 
-    // Schema built from the vocabulary, not written out — the model is structurally unable to answer with an airport or vibe this app doesn't know.
-    // Why: docs/BUSINESS-LOGIC.md §11.
+    // Schema built from the vocabulary — the model cannot answer with an
+    // airport or vibe this app doesn't know (docs/BUSINESS-LOGIC.md §11).
     #[Test]
     public function the_schema_only_permits_words_this_app_knows(): void
     {

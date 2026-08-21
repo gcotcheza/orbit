@@ -1265,6 +1265,10 @@ the destination.
 recent searches — the booking site shows live availability"* — which merged the
 old "we don't sell tickets" disclaimer rather than stacking beside it. See §2.
 
+**A deal-alert mail carries the primary hand-off alone, never the pair.** A mail
+is the one place a reader cannot see two links and choose — so it links only
+Aviasales, the search Orbit's fares actually came out of.
+
 ---
 
 ## 13. The daily timetable
@@ -2517,10 +2521,14 @@ by anyone.
 
 ### Tests, seeders and fixtures
 
+- **`AuthenticationTest` checks the absent multi-user routes against the route table, not against a 404** — `routes/web.php` answers every unclaimed GET with the SPA shell, so `GET /register` is a 200 regardless; asserting nothing is *registered* at that path fails immediately and names the route if a starter kit or refactor ever adds one, where a status-code check would only notice once the response happened to change. The POST half is 405, not 404, for the same reason: the catch-all claims the URI for GET, so the router refuses the verb rather than the path.
 - **`SingleUserSeederTest` cares about idempotence above all** — this seeder runs on every deploy, and getting the "already exists" path wrong silently rotates the owner's password during a release, discovered only as a locked-out login.
 - **`SeedersTest` asserts three separate drift guards**: config origins vs. the seeder's `is_origin` flags, the NLP parser's vibe vocabulary vs. the seeder's actual tags, and every origin alias resolving to a real origin — each a silent-forever bug if it drifts.
 - **The curated and world-imported airport seeders write disjoint sets on purpose** — the import never overwrites a curated row (Amsterdam's proper name vs. OurAirports' "Schiphol"), so `is_origin` can never be silently added or removed by a snapshot refresh.
 - **`BuildsRouteData::trackedSince()` writes exactly one old observation, not a series** — a multi-day fixture would hand the scorer a computable trend and move every test's score in ways nobody could explain on paper. `BuildsAlertData` does the same for alert-scoring fixtures.
+- **`BuildsRuleData` fixtures use a handful of destinations, never the seeder's 77** — rule-matching tests ask whether a rule finds the right routes, a question best asked of places whose vibe and climate a reader can hold in their head ("FAO is sunny and warm, OSL is cold"), not "the eleventh of the med-south group."
+- **`AlertPipelineTest` freezes the clock at 06:55 UTC (08:55 Amsterdam), five minutes after the default quiet window ends** — the ordinary tests run at that boundary rather than in the middle of the afternoon, where a timezone bug would hide. `brandNewRoute()` deliberately gives its fixtures the FULL set of statistics, so each one really does score 94 before the maturity gate holds it — nothing in the day-1 tests depends on degenerate day-1 statistics also happening to produce a low score.
+- **`RunsCommands::runCommand()` exists because `$this->artisan()` is typed `PendingCommand|int`** — it answers an int only when console output is mocked, so the assertion helpers live on one side of the union and every call site would otherwise have to narrow it itself. Narrowed once, here.
 - **`SpaShellTest` runs `withoutVite()`** because these tests are about routing, and requiring a built bundle would fail a fresh checkout for an unrelated reason.
 - **`ResetHistoryTest`'s two negatives are the point**: the command must not run without `--confirm`, and must not touch anything the owner decided (watchlist, rules, alert ledger) — the ledger especially, since wiping it would let the next poll re-announce every deal already mailed.
 - **`e2e/specs/live-price.spec.js` intercepts the app's own API for 3 of 4 tests** because the sandbox structurally cannot hold the states under test (nothing is old enough to demote, there's no SerpAPI key and must never be one) — the endpoint itself is proven against recorded fixtures in `LivePriceCheckTest`; the browser only needs to prove it *draws* the documents.

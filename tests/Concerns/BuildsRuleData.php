@@ -11,14 +11,8 @@ use App\Models\DealRule;
 use App\Models\Destination;
 
 /**
- * Fixtures for the rules engine's tests.
- *
- * A HANDFUL OF PLACES RATHER THAN THE SEEDER'S SEVENTY-SEVEN. The seeder has
- * its own tests; these are about whether a rule finds the right routes, and
- * that is a question best asked of four destinations whose vibes and climates
- * a reader can hold in their head — "FAO is sunny and warm, OSL is a cold
- * city" is an expectation somebody can check, and "the eleventh of the med-
- * south group" is not.
+ * Fixtures for the rules engine's tests: a handful of destinations, not the
+ * seeder's 77 (docs/BUSINESS-LOGIC.md §36).
  */
 trait BuildsRuleData
 {
@@ -44,7 +38,7 @@ trait BuildsRuleData
         Destination::query()->create([
             'airport_id' => $airport->id,
             'vibes'      => $vibes,
-            /* One rating for the whole year keeps the climate gate out of the way unless a test is about it. */
+            /* Same rating all year: keeps the climate gate out of the way. */
             'warmth' => array_fill(1, 12, $warmth),
         ]);
 

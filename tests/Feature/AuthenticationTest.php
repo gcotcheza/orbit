@@ -14,15 +14,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * The whole authentication surface, including the parts of it that must not
- * exist.
- *
- * Orbit is a single-user app (docs/PLAN.md): sign in, sign out, and one
- * endpoint that says who you are. Every OTHER thing an auth scaffold usually
- * brings — registration, password reset, email verification — is absent, and
- * the tests at the bottom of this file are what keep it absent. A `composer
- * require` of a starter kit, or a well-meaning `route:list` tidy-up, would
- * otherwise put a public signup form on a private app without anybody noticing.
+ * The whole authentication surface, including the parts that must not exist
+ * (docs/BUSINESS-LOGIC.md §36).
  */
 final class AuthenticationTest extends TestCase
 {
@@ -37,8 +30,6 @@ final class AuthenticationTest extends TestCase
             'password' => self::PASSWORD,
         ]);
     }
-
-    // ---------------------------------------------------------------- sign in
 
     #[Test]
     public function a_correct_password_starts_a_session(): void
@@ -89,9 +80,8 @@ final class AuthenticationTest extends TestCase
     }
 
     /**
-     * An unknown address gets the SAME answer as a wrong password. With one
-     * account, a distinguishable "no such user" would confirm the owner's
-     * email address to anybody who guessed it.
+     * Same answer as a wrong password — a distinguishable "no such user" would
+     * confirm the owner's address to a guesser.
      */
     #[Test]
     public function an_unknown_address_is_answered_exactly_like_a_wrong_password(): void
@@ -113,9 +103,8 @@ final class AuthenticationTest extends TestCase
     }
 
     /**
-     * Five a minute, keyed on email|ip — see AppServiceProvider. One account
-     * means this route is the entire brute-force surface, so the sixth attempt
-     * inside a minute has to be refused rather than merely wrong.
+     * Five a minute, keyed on email|ip — the app's entire brute-force surface
+     * (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function the_sixth_attempt_in_a_minute_is_throttled(): void
@@ -144,8 +133,6 @@ final class AuthenticationTest extends TestCase
         $this->assertGuest();
     }
 
-    // --------------------------------------------------------------- sign out
-
     #[Test]
     public function signing_out_ends_the_session(): void
     {
@@ -162,8 +149,6 @@ final class AuthenticationTest extends TestCase
         $this->postJson('/logout')->assertStatus(401);
     }
 
-    // ------------------------------------------------------------------ /api/me
-
     #[Test]
     public function the_current_user_endpoint_describes_the_signed_in_user(): void
     {
@@ -179,14 +164,8 @@ final class AuthenticationTest extends TestCase
     }
 
     /**
-     * The SPA calls this from fetch() on a page that must not navigate, so the
-     * guest answer has to be a 401 with a JSON body — NOT a 302 that fetch()
-     * follows and hands back as the shell's HTML with a 200, i.e. as a
-     * successful call that returns a page instead of a user.
-     *
-     * Asserted with a plain `get`, deliberately: bootstrap/app.php renders
-     * `api/*` as JSON on the path prefix alone, so this holds even for a caller
-     * that forgot to ask for JSON.
+     * `fetch()` must not be redirected to the shell — 401 with JSON, not 302
+     * (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_guest_is_told_no_in_json_rather_than_redirected(): void
@@ -199,10 +178,8 @@ final class AuthenticationTest extends TestCase
     }
 
     /**
-     * Orbit issues no API tokens and has no `personal_access_tokens` table.
-     * Sanctum's guard would nonetheless go looking for that table the moment a
-     * request carried a bearer token, turning a 401 into a 500 from a missing
-     * relation — see the callback in AppServiceProvider that closes it.
+     * Sanctum would otherwise turn a stray bearer header into a 500 from a
+     * missing table (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_bearer_token_is_not_a_credential_and_does_not_break_anything(): void
@@ -212,8 +189,6 @@ final class AuthenticationTest extends TestCase
         $this->getJson('/api/me', ['Authorization' => 'Bearer anything-at-all'])
             ->assertStatus(401);
     }
-
-    // ------------------------------------------------- the routes that must not exist
 
     /**
      * @return array<string, array{non-empty-string}>
@@ -231,21 +206,8 @@ final class AuthenticationTest extends TestCase
     }
 
     /**
-     * ASSERTED AGAINST THE ROUTE TABLE, NOT AGAINST A 404, and the difference
-     * is forced by this app's shape rather than chosen.
-     *
-     * routes/web.php answers every unclaimed GET with the SPA shell, because
-     * that is what a client-side router needs. So `GET /register` is a 200 —
-     * the shell, which then routes to the home screen — and it cannot be a 404
-     * without teaching the catch-all a list of URLs that do not exist, which is
-     * a list nobody would maintain.
-     *
-     * What actually matters is that NOTHING IS REGISTERED at those paths, and
-     * that is what this checks, directly and without ambiguity. It is the
-     * stronger assertion of the two: if a starter kit or a helpful refactor
-     * ever registers a real registration route, this fails immediately and
-     * names it, where a status-code test would only notice once the response
-     * happened to change.
+     * Asserted against the route table, not a 404 — the catch-all answers every
+     * unclaimed GET with the shell (docs/BUSINESS-LOGIC.md §36).
      *
      * @param  non-empty-string  $path
      */
@@ -267,12 +229,8 @@ final class AuthenticationTest extends TestCase
     }
 
     /**
-     * And the behavioural half: a POST to any of them is refused.
-     *
-     * 405 rather than 404 because the catch-all above claims the URI for GET,
-     * so the router answers "not with that verb" — see the test above for why
-     * that is the honest answer here. Either way nothing runs, nothing is
-     * created and nothing is emailed.
+     * 405, not 404 — the catch-all claims the URI for GET, so the router
+     * refuses the verb instead (docs/BUSINESS-LOGIC.md §36).
      *
      * @param  non-empty-string  $path
      */
@@ -284,10 +242,8 @@ final class AuthenticationTest extends TestCase
     }
 
     /**
-     * Sanctum's own route, which the SPA calls before signing in. It is
-     * registered by the package while the framework boots — i.e. BEFORE
-     * routes/web.php — so the catch-all at the bottom of that file cannot
-     * swallow it. This is the assertion that keeps that ordering true.
+     * Sanctum registers this while the framework boots, before routes/web.php,
+     * so the catch-all cannot swallow it.
      */
     #[Test]
     public function the_csrf_cookie_endpoint_is_reachable_and_is_not_the_spa_shell(): void
