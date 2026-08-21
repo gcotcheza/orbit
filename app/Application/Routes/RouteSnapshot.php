@@ -37,12 +37,8 @@ final readonly class RouteSnapshot
     }
 
     /**
-     * Whether the cheapest fare is the kind that has probably already gone —
-     * old AND well under this route's usual price. Both halves are required,
-     * and a null `foundAt` is never demoted (docs/BUSINESS-LOGIC.md §17).
-     *
-     * ⚠ It judges the CHEAPEST DEPARTURE, which is the fare carrying a
-     * `found_at` and the one the screen draws the demotion on.
+     * Whether the cheapest DEPARTURE has probably gone — old AND well under usual, both halves
+     * required, and a null `foundAt` is never demoted (docs/BUSINESS-LOGIC.md §17).
      */
     public function cheapestMayBeGone(DateTimeImmutable $now, int $staleAfterHours, int $underUsualPercent): bool
     {
@@ -62,9 +58,8 @@ final readonly class RouteSnapshot
     }
 
     /**
-     * "38% below its usual €84" — negative when the fare is above usual. NULL
-     * when either half of the comparison is missing, which the client renders
-     * as no caption rather than as 0%.
+     * "38% below its usual €84" — negative when above usual, NULL when either half of the
+     * comparison is missing, which the client renders as no caption rather than 0%.
      */
     public function percentUnderUsual(): ?int
     {

@@ -1,10 +1,7 @@
 <script setup>
 /*
- * The only screen a guest can reach.
- *
- * No "create an account", no "forgot your password" — neither route exists on
- * the server (routes/web.php), so offering either would be a link to a 404.
- * Orbit has one account and it is created by a seeder.
+ * The only screen a guest can reach. No "create an account", no "forgot your password" —
+ * neither route exists on the server, so offering either would be a link to a 404.
  */
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -20,11 +17,8 @@ const error = ref('')
 const busy = ref(false)
 
 /**
- * Turn a failed request into one sentence somebody can act on.
- *
- * The 422 message comes from the server and is deliberately the same for a
- * wrong address and a wrong password — see LoginController. The others are
- * written here because their HTTP status is the whole message.
+ * Turn a failed request into one sentence somebody can act on. The 422 is the server's and is
+ * deliberately the same for a wrong address and a wrong password (see LoginController).
  */
 function messageFor(failure) {
   const response = failure.response
@@ -39,8 +33,8 @@ function messageFor(failure) {
     case 429:
       return 'Too many attempts. Wait a minute, then try again.'
     case 419:
-      // The session behind the page expired while the form sat open. Reloading
-      // fetches a fresh token, which is genuinely the fix.
+      // The session behind the page expired while the form sat open. Reloading fetches a fresh
+      // token, which is genuinely the fix.
       return 'This page went stale. Reload it and sign in again.'
     default:
       return 'Something went wrong signing in.'
@@ -119,9 +113,8 @@ async function submit() {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  /* Fills the shell's main area. The safe-area inset is subtracted because
-     .app-shell__main has already spent it as padding — 100dvh on top of that
-     is a screen that scrolls by the height of the notch. */
+  /* Fills the shell's main area. The safe-area inset is subtracted because .app-shell__main already
+     spent it as padding. */
   min-height: calc(100dvh - env(safe-area-inset-top));
   padding: 32px var(--gutter);
 }

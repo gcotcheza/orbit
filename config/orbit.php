@@ -7,8 +7,7 @@ declare(strict_types=1);
 | Orbit
 |--------------------------------------------------------------------------
 |
-| Everything about THIS app rather than the framework it runs on.
-| Why a config file rather than env() at the call site: docs/BUSINESS-LOGIC.md §18.
+| Everything about THIS app, not the framework. Why not env(): docs/BUSINESS-LOGIC.md §18.
 |
 */
 
@@ -19,8 +18,7 @@ return [
     | The single account
     |--------------------------------------------------------------------------
     |
-    | Null password = generate + print once; empty .env value is treated as
-    | null. Why: docs/BUSINESS-LOGIC.md §19.
+    | Null password = generate + print once; empty .env value is null. docs/BUSINESS-LOGIC.md §19.
     |
     */
 
@@ -35,8 +33,7 @@ return [
     | The clock the owner lives on
     |--------------------------------------------------------------------------
     |
-    | Storage stays UTC; everything a person reads is local. Why:
-    | docs/BUSINESS-LOGIC.md §20.
+    | Storage stays UTC; what a person reads is local. docs/BUSINESS-LOGIC.md §20.
     |
     */
 
@@ -47,8 +44,7 @@ return [
     | Fare providers
     |--------------------------------------------------------------------------
     |
-    | Three ports plus a sweep switch, chosen by name, bound in AppServiceProvider.
-    | Why four switches, why `fake` is still the default: docs/BUSINESS-LOGIC.md §21.
+    | Four switches, bound by name in AppServiceProvider. docs/BUSINESS-LOGIC.md §21.
     |
     */
 
@@ -67,8 +63,7 @@ return [
     | Travelpayouts — the real fares
     |--------------------------------------------------------------------------
     |
-    | Read when `providers.price` is `travelpayouts`. Endpoint choice, token
-    | placement, timeouts and the currency guard: docs/BUSINESS-LOGIC.md §22.
+    | Read when `providers.price` is `travelpayouts`. docs/BUSINESS-LOGIC.md §22.
     |
     */
 
@@ -92,11 +87,10 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Self-computed statistics — what a route usually costs, from our own data
+    | Self-computed statistics — what a route usually costs
     |--------------------------------------------------------------------------
     |
-    | Read when `providers.stats` is `self`. The blend arithmetic and why each
-    | horizon is capped where it is: docs/BUSINESS-LOGIC.md §23.
+    | Read when `providers.stats` is `self`. docs/BUSINESS-LOGIC.md §23.
     |
     */
 
@@ -111,8 +105,7 @@ return [
     | Where the owner flies from
     |--------------------------------------------------------------------------
     |
-    | Still the rule engine's origins and a request-budget bound, even though
-    | it stopped being a search-input validation list. Why: docs/BUSINESS-LOGIC.md §24.
+    | Rule-engine origins and a request budget, not a validation list. docs/BUSINESS-LOGIC.md §24.
     |
     */
 
@@ -123,8 +116,7 @@ return [
     | The deal score
     |--------------------------------------------------------------------------
     |
-    | Read once into App\Domain\Pricing\ScoringPolicy, which is pure PHP.
-    | Weights, tiers and trend saturation: docs/BUSINESS-LOGIC.md §25.
+    | Read once into App\Domain\Pricing\ScoringPolicy, pure PHP. docs/BUSINESS-LOGIC.md §25.
     |
     */
 
@@ -150,8 +142,7 @@ return [
     | Alerts
     |--------------------------------------------------------------------------
     |
-    | When Orbit is allowed to interrupt somebody — AlertPolicy's rule book, read once.
-    | Why each number, and why `blurb`/`tier` live here: docs/BUSINESS-LOGIC.md §26.
+    | AlertPolicy's rule book for when Orbit may interrupt somebody. docs/BUSINESS-LOGIC.md §26.
     |
     */
 
@@ -199,8 +190,7 @@ return [
     | Polling — eleven months, at two speeds
     |--------------------------------------------------------------------------
     |
-    | `window_days` (near, daily) vs `horizon_days` (far, weekly) answer two questions.
-    | Full budget table and staleness reasoning: docs/BUSINESS-LOGIC.md §27.
+    | `window_days` (near, daily) vs `horizon_days` (far, weekly). docs/BUSINESS-LOGIC.md §27.
     |
     */
 
@@ -218,8 +208,7 @@ return [
     | Round trips — going and coming back
     |--------------------------------------------------------------------------
     |
-    | The round-trip table nothing reads yet (polled daily since the foundation PR).
-    | Budget, schedule reasoning and the duration bands: docs/BUSINESS-LOGIC.md §28.
+    | Polled daily; nothing reads the table yet. docs/BUSINESS-LOGIC.md §28.
     |
     */
 
@@ -245,8 +234,7 @@ return [
     | Looking a route up before watching it
     |--------------------------------------------------------------------------
     |
-    | `fresh_for_hours` covers both "is the data fresh" and "did we already ask".
-    | Why, and why the near window not the horizon: docs/BUSINESS-LOGIC.md §29.
+    | `fresh_for_hours` is both "is it fresh" and "did we already ask". docs/BUSINESS-LOGIC.md §29.
     |
     */
 
@@ -256,11 +244,10 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Discovery — the insanely cheap routes nobody is watching
+    | Discovery — the routes nobody is watching
     |--------------------------------------------------------------------------
     |
-    | "Surprise me," not "find cheap fares" -- every default read off one real run.
-    | Full reasoning, every threshold, the second lane's flywheel: docs/BUSINESS-LOGIC.md §30.
+    | "Surprise me," not "find cheap fares". docs/BUSINESS-LOGIC.md §30.
     |
     */
 
@@ -313,8 +300,7 @@ return [
     | SerpAPI — asking Google whether we are telling the truth
     |--------------------------------------------------------------------------
     |
-    | `key` defaults to null; the feature degrades to "skip the check".
-    | What the verdict compares, and the spend guardrails: docs/BUSINESS-LOGIC.md §31.
+    | `key` defaults to null; the check degrades to skipped. docs/BUSINESS-LOGIC.md §31.
     |
     */
 
@@ -342,8 +328,7 @@ return [
     | "Seen 3 days ago — may be gone", and the way to find out
     |--------------------------------------------------------------------------
     |
-    | The demotion needs BOTH halves (48h old, 20% under usual); the cooldown
-    | is how long one paid answer is worth. The reasoning: docs/BUSINESS-LOGIC.md §17.
+    | The demotion needs BOTH halves (48h old, 20% under usual). docs/BUSINESS-LOGIC.md §17.
     |
     */
 
@@ -359,10 +344,7 @@ return [
     | How much history the screens get
     |--------------------------------------------------------------------------
     |
-    | The watchlist sparkline is 14 points and the detail chart is 60 (design
-    | README §1 and §2). BACKFILL_DAYS is how far Database\Seeders\
-    | FakeHistorySeeder simulates backwards — see that file for why simulated
-    | history is defensible for a fake provider and would not be for a real one.
+    | Sparkline 14, detail chart 60 (design/README.md §1–§2); backfill feeds FakeHistorySeeder.
     |
     */
 
@@ -377,10 +359,7 @@ return [
     | Calendar heat thresholds
     |--------------------------------------------------------------------------
     |
-    | design/README.md §3: a day is "cheap" at or below lo + 28% of the month's
-    | range and "pricey" at or above lo + 66%. The API returns the verdict
-    | rather than the thresholds so the calendar screen and a future alert
-    | cannot disagree about what a cheap day is.
+    | design/README.md §3; the API returns the verdict, not these thresholds.
     |
     */
 
@@ -394,8 +373,7 @@ return [
     | Booking
     |--------------------------------------------------------------------------
     |
-    | No booking API, deep links only — Aviasales primary, Skyscanner second opinion.
-    | Only the hosts live here; path shapes belong to BookingLink: docs/BUSINESS-LOGIC.md §32.
+    | Deep links only; hosts here, path shapes in BookingLink. docs/BUSINESS-LOGIC.md §32.
     |
     */
 
@@ -412,8 +390,7 @@ return [
     | Reading a rule written in English
     |--------------------------------------------------------------------------
     |
-    | `parser` defaults to regex; Anthropic takes over once a key lands in .env,
-    | composing regex as its own fallback. Why, and why Haiku: docs/BUSINESS-LOGIC.md §33.
+    | `parser` defaults to regex; Anthropic takes over when a key lands. docs/BUSINESS-LOGIC.md §33.
     |
     */
 
@@ -447,10 +424,8 @@ return [
             'dusseldorf' => 'DUS',
         ],
 
-        // Keys are the closed vocabulary from european_destinations.php
-        // (SeedersTest drift guard); adding a KEY (not a synonym) matches
-        // nothing. Longest phrase first per vibe -- RegexRuleTextParser relies
-        // on the order. See §33.
+        // Closed vocabulary; a new KEY (not a synonym) matches nothing.
+        // Longest phrase first per vibe — the regex parser needs it. docs/BUSINESS-LOGIC.md §33.
         'vibe_words' => [
             'sunny'   => ['sunshine', 'sunny', 'warm', 'hot', 'sun'],
             'beach'   => ['seaside', 'beaches', 'beach', 'coastal', 'coast', 'sand', 'swimming'],
@@ -483,8 +458,7 @@ return [
     | Matching a rule against the world
     |--------------------------------------------------------------------------
     |
-    | `warm_at`/`warm_vibes` gate on the rule window's best month. `sweep_cap` and
-    | `sweep_horizon_days` are the sweep's request budget. Full arithmetic: docs/BUSINESS-LOGIC.md §34.
+    | `warm_at` gates the best month; `sweep_cap` bounds the sweep. docs/BUSINESS-LOGIC.md §34.
     |
     */
 
@@ -501,8 +475,7 @@ return [
     | The installed app
     |--------------------------------------------------------------------------
     |
-    | Manifest and meta tag both read from here so the colour never drifts.
-    | No env() -- staging and production must look identical: docs/BUSINESS-LOGIC.md §35.
+    | No env() — staging and production must look identical. docs/BUSINESS-LOGIC.md §35.
     |
     */
 

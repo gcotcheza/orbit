@@ -5,13 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Rules;
 
 /**
- * A sentence, read: the chips design/README.md §4 draws, and the criteria they
- * add up to.
- *
- * One direction only: criteria in, chips out, criteria back — nothing builds chips by hand.
- *
- * `without()` re-derives criteria from the remaining chips rather than re-parsing text.
- * Why: docs/BUSINESS-LOGIC.md §11.
+ * A sentence, read: the chips design/README.md §4 draws and the criteria they add up to.
+ * `without()` re-derives criteria from the chips left (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class ParsedRule
 {
@@ -80,10 +75,8 @@ final readonly class ParsedRule
     }
 
     /**
-     * The same parse with some chips taken off.
-     *
-     * Unknown ids are ignored, not rejected — normal while the client re-parses text as somebody types.
-     * Why: docs/BUSINESS-LOGIC.md §11.
+     * The same parse with some chips taken off. Unknown ids are ignored, not rejected —
+     * normal while the client re-parses text as somebody types.
      *
      * @param  list<string>  $removedIds
      */
@@ -100,9 +93,8 @@ final readonly class ParsedRule
     }
 
     /**
-     * What the surviving chips add up to.
-     *
-     * The type guards aren't decoration: `$chip->value` is `mixed`, and this is the one place that must know which of six shapes it is.
+     * What the surviving chips add up to. The type guards are not decoration: `$chip->value`
+     * is `mixed`, and this is the one place that must know which of six shapes it is.
      */
     public function criteria(): RuleCriteria
     {
@@ -132,7 +124,8 @@ final readonly class ParsedRule
         }
 
         /*
-         * Through RuleCriteria::from(), not the constructor, so chip shapes are validated the same way database shapes are.
+         * Through RuleCriteria::from(), not the constructor, so chip shapes are validated
+         * the same way database shapes are.
          */
         return RuleCriteria::from([
             'origins'          => $origins,

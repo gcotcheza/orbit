@@ -11,13 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * One morning's answer for one route — a row of `route_price_history`.
- *
- * The model is named for the ROW and the table for the SERIES, which is why
- * `$table` is set explicitly rather than left to Eloquent's pluraliser (it
- * would look for `price_observations`). "History" is what the series is called
- * everywhere else — in the plan, in the design, in the API — and one row of it
- * is an observation.
+ * One morning's answer for one route — a row of `route_price_history`, hence `$table`.
  *
  * @property int $id
  * @property int $route_id

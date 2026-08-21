@@ -35,11 +35,8 @@ class User extends Authenticatable
     }
 
     /**
-     * The trips this account described in English (design/README.md §4),
-     * newest first — a rule somebody just wrote is the one they want to see.
-     *
-     * Separate from `watchlistItems`, not a kind of it (docs/PLAN.md): a rule finds unwatched routes; promoting a match is
-     * a deliberate tap, not automatic (docs/BUSINESS-LOGIC.md §11).
+     * The trips this account described in English, newest first. Separate from
+     * `watchlistItems`, not a kind of it (docs/BUSINESS-LOGIC.md §11).
      *
      * @return HasMany<DealRule, $this>
      */
@@ -49,10 +46,8 @@ class User extends Authenticatable
     }
 
     /**
-     * Everything Orbit has decided to tell this account, newest first.
-     *
-     * Ordered by `triggered_at`, not `created_at`: they diverge on a retried run, and this must reflect when the DECISION
-     * was made, not written (docs/BUSINESS-LOGIC.md §10).
+     * Everything Orbit has decided to tell this account, newest first. Ordered by
+     * `triggered_at`, not `created_at` — the decision, not the write (docs/BUSINESS-LOGIC.md §10).
      *
      * @return HasMany<Alert, $this>
      */
@@ -62,10 +57,8 @@ class User extends Authenticatable
     }
 
     /**
-     * How and when this account wants to be told about a deal.
-     *
-     * MAY NOT EXIST YET — use UserSettings::for($user), which creates the row on first read. This relation exists for that
-     * method and for eager-loading (docs/BUSINESS-LOGIC.md §36).
+     * How and when this account wants to be told about a deal. MAY NOT EXIST YET — use
+     * UserSettings::for($user), which creates the row on first read.
      *
      * @return HasOne<UserSettings, $this>
      */

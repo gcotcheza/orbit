@@ -7,8 +7,8 @@ namespace App\Application\Alerts;
 use App\Domain\Alerts\AlertType;
 
 /**
- * The Sunday morning mail: what every watched route, rule and week-of-alerts looks like — the one alert mail that is
- * not an interruption (docs/BUSINESS-LOGIC.md §10).
+ * The Sunday morning mail: what every watched route, rule and week-of-alerts looks like — the one
+ * alert mail that is not an interruption (docs/BUSINESS-LOGIC.md §10).
  */
 final readonly class DigestNotice implements AlertNotice
 {
@@ -30,8 +30,8 @@ final readonly class DigestNotice implements AlertNotice
     }
 
     /**
-     * Whether App\Jobs\SendWeeklyDigest should skip mailing/logging this week entirely — a weekly "you have nothing" is a
-     * reason to unsubscribe (docs/BUSINESS-LOGIC.md §10).
+     * Whether App\Jobs\SendWeeklyDigest should skip mailing/logging this week entirely — a weekly
+     * "you have nothing" is a reason to unsubscribe (docs/BUSINESS-LOGIC.md §10).
      */
     public function isEmpty(): bool
     {
@@ -39,8 +39,8 @@ final readonly class DigestNotice implements AlertNotice
     }
 
     /**
-     * The cheapest thing in the whole mail, whichever section it came from —
-     * what the subject leads with when there is nothing louder to say.
+     * The cheapest thing in the whole mail, whichever section it came from — what the subject leads
+     * with when there is nothing louder to say.
      */
     public function cheapest(): ?DealSummary
     {
@@ -66,8 +66,8 @@ final readonly class DigestNotice implements AlertNotice
     }
 
     /**
-     * The subject leads with the alert count when there is one — that is the decision the reader is making in a
-     * notification shade (docs/BUSINESS-LOGIC.md §10).
+     * The subject leads with the alert count when there is one — that is the decision the reader is
+     * making in a notification shade (docs/BUSINESS-LOGIC.md §10).
      */
     public function subject(): string
     {
@@ -87,8 +87,8 @@ final readonly class DigestNotice implements AlertNotice
     }
 
     /**
-     * What the ledger stores for a digest: counts, not copies — the deals already have their own ledger rows from when
-     * they fired (docs/BUSINESS-LOGIC.md §10).
+     * What the ledger stores for a digest: counts, not copies — the deals already have their own
+     * ledger rows from when they fired (docs/BUSINESS-LOGIC.md §10).
      *
      * @return array<string, mixed>
      */

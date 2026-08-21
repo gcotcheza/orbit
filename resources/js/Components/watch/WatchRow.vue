@@ -1,12 +1,7 @@
 <script setup>
 /*
- * One watched route, drawn as a boarding pass (design/README.md §5).
- *
- * Renders a route with no price history yet as day-1 honest: no data shown, not a guess.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * The link stops at the tear line, so the switch and remove button are never nested inside it.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One watched route, drawn as a boarding pass (design/README.md §5). A route with no history
+ * is day-1 honest, and the link stops at the tear line (docs/BUSINESS-LOGIC.md §36).
  */
 import { computed, ref } from 'vue'
 import ToggleSwitch from '@/Components/ToggleSwitch.vue'
@@ -30,8 +25,7 @@ const flightNumber = computed(() => flightNumberFor(props.route.code))
 const flagStyle = computed(() => ({ background: flagFor(props.route.destination.countryCode) }))
 
 /*
- * `stubNote` puts "Paused" ahead of the tracking note, deliberately.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `stubNote` puts "Paused" ahead of the tracking note, deliberately (docs/BUSINESS-LOGIC.md §36).
  */
 const stubNote = computed(() => {
   if (!props.route.active) {
@@ -105,7 +99,7 @@ function confirmRemove() {
           </p>
         </div>
 
-        <!-- Same chevron affordance as SpotlightCard.vue, sized to this row (docs/BUSINESS-LOGIC.md §36). -->
+        <!-- Same chevron affordance as SpotlightCard.vue, sized to this row. -->
         <svg class="chevron" width="15" height="15" viewBox="0 0 18 18" fill="none" aria-hidden="true">
           <path d="M6 4l5 5-5 5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
         </svg>

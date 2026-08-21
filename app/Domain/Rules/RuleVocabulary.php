@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Rules;
 
 /**
- * The words this app knows, handed to parts not allowed to call config() — App\Domain is pure PHP (docs/PLAN.md).
- * Built once in AppServiceProvider (docs/BUSINESS-LOGIC.md §11).
+ * The words this app knows, handed to parts not allowed to call config() — App\Domain is pure PHP
+ * (docs/PLAN.md). Built once in AppServiceProvider (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class RuleVocabulary
 {
@@ -24,8 +24,8 @@ final readonly class RuleVocabulary
     ) {}
 
     /**
-     * The chip text for a vibe, falling back to the vibe itself — a stored
-     * rule may predate an edited vocabulary; a crash is worse than the raw word.
+     * The chip text for a vibe, falling back to the vibe itself — a stored rule may predate an
+     * edited vocabulary; a crash is worse than the raw word.
      */
     public function labelFor(string $vibe): string
     {

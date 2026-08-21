@@ -1,18 +1,9 @@
-// The calendar's heat scale (design/README.md §3): each day cell is painted
-// by where its fare sits between the month's cheapest and dearest, on a
-// five-stop green -> red ramp.
-//
-// Plain module, not a component — shared arithmetic for the grid, legend
-// and day sheet.
-// Why: docs/BUSINESS-LOGIC.md §36.
-//
-// Colours are literals, not tokens.css palette — a fixed data-viz ramp,
-// not a themed surface.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The calendar's heat scale (design/README.md §3): a five-stop green-to-red ramp, a plain
+// module, and the colours are literals — a data-viz ramp, not a themed surface.
 
 /**
- * The five stops, as RGB triples, in design/README.md's order. Exported so
- * the legend builds its gradient from the same list the cells use.
+ * The five stops, as RGB triples, in design/README.md's order. Exported so the legend builds its
+ * gradient from the same list the cells use.
  */
 export const HEAT_STOPS = [
     [121, 184, 148],
@@ -23,14 +14,14 @@ export const HEAT_STOPS = [
 ]
 
 /**
- * The text colour that sits ON a heat cell. `var(--ink)` can't be used:
- * it's near-white in dark mode, unreadable on the light/mid-toned ramp.
+ * The text colour that sits ON a heat cell. `var(--ink)` can't be used: it's near-white in dark
+ * mode, unreadable on the light/mid-toned ramp.
  */
 export const HEAT_INK = 'rgb(23, 48, 40)'
 
 /**
- * The colour for `price`, interpolated across the month's `min`–`max`,
- * clamped at both ends. A flat month (min === max) collapses to the first stop.
+ * The colour for `price`, interpolated across the month's `min`–`max`, clamped at both ends. A flat
+ * month (min === max) collapses to the first stop.
  */
 export function heatColour(price, min, max) {
     const span = max - min || 1

@@ -7,12 +7,8 @@ namespace App\Domain\Discovery;
 use DateTimeImmutable;
 
 /**
- * A swept fare with a distance attached — the middle of the funnel between a
- * raw SweptFare and a verified App\Models\Discovery, and therefore rankable.
- * €/km is the sort (buys "surprise", not just "near") but not sufficient alone
- * — long-haul fares can land in the same band as genuine bargains, so
- * DiscoveryPolicy adds an absolute ceiling. Unit is millieuros/km throughout.
- * Why: docs/BUSINESS-LOGIC.md §16.
+ * A swept fare with a distance attached — the funnel's middle, and therefore rankable.
+ * €/km sorts but is not sufficient alone; the unit is millieuros/km (docs/BUSINESS-LOGIC.md §16).
  */
 final readonly class DealCandidate
 {
@@ -27,8 +23,8 @@ final readonly class DealCandidate
     ) {}
 
     /**
-     * `AMS-AGP` — the app's own route code, and the reason this type carries both ends rather than a destination alone. Tapping a discovery opens `/route/AMS-AGP` via the same lookup flow the search screen
-     * uses — only possible because the code matches Route::codeFor's spelling exactly (docs/BUSINESS-LOGIC.md §16).
+     * `AMS-AGP` — the app's own route code, which is why this type carries both ends: a tap
+     * opens `/route/AMS-AGP` through the ordinary lookup flow (docs/BUSINESS-LOGIC.md §16).
      */
     public function routeCode(): string
     {
@@ -36,8 +32,8 @@ final readonly class DealCandidate
     }
 
     /**
-     * What a kilometre of this flight costs, in EURO CENTS. DO NOT let a zero-distance candidate reach the scorer's sort —
-     * dividing here returns INF, and INF sorts to the front of the cheapest-first list (docs/BUSINESS-LOGIC.md §16).
+     * What a kilometre of this flight costs, in EURO CENTS. DO NOT let a zero-distance candidate
+     * reach the sort — dividing returns INF, which sorts to the front (docs/BUSINESS-LOGIC.md §16).
      */
     public function centsPerKilometre(): float
     {
@@ -47,8 +43,8 @@ final readonly class DealCandidate
     }
 
     /**
-     * How old the price is, in days, as of `$now` — or null if the provider would not say when it found it. Null means TOO OLD here — the opposite of
-     * AlertPolicy's null-means-fresh (that column arrived after existing rows; this feature has no legacy rows to protect) (docs/BUSINESS-LOGIC.md §16).
+     * How old the price is, in days, or null if the provider would not say. NULL MEANS TOO OLD
+     * here — the opposite of AlertPolicy's null-means-fresh (docs/BUSINESS-LOGIC.md §16).
      */
     public function ageInDays(DateTimeImmutable $now): ?float
     {

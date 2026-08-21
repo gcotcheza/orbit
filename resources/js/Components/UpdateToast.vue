@@ -1,29 +1,12 @@
 <script setup>
 /*
- * "A new version is ready."
- *
- * THE ONE THING AN INSTALLED APP CANNOT WORK OUT FOR ITSELF. A PWA on a home
- * screen is a page opened once and never closed: it keeps running the JavaScript
- * it downloaded the morning it was launched, whatever the service worker has
- * quietly fetched since. The owner deployed and then looked at the old screens
- * for hours — nothing was broken, and nothing said anything. This is the
- * sentence that was missing. See resources/js/lib/pwa.js for how it finds out.
- *
- * QUIET, AND DISMISSIBLE. It is news rather than a problem: the app underneath
- * it works, the fares in it are today's (nothing with a price in it is ever
- * cached — service-worker.js), and the only thing out of date is the code. So it
- * takes the app's card treatment rather than a tone colour, sits out of the
- * thumb's way, and goes away when told.
- *
- * `role="status"` and not `alert`: nothing has gone wrong, and an assertive
- * announcement over whatever a screen-reader user was reading would be this app
- * interrupting them to talk about itself.
+ * "A new version is ready." — the one thing an installed app cannot work out for itself.
+ * Quiet, dismissible, and `role="status"` rather than `alert`: nothing has gone wrong.
  */
 defineProps({
   /**
-   * Is the five-item tab bar on screen? It is fixed to the bottom of the
-   * viewport, so the toast has to clear it — and on the two screens without one
-   * (route detail, login) clearing it would leave the toast floating.
+   * Is the five-item tab bar on screen? It is fixed to the bottom, so the toast has to clear it
+   * — and on the two screens without one, clearing it would leave the toast floating.
    */
   aboveTabBar: { type: Boolean, default: false },
 })
@@ -48,9 +31,8 @@ defineEmits(['refresh', 'dismiss'])
 </template>
 
 <style scoped>
-/* Fixed to the viewport rather than to the shell, and then centred on the shell's
-   own column — the same trick the day sheet uses, so on a laptop the toast
-   belongs to the phone in the middle of the window rather than to the window. */
+/* Fixed to the viewport, then centred on the shell's own column — the day sheet's trick, so on a
+   laptop the toast belongs to the phone. */
 .toast {
   position: fixed;
   inset-inline: 0;

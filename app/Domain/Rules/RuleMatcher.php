@@ -8,12 +8,8 @@ use DateTimeImmutable;
 use App\Domain\Pricing\DatedFare;
 
 /**
- * Which places a rule is about, and which fares it would fire on.
- *
- * Pure PHP, zero queries (docs/PLAN.md) — kept as two functions so SweepRuleFares can ask "where" before there are fares.
- *
- * Trip length is parsed but not matched on, deliberately — PriceProvider has no return-leg fact yet to filter on.
- * Why: docs/BUSINESS-LOGIC.md §11.
+ * Which places a rule is about, and which fares it would fire on. Pure PHP, zero queries;
+ * trip length is parsed but not matched on (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class RuleMatcher
 {
@@ -27,10 +23,8 @@ final readonly class RuleMatcher
     ) {}
 
     /**
-     * The destinations a rule is asking about, best fit first.
-     *
-     * Two filters (vibe, climate) then a deterministic sort — see config/orbit.php for the climate rule.
-     * Why: docs/BUSINESS-LOGIC.md §11.
+     * The destinations a rule is asking about, best fit first: two filters then a
+     * deterministic sort (docs/BUSINESS-LOGIC.md §11).
      *
      * @param  list<DestinationProfile>  $destinations
      * @return list<DestinationProfile>
@@ -58,12 +52,8 @@ final readonly class RuleMatcher
     }
 
     /**
-     * The cheapest fare on this route that the rule would actually fire on, or
-     * NULL if none of them would.
-     *
-     * Clears price ceiling, weekday and window; nothing set means cheapest available.
-     *
-     * `$today` is passed in, not read from a clock — this stays pure, and "which spring" depends on the caller's timezone-local day.
+     * The cheapest fare on this route the rule would fire on, or NULL. `$today` is passed in,
+     * not read from a clock — this stays pure and "which spring" is the caller's day.
      *
      * @param  list<DatedFare>  $fares
      */
@@ -89,8 +79,8 @@ final readonly class RuleMatcher
             }
 
             /*
-             * Strictly cheaper, so a tie keeps the earlier date — same rule RouteSnapshots picks by.
-             * Why: docs/BUSINESS-LOGIC.md §11.
+             * Strictly cheaper, so a tie keeps the earlier date — the same rule
+             * RouteSnapshots picks by (docs/BUSINESS-LOGIC.md §11).
              */
             if ($cheapest === null || $fare->cents < $cheapest->cents) {
                 $cheapest = $fare;

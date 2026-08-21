@@ -9,17 +9,8 @@ use App\Jobs\EvaluateAlerts;
 use Illuminate\Console\Command;
 
 /**
- * The morning's alert run — fan-out only, exactly like orbit:poll-fares.
- *
- * A COMMAND RATHER THAN `Schedule::job()`, for the reason routes/console.php
- * spells out: that file is loaded on every artisan invocation including
- * `migrate` against an empty database, so a schedule that enumerated accounts
- * there would query a table that does not exist yet.
- *
- * IT RUNS LAST OF THE THREE. 06:10 polls the watchlist, 06:40 sweeps the rules,
- * and this reads what both of them wrote — an alert run that went first would
- * be deciding this morning on yesterday's prices, which is precisely the bug
- * that is invisible: the mail still arrives, and it is a day out of date.
+ * The morning's alert run — fan-out only. A command rather than `Schedule::job()`, and it
+ * runs last of the three: going first would decide today on yesterday's prices.
  */
 final class RunAlerts extends Command
 {

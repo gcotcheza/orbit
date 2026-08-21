@@ -8,12 +8,8 @@ use Illuminate\Http\JsonResponse;
 use App\Http\Controllers\Controller;
 
 /**
- * `GET /manifest.webmanifest` — what "Add to Home Screen" reads.
- *
- * A route, not a static file — nginx has no mime type for .webmanifest.
- *
- * Most keys here are inert on iOS (this app's only real target); declared anyway for Android/desktop.
- * Why: docs/BUSINESS-LOGIC.md §35.
+ * `GET /manifest.webmanifest` — a route, not a static file, because nginx has no mime type
+ * for it. Most keys are inert on iOS; declared anyway (docs/BUSINESS-LOGIC.md §35).
  */
 final class ManifestController extends Controller
 {
@@ -67,8 +63,8 @@ final class ManifestController extends Controller
                     'purpose' => 'any',
                 ],
                 /*
-                 * A separate rendering, not the same file tagged twice — maskable needs a smaller glyph to survive the crop.
-                 * Why: docs/BUSINESS-LOGIC.md §35.
+                 * A separate rendering, not the same file tagged twice — maskable needs a smaller
+                 * glyph to survive the crop.
                  */
                 [
                     'src'     => '/icons/icon-maskable-192.png',
@@ -91,8 +87,8 @@ final class ManifestController extends Controller
                 'Content-Type' => 'application/manifest+json',
 
                 /*
-                 * An hour, not longer — icon paths could rename in a bad deploy, and this response carries no session.
-                 * Why: docs/BUSINESS-LOGIC.md §35.
+                 * An hour, not longer — icon paths could rename in a bad deploy, and this response
+                 * carries no session.
                  */
                 'Cache-Control' => 'public, max-age=3600',
             ], JSON_UNESCAPED_SLASHES);

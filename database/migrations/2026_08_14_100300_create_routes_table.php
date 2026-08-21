@@ -7,18 +7,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
 /**
- * A city pair. Everything Orbit measures hangs off one of these.
- *
- * `code` ("AMS-LIS") is DENORMALISED from the two airport ids on purpose. It
- * is what the SPA's URLs carry, what the provider adapters are asked about and
- * what a log line has to be readable with — resolving two joins to name the
- * thing an error is about is how logs stop being read. The unique index on it
- * doubles as the guard against the same pair being inserted twice, which is
- * what keeps a route's price history in one place.
- *
- * NO `active` COLUMN HERE. Whether a route is being watched belongs to the
- * watchlist, not to the route: PR10's rules will surface routes nobody has
- * ever watched, and those still need somewhere to keep a code and a history.
+ * A city pair. `code` is DENORMALISED from the two airport ids on purpose, and there is no
+ * `active` column — being watched belongs to the watchlist (docs/BUSINESS-LOGIC.md §1).
  */
 return new class extends Migration
 {

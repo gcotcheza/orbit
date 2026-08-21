@@ -7,70 +7,14 @@ namespace App\Services\Pwa;
 use Illuminate\Support\Facades\File;
 
 /**
- * What the service worker precaches, and what "this build" means.
- *
- * ---------------------------------------------------------------------------
- * THE VITE MANIFEST IS THE SOURCE OF TRUTH, NOT A HAND-WRITTEN LIST
- *
- * A precache list written by hand is a list that is wrong one deploy later:
- * every filename in `public/build/assets` carries a content hash, so a worker
- * precaching `app-B1WR5ovF.js` after that build has been replaced installs
- * nothing and says nothing. The list is therefore READ from
- * `public/build/manifest.json` — the same file `@vite()` reads to write the
- * script tags, so the worker and the page cannot disagree about what the build
- * produced.
- *
- * ---------------------------------------------------------------------------
- * WHAT IS PRECACHED: THE SHELL, AND ONLY BECAUSE IT IS SMALL
- *
- * Precaching happens on INSTALL — the first launch after a deploy, quite
- * possibly on mobile data — so every byte in this list is a byte downloaded
- * before the user has asked for anything. The rule is: the entry chunks and
- * what they cannot run without.
- *
- * Concretely (PR12's build, ~410 KB): the entry chunk, the two chunks it
- * imports STATICALLY (the rolldown runtime and Vue itself), the entry's
- * stylesheets, and the woff2 faces. Plus the handful of static URLs below.
- *
- * WHAT IS NOT, and this is the part that matters:
- *
- *   THE GLOBE. `globe.gl` is 1.88 MB minified — bigger than everything else
- *   this app ships put together — and `resources/js/Views/Home.vue` reaches it
- *   through a DYNAMIC import. That is why this class walks `imports` and never
- *   `dynamicImports`: the split the home screen already makes for the network
- *   is the same split the cache should make, and it means nothing has to name
- *   the globe chunk here to keep it out. A lazy view that gets its own chunk
- *   tomorrow is excluded by the same rule, with no edit.
- *
- *   THE EARTH TEXTURES. 2.5 MB in `public/globe/`, and not in the manifest at
- *   all — they are fetched by literal path when the globe first draws. The
- *   worker's runtime cache-first rule picks them up then, which is the moment
- *   the user has demonstrably asked for a planet.
- *
- *   THE `.woff` FALLBACKS. Every browser that can run a service worker has
- *   supported woff2 for a decade; caching both formats would double the font
- *   cost of an install to keep a copy nothing will ever request.
- *
- * The runtime cache-first rule for `/build/` picks up everything omitted here
- * the first time it is genuinely fetched, which is the right moment for all of
- * it.
- *
- * ---------------------------------------------------------------------------
- * THE VERSION is a hash of the manifest itself. It changes when, and only when,
- * the build output changes — so a deploy busts the cache and a
- * `docker compose restart` does not. It is also what makes the served `/sw.js`
- * bytes differ after a deploy, which is the only thing that makes a browser
- * treat it as a new worker at all.
- * ---------------------------------------------------------------------------
+ * What the service worker precaches, and what "this build" means: read from the live Vite
+ * manifest, static imports only (docs/BUSINESS-LOGIC.md §35).
  */
 final class BuildAssets
 {
     /**
-     * Everything precached that the build does not produce.
-     *
-     * The offline page is first because it is the one entry whose absence turns
-     * the whole feature off. The icons are here rather than left to the OS
-     * because they are also what the shell links to, and they are 21 KB.
+     * Everything precached that the build does not produce. The offline page is first
+     * because its absence turns the whole feature off; the icons are 21 KB.
      *
      * @var list<string>
      */
@@ -99,9 +43,8 @@ final class BuildAssets
     }
 
     /**
-     * The entry chunks, their stylesheets, their fonts, and the chunks they
-     * import statically — i.e. exactly what has to be on disk for the app to
-     * boot.
+     * The entry chunks, their stylesheets, their fonts, and the chunks they import
+     * statically — exactly what has to be on disk for the app to boot.
      *
      * @return list<string>
      */
@@ -118,18 +61,14 @@ final class BuildAssets
             }
         }
 
-        // Vite lists an entry's stylesheet on the entry AND as its own manifest
-        // key when the stylesheet is itself an input, so the same file arrives
-        // twice. A duplicate would make the worker fetch it twice on install.
+        // Vite lists an entry's stylesheet twice when it is itself an input; a duplicate
+        // would make the worker fetch it twice on install.
         return array_values(array_unique($urls));
     }
 
     /**
-     * Short, stable, changes exactly when the build does.
-     *
-     * Falls back to a constant when there is no build yet — a fresh checkout
-     * that has not run `npm run build` should still serve a coherent worker
-     * rather than throw on a missing file.
+     * Short, stable, changes exactly when the build does. Falls back to a constant when
+     * there is no build yet, so a fresh checkout still serves a coherent worker.
      */
     public function version(): string
     {
@@ -149,11 +88,7 @@ final class BuildAssets
 
     /**
      * Add one chunk's URLs, then the URLs of everything it imports statically.
-     *
-     * `dynamicImports` IS NOT FOLLOWED — see the note at the top of the class.
-     * `$visited` is keyed by manifest key rather than by URL because the graph
-     * is a graph: the Vue chunk is imported by the entry and by every view, and
-     * without this the walk would revisit it once per importer.
+     * `$visited` is keyed by manifest key because the import graph is a graph.
      *
      * @param  array<string, array<mixed, mixed>>  $manifest
      * @param  list<string>  $urls
@@ -195,9 +130,8 @@ final class BuildAssets
     }
 
     /**
-     * The manifest, with anything that is not a chunk dropped rather than
-     * trusted: this file is read at request time, and a truncated one written
-     * by a build that was killed halfway must not become a TypeError on /sw.js.
+     * The manifest, with anything that is not a chunk dropped rather than trusted: a
+     * half-written file must not become a TypeError on /sw.js.
      *
      * @return array<string, array<mixed, mixed>>
      */

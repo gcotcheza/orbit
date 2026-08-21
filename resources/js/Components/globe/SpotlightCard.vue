@@ -1,8 +1,7 @@
 <script setup>
 /*
- * The card under the globe: what the camera is flying, in words (design/README.md §1).
- * A real link, not a router.push button; day-1 routes say what they actually know.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The card under the globe: what the camera is flying, in words (design/README.md §1). A real link,
+ * not a router.push button; day-1 routes say what they actually know (docs/BUSINESS-LOGIC.md §36).
  */
 import { computed } from 'vue'
 import PriceSparkline from '@/Components/PriceSparkline.vue'
@@ -22,9 +21,8 @@ const price = computed(() => euro(props.route.price.current))
 const comparison = computed(() => usualPriceLabel(props.route.price.pctBelow))
 
 /*
- * The day the fare is for, compactly — a DEPARTURE date (docs/API.md's
- * other axis), null before the first poll. Answers "€74 to Lisbon, but WHEN".
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The day the fare is for, compactly — a DEPARTURE date (docs/API.md's other axis), null before the
+ * first poll. Answers "€74 to Lisbon, but WHEN" (docs/BUSINESS-LOGIC.md §36).
  */
 const departure = computed(() => departureLabel(props.route.cheapest?.date ?? null))
 

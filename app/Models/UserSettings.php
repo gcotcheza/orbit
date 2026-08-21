@@ -9,13 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * How and when this account wants to be told about a deal.
- *
- * One row per account, created on first read (see for()); deliberately no seeder.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * Read by the alert engine too — minimumScore() is what PR11 asks instead of
- * switching on sensitivity itself.
+ * How and when this account wants to be told about a deal (docs/BUSINESS-LOGIC.md §36).
  *
  * @property int $id
  * @property int $user_id
@@ -39,9 +33,7 @@ final class UserSettings extends Model
 
     /**
      * This account's settings, creating the row the first time anybody asks.
-     *
-     * `first()` then `create()`, not `firstOrCreate([...defaults])` — the defaults belong to the migration, not to this call.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * `first()` then `create()`: defaults belong to the migration (docs/BUSINESS-LOGIC.md §36).
      */
     public static function for(User $user): self
     {
@@ -58,10 +50,8 @@ final class UserSettings extends Model
     }
 
     /**
-     * The deal score at or above which this account wants to hear about it.
-     *
-     * The mapping is config, not code, tying sensitivity to the same tier the API publishes.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * The deal score at or above which this account wants to hear about it. The mapping is
+     * config, tying sensitivity to the tier the API publishes (docs/BUSINESS-LOGIC.md §36).
      */
     public function minimumScore(): int
     {
@@ -79,10 +69,8 @@ final class UserSettings extends Model
     }
 
     /**
-     * The start of the quiet window as `HH:MM`.
-     *
-     * Trimmed, not parsed — Postgres and SQLite return a `time` column at different precisions.
-     * Why: docs/BUSINESS-LOGIC.md §36.
+     * The start of the quiet window as `HH:MM`. Trimmed, not parsed — Postgres and SQLite
+     * return a `time` column at different precisions (docs/BUSINESS-LOGIC.md §36).
      */
     public function quietStartAt(): string
     {

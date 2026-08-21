@@ -1,7 +1,7 @@
 <script setup>
 /*
- * Alerts (design/README.md §6) — how and when Orbit reaches the owner:
- * channels, sensitivity, timing, plus the app's theme/sign-out controls.
+ * Alerts (design/README.md §6) — how and when Orbit reaches the owner: channels, sensitivity,
+ * timing, plus the app's theme/sign-out controls.
  */
 import { computed, nextTick, onMounted, useTemplateRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -74,9 +74,8 @@ function save(patch) {
 }
 
 /*
- * Empty string from a cleared time input isn't valid (server 422s); ignore it
- * and keep the previous value instead of saving.
- * Why: docs/BUSINESS-LOGIC.md §10.
+ * Empty string from a cleared time input isn't valid (server 422s); ignore it and keep the previous
+ * value instead of saving (docs/BUSINESS-LOGIC.md §10).
  */
 function saveTime(field, value) {
   if (value !== '') {
@@ -205,7 +204,7 @@ async function signOut() {
          settings surface the tab bar reaches (docs/BUSINESS-LOGIC.md §10). -->
     <h2 id="account" ref="accountHeading" class="section">Account</h2>
     <section class="card">
-      <!-- Name/email read-only: they're the seeder's, no edit endpoint exists (docs/BUSINESS-LOGIC.md §10). -->
+      <!-- Name and email are read-only: they are the seeder's, and no edit endpoint exists. -->
       <div class="account card__row">
         <p class="account__name">{{ user?.name }}</p>
         <p class="account__email">{{ user?.email }}</p>

@@ -9,14 +9,8 @@ use App\Application\Routes\RouteSnapshot;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * The core every screen shows about a route: where it goes, what it costs, and
- * what Orbit thinks of that.
- *
- * One shape, three screens (spotlight card, watchlist row, detail header) build on this so `price` can't mean
- * something different on one of them.
- *
- * Nulls in `price` are real answers ("not known yet"), not zeroes; a screen that renders them as €0 or 0% is stating
- * something false (docs/BUSINESS-LOGIC.md §36).
+ * The core every screen shows about a route — one shape, three screens. Nulls in `price` are
+ * real answers ("not known yet"), never zeroes (docs/BUSINESS-LOGIC.md §36).
  */
 class RouteSummaryResource extends JsonResource
 {
@@ -57,8 +51,8 @@ class RouteSummaryResource extends JsonResource
                 'tone' => $deal->verdict->tone,
             ],
 
-            // Oldest first (last element = price above it); up to 14 points, often fewer — the chart draws whatever a new route
-            // has (docs/BUSINESS-LOGIC.md §36).
+            // Oldest first (last element = the price above it); up to 14 points, often fewer — the
+            // chart draws whatever a new route has.
             'sparkline' => array_map(
                 Euros::from(...),
                 $snapshot->history->lastDays((int) config('orbit.history.sparkline_days'))->cents(),
@@ -66,11 +60,11 @@ class RouteSummaryResource extends JsonResource
 
             'trackingDays' => $snapshot->trackingDays,
 
-            // On the summary, not just the detail: every screen printing `price.current` had a fare with no date attached, which
-            // nobody can act on (docs/BUSINESS-LOGIC.md §36).
+            // On the summary, not just the detail: every screen printing `price.current` had a fare
+            // with no date attached, which nobody can act on.
 
-            // A departure date, not an observation date (the other axis, docs/API.md); null before the first poll, and null must
-            // print as no date, not "today" (docs/BUSINESS-LOGIC.md §36).
+            // A departure date, not an observation date (the other axis, docs/API.md); null before
+            // the first poll, and null must print as no date.
             'cheapest' => $snapshot->cheapest === null ? null : [
                 'date'  => $snapshot->cheapest->departureDate->format('Y-m-d'),
                 'price' => Euros::from($snapshot->cheapest->cents),

@@ -1,6 +1,6 @@
 <script setup>
-// The watch list (design/README.md §5): boarding passes plus rules. Route-finding moved to Search.vue on 2026-08-16; this screen only lists, reads the shared stores/watchlist.js store, keeps paused routes visible (docs/API.md), and reverts optimistic writes on failure.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The watch list (design/README.md §5): boarding passes plus rules. This screen only lists —
+// route-finding moved to Search.vue — and keeps paused routes visible.
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterLink } from 'vue-router'
@@ -13,8 +13,8 @@ import { useWatchlistStore } from '@/stores/watchlist'
 const watchlist = useWatchlistStore()
 const { routes, status, error: notice } = storeToRefs(watchlist)
 
-// Rules use a second store (docs/PLAN.md): rules and routes are separate concepts that happen to share this screen; the create tab and this one are two views of the same rules list.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Rules use a second store: rules and routes are separate concepts that happen to share this
+// screen.
 const rules = useRulesStore()
 const { rules: dealRules, status: rulesStatus, error: rulesError } = storeToRefs(rules)
 
@@ -24,8 +24,8 @@ const busyRules = ref(new Set())
 /** The code of the match currently being promoted to the watchlist. */
 const watchingCode = ref('')
 
-// Undo is a real add write (not a held request): removing a route deletes only the watchlist ROW, never its history (docs/API.md), so a restored route comes back with its full 60-day history, score and verdict intact.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Undo is a real add write: removing a route deletes only the watchlist ROW, never its history, so
+// a restored route comes back intact.
 const UNDO_MS = 6000
 
 /** The route just removed: `{ label, origin, destination }`, or null. */
@@ -39,8 +39,8 @@ const busyCodes = ref(new Set())
 
 const rulesSection = useTemplateRef('rulesSection')
 
-// The "Rules · N" chip jumps to the rules section (below the routes); it's a count not a link since the section lives on this screen, and it only renders when there are rules (0 would be a scroll to nothing).
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The "Rules · N" chip jumps to the rules section below; a count, not a link, and it renders only
+// when there are rules.
 const jumpToRules = () => scrollIntoView(rulesSection.value, { block: 'start' })
 
 const countLine = computed(() => {
@@ -65,8 +65,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => clearTimeout(undoTimer))
 
-// Stop watching a route and offer undo; the store already reverts failed deletes and sets `notice`, so the undo offer only appears when the list actually changed.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Stop watching a route and offer undo; the store already reverts failed deletes and sets `notice`,
+// so the undo offer only appears when the list actually changed (docs/BUSINESS-LOGIC.md §36).
 async function remove(route) {
   const label = `${route.origin.iata}→${route.destination.iata}`
 
@@ -88,8 +88,8 @@ async function remove(route) {
 }
 
 /**
- * Put it back. The same write the add form makes — see the note on UNDO_MS for
- * why that is enough to restore the route rather than merely re-create it.
+ * Put it back. The same write the add form makes — see the note on UNDO_MS for why that is enough
+ * to restore the route rather than merely re-create it.
  */
 async function undoRemove() {
   const removed = undo.value
@@ -121,7 +121,8 @@ async function toggle(route, active) {
   }
 }
 
-// A new Set each time, not a mutation: Vue 3 does track Set methods, but replacing keeps this consistent with the ref assignments around it (the set is always tiny).
+// A new Set each time, not a mutation: Vue 3 does track Set methods, but replacing keeps this
+// consistent with the ref assignments around it (the set is always tiny).
 function markBusy(code, busy) {
   const next = new Set(busyCodes.value)
 
@@ -135,8 +136,8 @@ function markBusy(code, busy) {
 }
 
 /*
- * Pause or resume a rule. The store is optimistic and puts the switch back if
- * the write fails, exactly like the route toggle above.
+ * Pause or resume a rule. The store is optimistic and puts the switch back if the write fails,
+ * exactly like the route toggle above.
  */
 async function toggleRule(rule, active) {
   markRuleBusy(rule.id, true)
@@ -148,8 +149,8 @@ async function toggleRule(rule, active) {
   }
 }
 
-// Promoting a match uses the same write the add form makes; the new row drops straight in (no re-fetch) because the response already matches GET /api/watchlist's shape.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Promoting a match uses the same write the add form makes; the response already matches GET
+// /api/watchlist's shape.
 async function watchMatch(match) {
   watchingCode.value = match.code
 
@@ -185,8 +186,8 @@ function markRuleBusy(id, busy) {
     </header>
 
     <div class="screen__chips">
-      <!-- Search link replaces the old add form; it's a link not a button to keep browser navigation affordances (middle click, long press, status bar). -->
-      <!-- Why: docs/BUSINESS-LOGIC.md §36. -->
+      <!-- A link, not a button, so browser navigation affordances survive: middle click,
+           long press, status bar. -->
       <RouterLink class="screen__chip" :to="{ name: 'search' }">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <circle cx="7" cy="7" r="4.2" stroke-width="1.6" />
@@ -214,7 +215,8 @@ function markRuleBusy(id, busy) {
     <p v-if="notice" class="screen__notice" role="alert">{{ notice }}</p>
     <p v-if="undoError" class="screen__notice" role="alert">{{ undoError }}</p>
 
-    <!-- `role="status"` not `alert`: nothing went wrong, so an assertive announcement over a deliberate user action would be the screen reader shouting about a thing they just did. -->
+    <!-- `role="status"`, not `alert`: nothing went wrong, and an assertive announcement over a
+         deliberate action would be the reader shouting about what the user just did. -->
     <p v-if="undo" class="screen__notice screen__notice--undo" role="status">
       Stopped watching {{ undo.label }}
       <button type="button" class="screen__undo" @click="undoRemove">Undo</button>
@@ -227,8 +229,8 @@ function markRuleBusy(id, busy) {
       <button type="button" class="screen__retry" @click="watchlist.refresh()">Try again</button>
     </div>
 
-    <!-- Empty-state copy names the Search tab (where finding now happens) and says "look one up" not "watch one", matching the search screen's price-without-commitment first step. -->
-    <!-- Why: docs/BUSINESS-LOGIC.md §36. -->
+    <!-- Empty-state copy names the Search tab and says "look one up", not "watch one" —
+         matching the search screen's price-without-commitment first step. -->
     <p v-else-if="routes.length === 0" class="screen__state">
       No routes yet. <RouterLink class="screen__link" :to="{ name: 'search' }">Search</RouterLink> for one to look up its
       price — you can start watching it from there, and Orbit prices it every morning after that.
@@ -247,13 +249,14 @@ function markRuleBusy(id, busy) {
       />
     </div>
 
-    <!-- Deal rules section (design/README.md §4) is deliberately quieter than the routes above (hairline, not a card) and is now always drawn: since 2026-08-16 it's the only door to /create, so hiding it when empty would hide the only way in. -->
-    <!-- Why: docs/BUSINESS-LOGIC.md §36. -->
+    <!-- The deal rules section is deliberately quieter than the routes above, and is always
+         drawn: it is the only door to /create, so hiding it when empty would hide the way in. -->
     <section ref="rulesSection" class="rules">
       <div class="rules__head">
         <h2 class="rules__title">Deal rules</h2>
 
-        <!-- The one + left on this screen names what it makes ("New rule"): there used to be two identical accent squares here doing different writes. -->
+        <!-- The one + left on this screen names what it makes ("New rule"): there used to be
+             two identical accent squares here doing different writes. -->
         <RouterLink class="rules__new" :to="{ name: 'create' }">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M8 3v10M3 8h10" stroke-width="1.8" stroke-linecap="round" />
@@ -315,7 +318,10 @@ function markRuleBusy(id, busy) {
   color: var(--muted);
 }
 
-/* The app's inactive-chip vocabulary (card/hairline/pill) for "a second thing you may tap"; chips wrap rather than shrink since 44px tap targets aren't negotiable. */
+/*
+ * The app's inactive-chip vocabulary for "a second thing you may tap"; chips wrap rather than
+ * shrink, since 44px tap targets are not negotiable.
+ */
 .screen__chips {
   display: flex;
   flex-wrap: wrap;
@@ -357,7 +363,10 @@ function markRuleBusy(id, busy) {
   background: var(--warn-bg);
 }
 
-/* Same box as the failure notice, but the app's quiet colours: a deliberate removal is not a warning, and the warn tint is reserved for something going wrong. */
+/*
+ * Same box as the failure notice but in the app's quiet colours: a deliberate removal is not a
+ * warning, and the warn tint is reserved for something going wrong.
+ */
 .screen__notice--undo {
   display: flex;
   align-items: center;
@@ -422,7 +431,10 @@ function markRuleBusy(id, busy) {
   opacity: 0.58;
 }
 
-/* Deal rules section: set apart from the routes by space and a hairline, not another card — two competing card treatments would leave the phone with no focal point. */
+/*
+ * Deal rules: set apart by space and a hairline, not another card — two competing card treatments
+ * would leave the phone with no focal point.
+ */
 .rules {
   margin-top: 26px;
   padding-top: 18px;
@@ -445,7 +457,10 @@ function markRuleBusy(id, busy) {
   color: var(--ink);
 }
 
-/* Accent as text, not a filled square: a solid button here would make the rules section louder than the routes, the same imbalance that pushed rules two screens down originally. Negative margin keeps the 44px tap target without shifting the heading. */
+/*
+ * Accent as text, not a filled square: a solid button would make the rules section louder than the
+ * routes. The negative margin keeps the 44px tap target.
+ */
 .rules__new {
   display: inline-flex;
   align-items: center;

@@ -5,19 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Pricing;
 
 /**
- * The one-line judgement, in the two lengths the design asks for.
- *
- * `$label` is the sentence the spotlight card and the route detail show
- * ("Cheap & still falling"); `$short` is the single word the watchlist's status
- * pill has room for (Good / Falling / Normal / Wait — design/README.md §5, plus
- * `New` for a route Orbit has no opinion about yet).
- * BOTH ARE EMITTED BY THE API rather than the client deriving one from the
- * other, because the mapping is a product decision and four screens deriving
- * it independently is four places for it to drift.
- *
- * `$tone` is one of good | info | normal | warn and is the ONLY thing the
- * client is meant to switch colours on — it maps straight onto the token pairs
- * in resources/css/tokens.css.
+ * The one-line judgement in the two lengths the design asks for; both are emitted by the API
+ * rather than derived client-side, and `$tone` is the only thing colours switch on.
  */
 final readonly class Verdict
 {

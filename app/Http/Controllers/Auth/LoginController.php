@@ -14,11 +14,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Session login. That is the whole auth surface — no registration, reset, verification, or "remember me" toggle; Orbit
- * has exactly one user.
- *
- * Both actions answer JSON, never a redirect, so the SPA's fetch never reads a followed redirect's 200 as a login that
- * didn't happen (docs/BUSINESS-LOGIC.md §36).
+ * Session login, and that is the whole auth surface. Both actions answer JSON, never a
+ * redirect, so a followed redirect cannot read as a login (docs/BUSINESS-LOGIC.md §36).
  */
 final class LoginController extends Controller
 {
@@ -67,8 +64,8 @@ final class LoginController extends Controller
     }
 
     /**
-     * Equalises timing between wrong-email and wrong-password by paying a bcrypt against DUMMY_HASH even when no user was
-     * found. Deliberately NOT unit-tested — timing asserts flake on a shared VPS (docs/BUSINESS-LOGIC.md §36).
+     * Equalises timing between wrong-email and wrong-password by paying a bcrypt against
+     * DUMMY_HASH. Deliberately not unit-tested — timing asserts flake (docs/BUSINESS-LOGIC.md §36).
      */
     private function equaliseUnknownEmailTiming(string $email, string $password): void
     {

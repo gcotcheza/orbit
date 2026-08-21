@@ -6,12 +6,6 @@ return [
     |--------------------------------------------------------------------------
     | Default Mailer
     |--------------------------------------------------------------------------
-    |
-    | This option controls the default mailer that is used to send all email
-    | messages unless another mailer is explicitly specified when sending
-    | the message. All additional mailers can be configured within the
-    | "mailers" array. Examples of each type of mailer are provided.
-    |
     */
 
     'default' => env('MAIL_MAILER', 'log'),
@@ -20,19 +14,6 @@ return [
     |--------------------------------------------------------------------------
     | Mailer Configurations
     |--------------------------------------------------------------------------
-    |
-    | Here you may configure all of the mailers used by your application plus
-    | their respective settings. Several examples have been configured for
-    | you and you are free to add your own as your application requires.
-    |
-    | Laravel supports a variety of mail "transport" drivers that can be used
-    | when delivering an email. You may specify which one you're using for
-    | your mailers below. You may also add additional mailers if needed.
-    |
-    | Supported: "smtp", "sendmail", "mailgun", "ses", "ses-v2",
-    |            "postmark", "resend", "log", "array",
-    |            "failover", "roundrobin"
-    |
     */
 
     'mailers' => [
@@ -55,10 +36,6 @@ return [
 
         'postmark' => [
             'transport' => 'postmark',
-            // 'message_stream_id' => env('POSTMARK_MESSAGE_STREAM_ID'),
-            // 'client' => [
-            //     'timeout' => 5,
-            // ],
         ],
 
         'resend' => [
@@ -103,11 +80,6 @@ return [
     |--------------------------------------------------------------------------
     | Global "From" Address
     |--------------------------------------------------------------------------
-    |
-    | You may wish for all emails sent by your application to be sent from
-    | the same address. Here you may specify a name and address that is
-    | used globally for all emails that are sent by your application.
-    |
     */
 
     'from' => [
@@ -120,23 +92,7 @@ return [
     | Markdown Mail Components
     |--------------------------------------------------------------------------
     |
-    | WITHOUT `paths`, THE PUBLISHED VIEWS ARE DEAD FILES. Illuminate\Mail\
-    | Markdown reads this key and hands it to the view factory as the `mail::`
-    | namespace; the default is an EMPTY array, which resolves the namespace to
-    | the framework's own copy inside vendor/ and quietly ignores every file in
-    | resources/views/vendor/mail. The symptom is not an error — it is Laravel's
-    | grey-box layout arriving in somebody's inbox after an afternoon spent
-    | redesigning one that never rendered.
-    |
-    | `theme` NAMES A FILE, resources/views/vendor/mail/html/themes/orbit.css,
-    | which is not a stylesheet the reader ever receives: it is inlined onto the
-    | markup by TijsVerkoyen\CssToInlineStyles and then discarded. Read the
-    | header of that file before editing it — media queries and nested comments
-    | both fail there, and both fail silently.
-    |
-    | NO env() HERE. Staging and production send the same mail; a theme that
-    | varied by environment would mean the design was only ever reviewed in one
-    | of them.
+    | `paths` UNSET = the published views are dead files; no env() here. docs/BUSINESS-LOGIC.md §36.
     |
     */
 

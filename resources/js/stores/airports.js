@@ -1,17 +1,12 @@
-// The rest of the world (3,270 airports) via `?q=` against `GET
-// /api/airports`; stores/destinations.js still covers the 184 curated ones.
-// Why: docs/BUSINESS-LOGIC.md §36.
-//
-// A composable, not a Pinia store — a store would share state globally,
-// but each search field (From/To) needs its own independent query.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The rest of the world (3,270 airports) via `?q=` against `GET /api/airports`. A composable, not a
+// Pinia store: each search field needs its own query (docs/BUSINESS-LOGIC.md §36).
 import { onScopeDispose, ref } from 'vue'
 import { http } from '@/lib/http'
 import { markRow, MAX_SUGGESTIONS } from '@/stores/destinations'
 
 /**
- * A finished airport code. Upper-cased at the request boundary (here), not per keystroke in the field — see
- * AirportField.vue (docs/BUSINESS-LOGIC.md §36).
+ * A finished airport code. Upper-cased at the request boundary (here), not per keystroke in the
+ * field — see AirportField.vue (docs/BUSINESS-LOGIC.md §36).
  */
 export const IATA = /^[A-Z]{3}$/
 
@@ -24,14 +19,14 @@ export function toCode(value) {
 }
 
 /**
- * Below this, don't ask — a single letter matches ~1/3 of the table for ten arbitrary rows. SearchAirportsRequest
- * enforces the same floor server-side (docs/BUSINESS-LOGIC.md §36).
+ * Below this, don't ask — a single letter matches ~1/3 of the table for ten arbitrary rows.
+ * SearchAirportsRequest enforces the same floor server-side (docs/BUSINESS-LOGIC.md §36).
  */
 export const MIN_QUERY = 2
 
 /**
- * Fast enough to feel responsive, slow enough that a fast typist produces
- * one request per word. (The rule parser uses 500ms because it costs money.)
+ * Fast enough to feel responsive, slow enough that a fast typist produces one request per word.
+ * (The rule parser uses 500ms because it costs money.)
  */
 export const DEBOUNCE_MS = 250
 
@@ -50,8 +45,8 @@ export function useAirportSearch() {
     let timer = null
     let controller = null
 
-    // Which request is the current one — incremented on every call
-    // (including cancels) so a stale reply is discarded rather than rendered.
+    // Which request is the current one — incremented on every call (including cancels) so a stale
+    // reply is discarded rather than rendered.
     let sequence = 0
 
     /**
@@ -65,8 +60,8 @@ export function useAirportSearch() {
         cancel()
 
         if (query.length < MIN_QUERY) {
-            // Not `failed`, and not the previous query's rows either — an
-            // emptied box has no answer; showing stale results would argue with the field.
+            // Not `failed`, and not the previous query's rows either — an emptied box has no
+            // answer; showing stale results would argue with the field.
             results.value = []
             status.value = 'idle'
 
@@ -91,8 +86,8 @@ export function useAirportSearch() {
                     status.value = 'ready'
                 })
                 .catch((failure) => {
-                    // An abort rejects here just like a 500 does, and isn't a
-                    // failure — it's this store's own doing; the sequence guard tells them apart.
+                    // An abort rejects here just like a 500 does, and isn't a failure — it's this
+                    // store's own doing; the sequence guard tells them apart.
                     if (mine !== sequence) {
                         return
                     }
@@ -106,8 +101,8 @@ export function useAirportSearch() {
     }
 
     /**
-     * Forget the query and whatever it found — called once a suggestion is
-     * taken, when a stray in-flight request would answer nobody is watching.
+     * Forget the query and whatever it found — called once a suggestion is taken, when a stray
+     * in-flight request would answer nobody is watching.
      */
     function clear() {
         cancel()
@@ -131,26 +126,16 @@ export function useAirportSearch() {
         }
     }
 
-    // A disposed box isn't waiting for an answer — without this, a stray
-    // debounced request could still fire into nothing. `failSilently`: also
-    // called from a unit test outside any component scope.
+    // A disposed box is not waiting for an answer. `failSilently`: also called from a unit test
+    // outside any component scope.
     onScopeDispose(cancel, true)
 
     return { results, status, search, clear }
 }
 
 /**
- * The two lists, shown as one: curated results always first (only they match the rule engine and have hand-picked
- * names/cities) (docs/BUSINESS-LOGIC.md §36).
- *
- * Deduped by code — the world endpoint searches the whole table, which includes the curated rows too (e.g. AMS would
- * otherwise appear twice) (docs/BUSINESS-LOGIC.md §36).
- *
- * `world: true` is the only thing added; means "Orbit prices this with no curated opinion" (docs/BUSINESS-LOGIC.md §1)
- * — draws one divider, not a badge (docs/BUSINESS-LOGIC.md §36).
- *
- * `exclude` is filtered here (not in the component) because it must happen BEFORE the `limit` cut, or a dropped row
- * silently shrinks the panel (docs/BUSINESS-LOGIC.md §36).
+ * The two lists shown as one: curated always first, deduped by code, `world: true` the only thing
+ * added, and `exclude` filtered BEFORE the limit cut (docs/BUSINESS-LOGIC.md §36).
  *
  * @param {Array<object>} curated already ranked and marked by searchDestinations
  * @param {Array<object>} world `GET /api/airports`'s rows, in the server's order

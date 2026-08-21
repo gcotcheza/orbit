@@ -8,22 +8,8 @@ use App\Models\Airport;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * A city pair, named by two IATA codes — the body of both writes that take one.
- *
- * Three ways to get it wrong (unknown airport, same code twice, not three letters), each answered with its own
- * sentence, not a generic one.
- *
- * The origin is no longer restricted to the three home airports (removed 2026-08-16) — both ends are now plain
- * `exists:airports,iata`.
- *
- * `config('orbit.origins')` is untouched and MUST STAY that way — it still bounds the nightly sweep's budget; widening
- * this request never widens a sweep.
- *
- * Input is upper-cased before any rule runs (prepareForValidation), so the `exists` lookup, subclass checks, and the
- * stored row all agree.
- *
- * Two subclasses, and the difference IS the feature: AddWatchedRouteRequest refuses a duplicate watch;
- * LookupRouteRequest refuses nothing (docs/BUSINESS-LOGIC.md §36).
+ * A city pair named by two IATA codes. Both ends are plain `exists:airports,iata` since
+ * 2026-08-16; `config('orbit.origins')` MUST STAY untouched (docs/BUSINESS-LOGIC.md §36).
  */
 abstract class RoutePairRequest extends FormRequest
 {
@@ -33,13 +19,8 @@ abstract class RoutePairRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // `size:3` before `exists` only changes which message comes back first;
-            // both run — reads as "is it a code, then do we know it".
-            // Why: docs/BUSINESS-LOGIC.md §36.
-            //
-            // The two lists are the same list now — they differ only in
-            // `different:origin`, which belongs on the second field being compared.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // `size:3` before `exists` only changes which message comes back first; both run.
+            // The two lists differ only in `different:origin` (docs/BUSINESS-LOGIC.md §36).
             'origin' => [
                 'required', 'string', 'size:3',
                 'exists:airports,iata',
@@ -76,10 +57,8 @@ abstract class RoutePairRequest extends FormRequest
     }
 
     /**
-     * The airport row behind one of the two fields.
-     *
-     * `firstOrFail`, not a polite abort — validation already established it exists, so reaching here unknown would be a
-     * bug in the rules above.
+     * The airport row behind one of the two fields. `firstOrFail`, not a polite abort:
+     * validation already established it exists, so reaching here unknown is a bug.
      */
     public function airport(string $field): Airport
     {

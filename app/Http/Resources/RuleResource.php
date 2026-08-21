@@ -9,25 +9,8 @@ use App\Application\Rules\RuleView;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * A saved rule: the reading, plus the four facts that belong to the row rather
- * than to the sentence.
- *
- * IT COMPOSES RuleReadingResource RATHER THAN EXTENDING IT — the two hold
- * different resources (a RuleView and a RuleReading), and inheritance whose
- * parent could never be handed this object is a relationship that only looks
- * like one. Composition is also what keeps the parse endpoint's shape a
- * literal subset of this one, which is what lets the create screen hand its
- * last parse straight to the create call.
- *
- * `text` IS WHAT WAS TYPED and is not derivable from the chips — a rule whose
- * chips say "From AMS · Max €80" could have been written a dozen ways, and the
- * one the owner chose is the one the textarea should show when they come back
- * to it.
- *
- * PAUSED RULES ARE IN THE LIST with `active: false`, exactly like paused
- * watchlist rows: the switch that turns one back on lives on the row it turned
- * off, so hiding it would make the action impossible from the only screen that
- * offers it.
+ * A saved rule: the reading plus the four facts that belong to the row. It composes
+ * RuleReadingResource rather than extending it; paused rules stay in the list.
  */
 final class RuleResource extends JsonResource
 {

@@ -17,9 +17,8 @@ use App\Application\Routes\LivePriceChecks;
 use App\Http\Resources\RouteDetailResource;
 
 /**
- * One route, in full (design/README.md §2). Keyed on the code because
- * `/route/AMS-LIS` has to be bookmarkable; the two writes are POSTs because a
- * GET that spends metered provider calls is one a link preview will spend.
+ * One route, in full (design/README.md §2). Keyed on the code so `/route/AMS-LIS` is
+ * bookmarkable; the two writes are POSTs because a GET spends metered provider calls.
  */
 final class RouteController extends Controller
 {
@@ -55,9 +54,7 @@ final class RouteController extends Controller
     }
 
     /**
-     * ⚠ The only tap in Orbit that spends a SerpAPI search, and the date is the
-     * server's — the cheapest departure this document is showing.
-     *
+     * ⚠ The only tap in Orbit that spends a SerpAPI search, and the date is the server's.
      * The two 503s are different facts, never a 200 (docs/API.md).
      */
     public function liveCheck(

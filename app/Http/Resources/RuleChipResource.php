@@ -9,14 +9,8 @@ use App\Domain\Rules\RuleChip;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * One removable chip (design/README.md §4).
- *
- * THE VALUE IS NOT PUBLISHED, only the id and the words. A chip's payload is
- * how App\Domain\Rules\ParsedRule folds criteria back together and is nobody
- * else's business — the client's whole job is to draw `category` over `label`
- * and send `id` back in `removed` when the × is tapped. Sending the payload
- * too would invite a second implementation of the fold in JavaScript, and two
- * folds is one of them being wrong.
+ * One removable chip (design/README.md §4). THE VALUE IS NOT PUBLISHED, only the id and the
+ * words — sending the payload would invite a second fold in JavaScript.
  */
 final class RuleChipResource extends JsonResource
 {

@@ -1,17 +1,7 @@
 <script setup>
 /*
- * One route: what it costs, what it usually costs, what we think of that
- * (design/README.md §2). No tab bar — see this route's meta in
- * resources/js/router/index.js.
- *
- * Null fields render as "not yet", never a false €0.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * `history[].date` is when we LOOKED, never the day you FLY.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * A route Orbit has never priced is fetched on demand from here.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One route: what it costs, what it usually costs, what we think of that (design/README.md §2).
+ * Null fields render as "not yet"; `history[].date` is when we LOOKED (docs/BUSINESS-LOGIC.md §3).
  */
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -23,19 +13,16 @@ import DealScoreGauge from '@/Components/route/DealScoreGauge.vue'
 import PriceHistoryChart from '@/Components/route/PriceHistoryChart.vue'
 import { departureLabel, euro, hoursSince, seenLabel } from '@/lib/format'
 
-// Case-normalised here (a display concern) so a bad shape is rejected
-// locally instead of by a round trip that can only come back 404.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Case-normalised here (a display concern) so a bad shape is rejected locally instead of by a round
+// trip that can only come back 404 (docs/BUSINESS-LOGIC.md §36).
 const CODE_PATTERN = /^[A-Z]{3}-[A-Z]{3}$/
 
-// 25s: several times a healthy fetch's own 2-3s, still short of anyone's
-// patience. Giving up loses nothing — the writes behind it are upserts.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// 25s: several times a healthy fetch's own 2-3s, still short of anyone's patience. Giving up loses
+// nothing — the writes behind it are upserts (docs/BUSINESS-LOGIC.md §36).
 const LOOKUP_TIMEOUT_MS = 25_000
 
-// 24h, matching the poll's own daily period — under it is an ordinary
-// watched route; past it, a fare that survived a morning it should not have.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// 24h, matching the poll's own daily period — under it is an ordinary watched route; past it, a
+// fare that survived a morning it should not have (docs/BUSINESS-LOGIC.md §36).
 const SEEN_AFTER_HOURS = 24
 
 /* Ends the WAIT, not the work: the server stores what it paid for either way. */
@@ -77,9 +64,8 @@ const checkingLive = ref(false)
 /** Why no live answer arrived, in the reader's words rather than a status code. */
 const liveError = ref('')
 
-/** Separate from `meta.watched`: this is the answer to a button just
- *  pressed, not whether the route was already watched on open.
- *  Why: docs/BUSINESS-LOGIC.md §36. */
+/** Separate from `meta.watched`: this answers a button just pressed, not whether the route was
+ *  already watched on open. */
 const justWatched = ref(false)
 
 const code = computed(() => props.id.toUpperCase())
@@ -88,9 +74,8 @@ const code = computed(() => props.id.toUpperCase())
  *  and a screen that can't tell must not offer to add a route twice. */
 const unwatched = computed(() => meta.value?.watched === false)
 
-/** The day Orbit last got fares, for the "refresh did not happen" line.
- *  NOT `departureLabel` — this is a day WE LOOKED, not a day you FLY.
- *  Why: docs/BUSINESS-LOGIC.md §36. */
+/** The day Orbit last got fares, for the "refresh did not happen" line. NOT `departureLabel` — a
+ *  day WE LOOKED, not one you FLY. */
 const lastChecked = computed(() => {
   const at = meta.value?.fares?.fetchedAt
 
@@ -108,18 +93,16 @@ const lastChecked = computed(() => {
   }).format(new Date(Date.UTC(year, month - 1, day)))
 })
 
-// Statistics are null until the provider has some; the chart draws no
-// reference line rather than one at zero.
+// Statistics are null until the provider has some; the chart draws no reference line rather than
+// one at zero.
 const median = computed(() => detail.value?.stats?.median ?? null)
 
-/** `cheapest.date` is a DEPARTURE date (day you fly), never derived from
- *  `history[].date` (day we looked). Null before the first poll.
- *  Why: docs/BUSINESS-LOGIC.md §36. */
+/** `cheapest.date` is a DEPARTURE date, never derived from `history[].date` (the day we looked).
+ *  Null before the first poll. */
 const departure = computed(() => departureLabel(detail.value?.cheapest?.date ?? null))
 
-/** `cheapest.foundAt` is a THIRD date (when the price was found) — distinct
- *  from looked-at and fly-at. Null unless there's an honest age to show.
- *  Why: docs/BUSINESS-LOGIC.md §36. */
+/** `cheapest.foundAt` is a THIRD date, when the price was found. Null unless there is an honest age
+ *  to show. */
 const seen = computed(() => {
   const foundAt = detail.value?.cheapest?.foundAt ?? null
   const age = hoursSince(foundAt)
@@ -178,9 +161,8 @@ const liveTypical = computed(() => {
   return low === null || high === null ? null : `Google’s typical ${low}–${high}`
 })
 
-/** `pctBelow` IS SIGNED (docs/API.md): negative means ABOVE usual. Silent
- *  under a live headline — it would misread as an opinion of Google's.
- *  Why: docs/BUSINESS-LOGIC.md §36. */
+/** `pctBelow` IS SIGNED (docs/API.md): negative means ABOVE usual. Silent under a live headline, or
+ *  it misreads as Google's opinion. */
 const caption = computed(() => {
   const price = detail.value?.price
 
@@ -196,9 +178,7 @@ const caption = computed(() => {
     return 'No usual price for this route yet.'
   }
 
-  /* NOT CONFIDENT, SO NO PERCENTAGE — `confident: false` means Orbit has no
-     opinion yet; the usual price still shows, the comparison doesn't.
-     Why: docs/BUSINESS-LOGIC.md §36. */
+  /* NOT CONFIDENT, SO NO PERCENTAGE: the usual price still shows, the comparison does not. */
   if (detail.value?.confident === false) {
     return `Usual ${euro(price.usual)} · still learning`
   }
@@ -216,8 +196,8 @@ const caption = computed(() => {
   return `${Math.abs(price.pctBelow)}% ${direction} its usual ${euro(price.usual)}`
 })
 
-// The last request wins, not the last response: navigating detail → detail
-// keeps this component mounted and only changes the prop.
+// The last request wins, not the last response: navigating detail → detail keeps this component
+// mounted and only changes the prop.
 let request = 0
 
 async function load() {
@@ -251,9 +231,8 @@ async function load() {
     adopt(data)
     loading.value = false
 
-    // Refresh only when STALE AND UNWATCHED: a watched route's poll will fix
-    // stale fares; an unwatched one has nothing else that ever will.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Refresh only when STALE AND UNWATCHED: a watched route's poll will fix stale fares; an
+    // unwatched one has nothing else that ever will (docs/BUSINESS-LOGIC.md §36).
     if (!meta.value?.fares?.fresh && unwatched.value) {
       await lookUp(mine)
     }
@@ -262,9 +241,8 @@ async function load() {
       return
     }
 
-    // 404 means no route row yet, not a dead end: try pricing it via lookup.
-    // An invalid pair is refused there instead, with its own message.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // 404 means no route row yet, not a dead end: try pricing it via lookup. An invalid pair is
+    // refused there instead, with its own message (docs/BUSINESS-LOGIC.md §36).
     if (error.response?.status === 404) {
       loading.value = false
 
@@ -313,9 +291,8 @@ async function lookUp(mine) {
   }
 }
 
-/** THE ORDER OF THESE BRANCHES IS THE JUDGEMENT — 422 means unpriceable,
- *  a price already on screen says "refresh failed" without replacing it.
- *  Why: docs/BUSINESS-LOGIC.md §36. */
+/** THE ORDER OF THESE BRANCHES IS THE JUDGEMENT: 422 means unpriceable, and a price already on
+ *  screen says "refresh failed". */
 function describeLookupFailure(error) {
   const status = error.response?.status
 
@@ -349,8 +326,8 @@ function describeLookupFailure(error) {
 }
 
 /**
- * ⚠ One tap spends one SerpAPI search out of 250 a MONTH. Nothing here is
- * automatic: no watcher, no mounted hook, no retry — it is a tap or it is not.
+ * ⚠ One tap spends one SerpAPI search out of 250 a MONTH. Nothing here is automatic: no watcher, no
+ * mounted hook, no retry — it is a tap or it is not.
  */
 async function checkLivePrice() {
   if (checkingLive.value || !detail.value?.cheapest) {
@@ -416,9 +393,8 @@ function adopt(payload) {
   meta.value = payload.meta ?? null
 }
 
-/** Uses the same store write the add form makes, so Home's globe/tour stays
- *  in step — Home stays mounted between navigations, not reloaded.
- *  Why: docs/BUSINESS-LOGIC.md §36. */
+/** Uses the same store write the add form makes, so Home's globe and tour stay in step — Home stays
+ *  mounted between navigations. */
 async function watchRoute() {
   if (watching.value || detail.value === null) {
     return
@@ -430,8 +406,8 @@ async function watchRoute() {
   try {
     await watchlist.add(detail.value.origin.iata, detail.value.destination.iata)
 
-    // The server's answer is the row, and the store has it. What changes HERE
-    // is only which of the two states this strip is in.
+    // The server's answer is the row, and the store has it. What changes HERE is only which of the
+    // two states this strip is in.
     meta.value = { ...meta.value, watched: true }
     justWatched.value = true
   } catch (failure) {
@@ -447,9 +423,8 @@ async function watchRoute() {
 
 watch(code, load, { immediate: true })
 
-/** Checks `history.state.back` first — else a shared-link visitor with no
- *  prior entry gets walked out of the app by router.back().
- *  Why: docs/BUSINESS-LOGIC.md §36. */
+/** Checks `history.state.back` first, or a shared-link visitor with no prior entry is walked out of
+ *  the app by router.back(). */
 function goBack() {
   if (window.history.state?.back) {
     router.back()

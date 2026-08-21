@@ -9,14 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * One end of a route.
- *
- * `lat`/`lng` are here for the globe, which needs both ends of every watched
- * route before it can draw a single arc — so they travel with the watchlist
- * rather than being fetched per route when the camera reaches one.
- *
- * `countryCode` is what the design's CSS-gradient flag swatches key off (§5).
- * The full country name is next to it because the route detail prints it.
+ * One end of a route. `lat`/`lng` travel with the watchlist because the globe needs both ends
+ * before it can draw an arc; `countryCode` keys the flag swatches (design/README.md §5).
  */
 final class AirportResource extends JsonResource
 {

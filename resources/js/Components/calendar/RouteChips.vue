@@ -1,11 +1,7 @@
 <script setup>
 /*
- * The route selector above the month (design/README.md §3).
- *
- * The active chip is INK on BG — the palette inverted — which is the loudest
- * thing on the screen in both themes and is deliberately not the accent: the
- * accent already means "an action" everywhere else in this app (the tab bar's
- * + button, the Book CTA), and these chips are a filter, not an action.
+ * The route selector above the month (design/README.md §3). The active chip is INK on BG,
+ * deliberately not the accent: the accent means "an action", and these are a filter.
  */
 defineProps({
   routes: { type: Array, required: true },
@@ -16,10 +12,8 @@ defineEmits(['pick'])
 </script>
 
 <template>
-  <!-- A group of toggles rather than a `tablist`: these chips select which
-       route the month below is for, but the grid is not a tabpanel and wiring
-       one up with `aria-controls` would describe a widget this screen does not
-       have. `aria-pressed` says the true thing — this one is the chosen one. -->
+  <!-- A group of toggles rather than a `tablist`: the grid is not a tabpanel, and `aria-pressed`
+       says the true thing. -->
   <div class="chips" role="group" aria-label="Route">
     <button
       v-for="route in routes"
@@ -30,19 +24,16 @@ defineEmits(['pick'])
       @click="$emit('pick', route.code)"
     >
       <span>{{ route.origin.iata }}→{{ route.destination.iata }}</span>
-      <!-- The city, under the codes. Six chips reading AMS→OPO, AMS→FAO,
-           EIN→LIS are six anagrams unless you already know them, and this
-           screen's question — "when is it cheap?" — is asked about a PLACE.
-           Same addition, same reasoning, as the globe's route rail. -->
+      <!-- The city, under the codes: six chips reading AMS→OPO are six anagrams unless you already
+           know them. -->
       <span class="chip__city">{{ route.destination.city }}</span>
     </button>
   </div>
 </template>
 
 <style scoped>
-/* Bleeds into the screen's gutter so the row scrolls edge to edge, then pads
-   it back — a chip half-cut by the viewport is the affordance that says there
-   are more of them. */
+/* Bleeds into the screen's gutter so the row scrolls edge to edge — a chip half-cut by the viewport
+   says there are more. */
 .chips {
   display: flex;
   gap: 8px;
@@ -77,9 +68,8 @@ defineEmits(['pick'])
   font-family: var(--font-body);
   font-size: var(--text-sm);
   font-weight: 500;
-  /* Stepped back rather than set to --muted: the active chip is INK on BG, and
-     a fixed grey on it would be a colour nobody picked. Opacity inherits
-     whichever ink the chip is currently wearing. */
+  /* Stepped back rather than set to --muted: the active chip is INK on BG, and a fixed grey on it
+     would be a colour nobody picked. */
   opacity: 0.68;
 }
 
@@ -90,15 +80,8 @@ defineEmits(['pick'])
 }
 
 /*
- * A PAUSED ROUTE IS DIMMED HERE TOO, at the same 0.58 the watch screen's rows
- * use. It stays in the list and stays selectable — its calendar is still worth
- * reading, and docs/API.md is explicit that paused routes are not filtered out
- * — but a screen that draws a paused route identically to a live one is a
- * screen quietly disagreeing with the switch the owner just moved.
- *
- * IT COMPOSES WITH `.chip--active` rather than competing with it — one sets a
- * fill, the other an opacity — so the selected chip of a paused route is both
- * inverted and dimmed. Both statements are true at once.
+ * A PAUSED ROUTE IS DIMMED HERE TOO, at the same 0.58 the watch rows use, and stays
+ * selectable. It composes with `.chip--active` rather than competing: both are true at once.
  */
 .chip--paused {
   opacity: 0.58;

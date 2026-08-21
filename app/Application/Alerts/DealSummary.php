@@ -9,27 +9,8 @@ use App\Application\Routes\BookingLink;
 use App\Application\Routes\RouteSnapshot;
 
 /**
- * One trip, as an alert states it — and, character for character, the JSON that
- * goes into `alerts.payload`.
- *
- * ONE SHAPE FOR THE MAIL AND FOR THE LEDGER, which is the whole point. The
- * alternative is a mail built from today's models and a payload assembled
- * beside it, and the two drift the first time a line is added to the template:
- * the inbox says one thing and `GET /api/alerts` remembers another, with no way
- * left to find out which was true. Here the mail renders this object, the
- * ledger stores `toArray()` of the same object, and `from()` reads it back
- * months later exactly as it was sent.
- *
- * THE STORED COPY IS FROZEN AND MUST STAY THAT WAY. A row written in March
- * quotes March's usual price and March's percentage. Re-deriving those from the
- * route when the ledger is read would quietly rewrite history to agree with
- * today's statistics — and the one thing a person wants from an alert history
- * is what the alert actually said.
- *
- * `from()` IS DEFENSIVE for the reason App\Domain\Rules\RuleCriteria::from() is:
- * it parses JSON that an earlier version of this class wrote, and a payload
- * with one unreadable field should cost that field rather than the whole
- * screen.
+ * One trip as an alert states it, and character for character the JSON in `alerts.payload`.
+ * The stored copy is FROZEN and must stay that way (docs/BUSINESS-LOGIC.md §10).
  */
 final readonly class DealSummary
 {
@@ -52,14 +33,8 @@ final readonly class DealSummary
     ) {}
 
     /**
-     * A watched route, from the snapshot the score was computed on.
-     *
-     * THE PRICE IS THE SNAPSHOT'S `currentCents` and not the cheapest calendar
-     * fare, because that is the number the score was computed from — an alert
-     * whose headline price and whose score came from two different fares would
-     * be defending a claim it had not made. The DATE comes from the calendar,
-     * because "the cheapest fare in the next 90 days" is not a day anybody can
-     * book without being told which one it is.
+     * A watched route, from the snapshot the score was computed on: the PRICE is the
+     * snapshot's, the DATE is the calendar's cheapest (docs/BUSINESS-LOGIC.md §10).
      */
     public static function forRoute(RouteSnapshot $snapshot, int $priceCents): self
     {
@@ -76,25 +51,16 @@ final readonly class DealSummary
             verdict: $snapshot->deal->verdict->label,
             departureDate: $snapshot->cheapest?->departureDate->format('Y-m-d'),
             /*
-             * THE PRIMARY HAND-OFF, which is now Aviasales — the search Orbit's
-             * fares come out of. A mail is the one place a reader cannot see
-             * two links and pick; it gets the one site that can be expected to
-             * hold the price in the subject line. See App\Application\Routes\
-             * BookingLink.
+             * The primary hand-off, Aviasales — a mail reader cannot see two links and pick,
+             * so it gets the site the price came out of. See BookingLink.
              */
             bookingUrl: BookingLink::aviasales($route, $snapshot->cheapest?->departureDate),
         );
     }
 
     /**
-     * A fare a standing rule matched.
-     *
-     * NO SCORE AND NO USUAL PRICE, and neither is an omission. The matching
-     * engine works from the rule's own maximum price and the calendar
-     * (App\Application\Rules\RuleMatches) — it never asks for statistics, and
-     * inventing them here would mean a second query per matched route on a run
-     * that already fans out over thirty of them. What the mail says about a
-     * rule match is what the rule asked for: a route, a date and a price.
+     * A fare a standing rule matched. No score and no usual price, and neither is an
+     * omission: a rule match is a route, a date and a price (docs/BUSINESS-LOGIC.md §10).
      */
     public static function forMatch(RuleMatch $match): self
     {
@@ -133,11 +99,8 @@ final readonly class DealSummary
     }
 
     /**
-     * THE HEADLINE IS STORED rather than re-derived on read, unlike everything
-     * else `from()` reads. It is the SUBJECT LINE that landed on somebody's
-     * phone, and the ledger's job is to remember what was said — re-rendering
-     * it through today's code would make a history that silently agrees with
-     * whatever the copy has since become.
+     * THE HEADLINE IS STORED rather than re-derived: it is the subject line that landed on
+     * somebody's phone, and the ledger remembers what was said.
      *
      * @return array<string, mixed>
      */
@@ -159,19 +122,8 @@ final readonly class DealSummary
     }
 
     /**
-     * "AMS→OPO €44 — 53% below usual" — the subject line, and the one line
-     * `GET /api/alerts` shows per row.
-     *
-     * WRITTEN FOR A LOCK SCREEN. It is read in a notification shade before it
-     * is read anywhere else, which is perhaps forty characters: the two ends,
-     * the price, and the single fact that makes it worth opening. The arrow is
-     * the route code's own hyphen turned into something a person reads as a
-     * direction.
-     *
-     * THE SECOND CLAUSE IS WHICHEVER ONE IS TRUE. A watched route has a usual
-     * price to be under; a rule match has a date it flies on and nothing to
-     * compare against, and a subject that said "0% below usual" because the
-     * statistics were missing would be worse than one that said nothing.
+     * "AMS→OPO €44 — 53% below usual": written for a lock screen, and the second clause is
+     * whichever one is true (docs/BUSINESS-LOGIC.md §10).
      */
     public function headline(): string
     {
@@ -222,11 +174,8 @@ final readonly class DealSummary
     }
 
     /**
-     * "Fri 12 Jun", or an empty string when there is no date.
-     *
-     * FORMATTED FROM THE STORED STRING, not from a date object: the value is a
-     * bare `Y-m-d` that means a day and not an instant, and handing it to a
-     * timezone-aware parser is how a departure moves to the evening before.
+     * "Fri 12 Jun", or an empty string when there is no date. FORMATTED FROM THE STORED
+     * STRING: a bare Y-m-d means a day, and a timezone-aware parser moves it a night.
      */
     public function departureDay(): string
     {
@@ -246,14 +195,8 @@ final readonly class DealSummary
     }
 
     /**
-     * Cents to the string a person reads.
-     *
-     * NOT App\Http\Resources\Euros, which converts cents to a JSON NUMBER at
-     * the HTTP boundary and is right there and wrong here — a mail needs a
-     * currency symbol and a decision about decimals. App\Domain\Pricing\
-     * DealScorer and App\Domain\Rules\ParsedRule each carry the same six lines
-     * for the same reason: neither the domain nor this layer may import from
-     * App\Http.
+     * Cents to the string a person reads. NOT App\Http\Resources\Euros — neither the domain
+     * nor this layer may import from App\Http, so the six lines are repeated.
      */
     private static function euros(int $cents): string
     {

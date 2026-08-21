@@ -7,8 +7,8 @@ namespace App\Domain\Pricing;
 use InvalidArgumentException;
 
 /**
- * The "usual price" half of docs/PLAN.md's hybrid pricing model; the five numbers must stay non-decreasing (treated as
- * monotone-curve knots) (docs/BUSINESS-LOGIC.md §6).
+ * The "usual price" half of docs/PLAN.md's hybrid pricing model; the five numbers must stay
+ * non-decreasing (treated as monotone-curve knots) (docs/BUSINESS-LOGIC.md §6).
  */
 final readonly class PriceStats
 {
@@ -36,8 +36,8 @@ final readonly class PriceStats
     }
 
     /**
-     * Build the summary from raw observations (e.g. the fake stats adapter). Nearest-rank, not interpolation: percentiles
-     * must be prices actually quoted (docs/BUSINESS-LOGIC.md §6).
+     * Build the summary from raw observations (e.g. the fake stats adapter). Nearest-rank, not
+     * interpolation: percentiles must be prices actually quoted (docs/BUSINESS-LOGIC.md §6).
      *
      * @param  list<int>  $cents
      */
@@ -73,8 +73,8 @@ final readonly class PriceStats
     }
 
     /**
-     * How far UNDER the usual price a fare is, as a whole percent (negative
-     * means above); this is the "38% below its usual €84" design caption.
+     * How far UNDER the usual price a fare is, as a whole percent (negative means above); this is
+     * the "38% below its usual €84" design caption.
      */
     public function percentUnderUsual(int $cents): int
     {
@@ -88,8 +88,8 @@ final readonly class PriceStats
     }
 
     /**
-     * 0 (cheapest seen) to 1 (dearest), piecewise-linear through the five knots; a degenerate summary (all knots equal)
-     * answers 0.5 (docs/BUSINESS-LOGIC.md §6).
+     * 0 (cheapest seen) to 1 (dearest), piecewise-linear through the five knots; a degenerate
+     * summary (all knots equal) answers 0.5 (docs/BUSINESS-LOGIC.md §6).
      */
     public function percentileOf(int $cents): float
     {
@@ -126,8 +126,8 @@ final readonly class PriceStats
             }
 
             if ($highCents === $lowCents) {
-                // Zero-width band: price sits on a repeated knot, so both
-                // ranks are true — the midpoint doesn't pick a side.
+                // Zero-width band: price sits on a repeated knot, so both ranks are true — the
+                // midpoint doesn't pick a side.
                 return ($lowRank + $highRank) / 2;
             }
 

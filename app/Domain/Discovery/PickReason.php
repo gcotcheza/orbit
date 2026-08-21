@@ -5,13 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Discovery;
 
 /**
- * Why the relative lane spent a request on a candidate.
- *
- * NOT PERSISTED AND NOT PUBLISHED. It is a fact about a RUN, not about a
- * discovery: by the time a row exists, what matters is the window that was
- * measured, and "we picked this because we already had a baseline" is not
- * something a card should say. It lives in the log line and in the tests that
- * assert the ordering.
+ * Why the relative lane spent a request on a candidate. NOT PERSISTED AND NOT PUBLISHED: it
+ * is a fact about a RUN, and lives in the log line and the ordering tests.
  */
 enum PickReason: string
 {

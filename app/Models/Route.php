@@ -15,10 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 /**
- * A city pair, and the hub every price in this app hangs off.
- *
- * Named `Route` despite Illuminate's Route facade: "route" is the domain word everywhere in the product, so it wins the name; the two are never both
- * needed in one file (tests alias at the import if they are) (docs/BUSINESS-LOGIC.md §1).
+ * A city pair, the hub every price hangs off; named `Route` despite Illuminate's facade.
  *
  * @property int $id
  * @property string $code "AMS-LIS"
@@ -85,8 +82,8 @@ final class Route extends Model
     }
 
     /**
-     * The routes worth spending a provider call on. ONE definition: two commands and a seeder all need it, and drift here
-     * means a route polled but never scored (or scored against stale statistics) (docs/BUSINESS-LOGIC.md §1).
+     * The routes worth spending a provider call on. ONE definition: drift here means a route
+     * polled but never scored, or scored against stale statistics (docs/BUSINESS-LOGIC.md §1).
      *
      * @return Builder<Route>
      */

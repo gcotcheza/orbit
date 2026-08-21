@@ -1,12 +1,5 @@
-// Flag swatch and flight number are derived here, not sent by the server —
-// neither is real data, and both must be pure (same input, same output) so a
-// boarding pass doesn't visibly change between renders.
-// Why: docs/BUSINESS-LOGIC.md §36.
-
-// CSS gradients, not images/emoji: an image per country is 28 requests for
-// 22×15px, and Windows renders flag emoji as grey letters. Approximated at
-// that size; unlisted countries fall back to a neutral slate swatch.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Flag swatch and flight number are derived here, not sent by the server, and must be pure.
+// CSS gradients, not images or emoji, with a neutral fallback (docs/BUSINESS-LOGIC.md §36).
 
 const NEUTRAL = 'linear-gradient(135deg, #8b93ad, #5d6883)'
 
@@ -21,8 +14,8 @@ function tricolourV(left, middle, right) {
 }
 
 /**
- * A Nordic cross: vertical bar offset to the hoist, horizontal bar centred.
- * Two solid-colour layers over a field, which is exactly what the flag is.
+ * A Nordic cross: vertical bar offset to the hoist, horizontal bar centred. Two solid-colour layers
+ * over a field, which is exactly what the flag is.
  */
 function nordic(field, cross) {
     return [
@@ -69,8 +62,8 @@ const FLAGS = {
     IT: tricolourV('#1a8a4b', '#f4f4f4', '#d62b3a'),
     MT: 'linear-gradient(90deg, #f4f4f4 0 50%, #cf142b 50% 100%)',
     PT: [
-        // The armillary sphere, as the design's prototype drew it: one dot on
-        // the seam between the two fields.
+        // The armillary sphere, as the design's prototype drew it: one dot on the seam between the
+        // two fields.
         'radial-gradient(circle at 42% 50%, #ffd24a 0 17%, transparent 18%)',
         'linear-gradient(90deg, #1b6b3a 0 42%, #d4202c 42% 100%)',
     ].join(', '),
@@ -127,8 +120,8 @@ export function flagFor(countryCode) {
 }
 
 /**
- * The `FW###` in the boarding pass eyebrow, derived from the route code. No real flight — set dressing for the card. Derived, not random, so AMS-LIS shows the same number on every render/device/reload
- * (a changing number would give the fiction away). Hash is the design prototype's own 31-multiplier sum (docs/BUSINESS-LOGIC.md §36).
+ * The `FW###` in the boarding pass eyebrow, derived from the route code — set dressing, but
+ * derived rather than random, or a changing number gives the fiction away.
  *
  * @param {string} code "AMS-LIS"
  * @returns {string} "FW304"

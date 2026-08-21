@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace App\Domain\Pricing;
 
-// Deal score = weighted blend of percentile (60), trend (25), absolute-floor (15) components (config/orbit.php), each renormalised over what's computable; missing/insufficient history (below `$policy->minTrackingDays`) returns noOpinion() rather than a false-confident 100.
-// Why: docs/BUSINESS-LOGIC.md §7.
+// Deal score = weighted blend of percentile (60), trend (25) and floor (15), each
+// renormalised over what is computable (docs/BUSINESS-LOGIC.md §7).
 final readonly class DealScorer
 {
     public function __construct(private ScoringPolicy $policy = new ScoringPolicy) {}
 
-    // The "can't judge yet" answer, distinct from score(0,...) (0 cents would score 100); the same sentence covers zero history and a few days of it, per SpotlightCard.vue's `verdict.label` contract. "Pricing" not "Watching" since PR #29 (lookup can reach this without watching).
-    // Why: docs/BUSINESS-LOGIC.md §7.
+    // The "can't judge yet" answer, distinct from score(0, ...) — 0 cents would score 100
+    // (docs/BUSINESS-LOGIC.md §7).
     public function noOpinion(): DealScore
     {
-        // Pill label is 'New', not 'Normal': "no data yet" and "judged ordinary" used to share a label and were indistinguishable on the watchlist. 'New' is a state, not a verdict, so tone stays TONE_NORMAL.
-        // Why: docs/BUSINESS-LOGIC.md §7.
+        // Pill label is 'New', not 'Normal': "no data yet" and "judged ordinary" used to share
+        // a label. 'New' is a state, not a verdict, so the tone stays TONE_NORMAL.
         $verdict = new Verdict('Not enough data yet', 'New', Verdict::TONE_NORMAL);
 
         return new DealScore(
@@ -32,16 +32,13 @@ final readonly class DealScorer
     }
 
     /**
-     * @param  int  $trackingDays  mornings of this route's own prices Orbit
-     *                             actually holds — App\Application\Routes\
-     *                             RouteSnapshot::$trackingDays, counted from the
-     *                             first observation and not from when the route
-     *                             was added
+     * @param  int  $trackingDays  mornings of this route's own prices Orbit holds, counted from
+     *                             the first observation and not from when the route was added
      */
     public function score(int $currentCents, ?PriceStats $stats, PriceHistory $history, int $trackingDays): DealScore
     {
-        // `$trackingDays` is required, not defaulted: a default would silently claim an uncounted caller was looking at a mature route — the exact bug this guard prevents.
-        // Why: docs/BUSINESS-LOGIC.md §7.
+        // `$trackingDays` is required, not defaulted: a default would silently claim an
+        // uncounted caller was looking at a mature route.
         if ($trackingDays < $this->policy->minTrackingDays) {
             return $this->noOpinion();
         }
@@ -82,15 +79,15 @@ final readonly class DealScorer
         );
     }
 
-    // Trend component is linear (50=flat, saturating to 0/100): a curve would claim knowledge about fare behaviour this app doesn't have.
-    // Why: docs/BUSINESS-LOGIC.md §7.
+    // Trend component is linear (50 = flat, saturating to 0/100): a curve would claim
+    // knowledge about fare behaviour this app does not have.
     private function trendComponent(float $drift): float
     {
         return max(0.0, min(100.0, 50.0 - ($drift / $this->policy->trendSaturationPerDay) * 50.0));
     }
 
-    // 100 at the floor, 0 at usual price and above, NULL when floor==usual (not a division guard — an answer meaning "nothing to measure", so weight falls to other components).
-    // Why: docs/BUSINESS-LOGIC.md §7.
+    // 100 at the floor, 0 at usual and above, NULL when floor == usual — an answer meaning
+    // "nothing to measure", so the weight falls to the other components.
     private function absoluteComponent(int $currentCents, PriceStats $stats): ?float
     {
         $span = $stats->medianCents - $stats->minCents;
@@ -102,8 +99,8 @@ final readonly class DealScorer
         return max(0.0, min(1.0, ($stats->medianCents - $currentCents) / $span)) * 100.0;
     }
 
-    // Threshold is tied to trendSaturationPerDay, not its own constant, so tuning trend sensitivity can't make the word "falling" disagree with the number shown beside it.
-    // Why: docs/BUSINESS-LOGIC.md §7.
+    // Threshold is tied to trendSaturationPerDay, not its own constant, so tuning trend
+    // sensitivity cannot make "falling" disagree with the number beside it.
     private function isFalling(?float $drift): bool
     {
         return $drift !== null && $drift <= -0.2 * $this->policy->trendSaturationPerDay;
@@ -158,7 +155,7 @@ final readonly class DealScorer
         return new Advice($verdict->label, $body, $verdict->tone);
     }
 
-    // Whole euros lose the decimals: every fare this app has ever shown is a whole number, and "€52.00" in a sentence reads like a receipt.
+    // Whole euros lose the decimals: every fare shown is whole, and "€52.00" reads like a receipt.
     private static function euros(int $cents): string
     {
         return $cents % 100 === 0

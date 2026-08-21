@@ -1,35 +1,15 @@
 <script setup>
 /*
- * Orbit's opinion, in one pill.
- *
- * The API sends the sentence AND the colour to say it in (`verdict.label`,
- * `verdict.tone` — docs/API.md), and the tone is the ONLY thing this switches
- * on. Deriving a colour from the label instead — matching on "falling", or on
- * "book" — is the kind of thing that works for four weeks and then turns a new
- * verdict grey, silently, on every screen at once.
- *
- * The mapping is CSS rather than a JavaScript lookup returning `var(--…)`
- * strings: four token pairs, one attribute selector each, and the component
- * ships no colour logic at all.
- *
- * Used by the globe home's spotlight card (design/README.md §1) and, with
- * `verdict.short`, by the watchlist rows (§5).
- *
- * TWO SIZES, NOT TWO COMPONENTS. The watchlist's pill is the smaller of the
- * design's two — it shares a line with the flight number rather than standing
- * under a price — and it was a scoped copy of this file until the DRY pass,
- * because the two screens were written in parallel branches. The difference is
- * three CSS declarations, so it is a prop.
+ * Orbit's opinion, in one pill. The API sends the sentence AND the tone, and the tone is the
+ * ONLY thing this switches on. Two sizes, not two components (docs/API.md).
  */
 defineProps({
   label: { type: String, required: true },
   tone: {
     type: String,
     required: true,
-    // The four docs/API.md sends. Listed inline rather than as a constant
-    // above: defineProps is compiled OUT of this scope, so it cannot see a
-    // local — and a tone that is not one of these gets no colour at all, which
-    // is worth a console warning in development.
+    // The four docs/API.md sends, listed inline because defineProps is compiled out of this
+    // scope; an unknown tone gets no colour, which is worth a development warning.
     validator: (value) => ['good', 'info', 'normal', 'warn'].includes(value),
   },
   /** 'md' on the spotlight card, 'sm' on a watchlist row. */

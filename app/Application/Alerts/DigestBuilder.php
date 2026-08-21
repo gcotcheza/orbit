@@ -14,13 +14,8 @@ use App\Application\Rules\RuleViews;
 use App\Application\Routes\RouteSnapshots;
 
 /**
- * Sunday morning: everything at once, and nothing urgent.
- *
- * Opposite of an alert, by design: ignores cooldown/sensitivity/every other interrupt rule, since the digest isn't an
- * interruption — a route suppressed all week still belongs in Sunday's mail.
- *
- * Reads and writes nothing else: every number comes from the same classes the screens read (RouteSnapshots, RuleViews)
- * plus the ledger, so the digest can't disagree with what tapping through shows (docs/BUSINESS-LOGIC.md §10).
+ * Sunday morning: everything at once, and nothing urgent. Ignores every interrupt rule and
+ * reads only what the screens read (docs/BUSINESS-LOGIC.md §10).
  */
 final readonly class DigestBuilder
 {
@@ -62,8 +57,8 @@ final readonly class DigestBuilder
 
         foreach ($this->snapshots->for($routes) as $snapshot) {
             /*
-             * No observation yet = no price, score 0 means "no opinion" — that's the "tracking N days" note on-screen, not a mail
-             * verdict (docs/BUSINESS-LOGIC.md §10).
+             * No observation yet = no price; score 0 means "no opinion", which is the on-screen
+             * "tracking N days" note, not a mail verdict.
              */
             if ($snapshot->currentCents === null) {
                 continue;
@@ -73,8 +68,8 @@ final readonly class DigestBuilder
         }
 
         /*
-         * Best first, not watchlist order: mail is read top-down once, so the first line should be worth acting on. Ties break
-         * on price for a stable order week to week (docs/BUSINESS-LOGIC.md §10).
+         * Best first, not watchlist order: mail is read top-down once. Ties break on price
+         * for a stable order week to week.
          */
         usort($deals, static fn (DealSummary $a, DealSummary $b): int => ($b->score ?? 0) <=> ($a->score ?? 0)
             ?: $a->priceCents <=> $b->priceCents);
@@ -100,8 +95,8 @@ final readonly class DigestBuilder
             $matches = $this->views->of($rule, $user)->reading->matches;
 
             /*
-             * Rule with nothing to show is left out, not listed as "0 matches" — same principle docs/API.md states for the create
-             * screen: say it in words, or say nothing (docs/BUSINESS-LOGIC.md §10).
+             * A rule with nothing to show is left out, not listed as "0 matches" — say it in
+             * words, or say nothing (docs/API.md).
              */
             if ($matches->count() === 0) {
                 continue;
@@ -121,9 +116,7 @@ final readonly class DigestBuilder
     }
 
     /**
-     * What Orbit actually sent this week, straight out of the ledger.
-     *
-     * From the STORED payload, not re-derived: a fare that rose since is still what was flagged — recomputing would turn
+     * What Orbit actually sent this week, from the STORED payload: recomputing would turn
      * history into a copy of the present (docs/BUSINESS-LOGIC.md §10).
      *
      * @return list<DealSummary>

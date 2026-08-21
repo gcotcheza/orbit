@@ -11,8 +11,8 @@ use App\Application\Rules\RuleReading;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * A sentence as this app reads it: chips, criteria, matches. Backs `POST /api/rules/parse` and every stored rule
- * (RuleResource builds on it) (docs/BUSINESS-LOGIC.md §11).
+ * A sentence as this app reads it: chips, criteria, matches. Backs `POST /api/rules/parse` and
+ * every stored rule (RuleResource builds on it) (docs/BUSINESS-LOGIC.md §11).
  */
 final class RuleReadingResource extends JsonResource
 {
@@ -27,8 +27,8 @@ final class RuleReadingResource extends JsonResource
 
         return [
             /*
-             * In the design's order (where, how much, how long, day, when,
-             * what for) — the screen renders chips as given, order intact.
+             * In the design's order (where, how much, how long, day, when, what for) — the screen
+             * renders chips as given, order intact.
              */
             'chips' => array_map(
                 static fn (RuleChip $chip): array => RuleChipResource::make($chip)->toArray($request),
@@ -36,8 +36,8 @@ final class RuleReadingResource extends JsonResource
             ),
 
             /*
-             * What the chips add up to — published so a client summary doesn't
-             * have to reconstruct it from labels sized for a 352px chip.
+             * What the chips add up to — published so a client summary doesn't have to reconstruct
+             * it from labels sized for a 352px chip.
              */
             'criteria' => $reading->criteria()->toArray(),
 
@@ -45,8 +45,8 @@ final class RuleReadingResource extends JsonResource
                 /* Every match, not just the sampled ones — the banner's number. */
                 'count' => $matches->count(),
                 /*
-                 * True means `count` is a floor the banner must say so — some routes have no fare yet, so the number can only grow
-                 * (docs/BUSINESS-LOGIC.md §11).
+                 * True means `count` is a floor the banner must say so — some routes have no fare
+                 * yet, so the number can only grow (docs/BUSINESS-LOGIC.md §11).
                  */
                 'partial' => $matches->partial(),
                 /* NULL when nothing matched: no trips is not a €0 trip. */

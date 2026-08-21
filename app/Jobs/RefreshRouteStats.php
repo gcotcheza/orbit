@@ -12,16 +12,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use App\Application\Ports\PriceStatsProvider;
 
 /**
- * Refresh what a route USUALLY costs.
- *
- * WEEKLY, NOT DAILY (routes/console.php). These statistics describe months of
- * fares, so a daily call would spend rate limit and money to move a median by
- * a euro — and the score is deliberately most sensitive to this number, which
- * is an argument for it being stable rather than for it being fresh.
- *
- * A PROVIDER THAT ANSWERS NULL LEAVES THE OLD ROW ALONE. Statistics do not
- * exist for every city pair and an outage is not evidence that they stopped
- * existing; a month-old "usual price" scores far better than none.
+ * Refresh what a route USUALLY costs. WEEKLY, NOT DAILY, and a provider that answers null
+ * leaves the old row alone — an outage is not evidence statistics stopped existing.
  */
 final class RefreshRouteStats implements ShouldQueue
 {

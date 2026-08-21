@@ -10,8 +10,8 @@ use App\Application\Routes\MonthCalendar;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * One month of the heatmap (design/README.md §3). Days with no fare are absent, not null; `min`/`max` label the
- * legend; `foundAt` is per-day (docs/BUSINESS-LOGIC.md §36).
+ * One month of the heatmap (design/README.md §3). Days with no fare are absent, not null;
+ * `min`/`max` label the legend; `foundAt` is per-day (docs/BUSINESS-LOGIC.md §36).
  */
 final class RouteCalendarResource extends JsonResource
 {
@@ -32,8 +32,8 @@ final class RouteCalendarResource extends JsonResource
                 // cheap | mid | pricey
                 'verdict' => $day['verdict'],
                 /*
-                 * In the owner's timezone, like `meta.fares.fetchedAt` — read
-                 * as UTC, "Seen 3 hours ago" gains an hour of invented age.
+                 * In the owner's timezone, like `meta.fares.fetchedAt` — read as UTC, "Seen 3 hours
+                 * ago" gains an hour of invented age.
                  */
                 'foundAt' => $day['foundAt']?->setTimezone(new DateTimeZone($timezone))->format('c'),
             ], $calendar->days),

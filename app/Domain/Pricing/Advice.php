@@ -5,13 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Pricing;
 
 /**
- * The route detail's callout: a title, a sentence, and the tone that colours
- * the tinted box behind them (design/README.md §2).
- *
- * It is generated HERE, from the same numbers that produced the score, so the
- * prose and the gauge can never disagree — a card reading "a clear bargain"
- * next to a 31 is the kind of thing that costs a user their trust in the whole
- * app.
+ * The route detail's callout: title, sentence and tone (design/README.md §2). Generated here,
+ * from the same numbers as the score, so prose and gauge can never disagree.
  */
 final readonly class Advice
 {

@@ -10,17 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 
 /**
- * What Orbit last measured a route's usual price to be — the relative lane's
- * memory.
- *
- * The only thing in Discovery that persists across runs (a `discoveries` row is ephemeral, 36 hours then gone); every
- * window the lane fetches leaves one behind.
- *
- * Not a cache of `calendar_fares`: stays one number per route, not a `routes`-keyed window. See the migration for what
- * breaks if it grows into one (docs/BUSINESS-LOGIC.md §16).
- *
- * NO USER, LIKE `discoveries` AND FOR THE SAME REASON (docs/BUSINESS-LOGIC.md
- * §1). What a route usually costs is a fact about the world.
+ * What Orbit last measured a route's usual price to be (docs/BUSINESS-LOGIC.md §16).
  *
  * @property int $id
  * @property string $code "AMS-DUB"
@@ -32,14 +22,14 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 final class DiscoveryBaseline extends Model
 {
     /**
-     * Laravel would pluralise this correctly; named explicitly anyway, so an inflector disagreement with the
-     * migration/job/tests fails fast, not as "relation does not exist" (docs/BUSINESS-LOGIC.md §16).
+     * Laravel would pluralise this correctly; named explicitly anyway, so an inflector
+     * disagreement fails fast rather than as "relation does not exist".
      */
     protected $table = 'discovery_baselines';
 
     /**
-     * The model is storage; RouteBaseline is the rule — conversion happens here, once, so the selector's arithmetic stays
-     * testable without a database (docs/BUSINESS-LOGIC.md §16).
+     * The model is storage; RouteBaseline is the rule. Converting here, once, keeps the
+     * selector's arithmetic testable without a database.
      */
     public function toDomain(): RouteBaseline
     {

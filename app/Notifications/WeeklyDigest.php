@@ -8,11 +8,8 @@ use App\Application\Alerts\DigestNotice;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * Sunday, 09:00 Europe/Amsterdam: where everything stands.
- *
- * IT IS NEVER EMPTY, because App\Jobs\SendWeeklyDigest does not send it when
- * there is nothing to say. A weekly mail that arrives with nothing in it is a
- * weekly reminder to unsubscribe from the one that will eventually matter.
+ * Sunday, 09:00 Europe/Amsterdam: where everything stands. IT IS NEVER EMPTY, because
+ * SendWeeklyDigest does not send it when there is nothing to say.
  */
 final class WeeklyDigest extends AlertNotification
 {

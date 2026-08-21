@@ -9,8 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * One line of the alert history, as `GET /api/alerts` publishes it. Reads from `payload`, not the relations — the
- * ledger records what was SAID (docs/BUSINESS-LOGIC.md §10).
+ * One line of the alert history, as `GET /api/alerts` publishes it. Reads from `payload`, not the
+ * relations — the ledger records what was SAID (docs/BUSINESS-LOGIC.md §10).
  */
 final class AlertResource extends JsonResource
 {
@@ -27,8 +27,8 @@ final class AlertResource extends JsonResource
             'type' => $alert->type->value,
 
             /*
-             * The route CODE, not an id — what every other endpoint keys on.
-             * Null on the weekly digest, which is about no route in particular.
+             * The route CODE, not an id — what every other endpoint keys on. Null on the weekly
+             * digest, which is about no route in particular.
              */
             'route' => $this->text($alert, 'routeCode'),
             'rule'  => $this->rule($alert),
@@ -37,8 +37,8 @@ final class AlertResource extends JsonResource
             'price' => $alert->price_cents === null ? null : Euros::from($alert->price_cents),
 
             /*
-             * Two different questions: `triggeredAt` is when Orbit decided;
-             * `deliveredAt` stays null while quiet hours hold a mail, or forever if off.
+             * Two different questions: `triggeredAt` is when Orbit decided; `deliveredAt` stays
+             * null while quiet hours hold a mail, or forever if off.
              */
             'triggeredAt' => $alert->triggered_at->toIso8601String(),
             'deliveredAt' => $alert->delivered_at?->toIso8601String(),

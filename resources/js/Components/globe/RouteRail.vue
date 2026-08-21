@@ -1,13 +1,7 @@
 <script setup>
 /*
- * "Fly to a route" — the horizontal rail of chips under the spotlight card
- * (design/README.md §1). Tapping selects the route: parent replays the
- * flight tour and re-draws the card.
- *
- * Tab list semantically (role="tablist"/"tab"): chips select which of
- * several things the screen shows. Globe/card aren't aria-controls'd — that
- * would lie about a decorative canvas being one panel.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * "Fly to a route" — the rail of chips under the spotlight card (design/README.md §1). A tab
+ * list semantically; the globe and card are not aria-controls'd (docs/BUSINESS-LOGIC.md §36).
  */
 import { nextTick, useTemplateRef, watch } from 'vue'
 import { euro } from '@/lib/format'
@@ -23,18 +17,8 @@ defineEmits(['select'])
 const track = useTemplateRef('track')
 
 /*
- * Selected chip must stay on screen: the tour auto-advances it every ~11s,
- * and off-screen the rail (the one control showing WHERE in the list the
- * camera is) looks like it forgot which route is showing.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * `inline: 'center'` (not 'nearest'): edge-visible still reads as "end of
- * list". `block: 'nearest'` stops the browser scrolling the whole PAGE to
- * drag the 360px globe off-screen instead.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * Smooth only if wanted (lib/motion.js decides). `nextTick`: the first
- * selection can land before the chip list has rendered.
+ * The selected chip must stay on screen — `inline: 'center'`, and `block: 'nearest'` stops the
+ * browser dragging the globe off-page. `nextTick` because the first selection can beat render.
  */
 watch(
   () => props.activeCode,
@@ -146,9 +130,8 @@ watch(
 .rail__chip--active {
   border-color: var(--accent);
   background: var(--accent);
-  /* White on accent in both themes (--ink would be near-black on it in
-     light); --on-solid also used by the tab bar's centre button.
-     Why: docs/BUSINESS-LOGIC.md §36. */
+  /* White on accent in both themes (--ink would be near-black in light); --on-solid, as the tab
+     bar's centre button uses. */
   color: var(--on-solid);
   box-shadow: 0 6px 16px var(--accent-glow);
 }
@@ -161,9 +144,8 @@ watch(
 }
 
 /*
- * Opacity, not --muted (same as .rail__price below): a fixed grey is either
- * invisible or a stray color on the accent-filled active chip.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Opacity, not --muted (same as .rail__price below): a fixed grey is either invisible or a stray
+ * color on the accent-filled active chip (docs/BUSINESS-LOGIC.md §36).
  */
 .rail__city {
   font-family: var(--font-body);
@@ -196,9 +178,8 @@ watch(
   background: var(--warn);
 }
 
-/* Active chip's dot matches the label (white): tone is already said by the
-   card above; a colored dot on the accent fill would read as a status light.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* The active chip's dot matches the label: the card above already says the tone, and a coloured dot
+   would read as a status light. */
 .rail__chip--active .rail__dot {
   background: var(--on-solid);
 }

@@ -11,8 +11,8 @@ use App\Http\Requests\SearchAirportsRequest;
 use App\Http\Resources\DestinationOptionResource;
 
 /**
- * Every airport Orbit will price, searched (the add-route form's typeahead). Unlike GET /api/destinations: includes
- * origins, shares its ranking, no accent folding (docs/BUSINESS-LOGIC.md §36).
+ * Every airport Orbit will price, searched (the add-route typeahead). Unlike
+ * GET /api/destinations: includes origins, no accent folding (docs/BUSINESS-LOGIC.md §36).
  */
 final class AirportController extends Controller
 {
@@ -47,8 +47,8 @@ final class AirportController extends Controller
                     ->orWhereRaw('lower(country) like ? '.self::ESCAPE, [$anywhere]);
             })
             ->orderByRaw(self::rank(), [$code, $prefix, $prefix, $prefix])
-            // Deterministic tie-break: without it, which N rows come back among ties is the planner's choice, and the panel would reshuffle.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // Deterministic tie-break: without it, which rows come back among ties is the
+            // planner's choice, and the panel would reshuffle on re-render.
             ->orderBy('city')
             ->orderBy('iata')
             ->limit(self::LIMIT)
@@ -57,17 +57,14 @@ final class AirportController extends Controller
         return DestinationOptionResource::collection($airports)
             ->additional(['meta' => ['count' => $airports->count(), 'query' => $term]])
             ->response()
-            // Private cache: a shared cache holding an authenticated response is how one account's answer reaches another.
-            // Why: docs/BUSINESS-LOGIC.md §36.
+            // Private cache: a shared cache holding an authenticated response is how one
+            // account's answer reaches another.
             ->header('Cache-Control', 'private, max-age=300');
     }
 
     /**
-     * Best match first: the code, then the city, then the airport's own name, then the country, then anything that merely contains what was typed. Order
-     * matches destinations.js's curated-list ranking — shown as one merged list.
-     *
-     * Every value in the CASE expression is a bound `?`; the literal-string return type proves no typed input reaches
-     * orderByRaw() as text (docs/BUSINESS-LOGIC.md §36).
+     * Best match first: code, city, airport name, country, then anything containing what was
+     * typed. Every CASE value is bound; `literal-string` proves it (docs/BUSINESS-LOGIC.md §36).
      *
      * @return literal-string
      */

@@ -9,18 +9,8 @@ use App\Jobs\SweepRuleFares;
 use Illuminate\Console\Command;
 
 /**
- * The daily rule sweep — fan-out only, exactly like orbit:poll-fares.
- *
- * A COMMAND RATHER THAN `Schedule::job()` PER RULE, for the reason
- * routes/console.php spells out: that file is loaded on every artisan
- * invocation including `migrate` against an empty database, so a schedule that
- * enumerated rules there would query a table that does not exist yet.
- *
- * IT RUNS AFTER THE WATCHLIST POLL and not with it. The watchlist is what the
- * owner actually asked to be told about and gets the morning's first calls; a
- * rule's candidate routes are speculative by comparison, and
- * App\Jobs\SweepRuleFares skips anything the poll has already priced — which
- * only works if the poll has been round first.
+ * The daily rule sweep — fan-out only. A command rather than `Schedule::job()` per rule, and
+ * it runs after the watchlist poll (docs/BUSINESS-LOGIC.md §11).
  */
 final class SweepRules extends Command
 {
@@ -51,10 +41,8 @@ final class SweepRules extends Command
         }
 
         /*
-         * NOT STAGGERED, unlike orbit:poll-fares. This command queues one job
-         * per RULE and each of those queues its own capped fan-out of polls;
-         * spacing the sweeps would only delay the moment the polls start
-         * arriving, and the polls are what the provider counts.
+         * NOT STAGGERED, unlike orbit:poll-fares: each job queues its own capped fan-out,
+         * and the polls are what the provider counts.
          */
         return self::SUCCESS;
     }

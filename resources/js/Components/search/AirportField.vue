@@ -1,9 +1,7 @@
 <script setup>
 /*
- * One airport box: type a place, get the airport. Shared machinery from AddRouteForm.vue for both search
- * fields; two-tier suggestions (curated then world); `open` is owned by the parent form, not this component;
- * ARIA 1.2 combobox pattern throughout.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One airport box: type a place, get the airport. Two-tier suggestions (curated then world),
+ * `open` owned by the parent form, ARIA 1.2 combobox (docs/BUSINESS-LOGIC.md §36).
  */
 import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -20,16 +18,14 @@ const props = defineProps({
   placeholder: { type: String, default: 'City or code' },
 
   /**
-   * What a screen reader calls the box, when the label above it isn't the whole
-   * story (e.g. From, sitting under three home-airport pills). Empty by default.
-   * Why: docs/BUSINESS-LOGIC.md §36.
+   * What a screen reader calls the box, when the label above it isn't the whole story (e.g. From,
+   * sitting under three home-airport pills). Empty by default (docs/BUSINESS-LOGIC.md §36).
    */
   ariaLabel: { type: String, default: '' },
 
   /**
-   * What the ✕ that empties the box is called, or '' for a box that has none —
-   * one prop rather than a boolean+name pair, since an unnamed clear announces as "button".
-   * Why: docs/BUSINESS-LOGIC.md §36.
+   * What the ✕ that empties the box is called, or '' for a box that has none — one prop rather than
+   * a boolean+name pair, since an unnamed clear announces as "button" (docs/BUSINESS-LOGIC.md §36).
    */
   clearLabel: { type: String, default: '' },
 
@@ -37,14 +33,13 @@ const props = defineProps({
   listLabel: { type: String, required: true },
 
   /**
-   * Whether this field's panel is the one showing. The form owns it — see the
-   * note above.
+   * Whether this field's panel is the one showing. The form owns it — see the note above.
    */
   open: { type: Boolean, default: false },
 
   /**
-   * The other end of the pair, upper-cased, or ''. Never suggested: a route
-   * from a place to itself is not a route.
+   * The other end of the pair, upper-cased, or ''. Never suggested: a route from a place to itself
+   * is not a route.
    */
   exclude: { type: String, default: '' },
 })
@@ -52,9 +47,8 @@ const props = defineProps({
 const value = defineModel({ type: String, required: true })
 
 /**
- * `open`/`close` are requests to the form, which decides; nothing is emitted on
- * an empty Enter — the keypress falls through to the browser's own submit.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * `open`/`close` are requests to the form, which decides; nothing is emitted on an empty Enter —
+ * the keypress falls through to the browser's own submit (docs/BUSINESS-LOGIC.md §36).
  */
 const emit = defineEmits(['open', 'close'])
 
@@ -80,9 +74,8 @@ const suggestions = computed(() =>
 const worldStartsAt = computed(() => suggestions.value.findIndex((suggestion) => suggestion.world))
 
 /*
- * The did-you-mean guess: curated-list-only edit distance, shown only when nothing
- * matched and the world search isn't still in flight; never for the pair's excluded end.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The did-you-mean guess: curated-list edit distance (docs/BUSINESS-LOGIC.md §36).
+ * Shown only when nothing matched and the world search is done; never for the excluded end.
  */
 const didYouMean = computed(() => {
   if (suggestions.value.length > 0 || worldStatus.value === 'searching') {
@@ -95,23 +88,20 @@ const didYouMean = computed(() => {
 })
 
 /**
- * Whether the box holds something — trimmed, so a stray space doesn't count for
- * either the suggestion panel or the ✕.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Whether the box holds something — trimmed, so a stray space doesn't count for either the
+ * suggestion panel or the ✕ (docs/BUSINESS-LOGIC.md §36).
  */
 const filled = computed(() => value.value.trim() !== '')
 
 /*
- * Not merely `open`: an empty box has nothing to suggest, and showing on focus
- * alone would cover the buttons before anything was asked.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Not merely `open`: an empty box has nothing to suggest, and showing on focus alone would cover
+ * the buttons before anything was asked (docs/BUSINESS-LOGIC.md §36).
  */
 const showing = computed(() => props.open && filled.value)
 
 /**
- * What the panel says when empty, in priority order: still searching, curated
- * list failed (code-only mode), or genuinely nothing found.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * What the panel says when empty, in priority order: still searching, curated list failed
+ * (code-only mode), or genuinely nothing found (docs/BUSINESS-LOGIC.md §36).
  */
 const emptyText = computed(() => {
   if (worldStatus.value === 'searching') {
@@ -124,17 +114,14 @@ const emptyText = computed(() => {
 })
 
 /*
- * The box shows what was typed; `code` (toCode()) is the upper-cased form the
- * form actually submits — the box no longer shouts back every keystroke.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The box shows what was typed; `code` (toCode()) is the upper-cased form the form actually submits
+ * — the box no longer shouts back every keystroke (docs/BUSINESS-LOGIC.md §36).
  */
 const code = computed(() => toCode(value.value))
 
 /*
- * A code Orbit actually knows, not just three letters (checked against curated
- * destinations AND world suggestions) — so Enter doesn't submit a half-typed
- * code like "por"/"bar", and known codes outside Europe (e.g. JFK) still submit on one Enter.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * A code Orbit actually knows, not just three letters — checked against curated destinations
+ * AND world suggestions, so Enter never submits a half-typed "por" (docs/BUSINESS-LOGIC.md §36).
  */
 const isKnownCode = computed(() =>
   IATA.test(code.value)
@@ -143,24 +130,16 @@ const isKnownCode = computed(() =>
 )
 
 /*
- * One fetch, however many boxes: the store dedupes concurrent load() calls via
- * its in-flight promise.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * One fetch, however many boxes: the store dedupes concurrent load() calls via its in-flight
+ * promise (docs/BUSINESS-LOGIC.md §36).
  */
 onMounted(() => {
   store.load()
 })
 
 /*
- * Stripped as typed (not on submit): letters in any alphabet, spaces, and
- * city-name punctuation survive; digits do not — no place name contains one.
- * Why: docs/BUSINESS-LOGIC.md §36.
- */
-/*
- * v-model + a pre-flush watcher, not :value/@input — a hand-rolled binding can
- * leave rejected digits stuck in the DOM when the normalised value equals the
- * ref's current value, since that produces no re-render to overwrite it.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Digits are stripped as typed (no place name has one), via v-model + a pre-flush watcher:
+ * a hand-rolled binding can leave rejected digits stuck in the DOM (docs/BUSINESS-LOGIC.md §36).
  */
 watch(value, (typed) => {
   const cleaned = typed.replace(/[^\p{L} ’'.-]/gu, '').slice(0, 40)
@@ -171,28 +150,24 @@ watch(value, (typed) => {
 })
 
 /*
- * Watches the normalised value (runs after the strip watcher above), not typing
- * events — an `if (open)` guard would miss paste/autofill/fill(), where a single
- * input event can beat the panel-open flag; cancellation lives in choose() instead.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Watches the normalised value, not typing events — an `if (open)` guard would miss paste and
+ * autofill; cancellation lives in choose() instead (docs/BUSINESS-LOGIC.md §36).
  */
 watch(value, (typed) => {
   world.search(typed)
 })
 
 /*
- * A new query un-highlights everything — keeping an index highlighted across a
- * changing list is how Enter picks a city nobody saw.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * A new query un-highlights everything — keeping an index highlighted across a changing list is how
+ * Enter picks a city nobody saw (docs/BUSINESS-LOGIC.md §36).
  */
 watch(suggestions, () => {
   active.value = -1
 })
 
 /**
- * Fires only on typing, not on writes: the panel opens here rather than in a
- * value watcher, so `choose()` and the form's field-swap don't reopen it.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Fires only on typing, not on writes: the panel opens here rather than in a value watcher, so
+ * `choose()` and the form's field-swap don't reopen it (docs/BUSINESS-LOGIC.md §36).
  */
 function onType() {
   emit('open')
@@ -204,17 +179,15 @@ function choose(suggestion) {
   emit('close')
 
   /*
-   * Cancels, on nextTick, the search this write's own watcher just queued —
-   * a synchronous clear() would run before the pre-flush watcher and cancel nothing.
-   * Why: docs/BUSINESS-LOGIC.md §36.
+   * Cancels, on nextTick, the search this write's own watcher just queued — a synchronous clear()
+   * would run before the pre-flush watcher and cancel nothing (docs/BUSINESS-LOGIC.md §36).
    */
   nextTick(() => world.clear())
 }
 
 /**
- * A box that already holds a known code submits on Enter without a second
- * press; anything else takes the highlighted (or first) suggestion.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * A box that already holds a known code submits on Enter without a second press; anything else
+ * takes the highlighted (or first) suggestion (docs/BUSINESS-LOGIC.md §36).
  *
  * @param {KeyboardEvent} event
  */
@@ -224,9 +197,8 @@ function onEnter(event) {
   }
 
   /*
-   * The only keyboard path to the did-you-mean guess: it isn't in `suggestions`,
-   * so arrow keys never reach it — Enter answers the question instead.
-   * Why: docs/BUSINESS-LOGIC.md §36.
+   * The only keyboard path to the did-you-mean guess: it isn't in `suggestions`, so arrow keys
+   * never reach it — Enter answers the question instead (docs/BUSINESS-LOGIC.md §36).
    */
   if (suggestions.value.length === 0) {
     if (didYouMean.value === null) {
@@ -258,9 +230,8 @@ function move(step) {
   }
 
   /*
-   * The ring has one extra stop beyond the rows — "nothing highlighted" — so
-   * arrowing past the last row returns focus to the box instead of wrapping to the top.
-   * Why: docs/BUSINESS-LOGIC.md §36.
+   * The ring has one extra stop beyond the rows — "nothing highlighted" — so arrowing past the last
+   * row returns focus to the box instead of wrapping to the top (docs/BUSINESS-LOGIC.md §36).
    */
   const slot = active.value + 1
   active.value = (slot + step + count + 1) % (count + 1) - 1
@@ -269,15 +240,14 @@ function move(step) {
 }
 
 /*
- * The highlighted row is never focused (aria-activedescendant names it instead),
- * so the browser won't auto-scroll it — this does that manually.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The highlighted row is never focused (aria-activedescendant names it instead), so the browser
+ * won't auto-scroll it — this does that manually (docs/BUSINESS-LOGIC.md §36).
  */
 function scrollActiveIntoView() {
   nextTick(() => {
     /*
-     * Looked up by id, not child index — the divider is a child too, so
-     * `children[active]` would be off by one past it; optional call guards jsdom, which has no scrollIntoView.
+     * Looked up by id, not child index — the divider is a child too, so `children[active]` would be
+     * off by one past it; optional call guards jsdom, which has no scrollIntoView.
      */
     listbox.value
       ?.querySelector(`#${props.id}-option-${active.value}`)
@@ -286,9 +256,8 @@ function scrollActiveIntoView() {
 }
 
 /**
- * Empties the box for the ✕ and the search screen's home pills; no explicit
- * cancellation needed since writing '' triggers the search watcher to drop below MIN_QUERY on its own.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Empties the box for the ✕ and the search screen's home pills. No explicit cancellation:
+ * writing '' drops the search watcher below MIN_QUERY on its own (docs/BUSINESS-LOGIC.md §36).
  */
 function clear() {
   value.value = ''
@@ -360,11 +329,11 @@ defineExpose({ clear })
       role="listbox"
       :aria-label="listLabel"
     >
-      <!-- @mousedown.prevent is the whole focus race: without it, tap blurs the input,
-           focusout closes the list, and the click lands on nothing (docs/BUSINESS-LOGIC.md §36). -->
+      <!-- @mousedown.prevent is the whole focus race: without it, tap blurs the input and the
+           click lands on nothing (docs/BUSINESS-LOGIC.md §36). -->
       <template v-for="(suggestion, index) in suggestions" :key="suggestion.iata">
-        <!-- Drawn only when both tiers are present (worldStartsAt > 0, not >= 0); role="presentation"
-             so it isn't announced as a selectable option (docs/BUSINESS-LOGIC.md §36). -->
+        <!-- Drawn only when both tiers are present (worldStartsAt > 0, not >= 0);
+             role="presentation", so it is not announced (docs/BUSINESS-LOGIC.md §36). -->
         <li v-if="index === worldStartsAt && worldStartsAt > 0" class="options__split" role="presentation">
           Everywhere else Orbit can price
         </li>
@@ -391,8 +360,8 @@ defineExpose({ clear })
         </li>
       </template>
 
-      <!-- A real option — tapping fills the box — but not arrow-reachable
-           (move() walks suggestions, not this), so Enter takes it instead (docs/BUSINESS-LOGIC.md §36). -->
+      <!-- A real option — tapping fills the box — but not arrow-reachable (move() walks
+           suggestions, not this), so Enter takes it instead (docs/BUSINESS-LOGIC.md §36). -->
       <li
         v-if="didYouMean"
         class="option option--guess"
@@ -425,9 +394,8 @@ defineExpose({ clear })
   color: var(--muted);
 }
 
-/* What the ✕ is positioned against: the margin moved here from the input so
-   both share the same 44px top the ✕ centres in.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* What the ✕ is positioned against: the margin moved here from the input so both share the same
+   44px top the ✕ centres in. */
 .field__box {
   position: relative;
   margin-top: 9px;
@@ -454,16 +422,14 @@ defineExpose({ clear })
   border-color: var(--accent);
 }
 
-/* Padding for the ✕ reserved whether or not it's shown — text width changing
-   mid-type would reflow what's being typed.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* Padding for the ✕ is reserved whether or not it is shown — a text width changing mid-type would
+   reflow what is being typed. */
 .field__input--clearable {
   padding-right: 42px;
 }
 
-/* On the field, not beside it, so it reads as one control; 30px matches the
-   toast dismiss target and stops short of the field's 44px so a tap near the text edge still lands in the text.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* On the field, not beside it, so it reads as one control; 30px stops short of the 44px so a tap
+   near the text edge still lands in the text. */
 .field__clear {
   position: absolute;
   top: 50%;
@@ -488,9 +454,8 @@ defineExpose({ clear })
   stroke: currentColor;
 }
 
-/* In the flow, not floating — a 430px column means an overlaid panel would sit
-   on the buttons beneath it. Capped/scrolled internally; --panel (not --card) keeps the hairline dropdown look.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* In the flow, not floating — on a 430px column an overlaid panel would sit on the buttons beneath
+   it. --panel keeps the hairline look. */
 
 .options {
   max-height: 244px;
@@ -522,8 +487,8 @@ defineExpose({ clear })
 }
 
 /*
- * One highlight source (`active`) for mouse and keyboard — a separate :hover
- * rule could show two rows chosen at once.
+ * One highlight source (`active`) for mouse and keyboard — a separate :hover rule could show two
+ * rows chosen at once.
  */
 .option--active {
   color: var(--ink);
@@ -574,9 +539,8 @@ defineExpose({ clear })
   cursor: default;
 }
 
-/* The divider between curated ("opinion") and priceable-only places, styled as
-   a quiet caption rather than a row.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* The divider between curated ("opinion") and priceable-only places, styled as a quiet caption
+   rather than a row. */
 .options__split {
   margin: 6px 0 2px;
   padding: 9px 10px 3px;
@@ -589,9 +553,8 @@ defineExpose({ clear })
   color: var(--muted);
 }
 
-/* Styled as a question, not a result: quieter, with the city bold (the word
-   that answers) and the code aligned to match ordinary suggestion rows.
-   Why: docs/BUSINESS-LOGIC.md §36. */
+/* Styled as a question, not a result: quieter, with the city bold — the word that answers — and the
+   code aligned to the ordinary rows. */
 .option--guess {
   justify-content: space-between;
   color: var(--muted);

@@ -7,18 +7,8 @@ namespace App\Domain\Alerts;
 use DateTimeImmutable;
 
 /**
- * Something that might be worth an alert, reduced to what the policy needs: a
- * kind, a price, and — for a watched route — a score and the number of days
- * that score was computed from.
- *
- * Two named constructors, one private — a watched route carries score and maturity; a rule match (already price-tested) carries neither.
- *
- * The two score/maturity nulls travel together — a rule's threshold is the owner's own number, not one Orbit inferred from history.
- *
- * The price is on both, since the cooldown is about the price, not the score.
- *
- * `fareFoundAt` and `departureDate` are on both and never null, unlike score — they feed the freshness guard every alert goes through.
- * Why: docs/BUSINESS-LOGIC.md §10.
+ * Something that might be worth an alert, reduced to what the policy needs. Score and
+ * maturity travel together and are null for a rule match (docs/BUSINESS-LOGIC.md §10).
  */
 final readonly class AlertCandidate
 {
@@ -34,11 +24,8 @@ final readonly class AlertCandidate
     ) {}
 
     /**
-     * A route on the watchlist, with the deal score it currently earns and the
-     * number of daily observations behind it (RouteSnapshot::$trackingDays).
-     *
-     * The two dates belong to the cheapest calendar fare, not the daily observation the price came from — same split
-     * DealSummary::forRoute() makes (docs/BUSINESS-LOGIC.md §10).
+     * A route on the watchlist, with its deal score and the observations behind it.
+     * The two dates are the cheapest fare's, not the observation's (docs/BUSINESS-LOGIC.md §10).
      */
     public static function watchedRoute(
         int $score,
@@ -51,10 +38,8 @@ final readonly class AlertCandidate
     }
 
     /**
-     * A fare a standing rule matched. Already at or below the rule's cap.
-     *
-     * Names one specific departure (RuleMatch's DatedFare), so both dates are
-     * real and the freshness guard has everything it needs.
+     * A fare a standing rule matched, already at or below the rule's cap. It names one
+     * departure, so both dates are real and the freshness guard has what it needs.
      */
     public static function ruleMatch(
         int $priceCents,

@@ -12,11 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * One live second opinion — a row of `live_price_checks`, written only by
- * App\Application\Routes\LivePriceChecks.
- *
- * A null `google_verdict` means Google was asked and would not say; a search
- * that was never spent gets no row at all (docs/BUSINESS-LOGIC.md §17).
+ * One live second opinion — a row of `live_price_checks` (docs/BUSINESS-LOGIC.md §17).
  *
  * @property int $id
  * @property int $route_id

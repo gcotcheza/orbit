@@ -7,13 +7,8 @@ namespace App\Domain\Pricing;
 use InvalidArgumentException;
 
 /**
- * The numbers docs/PLAN.md locked, as a value the scorer can be handed.
- *
- * The scorer is pure PHP and never calls config(), so somebody has to carry
- * these across the boundary — that is this class, and App\Providers\
- * AppServiceProvider is the only thing that builds one from config/orbit.php.
- * Tests build their own, which is why the weights are tunable at all: a test
- * that wants to prove the trend component works can turn the other two off.
+ * The numbers docs/PLAN.md locked, as a value the scorer can be handed: the scorer is pure
+ * PHP and never calls config(), so AppServiceProvider carries these across.
  */
 final readonly class ScoringPolicy
 {
@@ -35,16 +30,8 @@ final readonly class ScoringPolicy
         public int $trendDays = 30,
         public float $trendSaturationPerDay = 0.005,
         /**
-         * Daily observations a route needs before the scorer will express an
-         * opinion at all — config('orbit.alerts.min_tracking_days'), which is
-         * ALSO what App\Domain\Alerts\AlertPolicy gates on.
-         *
-         * ONE NUMBER FOR BOTH, read from the alerts section for both, because
-         * they are one decision seen from two sides: a screen saying "Good
-         * price — book" about a route the alert engine considers too young to
-         * mention would be Orbit disagreeing with itself in public. It lives
-         * under `alerts` rather than under `score` because that is where the
-         * consequence people feel is — an unwanted mail at 06:55.
+         * Daily observations before the scorer will express an opinion — ONE NUMBER shared
+         * with AlertPolicy, read from the alerts section (docs/BUSINESS-LOGIC.md §36).
          */
         public int $minTrackingDays = 7,
     ) {

@@ -11,8 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * A standing alert described in English (design/README.md §4). Plain CRUD,
- * which is why this is an Eloquent model and not a repository (docs/PLAN.md).
+ * A standing alert described in English (design/README.md §4); plain CRUD, hence a model.
  *
  * @property int $id
  * @property int $user_id

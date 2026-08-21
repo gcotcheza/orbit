@@ -7,11 +7,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
 /**
- * What Google said about ONE route on ONE date, when somebody paid for it.
- *
- * The latest answer per route and departure date, not a log — why it is a table
- * rather than a cache entry, and what a null verdict means: docs/BUSINESS-LOGIC
- * .md §17.
+ * What Google said about ONE route on ONE date, when somebody paid for it — the latest answer
+ * per route and date, not a log (docs/BUSINESS-LOGIC.md §17).
  */
 return new class extends Migration
 {

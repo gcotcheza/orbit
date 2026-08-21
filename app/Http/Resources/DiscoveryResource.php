@@ -9,8 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * Deal-strip card, deliberately NOT a RouteSummaryResource (no score/history — a discovery has none); carries its own evidence instead, and hands off
- * via `code` only (no booking/watch link of its own — /route/{code} already offers both) (docs/BUSINESS-LOGIC.md §16).
+ * Deal-strip card, deliberately NOT a RouteSummaryResource — a discovery has no score or history,
+ * so it carries its own evidence (docs/BUSINESS-LOGIC.md §16).
  */
 final class DiscoveryResource extends JsonResource
 {
@@ -30,8 +30,8 @@ final class DiscoveryResource extends JsonResource
             'code' => $discovery->code,
 
             /**
-             * `lane` (absolute/relative) drives the client's card sentence — absolute needs no extra words, relative must say "rare for THIS ROUTE" since its per-km
-             * price is ordinary. String, not boolean, matching App\Domain\Discovery\Lane (docs/BUSINESS-LOGIC.md §16).
+             * `lane` drives the client's card sentence: absolute needs no extra words, relative
+             * must say "rare for THIS ROUTE". A string, matching the enum.
              */
             'lane' => $discovery->lane->value,
 
@@ -41,27 +41,27 @@ final class DiscoveryResource extends JsonResource
             'price' => Euros::from($discovery->price_cents),
 
             /**
-             * Bare YYYY-MM-DD (a calendar day, not a moment — docs/API.md's two axes): an ISO timestamp here would be read in the
-             * viewer's timezone and land a day early west of London (docs/BUSINESS-LOGIC.md §16).
+             * Bare YYYY-MM-DD, a calendar day and not a moment: an ISO timestamp would be read in
+             * the viewer's timezone and land a day early west of London.
              */
             'departureDate' => $discovery->departure_date->toDateString(),
 
             /**
-             * Milli-euros/km, 1dp — readable vs €0.0108/km's leading zeros. Published even though no screen prints it yet: it's
-             * why the card is on the strip and its order (docs/BUSINESS-LOGIC.md §16).
+             * Milli-euros/km, one decimal — readable next to €0.0108/km. Published though no screen
+             * prints it: it is why the card is on the strip.
              */
             'milliEurosPerKm' => round($discovery->cents_per_km * 10, 1),
 
             /**
-             * Percentile, or null when the window couldn't be fetched — null is a real answer here (patchy coverage on obscure
-             * pairs); the client draws no line rather than a zero (docs/BUSINESS-LOGIC.md §16).
+             * Percentile, or null when the window could not be fetched — null is a real answer on
+             * obscure pairs, and the client draws no line rather than a zero.
              */
             'percentile' => $discovery->percentile === null ? null : round($discovery->percentile, 1),
             'savings'    => $discovery->savings_cents === null ? null : Euros::from($discovery->savings_cents),
 
             /**
-             * ISO timestamp with offset (a moment, not a day — client renders "seen 2 days ago" via resources/js/lib/format.js). Nullable on purpose even though it
-             * should never be null in practice: a resource that assumed that invariant would break if it's retuned (docs/BUSINESS-LOGIC.md §16).
+             * ISO timestamp with offset (a moment, not a day). Nullable on purpose even though it
+             * should never be null: an assumed invariant breaks when retuned.
              */
             'foundAt' => $discovery->found_at?->setTimezone((string) config('orbit.timezone'))->toIso8601String(),
 
@@ -70,8 +70,8 @@ final class DiscoveryResource extends JsonResource
     }
 
     /**
-     * `verified` is read off the stored verdict, never re-derived (same argument as AlertResource — a retuned rule must not restate what last month's card said). `label` is server-composed, not
-     * client-composed. `googleLowest` publishes even when unconfirmed, since the disagreement itself is evidence the reader should see (docs/BUSINESS-LOGIC.md §16).
+     * `verified` is read off the stored verdict, never re-derived, and `label` is server-composed.
+     * `googleLowest` publishes even when unconfirmed.
      *
      * @return array{verified: bool, label: string, level: string|null, googleLowest: int|float|null, typicalLow: int|float|null, typicalHigh: int|float|null}
      */

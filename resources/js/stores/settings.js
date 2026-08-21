@@ -1,13 +1,5 @@
-// Alert settings: the seven switches on the alerts screen (design/README.md
-// §6), and the three sensitivity levels the server describes.
-//
-// A store, not component state — PR11's alert screens and PR12's push flow
-// both need one shared answer for whether push is on.
-// Why: docs/BUSINESS-LOGIC.md §36.
-//
-// Optimistic updates, honestly reverted: a failed PUT restores the old
-// value and says why — a silent revert is worse than no optimism.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Alert settings: the seven switches on the alerts screen (design/README.md §6). A store, not
+// component state, and optimistic updates are honestly reverted (docs/BUSINESS-LOGIC.md §36).
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { http } from '@/lib/http'
@@ -25,8 +17,8 @@ export const useSettingsStore = defineStore('settings', () => {
     const error = ref('')
 
     /*
-     * Which request's answer to believe: two PUTs can land out of order, so
-     * only the most recent request is allowed to write to the store.
+     * Which request's answer to believe: two PUTs can land out of order, so only the most recent
+     * request is allowed to write to the store.
      */
     let sequence = 0
 
@@ -43,8 +35,8 @@ export const useSettingsStore = defineStore('settings', () => {
     }
 
     /**
-     * Load once per visit to the screen. Safe to call again — it will not
-     * stack requests, and a failure can be retried by calling it.
+     * Load once per visit to the screen. Safe to call again — it will not stack requests, and a
+     * failure can be retried by calling it.
      */
     async function load() {
         if (status.value === 'loading') {
@@ -74,8 +66,8 @@ export const useSettingsStore = defineStore('settings', () => {
     }
 
     /**
-     * Change one or more settings. The whole object goes back (PUT, not PATCH)
-     * — see docs/API.md for why an optional boolean can't be turned off.
+     * Change one or more settings. The whole object goes back (PUT, not PATCH) — see docs/API.md
+     * for why an optional boolean can't be turned off.
      */
     async function change(patch) {
         if (settings.value === null) {
@@ -110,8 +102,8 @@ export const useSettingsStore = defineStore('settings', () => {
 })
 
 /**
- * One sentence somebody can act on. The 422 branch reads the server's own
- * message (UpdateSettingsRequest) rather than duplicating it here.
+ * One sentence somebody can act on. The 422 branch reads the server's own message
+ * (UpdateSettingsRequest) rather than duplicating it here.
  */
 function messageFor(failure) {
     const response = failure.response

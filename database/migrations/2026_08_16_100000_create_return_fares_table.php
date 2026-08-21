@@ -7,28 +7,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
 /**
- * The cheapest ROUND-TRIP fare for each (departure date, stay length).
- *
- * The third fare table: `calendar_fares` prices one-way, `route_price_history` tracks lookup day — neither answers
- * "what does a week cost".
- *
- * A separate table, not a nullable `nights` on `calendar_fares` — the unique key, retention rule, and every existing
- * read all differ.
- *
- * `nights` is stored, `return_date` is not — same fact twice, and nights is the query axis, indexes as a plain
- * integer, and derives the date exactly.
- *
- * Unsigned small integer: floors at 0 (same-day returns are real fares); a negative stay is corrupt and the column
- * type refuses it.
- *
- * One row per (route, departure_date, nights), overwritten every poll — same rule as `calendar_fares`; no history is
- * kept, nothing needs it.
- *
- * Retention is one clock, not two, unlike `calendar_fares` (which polls at two speeds) — this table is fetched in one
- * request per horizon.
- *
- * `found_at` is nullable and means "age unknown", never "fresh" — see `add_found_at_to_calendar_fares` for why that
- * distinction matters here too (docs/BUSINESS-LOGIC.md §15).
+ * The cheapest ROUND-TRIP fare per (departure date, stay length) — its own table, with `nights`
+ * stored and `return_date` derived, on one retention clock (docs/BUSINESS-LOGIC.md §15).
  */
 return new class extends Migration
 {
@@ -44,12 +24,12 @@ return new class extends Migration
             $table->timestamp('found_at')->nullable();
             $table->timestamps();
 
-            // The provider's own grain: `/v2/prices/latest` is unique per (depart_date, return_date) — this key agrees with the
-            // API, and its prefixes serve reads (docs/BUSINESS-LOGIC.md §15).
+            // The provider's own grain: `/v2/prices/latest` is unique per (depart, return),
+            // so this key agrees with the API and its prefixes serve reads.
             $table->unique(['route_id', 'departure_date', 'nights']);
 
-            // The other way round, for the real question: stay length filters first, which the unique index can't serve without
-            // scanning every candidate week (docs/BUSINESS-LOGIC.md §15).
+            // The other way round, for the real question: stay length filters first, which
+            // the unique index cannot serve without scanning every candidate week.
             $table->index(['route_id', 'nights', 'departure_date']);
         });
     }

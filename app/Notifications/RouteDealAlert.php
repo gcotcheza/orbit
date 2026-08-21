@@ -8,12 +8,8 @@ use App\Application\Alerts\RouteDealNotice;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * "✈ AMS→OPO €44 — 53% below usual" — the mail this whole app exists to send.
- *
- * THE SUBJECT COMES FROM THE NOTICE and not from here, because it is the one
- * line that has to work on a lock screen and it will be a push title as well as
- * a mail subject the day docs/PLAN.md's web push lands. See
- * App\Application\Alerts\AlertNotice.
+ * "✈ AMS→OPO €44 — 53% below usual" — the mail this whole app exists to send. THE SUBJECT
+ * COMES FROM THE NOTICE: it has to work on a lock screen, and will be a push title.
  */
 final class RouteDealAlert extends AlertNotification
 {

@@ -1,8 +1,7 @@
 <script setup>
 /*
- * The natural-language rule creator (design/README.md §4). Chips are
- * removable and re-parse the sentence; they never rewrite the text.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The natural-language rule creator (design/README.md §4). Chips are removable and re-parse the
+ * sentence; they never rewrite the text (docs/BUSINESS-LOGIC.md §36).
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'

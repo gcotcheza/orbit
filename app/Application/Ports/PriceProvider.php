@@ -8,19 +8,8 @@ use DateTimeImmutable;
 use App\Domain\Pricing\DatedFare;
 
 /**
- * Where fares come from.
- *
- * One method, shaped like Travelpayouts' calendar endpoint — one answer feeds both the heatmap (the list) and the
- * day's observation (its minimum).
- *
- * Implementations answer as of now — `asOf` is deliberately absent; no real API lets you ask about the past.
- * (FakeHistorySeeder moves the clock instead.) (docs/BUSINESS-LOGIC.md §15).
- *
- * A provider that has nothing for a date simply omits it: a gap in the
- * calendar is "no fare found", not the same as €0.
- *
- * Fares themselves may be older than "now" — `DatedFare::$foundAt` is when the price was found, since the real
- * provider is a cache; unknown is null (docs/BUSINESS-LOGIC.md §2).
+ * Where fares come from — one answer feeds both the heatmap and the day's observation.
+ * A missing date is "no fare found", never €0 (docs/BUSINESS-LOGIC.md §2).
  */
 interface PriceProvider
 {

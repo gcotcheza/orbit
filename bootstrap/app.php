@@ -15,15 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
 
         /*
-         * The PWA shell — the manifest, the service worker and the offline
-         * page — registered with NO middleware group.
-         *
-         * `Route::group([], ...)` is the whole point: none of the three reads a
-         * session, a CSRF token or a user, and a browser revalidates /sw.js on
-         * EVERY navigation. Inside the `web` group each of those checks would
-         * write a `sessions` row for a visitor who is not one and answer with a
-         * Set-Cookie, which also stops Cloudflare holding the response. The
-         * full reasoning is in routes/pwa.php.
+         * The PWA shell — manifest, service worker and offline page — registered with NO
+         * middleware group, so none of them starts a session (docs/BUSINESS-LOGIC.md §35).
          *
          * -------------------------------------------------------------------
          * WHY THE SPA ROUTE IS DEMOTED TO A FALLBACK ON THE LINE ABOVE

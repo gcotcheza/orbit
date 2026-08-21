@@ -1,26 +1,24 @@
-// Every request goes through here, so "does the server know who I am" has one
-// answer. Cookie auth only, no tokens: the session cookie is httpOnly and
-// unreadable from JS, so there is nothing in localStorage to steal.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Every request goes through here, so "does the server know who I am" has one answer. Cookie
+// auth only: the session cookie is httpOnly, so there is nothing in localStorage to steal.
 import axios from 'axios'
 
 export const http = axios.create({
-    // withXSRFToken re-reads the XSRF-TOKEN cookie per-request (login rotates it); a meta tag captured once at page load would go stale.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // withXSRFToken re-reads the XSRF-TOKEN cookie per-request (login rotates it); a meta tag
+    // captured once at page load would go stale (docs/BUSINESS-LOGIC.md §36).
     withCredentials: true,
     withXSRFToken: true,
 
     headers: {
-        // Both make Laravel answer JSON instead of a redirect/HTML error page: Accept drives expectsJson(), X-Requested-With is what ajax() checks.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Both make Laravel answer JSON instead of a redirect/HTML error page: Accept drives
+        // expectsJson(), X-Requested-With is what ajax() checks (docs/BUSINESS-LOGIC.md §36).
         Accept: 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
     },
 })
 
 /*
- * DO NOT make these imports static (circular with stores/auth.js -> router, which fails silently as `undefined`, not loudly). This interceptor is the one place a dead session redirects to login;
- * `/api/me` and `/login` are exempt since a 401 from either is expected, not an expired session (docs/BUSINESS-LOGIC.md §36).
+ * DO NOT make these imports static — circular with stores/auth.js, which fails silently as
+ * `undefined`. `/api/me` and `/login` are exempt: a 401 from either is expected.
  */
 const SESSION_EXEMPT = ['/api/me', '/login']
 
@@ -34,15 +32,15 @@ http.interceptors.response.use(null, async (error) => {
             import('@/router'),
         ])
 
-        // $patch, not an action: the app is being TOLD it's signed out already, not deciding to be — `resolved` stays true since the answer is already known.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // $patch, not an action: the app is being TOLD it's signed out already, not deciding to be
+        // — `resolved` stays true since the answer is already known (docs/BUSINESS-LOGIC.md §36).
         useAuthStore().$patch({ user: null })
 
         const from = router.currentRoute.value
 
         if (from.name !== 'login') {
-            // replace(), not push(): the page whose session just died has no
-            // business in the back stack.
+            // replace(), not push(): the page whose session just died has no business in the back
+            // stack.
             router.replace({
                 name: 'login',
                 query: from.fullPath === '/' ? {} : { redirect: from.fullPath },
@@ -50,14 +48,14 @@ http.interceptors.response.use(null, async (error) => {
         }
     }
 
-    // Rejected either way. The call site still gets its error — this handler
-    // decides where the USER goes, not what the caller sees.
+    // Rejected either way. The call site still gets its error — this handler decides where the USER
+    // goes, not what the caller sees.
     return Promise.reject(error)
 })
 
 /**
- * Ask the server for a fresh CSRF cookie. Called before signing in: a login form left open for hours can outlive the
- * shell's original cookie, turning an uninterpretable 419 into a working sign-in (docs/BUSINESS-LOGIC.md §36).
+ * Ask the server for a fresh CSRF cookie, before signing in: a form left open for hours can
+ * outlive the shell's original cookie, turning a 419 into a working sign-in.
  */
 export function ensureCsrfCookie() {
     return http.get('/sanctum/csrf-cookie')

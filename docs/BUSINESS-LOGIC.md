@@ -365,6 +365,33 @@ holds**, inclusive — not since the route was added. A route polled once today 
 "tracking 1 day". Both ends are parsed in the owner's timezone, or the
 difference comes back with a fraction on it.
 
+**The row is a near-window minimum, whatever that morning's run actually
+fetched.** `PollRoutePrices` bounds the day's observation to
+`poll.window_days` even on the weekly `--far` run, which reaches eleven
+months. Taken over the depth of the fetch instead, a Saturday's row would be
+the cheapest fare in the next *eleven* months — lower on most routes for no
+reason but how deep the run looked — and the series would dip every Saturday
+and recover every Sunday. The trend component would read that sawtooth as a
+fall and a recovery, and the percentile would score an ordinary Saturday as
+the cheapest morning of the month. The near-window filter compares `'Y-m-d'`
+strings rather than `DateTimeImmutable`s, because the near edge is midnight in
+the owner's timezone while a provider's departure date carries whatever zone
+the adapter built it in — two instants for the same calendar day can be hours
+apart. If a run somehow fetched nothing inside the near window at all, no row
+is written: yesterday's row is a better answer than an invented one.
+
+**The write is an `upsert` with the date as a bare `'Y-m-d'` string, and
+`updateOrCreate` is the trap it avoids.** `updateOrCreate` runs the value
+through the model's date cast on the way *in* but not on the way to the
+`WHERE` clause, so the lookup compares `'2026-08-14'` against a stored
+`'2026-08-14 00:00:00'`. Postgres coerces both to its `date` column and never
+notices; SQLite, which the test suite runs on, stores the string it is given,
+the two do not match, and every poll inserts a duplicate that hits the unique
+index. `observed_on` is stamped in the **owner's** timezone rather than UTC
+for the same class of reason: the poll runs at 06:10 Amsterdam, where both
+zones agree, but a retry landing at 00:30 local is still yesterday in UTC and
+would overwrite yesterday's observation with today's price.
+
 ---
 
 ## 6. Statistics — what a route "usually" costs
@@ -863,22 +890,31 @@ at all. Whether a mail leaves the box is `MAIL_MAILER`.
 
 ### Implementation notes
 
-`AlertNotification` implements `ShouldQueue` — without it, `->delay()` for quiet
-hours silently becomes decoration. `AlertCandidate::$alertIds` must stay
+`AlertNotification` implements `ShouldQueue` — without it, `->delay()` for
+quiet hours silently becomes decoration. `AlertCandidate::$alertIds` must stay
 `protected`, never `private` — Laravel's `SerializesModels` reflects on
 parent-class properties and silently drops private ones on the way to the
 queue, surfacing as a fatal deep inside the delivery listener. **This is a
 DO-NOT-REMOVE landmine.** `DigestBuilder` reads only the same classes screens
-read, so the mail can never disagree with what a tap-through shows; routes with
-no observation are skipped (not scored 0), rules with 0 matches are omitted
-rather than shown as "0 matches", and `week()` reads the stored payload rather
-than re-deriving it. An unknown alert-notice type throws rather than being
-dropped — an alert that silently goes nowhere is the worst failure this app
-has, because everything still looks like it's working. The profile button's
-`#account` entrance scrolls only once the settings have settled (`ready` or
-`failed`) — `idle` and `loading` are both "the four cards above it have not
-rendered", and scrolling then lands the reader in the middle of quiet hours a
-moment later.
+read, so the mail can never disagree with what a tap-through shows; routes
+with no observation are skipped (not scored 0), rules with 0 matches are
+omitted rather than shown as "0 matches", and `week()` reads the stored
+payload rather than re-deriving it. An unknown alert-notice type throws rather
+than being dropped — an alert that silently goes nowhere is the worst failure
+this app has, because everything still looks like it's working.
+`AlertEvaluation` reads the quiet window and the cooldown ledger **once per
+run**, not per route — the window cannot move while a run is in flight, and a
+per-route ledger read would be thirty round trips inside a job meant to be
+short. Its log line carries `routes_too_new` and none of the other three held
+reasons, because that one explains a *morning* rather than a route: a
+watchlist filled in yesterday sends nothing today, and `route_alerts: 0` on
+its own reads like a broken poller. The freshness guard is asked about the
+fare the mail **points at** — the cheapest calendar fare — not the observation
+the score came from, the same split `DealSummary::forRoute()` makes: what the
+reader clicks is what has to be real. The profile button's `#account` entrance
+scrolls only once the settings have settled (`ready` or `failed`) — `idle` and
+`loading` are both "the four cards above it have not rendered", and scrolling
+then lands the reader in the middle of quiet hours a moment later.
 
 ---
 
@@ -938,6 +974,14 @@ after the criteria field it folds back into:
 | `date_window` | `dateWindow` | Date window · Mar – May |
 | `vibe` | `vibes[]` | Vibe · ☀ Sunny |
 
+**The eyebrow on a chip is the server's word.** "From", "Max price", "Trip
+length" arrive on the chip and the client only upper-cases them, because the
+category names a criteria field the back end owns — a hard-coded list in the
+component would be a second vocabulary to keep in step, and the failure would
+be a chip labelled for a field that no longer exists. The chip itself is not
+clickable either: only the × is, so there is exactly one thing for a keyboard
+to reach, and its label says which chip it removes rather than "Remove".
+
 **One direction only** — criteria in, chips out, criteria back. Both adapters
 answer with a `RuleCriteria` and hand it to `ParsedRule::of()`; nothing builds
 chips by hand. That is what guarantees the chips on screen and the rule that
@@ -948,6 +992,12 @@ re-reading edited text, so taking "From EIN" off leaves every other chip exactly
 where it was and Reset is the same parse again. Unknown removed-ids are ignored,
 because the client holds its removed list across re-parses of a sentence
 somebody is still typing.
+
+**A chip's `id` is stable across parses of the same sentence** — it is the
+kind plus the value, never a position — because the client holds a list of
+removed ids across a re-parse it did not ask for (every keystroke re-parses,
+500ms behind). An index-based id would silently start removing a different
+chip the moment somebody edited a word earlier in the sentence.
 
 **A chip's × is never disabled, and a removal never waits.** `Create.vue`
 debounces typing by 500 ms, but disabling the × for that window — or for the
@@ -1172,8 +1222,16 @@ fares and then handed the reader to Skyscanner, a different meta-search with a
 different set of agencies and no reason to be holding the same fare. It showed
 DUS→AGP at **€29** where Skyscanner's cheapest for that date was **€68**.
 Quoting one shop's price and pointing at another's till is a way to look wrong
-while being right. Skyscanner survives as a quiet "Compare on Skyscanner" text
-link, because a second opinion is worth having.
+while being right. Skyscanner survives as the second opinion, because a second
+opinion is worth having — but it is a **button**, not a line of text: the two
+hand-offs are a pair on one line, Skyscanner outlined on the left as the check
+and Aviasales accented on the right at roughly six-tenths of the width, and the
+width is the reader's basis for choosing. It shipped as a 12px centred text link
+under the button, on the argument that "two buttons is a choice the reader has no
+basis for making"; the owner used it and disagreed, which settles it — on a phone
+that line did not read as pressable at all. `Components/calendar/DaySheet.vue`
+draws the same pair, so the two screens agree. The full layout and copy reasoning
+is in §36 ("Frontend — views and components").
 
 **One passenger, economy, one-way.** The trailing `1` is the passenger count and
 is mandatory — the link does not work without it — and economy is the *absence*
@@ -1776,6 +1834,40 @@ parameterless read behind `auth:sanctum`, on the owner's clock. In the sandbox,
 `SALE_IN_HUNDREDTHS` (22%) is tuned to fill the shortlist, not to match the real
 funnel's ~4.9% pass rate.
 
+The exploration rotation is **deterministic on purpose**:
+`RelativeLaneSelector` orders the unknown pool by a `crc32` hash of the day
+and the route code, never `rand()`. A shuffle would make the lane untestable
+(a feature test could assert only that *something* was explored) and would
+make two runs on the same morning disagree, which matters because the job is
+idempotent by design and a hand-run of `orbit:discover` is meant to reproduce
+the scheduled one. The **day** is in the seed so the rotation moves — hashing
+the route alone would explore the same three routes every morning forever, a
+flywheel turning three cogs — and it is the **owner's** day, already resolved
+to `orbit.timezone` by `DiscoverDeals`, so a 05:20 Amsterdam run seeds on the
+date the owner would call today. The route code breaks a hash collision, since
+32 bits over a few dozen candidates is unlikely but not impossible and the
+order still has to be total. **One destination appears only once across both
+lanes and across origins** — Málaga turned up in both the DUS and EIN sweeps
+on 2026-08-16, and spending an absolute slot *and* a relative slot on the same
+city pays twice to name one place.
+
+The relative lane's `maxFareCents` is **deliberately above the absolute lane's
+€120**: a relative find is by construction *not* remarkable per kilometre —
+that is what makes it this lane's — so a ceiling tuned for €/km outliers would
+reject the whole population, and €120 leaves no room for mid-haul routes whose
+usual is genuinely high. €150 is still a ceiling and is there on purpose,
+because a percentage is scale-free: a €400 long-haul at half its €800 usual is
+a real discount but a different product, a trip somebody plans around rather
+than a fare they book on a Tuesday. Its `minSavingsCents` is the same €15 as
+`DiscoveryPolicy`'s but is passed in separately rather than read off that
+object, so the two can be retuned apart. Its `minDiscount = 0.40` sits below
+both measured cases with margin (DUS-AGP at 62.8%, the owner's Dublin ask at
+50%) and comfortably clear of the 20–30% an ordinary route's window spans
+between its cheap Tuesdays and its median — the thing this must never fire on.
+Three picks is the only number in the class that costs anything (≤21 requests)
+and it adds no Google search at all: `serpapi.max_per_run` stays at five,
+shared across both lanes, absolute first.
+
 ---
 
 ## 17. A cheap fare that may already be gone, and the way to check
@@ -2230,6 +2322,23 @@ would throw someone off the screen they were reading, minutes after a deploy
 they had no part in. A fresh checkout with no build, or an unparseable
 manifest, serves the static shell rather than erroring.
 
+**The three PWA routes are registered with no middleware group at all, and
+that is what keeps them session-free.** `bootstrap/app.php` loads
+`routes/pwa.php` from the `then:` callback, outside both the `web` and `api`
+groups; global middleware (`TrustProxies`, `TrustHosts`) still applies,
+because that is framework-wide rather than group-scoped.
+`SESSION_DRIVER=database`, and a browser revalidates `/sw.js` on **every
+navigation** — inside the `web` group each of those revalidations would start
+a session, write a `sessions` row for a visitor who is not one, and answer
+with a `Set-Cookie`. A response carrying a `Set-Cookie` is one Cloudflare will
+not hold, so the manifest and the offline page would stop being edge-cacheable
+as well. None of the three reads a session, a CSRF token or a user, so none of
+them needs the group, and none of them exposes anything: an app name, two
+colours, a list of build filenames the HTML already links to, and a page of
+static prose. `tests/Feature/PwaShellTest` asserts they still carry no cookie,
+because that is exactly the kind of thing a later `->middleware('web')` undoes
+silently.
+
 ---
 
 ## 36. Notes carried over from the comment-slimdown pass
@@ -2274,6 +2383,8 @@ by anyone.
 
 ### HTTP layer — requests, resources and routes
 
+- **`RouteSnapshots` is four queries for any number of routes, and caches nothing.** The routes with airports and statistics eager-loaded; the observations inside the chart window for every route at once; one `MIN(observed_on)` per route (because "tracking N days" has to look past the chart window, or a route watched since March would claim 60 days); and one cheapest calendar fare per route for the booking link. The watchlist screen asks for six routes and gets four queries where accessors on the model would give it twenty-five. Nothing is cached because the inputs are two small indexed tables and the scoring is arithmetic on them — the read is cheaper than the invalidation, and a cached score is a second place the truth lives, always the one that is wrong after a stats refresh.
+- **`cheapestPerRoute()` is bounded to `orbit.poll.window_days`, and that bound is an API contract.** `docs/API.md` defines `cheapest` as "the day `price.current` is for", and `price.current` is the near-window minimum (§5). Since `calendar_fares` now runs eleven months deep, an unbounded `MIN` would publish a cheaper March fare as `cheapest` and leave a card printing "€120" beside "cheapest departure €78" — two numbers the API says are one, with a booking link aimed at a date the score was never computed from. The far months belong to the calendar screen alone. It is a correlated subquery in raw SQL rather than loading 180 rows per route to take one: neither Postgres' `DISTINCT ON` nor a window function is portable to the SQLite the test suite runs on, and its single binding is a date this app computed from config and the clock, bound rather than interpolated regardless. Both halves compare `< the day after the edge` rather than `<= the edge`, because this table is written two ways — `PollRoutePrices` upserts a bare `'Y-m-d'` while anything going through the model's cast writes `'Y-m-d H:i:s'` — and `<=` silently drops the window's last day on SQLite and not on Postgres. Ties keep the first row, which the ordering makes the earliest date.
 - **`RouteCalendarController` answers a month at a time**; an out-of-window month returns an empty grid (`days: []`), not a 404, so paging can walk past the horizon honestly. `month` is validated by regex shape rather than a Carbon parse, because Carbon accepts things like "+3 days" that aren't months. `RouteCalendarResource` publishes `min`/`max` for the legend and `foundAt` per day, not per month — the provider mixes fares found an hour ago with ones found last week.
 - **Booking links are sent as *templates*, not per-day URLs** — the day sheet books the date the user tapped, and only the client knows which date that is; named tokens (`{ddmm}`, `{yymmdd}`) keep site-specific date-format knowledge server-side.
 - **`UpdateSettingsRequest` is `PUT` with every field `required`**, not `PATCH` — a boolean's absence and its `false` value are indistinguishable once optional, and the failure mode is a quiet-hours toggle that can be switched on but never off. `quietStart`/`quietEnd` are required even when quiet hours are off, so turning the feature back on restores what was chosen rather than resetting to defaults. API keys are camelCase (the API's vocabulary), never the database's snake_case. `sensitivity` validates against the configured levels, not `between:0,2`, so a fourth sensitivity level is one config entry away.
@@ -2295,6 +2406,8 @@ by anyone.
 - **`PUT /settings` (not PATCH) sends the whole preferences object every time** — see `UpdateSettingsRequest` above for why an optional boolean would be a switch that can't be turned off.
 - **`POST /rules/parse` is a POST that writes nothing, deliberately** — a GET would put the owner's free-text rule sentence in every access log and browser history between the phone and the server. It's the only throttled route in this file besides login, since the create screen calls it on every keystroke's 500ms debounce.
 - **`PATCH /rules/{id}` keys on a numeric database id, not a natural key** — a rule has no code to look up by (two rules can be the identical sentence with different chips removed), so this is the one place in the API keyed on a raw id.
+
+- **A watched route may now start anywhere** (2026-08-16), and that is a poll every morning for a pair the owner cannot necessarily fly. It is deliberate and the owner's to decide: watching is an explicit act on a route somebody has just been shown the price of, the watchlist is six rows long, and a list that refused BCN-PMI would refuse the one route somebody actually wanted to follow. What is **not** widened is the rule engine, which watches on its own — `config('orbit.origins')` still bounds the nightly sweep's budget.
 
 ### Auth and security
 
@@ -2318,8 +2431,21 @@ by anyone.
 - **`e2e/specs/theme.spec.js` reads a real painted CSS property (`color` on `<body>`), not just a resolved custom property** — a custom property resolves whether or not anything actually uses it, so only a painted property proves the theme swap reached the live document. `background-color` is deliberately excluded, since the light theme's `--bg-grad` is a gradient and the shorthand reads transparent in exactly one theme. Tab labels are asserted separately from Home specifically because they were pinned to a test that first rasterises a 1.4MB globe on a software renderer, so on a loaded CI box the label assertion silently never ran.
 - **`GlobeStage.test.js` replaces `globe.gl` and the browser clock with fakes** so timing bugs are inspectable (the geometry itself is covered by `lib/geo.test.js` and `lib/tour.test.js`). jsdom lacks `matchMedia`/`ResizeObserver`, both legitimately used by this component, so they're stubbed in `beforeEach` rather than in the component. `vi.mock` is hoisted above imports, so its factory runs before consts defined above it exist — references to them are deferred inside functions because of it. Visibility state is remembered for `afterEach`, since jsdom's `document` outlives the test and a stage left mounted keeps answering `visibilitychange` for every test after it.
 
+- **There is deliberately no camera bias in `GlobeStage`, and that was measured rather than assumed.** The UX pass filed "the spotlight card covers the arc's destination" against a *mid-flight* screenshot. Aiming the camera a few degrees off-subject is the wrong fix at all three steps: **fit** needs nothing (at `fitAltitude` 2.4 the planet is ~205px across in a 390px canvas, its lower limb ~48px clear of the card, both endpoints on screen); **dive** cannot be fixed by aiming (at `diveAltitude` 0.42 a European destination is off the *bottom edge* entirely, and bringing it back means flying higher, i.e. a different screen); and **fly** would break something worse — `PlaneGlyph.vue` is pinned at the exact centre of the stage *because* the camera points at the plane, and offsetting it detaches the aeroplane from its arc by an amount that varies with altitude (0.20 to 0.71 across one flight) and so cannot be cancelled with a constant. The flight *ends* with the destination at the canvas centre, ~150px above the card, where it sits for the whole dwell — the moment the card underneath is there to be read. The finding was real as a photograph and not as a defect.
+- **The globe caption's offset is arithmetic, not a z-index.** `design/README.md` §1 asks for a caption pinned to the bottom of a 360px stage *and* a card that climbs 30px over that same edge, opaque, at `z-index: 4` — so every pixel of the caption was painted underneath the card: in the DOM, in the accessibility tree, and visible to nobody. Only a browser could see that; jsdom has no layout engine, so every existing test was green. The design's 6px stays as the caption's own breathing room and the card's overlap plus a gap is added on top. Raising the z-index instead would put the text *on* the card's rounded top edge, over the route code. The caption also carries a **scrim rather than a halo**, on the span and not the `<p>` (the paragraph spans the whole stage, so painting it there would be a full-width band across the planet): a halo tints only the pixels around each glyph, and the failure is that there is no known background at all — the text is over a photograph the palette does not choose.
+- **The stage collapses on a phone turned sideways** (`max-height` under a landscape media query, which keeps the rule off laptops — every desktop window is "landscape", and 560px of viewport height is a phone on its side and nothing else). The installed app is locked to portrait, so this is only ever a browser tab, which is how somebody who has not installed it yet looks at the app; the stage is the only thing that can give up height without losing information, since a smaller picture of one route is the same route. `globeScene.js` sizes the renderer from the element's own box through a `ResizeObserver`, so nothing else has to know the rule exists.
+
 ### Frontend — views and components
 
+- **A `var()` inside an SVG presentation attribute is the trap this branch avoids everywhere.** `stroke="var(--good)"` and `fill="var(--good)"` are *presentation attributes*, and browsers disagree about whether one may carry a CSS value: the ones that say no paint the ring, the glyph or the star black. So every tokenised SVG colour in this app is set from a style block instead — `AdviceCallout`, `DealScoreGauge`, `PriceHistoryChart` and the calendar's star all do it for this one reason.
+- **The deal-score ring prints "/100", because the scale is part of the number.** A ring reading 65 with "DEAL SCORE" under it is a figure with no units — 65 out of 100, out of 10, out of five stars, or a rank among the routes on the list are all readings a person actually offered, and an arc does not settle it, since a battery meter is an arc too. The `aria-label` had said "out of 100" from the start; this is the sighted half of the same sentence, and it is dropped when there is no score, because "/100" under a dash puts units on a number that is not there. The caption must stay on one line — "DEAL" over "SCORE /100" reads as two labels.
+- **The discovery strip renders only when there is something on it**: no skeleton, no "loading deals…", and no empty state, all three deliberate. A skeleton reserves space on every visit for a section that is frequently and legitimately empty (a box with no sweep provider, a week where nothing cleared the thresholds), and reserving space is a promise — the form must not move under somebody's thumb while a background fetch lands, the same reflow argument the suggestion panels are built around. An empty state would be the wrong apology: "No deals today" implies something failed, and nothing did — every threshold in `orbit.discovery` is a floor rather than a quota precisely so "nothing was remarkable this week" is a possible answer, whose honest rendering is silence.
+- **`UpdateToast` is a sibling of `<main>`, not something inside it.** It is fixed to the viewport and lives as long as the app does, so rendering it inside the `RouterView` would tie an announcement about the whole app to whichever screen happened to be mounted — and would put a node inside the `<KeepAlive>` that caches the globe.
+- **The day sheet mirrors `BookingCta`'s pair rather than sharing it** — same shape, same order, same "See this fare" copy and the same merged disclaimer, because they are one decision on two screens and the owner should not have to learn it twice; what the two have in common is the *sentence*, not the layout (that component is a full-width 54px button, this is half of a compact pair). Its colour swatch says what it is *of* — where this day's fare sits between the cheapest and dearest day of **this** month, on the grid's own ramp — because without the grid in front of you that is unguessable, and the UX pass read it as decoration; the square stays `aria-hidden`, since the caption is a restatement of the verdict pill, which says it in words already.
+- **The day sheet is `Teleport`ed to the body, and not for tidiness.** The calendar screen's root carries a `rise-in` transform, and an element with a transform is the containing block for its fixed-position descendants — so a sheet rendered in place would be pinned to the scrolling column rather than to the viewport for as long as that animation is live.
+
+- **`BookingCta` is an anchor, not a button** — it leaves the app, so it must be long-pressable, copyable and openable in a new tab, and announced as a link. `rel="noopener"` is not optional on a `target="_blank"` (without it the opened page gets a live `window.opener` handle back), and **`noreferrer` is deliberately absent**: the Aviasales link is an affiliate one, and stripping the referrer is how that attribution disappears. The second opinion is a **button, not a line of text** — it shipped as a 12px centred text link on the argument that "two buttons is a choice the reader has no basis for making", and the owner used it and disagreed, which settles it: on a phone that line did not read as pressable at all. So they are a pair and not equals — Skyscanner outlined on the left, Aviasales accented on the right at roughly six-tenths of the width, and the width *is* the reader's basis for choosing. Both go quiet when the advice is a warning: with two controls on the line, leaving the accent on one would keep the page arguing with itself. The labels **wrap rather than truncate or shrink** (ellipsis hides which site it is; smaller type is the fine-print defect being fixed; cutting the verbs loses "this leaves the app"), and the disclaimer is one merged line rather than two, because two greyed-out sentences under a button is the shape of small print and small print is not read. It is word for word the day sheet's, duplicated rather than shared because what the two have in common is the sentence, not the layout.
+- **The calendar screen opens on the month the route's cheapest departure is in**, clamped into the window the arrows can reach. It used to open on today, always — which the poll window only half covers, since the days before today are gone — while the actual cheapest day sat two taps away, unmentioned; the banner said "cheapest *this* month" and nothing said which month to be in. The arrows span eleven steps and twelve grids because 334 days can never touch more than twelve calendar months (brute-forced over every start date in a four-year span). The far months are legitimately thin and sometimes empty for three separate reasons, none of them a bug — a window opening early in a month closes inside the twelfth, the provider's cache thins with distance, and months 7–11 are refreshed only weekly — so the screen says "No fares seen for this month yet" rather than stopping short to guarantee a full grid.
 - **`Watchlist.vue`'s add-route machinery moved to `Search.vue` on 2026-08-16**, leaving this screen to just the list; undo is a real re-add write (not a held request), which is honest because removing a route never deletes its history — a re-added route comes back with its price history intact.
 - **`AirportField.vue`'s two-tier suggestion panel (curated, then world) exists because the curated 184 rows answer instantly from memory and are the only ones the rule engine can match**; the `open` flag is owned by the parent form, not the field, because focus/blur races with the suggestion panel made the "Look up" button unpressable while a panel was open. A "did-you-mean" guess only appears when nothing matched and the world search isn't still in flight, and only searches the curated list. The value watcher fires on the normalised (stripped, not upper-cased) value rather than gating on `open`, since paste/autofill/`fill()` can deliver a value in one event that beats an `if (open)` guard. The suggestion panel is in the document flow, not floating, because Orbit's 430px column would otherwise let a floating panel sit directly on the buttons beneath it.
 - **`Create.vue`'s textarea is seeded with a worked example** so the feature isn't invisible before anyone guesses what to type; removing a chip re-parses the same sentence rather than editing the text, so the words on screen are always exactly what was typed.
@@ -2338,6 +2464,12 @@ by anyone.
 - **`resources/js/Components/calendar/month.js` computes everything in UTC deliberately** — the API's dates are bare `YYYY-MM-DD` with no zone, and `new Date('2026-06-01')` parses as UTC midnight then answers `getDay()` in the viewer's own timezone, shifting the whole grid a column for anyone west of London. Locale is pinned to en-US to match the signed-off design. The grid is built from the calendar and filled from the API, never the reverse — `days` arrives with missing dates simply absent, so indexing into it by position would misalign every date after a gap.
 - **`resources/js/router/index.js` uses `createWebHistory`, not hashes**, so every route gets a real, shareable URL and a PWA launch target; `routes/web.php` answers every non-API path with the same shell. `meta.layout` (`'tabs'` or `'bare'`) is a string, not a swappable layout component, since swapping components would remount the tree and drop the globe's `<KeepAlive>` cache. `meta.guestOnly` mirrors the server's auth split and is opt-in: a route without it needs a session, so screens are private by default. The catch-all redirect goes to home rather than an error page, since there's no content at an unknown URL to apologise for.
 - **`RouteSummaryResource` is one shape read by three screens** (spotlight card, watchlist row, detail header), so `price` can't mean something different on one of them. Nulls in `price` are real answers ("not known yet"), not zeroes; a screen that renders them as €0 or 0% is stating something false.
+
+- **The centre tab is Search, and it replaced a `+` that wrote a deal rule.** On the first day of real use the owner made thirty-two look-ups and wrote zero rules — through a form folded behind a small `+` in the watch screen's header, offering three origins, second on the third screen. The most used feature was the hardest to reach and the least used one had the biggest button. Rules did not go away: `/create` is unchanged and is reached from the rules section of the watch screen, where the rules already live. The **From** box takes any of the 3,270 airports, exactly as **To** does, because `RoutePairRequest` stopped restricting the origin on the day this screen was drawn — "what does Barcelona to Palermo cost while I am already in Barcelona" is an ordinary question. The three home airports stay one tap as **quick chips, not a closed list** (nine flights in ten leave from AMS, EIN or DUS), written out in the client rather than fetched, because they are presentation now rather than validation and so have nothing left to disagree with.
+- **The pills and the box are two values, and that separation is the fix.** They used to be one — tapping DUS wrote "DUS" into the From box — and the box paid for it: a field arriving prefilled with three capitals and no placeholder is a *read-out*, showing an answer rather than inviting a question, and the empty To box beside it proved the point by contrast. So `home` is the lit pill and is the origin whenever the box is empty, `from` is "somewhere else" and starts empty, and the box **never** mirrors the pill. One rule settles the state no single value could express: **text wins while there is text, pills win on tap** — typing unlights the pills, tapping a pill empties the box, and one computed `origin` is the only place either fact is read, so a screen showing an unlit pill beside typed text cannot send the pill.
+- **"Look up" does not touch the network from this screen.** It is a navigation, and a screen that sat spinning for three seconds before it changed would be the app freezing on the page you are leaving. The screen being opened has to handle a route with no fares anyway (a bookmark, a shared link, a lookup made a month ago), so the fetch lives there — one path rather than two. The stated cost: a well-formed code with no airport behind it ("ZZZ") is refused on the detail screen rather than in the form. The **panel-open flag lives on the form, not in the fields**, because a field can only ask "did focus leave me" and the buttons are not in it — a field closing its own panel on `focusout` would move the buttons out from under the pointer between mousedown and mouseup, and no click would ever be produced. **"Add to watch" stays on this screen** rather than pushing to the detail: a route added a second ago has no polls, no history and no opinion.
+- **The discovery strip is below the search form, and not on the home globe.** The globe tours the watchlist — what the owner already thought of — and crowding a €27 Marrakesh into it would be two answers to two different questions on one canvas; a person on the search screen is already asking "where could I go". It sits *below* the form because the form is what the tab is for and what muscle memory reaches for, and a strip that pushed the boxes down the screen would be the app deciding it knows better than the person who tapped Search. Six cards, in the server's order.
+- **`stores/destinations.js` fetches once and filters in the browser**, because 184 rows of four short strings is a few kilobytes and the list changes when somebody edits a file in the repository, not while an app is open — a `?q=` endpoint here would put a round trip between a letter and the suggestion it should produce. The ranking is **exported as a pure function** rather than living in the component, since it is the part with opinions in it ("bil" means Bilbao before Bilbao's country) and opinions are worth testing without mounting anything. Its typo fallback uses **edit distance ≤ 2 against city names only**: two is one transposition plus one slip, which is what a thumb produces, three starts matching genuinely different places, and codes and countries are deliberately not fuzzed — a three-letter code is two edits from dozens of others, and "Did you mean Spain?" for a mistyped code is a guess with nothing behind it. It runs only when the ordinary search found nothing, so a query with real matches never has a guess mixed in.
 
 ### `resources/js/Views/RouteDetail.vue`
 
@@ -2360,6 +2492,7 @@ by anyone.
 
 ### Stores and client libraries
 
+- **`format.js` used to be three files.** `Components/route/format.js`, `Components/calendar/format.js` and `Components/globe/format.js` each carried their own copy of "print a fare", because the screens were written in parallel worktrees that could not create a shared file without colliding; each said so and each pointed at this pass. Fares are **rounded, not truncated** (€57.45 is nearer €57; a fare reading a euro cheaper than it is, is a small lie about a price, and a 45-cent overnight move is not a move), and **null in, null out** — callers disagree about what "no fare" looks like (an em dash on the rail, "No fare yet" on the spotlight card, a sentence on the detail) and the only thing none of them may print is €0. Ages read "just now" under an hour (nothing on these screens moves on a scale where forty minutes matters, and minute precision would make the commonest state the noisiest line), switch from hours to days at exactly 24 — the poll's own period — and a *future* timestamp reads as "just now", because clock skew is a fact of life and "in 2 hours" under a price is a bug report.
 - **`stores/airports.js` is a composable, not a Pinia store** — it was a store for exactly as long as the search screen had one input box; a singleton would have the From field repainting itself with whatever was typed into To. The world half of the typeahead is a network search, so everything worth testing is a race (debounce, abort, and the sequence guard, which catches the one case debounce and abort both miss: a request already on the wire when replaced can still resolve after the fact). Curated results always sort before world results in the merged typeahead.
 - **`stores/auth.js`'s `resolved` flag distinguishes "don't know yet" from "guest"** — routing on an unresolved session before `/api/me` answers would flash the login screen at someone who's actually signed in.
 - **`stores/settings.js` updates are optimistic and honestly reverted** — a failed `PUT` puts the old value back and says why; a silent revert is worse than no optimism, because the switch appears to work and then appears to have been forgotten.
@@ -2373,9 +2506,14 @@ by anyone.
 
 ### Database and config
 
+- **`airports.iata` is the real key and the surrogate id is a convenience**: the code is what the URL carries (`/route/AMS-LIS`), what the provider APIs speak, and what the design prints on the boarding-pass rows. It is unique so a second "AMS" cannot be created by a careless seeder run and quietly split a route's history in two. `lat`/`lng` are **doubles, not decimals** — they are read straight into the globe's camera and great-circle maths, where they are floats anyway, and a decimal column would only mean Eloquent handing the client a string JavaScript has to parse back.
+- **Neither `discoveries` nor `discovery_baselines` carries a `user_id`**, unlike `alerts` and `watchlist_items` — what a route usually costs, and the fact that it is cheap this morning, are facts about the world rather than about an account's relationship to it. `discovery_baselines` also stays one number per route rather than growing into a `routes`-keyed window (the migration says what breaks if it does).
+- **What the fare-table migrations decided.** `routes.code` ("AMS-LIS") is denormalised from the two airport ids on purpose — it is what the SPA's URLs carry, what the provider adapters are asked about, and what makes a log line readable without resolving two joins — and its unique index doubles as the guard against the same pair being inserted twice. `routes` has **no `active` column**: whether a route is watched belongs to `watchlist_items`, since rules surface routes nobody has ever watched and those still need a code and a history. `watchlist_items` is **user-scoped even though there is one user** (the column is the difference between "add a second account" being a migration and being a rewrite of every query), `active` is a pause that keeps the history already gathered, and `position` is what "the owner's order" means at all. `calendar_fares` keeps **one row per (route, departure_date), overwritten every poll** — Orbit does not keep the history of what next June looked like in April, which would be ninety new rows per route per day for a chart nobody drew — and `fetched_at` is a column on the row rather than `updated_at` because it is a fact about the *fare*, which the UI shows, not about the row. `route_price_stats` writes its five columns **in the order they sort**, and `PriceStats` refuses to be constructed out of order: a p25 above the median would make the score reward expensive fares, silently, forever. `return_fares` stores `nights` and derives `return_date` (one fact, one place; `nights` is also the query axis and indexes as a plain integer) and types it unsigned so a negative stay is refused by the column while a same-day return, which is a real fare, is not.
 - **`destinations` is a separate table from `airports`** because geography and editorial "vibe" judgement change for different reasons and at different rates; `vibes` is a JSON array (not a tags table + pivot) because nothing joins on it and the vocabulary is closed to nine words.
 - **`warmth` is a 1-5 rating, not a temperature** — the app answers "is it sunny in spring," and putting that judgement in degrees would just move the same editorial call into a query.
 - **`user_settings` is a separate table from `users`**, keeping Laravel's own authentication table narrow; it enforces one row per account via a unique constraint on `user_id`, and its defaults live in the migration alone. Quiet hours are stored as wall-clock local time — the one deliberate exception to "everything else is UTC." The row is created on first read (`UserSettings::for()`), not by a seeder, so an account that never opened the settings screen still has settings to read; both settings actions answer with the same body, which is what makes the screen's optimistic switches safe.
+- **`config/mail.php`'s `markdown` block is three separate landmines**: without `paths`, `Illuminate\Mail\Markdown` resolves the `mail::` namespace to the framework's own copy in `vendor/` and silently ignores every file in `resources/views/vendor/mail` (the symptom is Laravel's stock grey-box layout in somebody's inbox, not an error); `theme` names `resources/views/vendor/mail/html/themes/orbit.css`, which the reader never receives — it is inlined onto the markup by `TijsVerkoyen\CssToInlineStyles` and discarded, and that file's own header explains why media queries and nested comments both fail silently inside it; and there is no `env()` in the block on purpose, because staging and production must send identical mail or the design was only ever reviewed in one of them.
+- **`config/logging.php`'s `mail` channel is the one channel Orbit added**, and its `level` is a literal rather than `env('LOG_LEVEL')` on purpose: it is the fix for the swallowed staged rollout above — a channel whose only records are DEBUG must not take its floor from the variable set for the application log. It writes to its own file (`storage/logs/mail.log`, the path the deploy runbook tails) because one send is a full MIME message tens of lines long and interleaving those with the app's errors makes both unreadable. It is reached through `MAIL_LOG_CHANNEL`, `config/mail.php`'s `log` mailer.
 
 ### Tests, seeders and fixtures
 

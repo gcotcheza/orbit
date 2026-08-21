@@ -10,14 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * The cheapest fare found for one departure date — one cell of the heatmap.
- *
- * TWO TIMESTAMPS THAT SOUND ALIKE AND ARE NOT. `fetched_at` is when ORBIT
- * asked; `found_at` is when the PRICE was found by whoever's search turned it
- * up. The provider is a cache, so a row fetched this morning can hold a fare
- * last seen on Tuesday — see the `found_at` migration for the €36-that-was-€56
- * this distinction was added for. `found_at` is nullable and null means "not
- * known", which every screen renders as nothing at all.
+ * The cheapest fare for one departure date — one heatmap cell (docs/BUSINESS-LOGIC.md §2).
  *
  * @property int $id
  * @property int $route_id

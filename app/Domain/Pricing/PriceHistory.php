@@ -7,9 +7,7 @@ namespace App\Domain\Pricing;
 use InvalidArgumentException;
 
 /**
- * Orbit's own observations of a route, oldest first.
- *
- * One point per day the poller ran; this is data the app earns, not buys, and the only thing that can say a fare is
+ * Orbit's own observations of a route, oldest first — the only thing that can say a fare is
  * falling rather than merely low (docs/BUSINESS-LOGIC.md §5).
  */
 final readonly class PriceHistory
@@ -56,11 +54,8 @@ final readonly class PriceHistory
     }
 
     /**
-     * The tail of the history, by CALENDAR days back from the newest point
-     * rather than by number of points.
-     *
-     * Matters the first time the poller misses a run: counting points would quietly reach further back than asked and mix
-     * a month-old price into a "last week" trend (docs/BUSINESS-LOGIC.md §5).
+     * The tail of the history, by CALENDAR days back from the newest point rather than by
+     * number of points, which would reach further back than asked (docs/BUSINESS-LOGIC.md §5).
      */
     public function lastDays(int $days): self
     {
@@ -79,14 +74,8 @@ final readonly class PriceHistory
     }
 
     /**
-     * Least-squares slope in cents/day, divided by the mean price — a fraction of the
-     * fare per day. Negative is falling. Null when there is not enough to say.
-     *
-     * Least squares, not first-vs-last: a fare that slid all month then ticked up €2 yesterday would misread as "rising"
-     * under the naive version.
-     *
-     * Normalised by the mean so a €40 route and a €400 route compare on the same scale — "half a percent a day" is a
-     * trend, "€2 a day" alone is not (docs/BUSINESS-LOGIC.md §7).
+     * Least-squares slope in cents/day over the mean price. Least squares, not first-vs-last,
+     * and normalised so a €40 and a €400 route compare (docs/BUSINESS-LOGIC.md §7).
      */
     public function dailyDrift(): ?float
     {

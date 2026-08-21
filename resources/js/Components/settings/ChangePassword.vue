@@ -1,18 +1,7 @@
 <script setup>
 /*
- * The Account card's one control: change the password, from the phone.
- *
- * Collapsed until asked for — three open password boxes under the alert
- * switches would be the loudest thing on a screen about alerts.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * Errors are the server's, word for word — UpdatePasswordRequest owns the
- * copy; restating it here is two copies to keep in step.
- * Why: docs/BUSINESS-LOGIC.md §36.
- *
- * No strength meter, no modal — the server enforces the rule; a second
- * opinion that can disagree with it is worse than none.
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * The Account card's one control, collapsed until asked for. Errors are the server's word for
+ * word, and there is no strength meter: a second opinion that can disagree is worse than none.
  */
 import { ref } from 'vue'
 import SettingRow from '@/Components/settings/SettingRow.vue'
@@ -37,10 +26,8 @@ function blank() {
 }
 
 /*
- * Opening and closing both CLEAR THE FIELDS — a password left in a collapsed
- * form is a password in the DOM of a phone handed over to show a photo.
- *
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Opening and closing both CLEAR THE FIELDS — a password left in a collapsed form is a password in
+ * the DOM of a phone handed over to show a photo (docs/BUSINESS-LOGIC.md §36).
  */
 function toggle() {
   open.value = !open.value
@@ -73,10 +60,8 @@ async function submit() {
 }
 
 /**
- * Turn a failed request into something the form can show. 401 is absent on
- * purpose — lib/http.js intercepts it and routes to login.
- *
- * Why: docs/BUSINESS-LOGIC.md §36.
+ * Turn a failed request into something the form can show. 401 is absent on purpose — lib/http.js
+ * intercepts it and routes to login (docs/BUSINESS-LOGIC.md §36).
  */
 function absorb(failure) {
   const response = failure.response
@@ -89,8 +74,8 @@ function absorb(failure) {
 
   switch (response.status) {
     case 422:
-      // One sentence per field — the first, which is the rule that failed
-      // first and the only one worth putting under a box.
+      // One sentence per field — the first, which is the rule that failed first and the only one
+      // worth putting under a box.
       errors.value = Object.fromEntries(
         Object.entries(response.data?.errors ?? {}).map(([field, messages]) => [field, messages?.[0]]),
       )

@@ -1,10 +1,7 @@
 <script setup>
 /*
- * The gradient bar under the grid, labelled with the month's own bounds
- * (design/README.md §3: "€38 ↔ €116").
- *
- * The bar is built from HEAT_STOPS rather than from a gradient written out
- * here, so the key and the cells it explains cannot drift apart.
+ * The gradient bar under the grid, labelled with the month's own bounds (design/README.md §3).
+ * Built from HEAT_STOPS, so the key and the cells it explains cannot drift apart.
  */
 import { euro } from '@/lib/format'
 import { heatGradient } from './heat'

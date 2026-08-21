@@ -1,8 +1,7 @@
 <script setup>
 /*
- * "ⓘ 6 trips match this right now — cheapest €34" (design/README.md §4).
- * Info tone, shimmers instead of emptying, phrases a partial count as a floor.
- * Why: docs/BUSINESS-LOGIC.md §11.
+ * "ⓘ 6 trips match this right now — cheapest €34" (design/README.md §4). Info tone, shimmers
+ * instead of emptying, phrases a partial count as a floor (docs/BUSINESS-LOGIC.md §11).
  */
 defineProps({
   /** A parse's `matches`: { count, partial, cheapest, sample }. */

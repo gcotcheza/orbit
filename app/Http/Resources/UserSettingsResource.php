@@ -9,19 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * The alerts screen's seven switches (design/README.md §6).
- *
- * EVERY FIELD HERE IS WRITABLE AND EVERY WRITABLE FIELD IS HERE, which is what
- * lets `PUT /api/settings` take back exactly what `GET` handed out. Anything
- * DERIVED from these — the names of the sensitivity levels, the score each one
- * fires at, the sentence under the control — is `meta` on the response and is
- * built by App\Http\Controllers\SettingsController, so that a client which
- * PUTs the `data` object it was given can never accidentally send a label back
- * as a setting.
- *
- * `quietStart`/`quietEnd` are `HH:MM` strings in the OWNER's timezone, not
- * UTC and not a datetime — see the migration for why a bedtime is the one
- * thing this app stores as wall clock.
+ * The alerts screen's seven switches (design/README.md §6). EVERY FIELD HERE IS WRITABLE AND
+ * EVERY WRITABLE FIELD IS HERE; derived values are `meta` (docs/BUSINESS-LOGIC.md §36).
  */
 final class UserSettingsResource extends JsonResource
 {

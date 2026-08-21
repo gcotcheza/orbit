@@ -19,27 +19,27 @@ use App\Http\Resources\WatchlistRouteResource;
 use App\Http\Requests\UpdateWatchedRouteRequest;
 
 /**
- * Adding, pausing and dropping a watched route (design/README.md §5). Separate from WatchlistController (the tuned read stays untouched by writes). Every write answers in the list's own row shape
- * (WatchlistRouteResource), so the screen replaces rather than re-fetches. Keyed on route code, not row id — the client already has `code` for every row (docs/BUSINESS-LOGIC.md §36).
+ * Adding, pausing and dropping a watched route (design/README.md §5). Every write answers in the
+ * list's own row shape, and is keyed on route code (docs/BUSINESS-LOGIC.md §36).
  */
 final class WatchlistItemController extends Controller
 {
     /**
-     * Start watching a pair. 201, with the route's summary as it stands — for
-     * a new one that's `confident: false` and no prices until the jobs below run.
+     * Start watching a pair. 201, with the route's summary as it stands — for a new one that's
+     * `confident: false` and no prices until the jobs below run.
      */
     public function store(AddWatchedRouteRequest $request, RouteSnapshots $snapshots): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
 
-        // The lookup rather than the check — see App\Http\Requests\RoutePairRequest,
-        // which both this write and the route lookup take their pair from.
+        // The lookup rather than the check — see App\Http\Requests\RoutePairRequest, which both
+        // this write and the route lookup take their pair from.
         $origin = $request->airport('origin');
         $destination = $request->airport('destination');
 
-        // Find or create: a route is a fact about the world, not a possession — reusing an existing row hands back price history already paid for.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Find or create: a route is a fact about the world, not a possession — reusing an existing
+        // row hands back price history already paid for (docs/BUSINESS-LOGIC.md §36).
         $route = Route::query()->firstOrCreate(
             ['code' => Route::codeFor($origin->iata, $destination->iata)],
             [
@@ -52,13 +52,13 @@ final class WatchlistItemController extends Controller
             'user_id'  => $user->id,
             'route_id' => $route->id,
             'active'   => true,
-            // Onto the end of the owner's order. `-1` so the first route added
-            // to an empty list gets position 0, like the seeder's.
+            // Onto the end of the owner's order. `-1` so the first route added to an empty list
+            // gets position 0, like the seeder's.
             'position' => (int) ($user->watchlistItems()->max('position') ?? -1) + 1,
         ]);
 
-        // Queued, not synchronous: the tap should get a row back now, not after two round trips to the provider. The row renders "no opinion yet" until the poll lands.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Queued, not synchronous: the tap should get a row back now, not after two round trips.
+        // The row renders "no opinion yet" until the poll lands.
         PollRoutePrices::dispatch($route->id);
         RefreshRouteStats::dispatch($route->id);
 
@@ -80,8 +80,8 @@ final class WatchlistItemController extends Controller
     }
 
     /**
-     * Stop watching. 204 — there is nothing left to describe. The route and its history survive — only the watchlist row
-     * goes; nothing else in the app treats an unwatched route as deleted (docs/BUSINESS-LOGIC.md §36).
+     * Stop watching. 204 — there is nothing left to describe. The route and its history survive;
+     * nothing treats an unwatched route as deleted.
      */
     public function destroy(Request $request, string $code): JsonResponse
     {
@@ -94,13 +94,13 @@ final class WatchlistItemController extends Controller
     }
 
     /**
-     * This account's watchlist row for a route code, or a 404 that says so. Scoped to the user, not merely filtered by
-     * code — "whose is it" must never be assumed on a write (docs/BUSINESS-LOGIC.md §36).
+     * This account's watchlist row for a route code, or a 404 that says so. Scoped to the user:
+     * "whose is it" must never be assumed on a write.
      */
     private static function item(User $user, string $code): WatchlistItem
     {
-        // See RouteController for why abort() rather than firstOrFail(): the
-        // framework's own 404 body names an internal class.
+        // See RouteController for why abort() rather than firstOrFail(): the framework's own 404
+        // body names an internal class.
         return $user->watchlistItems()
             ->whereHas('route', function (Builder $route) use ($code): void {
                 /** @var Builder<Route> $route */

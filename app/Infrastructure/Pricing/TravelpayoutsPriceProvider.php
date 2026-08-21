@@ -15,15 +15,8 @@ use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Contracts\Cache\Repository as Cache;
 
 /**
- * Real fares, from Travelpayouts' month-matrix.
- *
- * One call per calendar month, not per route (the fetch loop tolerates a
- * mid-loop failure, since the caller upserts). Prices are one-way -- not a
- * setting, what this endpoint answers; the sibling `/v1/prices/calendar`
- * silently answers round-trip instead, which would make every route look
- * expensive without ever failing loudly. `found_at` is the price's age, not
- * the request's -- Orbit is reading a cache of other searches.
- * Why: docs/BUSINESS-LOGIC.md §2.
+ * Real fares from Travelpayouts' month-matrix, one call per calendar month. One-way is what
+ * this endpoint answers; `/v1/prices/calendar` is the trap (docs/BUSINESS-LOGIC.md §2).
  */
 final readonly class TravelpayoutsPriceProvider implements PriceProvider
 {
@@ -77,9 +70,8 @@ final readonly class TravelpayoutsPriceProvider implements PriceProvider
         }
 
         /**
-         * Keyed 'Y-m-d' so the cheapest-per-day reduction and the promised
-         * ordering are both array operations; the endpoint documents no
-         * uniqueness guarantee, so this reduces defensively.
+         * Keyed 'Y-m-d' so the cheapest-per-day reduction and the promised ordering are both
+         * array operations; the endpoint documents no uniqueness guarantee.
          *
          * @var array<string, DatedFare> $cheapest
          */
@@ -224,9 +216,7 @@ final readonly class TravelpayoutsPriceProvider implements PriceProvider
     /**
      * One entry, or null if it is not one we can believe.
      *
-     * @param  DateTimeImmutable  $reference  supplies the timezone, so a departure
-     *                                        date compares against the window it
-     *                                        came from rather than against UTC
+     * @param  DateTimeImmutable  $reference  supplies the timezone the departure compares in
      */
     private function fare(mixed $entry, DateTimeImmutable $reference): ?DatedFare
     {
@@ -272,10 +262,8 @@ final readonly class TravelpayoutsPriceProvider implements PriceProvider
     }
 
     /**
-     * When this price was found, per the provider, or null if it won't say.
-     * Always UTC; the format is pinned rather than left to the loose
-     * `new DateTimeImmutable($s)` parser, which would fabricate a confident
-     * answer from "tomorrow" or a bare "13:51".
+     * When this price was found, per the provider, or null. Always UTC, format pinned: the
+     * loose parser would fabricate a confident answer from "tomorrow" or a bare "13:51".
      *
      * @param  array<mixed>  $entry
      */
@@ -302,10 +290,8 @@ final readonly class TravelpayoutsPriceProvider implements PriceProvider
     }
 
     /**
-     * Say that the provider is failing — at most once every `warn_every_minutes`.
-     * One key for the whole adapter, not per route/month, so one outage
-     * doesn't become a hundred identical log lines. `add()`, not
-     * `has()`+`put()`, since it must be atomic across parallel Horizon workers.
+     * Say the provider is failing, at most once every `warn_every_minutes`. One key for
+     * the whole adapter; `add()` is atomic across parallel Horizon workers.
      *
      * @param  array<string, scalar>  $context
      */

@@ -8,23 +8,16 @@ use DateTimeImmutable;
 use InvalidArgumentException;
 
 /**
- * Should Orbit interrupt somebody about this?
- *
- * Zero framework imports (docs/PLAN.md): checkable on paper. Five rules, in this load-bearing order: maturity, threshold, freshness, cooldown, further
- * drop (docs/BUSINESS-LOGIC.md §10).
+ * Should Orbit interrupt somebody about this? Zero framework imports; five rules in a
+ * load-bearing order (docs/BUSINESS-LOGIC.md §10).
  */
 final readonly class AlertPolicy
 {
     /**
-     * @param  int  $cooldownHours  hours one route stays quiet for after an alert
-     * @param  int  $furtherDropPercent  how much cheaper a fare has to be than
-     *                                   the last alerted price to be worth
-     *                                   saying again inside the cooldown
-     * @param  int  $minTrackingDays  daily observations a route needs before its
-     *                                score may interrupt anybody
+     * @param  int  $cooldownHours  hours one route stays quiet after an alert
+     * @param  int  $furtherDropPercent  how much cheaper than the last alerted price it must be
+     * @param  int  $minTrackingDays  observations a route needs before its score may interrupt
      * @param  int  $maxFareAgeDays  how old the fare behind an alert may be
-     *                               before it is not worth sending about a
-     *                               flight that leaves soon
      * @param  int  $nearDepartureWeeks  how close "leaves soon" is
      */
     public function __construct(
@@ -61,10 +54,8 @@ final readonly class AlertPolicy
 
     /**
      * @param  int  $minimumScore  the score this account's sensitivity fires at
-     * @param  LastAlert|null  $last  the last alert for this route and kind, or
-     *                                null when there has never been one — or
-     *                                when the one there was is older than the
-     *                                cooldown, which is the same answer
+     * @param  LastAlert|null  $last  the last alert for this route and kind, null when there
+     *                                has never been one or the last is older than the cooldown
      */
     public function decide(
         AlertCandidate $candidate,
@@ -98,8 +89,8 @@ final readonly class AlertPolicy
     }
 
     /**
-     * Is the evidence behind this alert too old to act on? Both conditions required (age AND near-departure); the one gate
-     * a rule match is NOT exempt from; null found_at is treated as fresh, deliberately (docs/BUSINESS-LOGIC.md §10).
+     * Is the evidence behind this alert too old? Age AND near-departure both required; the one
+     * gate a rule match is not exempt from; null found_at is fresh (docs/BUSINESS-LOGIC.md §10).
      */
     private function isStale(AlertCandidate $candidate, DateTimeImmutable $now): bool
     {
@@ -128,9 +119,8 @@ final readonly class AlertPolicy
     }
 
     /**
-     * Is this fare at or below (100 - drop)% of the one last announced?
-     * Integer arithmetic, deliberately — a float comparison would go the
-     * wrong way on some prices landing exactly on the threshold.
+     * Is this fare at or below (100 - drop)% of the one last announced? Integer arithmetic —
+     * a float comparison goes the wrong way on prices landing exactly on the threshold.
      */
     private function hasDroppedFurther(int $priceCents, int $lastPriceCents): bool
     {

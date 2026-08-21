@@ -11,21 +11,8 @@ use Illuminate\Support\Collection;
 use App\Domain\Rules\RuleVocabulary;
 
 /**
- * Turns rules — saved ones, and the one somebody is still typing — into what
- * the API publishes.
- *
- * ONE PLACE THAT KNOWS A RULE IS "CHIPS PLUS CRITERIA PLUS MATCHES". The
- * create screen (`POST /api/rules/parse`) and the watch screen
- * (`GET /api/rules`) draw the same three things from different starting
- * points, and the whole point of this class is that they cannot disagree about
- * what a rule looks like: one of them starts from text and one from a stored
- * criteria object, and both end up here.
- *
- * A STORED RULE'S CHIPS ARE REBUILT FROM ITS CRITERIA, NOT FROM ITS TEXT, and
- * that is the load-bearing line in this file. The criteria are what the owner
- * accepted after removing the chips they disagreed with; re-parsing
- * `raw_text` would put every removed chip straight back on the row and make
- * the correction look like it never happened.
+ * The one place that knows a rule is chips plus criteria plus matches. A STORED RULE'S CHIPS
+ * ARE REBUILT FROM ITS CRITERIA, never from its text (docs/BUSINESS-LOGIC.md §11).
  */
 final readonly class RuleViews
 {
