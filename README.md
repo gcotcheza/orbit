@@ -151,6 +151,13 @@ docker compose up -d
 ./scripts/check.sh
 ```
 
+On the server, a worktree must use a sandbox project brought up from that
+same directory and named on the same command line —
+`COMPOSE_PROJECT_NAME=orbit-<name> docker compose up -d postgres redis app`,
+then `COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh` (`web` is left
+out because it publishes `127.0.0.1:3085`, which production owns); the gate
+refuses to run against a stack started from another directory.
+
 **The compose-project trap.** `docker-compose.yml` pins `name: orbit` and
 publishes `127.0.0.1:3085`; the browser sandbox pins `orbit-e2e` on
 `127.0.0.1:3185` with its own generated `.env.e2e`. A compose command is

@@ -878,7 +878,11 @@ no observation are skipped (not scored 0), rules with 0 matches are omitted
 rather than shown as "0 matches", and `week()` reads the stored payload rather
 than re-deriving it. An unknown alert-notice type throws rather than being
 dropped — an alert that silently goes nowhere is the worst failure this app
-has, because everything still looks like it's working. `AlertEvaluation` reads the quiet window and the cooldown ledger **once per run**, not per route — the window cannot move while a run is in flight, and a per-route ledger read would be thirty round trips inside a job meant to be short. Its log line carries `routes_too_new` and none of the other three held reasons, because that one explains a *morning* rather than a route: a watchlist filled in yesterday sends nothing today, and `route_alerts: 0` on its own reads like a broken poller. The freshness guard is asked about the fare the mail **points at** — the cheapest calendar fare — not the observation the score came from, the same split `DealSummary::forRoute()` makes: what the reader clicks is what has to be real.
+has, because everything still looks like it's working. `AlertEvaluation` reads the quiet window and the cooldown ledger **once per run**, not per route — the window cannot move while a run is in flight, and a per-route ledger read would be thirty round trips inside a job meant to be short. Its log line carries `routes_too_new` and none of the other three held reasons, because that one explains a *morning* rather than a route: a watchlist filled in yesterday sends nothing today, and `route_alerts: 0` on its own reads like a broken poller. The freshness guard is asked about the fare the mail **points at** — the cheapest calendar fare — not the observation the score came from, the same split `DealSummary::forRoute()` makes: what the reader clicks is what has to be real. The profile button's
+`#account` entrance scrolls only once the settings have settled (`ready` or
+`failed`) — `idle` and `loading` are both "the four cards above it have not
+rendered", and scrolling then lands the reader in the middle of quiet hours a
+moment later.
 
 ---
 
@@ -926,8 +930,6 @@ month, or "march to may" reads as "march".
 
 ### The chip model
 
-**A chip's `id` is stable across parses of the same sentence** — it is the kind plus the value, never a position — because the client holds a list of removed ids across a re-parse it did not ask for (every keystroke re-parses, 500ms behind). An index-based id would silently start removing a different chip the moment somebody edited a word earlier in the sentence.
-
 A parse is chips, and chips are the rule. `ChipKind` has six cases, each named
 after the criteria field it folds back into:
 
@@ -940,6 +942,8 @@ after the criteria field it folds back into:
 | `date_window` | `dateWindow` | Date window · Mar – May |
 | `vibe` | `vibes[]` | Vibe · ☀ Sunny |
 
+**The eyebrow on a chip is the server's word.** "From", "Max price", "Trip length" arrive on the chip and the client only upper-cases them, because the category names a criteria field the back end owns — a hard-coded list in the component would be a second vocabulary to keep in step, and the failure would be a chip labelled for a field that no longer exists. The chip itself is not clickable either: only the × is, so there is exactly one thing for a keyboard to reach, and its label says which chip it removes rather than "Remove".
+
 **One direction only** — criteria in, chips out, criteria back. Both adapters
 answer with a `RuleCriteria` and hand it to `ParsedRule::of()`; nothing builds
 chips by hand. That is what guarantees the chips on screen and the rule that
@@ -950,6 +954,24 @@ re-reading edited text, so taking "From EIN" off leaves every other chip exactly
 where it was and Reset is the same parse again. Unknown removed-ids are ignored,
 because the client holds its removed list across re-parses of a sentence
 somebody is still typing.
+
+**A chip's `id` is stable across parses of the same sentence** — it is the kind plus the value, never a position — because the client holds a list of removed ids across a re-parse it did not ask for (every keystroke re-parses, 500ms behind). An index-based id would silently start removing a different chip the moment somebody edited a word earlier in the sentence.
+
+**A chip's × is never disabled, and a removal never waits.** `Create.vue`
+debounces typing by 500 ms, but disabling the × for that window — or for the
+POST that follows it — is what makes a removal fail: the button is live when
+the finger goes down and inert when it comes up, and the browser then fires no
+`click` at all. So removing a chip cancels the pending wait and asks
+immediately, with the text exactly as it stands; a second removal a moment
+later does the same, and the store keeps only the newest answer
+(`stores/rules.js`). Removals are safe mid-parse because the server drops them
+by chip id rather than by position, so the reading a removal is issued against
+does not have to be the one that comes back.
+
+**"Create rule" is the one thing that waits.** It is disabled while the
+textarea differs from the text the reading on screen is of, or while a parse is
+in flight — a rule saved against a sentence the owner has already moved past is
+a rule they never described. Nothing else on the screen is gated on it.
 
 **A stored rule's chips are rebuilt from its criteria, never from its text**
 (`RuleViews`). Re-parsing `raw_text` would put back every chip the owner

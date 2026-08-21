@@ -49,8 +49,8 @@ const quietNote = computed(() => {
 onMounted(settingsStore.load)
 
 /*
- * Scroll to #account only once settings settle (ready/failed), not via router `scrollBehavior` —
- * mid-fetch it fires before layout above it is final.
+ * Scroll to #account only once settings settle (ready/failed), not via router
+ * `scrollBehavior` — before that the layout above it is not final.
  */
 const route = useRoute()
 const accountHeading = useTemplateRef('accountHeading')
@@ -58,7 +58,7 @@ const accountHeading = useTemplateRef('accountHeading')
 watch(
   status,
   async (value) => {
-    if (route.hash !== '#account' || value === 'loading') {
+    if (route.hash !== '#account' || (value !== 'ready' && value !== 'failed')) {
       return
     }
 

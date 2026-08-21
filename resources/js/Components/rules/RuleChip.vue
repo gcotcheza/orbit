@@ -1,14 +1,11 @@
 <script setup>
 /*
- * One thing Orbit understood, and the × that takes it back (design/README.md §4). THE EYEBROW
- * IS THE SERVER'S WORD, and only the × is clickable, labelled with which chip it removes.
+ * One thing Orbit understood, and the × that takes it back (design/README.md §4). The × is
+ * NEVER disabled — one that goes inert under the finger eats the tap (docs/BUSINESS-LOGIC.md §11).
  */
 defineProps({
   /** One element of a parse's `chips`: { id, category, label }. */
   chip: { type: Object, required: true },
-
-  /** Chips go inert while the parse that would replace them is in flight. */
-  disabled: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['remove'])
@@ -24,7 +21,6 @@ const emit = defineEmits(['remove'])
     <button
       type="button"
       class="chip__remove"
-      :disabled="disabled"
       :aria-label="`Remove ${chip.category} ${chip.label}`"
       @click="emit('remove', chip.id)"
     >
@@ -88,15 +84,10 @@ const emit = defineEmits(['remove'])
   transition: color 0.15s ease, background 0.15s ease;
 }
 
-.chip__remove:hover:not(:disabled),
-.chip__remove:focus-visible:not(:disabled) {
+.chip__remove:hover,
+.chip__remove:focus-visible {
   color: var(--warn-ink);
   background: var(--warn-bg);
-}
-
-.chip__remove:disabled {
-  opacity: 0.5;
-  cursor: progress;
 }
 
 @keyframes chip-in {

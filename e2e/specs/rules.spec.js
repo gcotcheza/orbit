@@ -168,19 +168,10 @@ test('removing a chip re-reads the rule and updates the match banner', async ({ 
 
     const chips = page.locator('.chips .chip')
 
-    /*
-     * EMPTIED FIRST, AND THAT IS NOT TIDINESS. The textarea is SEEDED with the
-     * design's own sentence (Create.vue's `SEED`) and parsed on mount, so the
-     * screen already shows eight chips — including a date window — before this
-     * test types anything. Filling in a sentence that also reads as eight chips
-     * and then waiting for eight is therefore a wait that is already over: every
-     * assertion after it races the parse that has not landed yet, and the chip
-     * this test is about is read off the SEED's reading rather than off ours.
-     *
-     * Driving the count to zero first makes the wait mean something. It costs
-     * one extra call to `/api/rules/parse`, which is throttled at 20/min and
-     * nowhere near it.
-     */
+    // The seed's own reading is waited for FIRST: until it lands, "no chips"
+    // and "nothing parsed yet" are the same screen. Why: docs/E2E.md.
+    await expect(chips).toHaveCount(8)
+
     await page.locator('#rule-text').fill('')
     await expect(chips).toHaveCount(0)
 

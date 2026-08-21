@@ -53,6 +53,19 @@ function lastParse() {
     return calls[calls.length - 1]?.[1]
 }
 
+/** How many chips' × are inert — the answer this screen owes is always zero. */
+function inertRemoves(wrapper) {
+    return wrapper.findAll('.chip__remove').filter((x) => x.attributes('disabled') !== undefined).length
+}
+
+/** A parse that is sent and never answered, so the test can hold it in flight. */
+function heldParse() {
+    let land
+    post.mockImplementationOnce(() => new Promise((resolve) => { land = resolve }))
+
+    return (value = reading()) => land(value)
+}
+
 async function screen() {
     const wrapper = mount(Create, {
         global: {
@@ -231,6 +244,115 @@ describe('Create', () => {
         expect(wrapper.text()).toContain('Rule created')
         expect(wrapper.text()).toContain("We'll tell you when a trip like this turns up")
         expect(wrapper.findComponent(RouterLinkStub).props().to).toEqual({ name: 'watch' })
+    })
+
+    // Live when the finger goes down, inert when it comes up = no `click` at
+    // all. Why: docs/BUSINESS-LOGIC.md §11.
+    it('leaves every × live through the debounce and through the parse', async () => {
+        const wrapper = await screen()
+
+        const land = heldParse()
+
+        await wrapper.find('textarea').setValue('a beach week in June under €150')
+        await flushPromises()
+
+        expect(post).toHaveBeenCalledTimes(1)
+        expect(inertRemoves(wrapper)).toBe(0)
+
+        await vi.advanceTimersByTimeAsync(500)
+        await flushPromises()
+
+        expect(wrapper.find('.banner').classes()).toContain('banner--loading')
+        expect(inertRemoves(wrapper)).toBe(0)
+
+        land()
+        await flushPromises()
+
+        expect(inertRemoves(wrapper)).toBe(0)
+    })
+
+    it('asks the moment a chip is removed instead of waiting the debounce out', async () => {
+        const wrapper = await screen()
+
+        post.mockClear()
+
+        await wrapper.find('textarea').setValue('a beach week in June under €150')
+
+        expect(post).not.toHaveBeenCalled()
+
+        await wrapper.findAll('.chip__remove')[3].trigger('click')
+        await flushPromises()
+
+        expect(post).toHaveBeenCalledTimes(1)
+        expect(lastParse()).toEqual({ text: 'a beach week in June under €150', removed: ['max_price'] })
+
+        // And the wait it cancelled does not fire a second parse behind it.
+        await vi.advanceTimersByTimeAsync(500)
+        await flushPromises()
+
+        expect(post).toHaveBeenCalledTimes(1)
+    })
+
+    it('takes a second removal immediately too, rather than eating it', async () => {
+        const wrapper = await screen()
+
+        post.mockClear()
+
+        await wrapper.findAll('.chip__remove')[3].trigger('click')
+        await wrapper.findAll('.chip__remove')[5].trigger('click')
+        await flushPromises()
+
+        expect(post).toHaveBeenCalledTimes(2)
+        expect(lastParse().removed).toEqual(['max_price', 'depart'])
+    })
+
+    /* The CTA is the one thing that does wait: a rule saved against a reading
+       the text has moved past is a rule nobody described. */
+    it('will not create against a reading the text has moved past', async () => {
+        const wrapper = await screen()
+
+        expect(wrapper.find('.cta').attributes('disabled')).toBeUndefined()
+
+        const land = heldParse()
+
+        await wrapper.find('textarea').setValue('a beach week in June under €150')
+        await flushPromises()
+
+        expect(wrapper.find('.cta').attributes('disabled')).toBeDefined()
+
+        await vi.advanceTimersByTimeAsync(500)
+        await flushPromises()
+
+        expect(wrapper.find('.cta').attributes('disabled')).toBeDefined()
+
+        land()
+        await flushPromises()
+
+        expect(wrapper.find('.cta').attributes('disabled')).toBeUndefined()
+    })
+
+    /* A failed parse read nothing, so the same string typed again is a new
+       question — not the one already on screen. */
+    it('re-asks after a failed parse when the text is retyped', async () => {
+        const wrapper = await screen()
+
+        post.mockRejectedValueOnce({ response: { status: 429 } })
+
+        await wrapper.find('textarea').setValue('a beach week in June')
+        await vi.advanceTimersByTimeAsync(500)
+        await flushPromises()
+
+        expect(wrapper.find('.error').text()).toContain('Slow down a moment')
+
+        post.mockClear()
+
+        await wrapper.find('textarea').setValue('a beach week in Jun')
+        await wrapper.find('textarea').setValue('a beach week in June')
+        await vi.advanceTimersByTimeAsync(500)
+        await flushPromises()
+
+        expect(post).toHaveBeenCalledTimes(1)
+        expect(lastParse().text).toBe('a beach week in June')
     })
 
     it('leaves the form alone and says why when the rule is refused', async () => {
