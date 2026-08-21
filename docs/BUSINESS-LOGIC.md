@@ -2070,6 +2070,8 @@ Three ports (`PriceProvider`, `PriceStatsProvider`, `ReturnTripProvider`), chose
 
 **It defaults to whatever `price` is, and that is the important half.** The other three keys default to `fake` independently, because each fills its own table — a fake return fare sits in `return_fares` next to nothing it can contradict. A sweep is different: its candidates are scored against the fares the price provider fetched, and its cards sit on a screen next to routes the price provider priced. A box running real fares with a fake sweep would put invented routes at invented prices on a strip headed "Orbit found these on its own," each verified against a real calendar it has nothing to do with — the exact failure this feature was built to prevent, arrived at by leaving one variable unset. So the sweep follows the fares by default and can still be pinned either way — `ORBIT_SWEEP_PROVIDER=fake` on a box with real prices is then a deliberate act rather than an omission. Flipping `ORBIT_PRICE_PROVIDER` also turns on ~38 provider requests a night at 05:20 (already in the §27 budget table).
 
+**Why these four and not a live airline feed:** `docs/PRICE-SOURCES.md` audits every alternative price source (2026-08-21) — no vendor pushes prices, and a live per-search API cannot fund Orbit's calendar shape.
+
 ## 22. Travelpayouts — the real fares (`travelpayouts`)
 
 Read by `AppServiceProvider` when `providers.price` is `travelpayouts`, and by nothing else. The default stays `fake`, so none of this is consulted until somebody sets that variable on a box that has a token.
