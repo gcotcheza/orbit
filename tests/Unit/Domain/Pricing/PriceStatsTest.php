@@ -56,9 +56,8 @@ final class PriceStatsTest extends TestCase
     }
 
     /**
-     * A route whose price never moves. Every knot is equal, so there is no
-     * distribution to place a fare in and "exactly usual" is the only honest
-     * answer for the one price it has.
+     * A route whose price never moves — "exactly usual" is the only honest
+     * answer when every knot is equal.
      */
     #[Test]
     public function a_flat_route_answers_the_middle_for_its_own_price(): void
