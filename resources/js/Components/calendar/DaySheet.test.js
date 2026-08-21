@@ -1,33 +1,6 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The day sheet's two actions
-// =============================================================================
-// The sheet's CONTENT — the date, the fare, the verdict pill — is covered by
-// e2e/specs/calendar.spec.js against real data. What is checked here is the
-// half that is a contract rather than a picture, and that a browser test can
-// only observe by leaving the app:
-//
-//   - each booking link is aimed at the day that was TAPPED. They are built by
-//     substituting a named date hole in the templates the calendar endpoint
-//     sends, and the failure mode is a URL that is well-formed, opens fine, and
-//     books a different day — which no smoke test notices.
-//   - AVIASALES IS THE LOUD ONE and Skyscanner the quiet second opinion, which
-//     is a correctness matter rather than a style one: Orbit's prices come out
-//     of Aviasales' cache, and the sheet used to send people to Skyscanner,
-//     which had often never had the fare (€29 here against €68 there).
-//   - they open away from the app with `rel="noopener"` and WITHOUT
-//     `noreferrer`, because the referrer is the affiliate attribution
-//     (Components/route/BookingCta.vue says why at length).
-//   - the details link goes to the route the month is for.
-//   - a response with no templates costs the sheet its outward actions, not the
-//     sheet.
-//   - the freshness line says how old the price is, and says NOTHING when that
-//     is not known.
-//
-// `RouterLinkStub` rather than a real router: what is under test is the `to`
-// that is handed over, and installing vue-router to read it back would be
-// testing vue-router.
-// =============================================================================
+// The day sheet's two actions — the contract half a browser test can only
+// observe by leaving the app (docs/BUSINESS-LOGIC.md §36).
 import { RouterLinkStub, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -75,19 +48,13 @@ function compare(wrapper) {
 }
 
 describe('DaySheet', () => {
-    /*
-     * THE PRIMARY LINK IS AVIASALES AND ITS DATE IS DAY-FIRST. `1509` is 15
-     * September; `0915` would be a link that opens perfectly and searches
-     * September's fifteenth month. The marker rides along, which is the
-     * attribution finally going somewhere.
-     */
+    // `1509` is 15 September; `0915` would search September's 15th month.
     it('sends the tapped day to Aviasales, day before month', () => {
         expect(booking(sheet()).attributes('href')).toBe(
             'https://www.aviasales.com/search/AMS1509OPO1?marker=123456',
         )
     })
 
-    /* And the second opinion gets the same day in its own encoding. */
     it('offers Skyscanner as a quiet comparison on the same day', () => {
         const link = compare(sheet())
 
@@ -97,12 +64,7 @@ describe('DaySheet', () => {
         expect(link.text()).toBe('Compare on Skyscanner')
     })
 
-    /*
-     * WHICH ONE IS LOUD IS THE POINT, not a detail of styling. Orbit quotes
-     * Aviasales' cached fares; sending the reader to a different meta-search as
-     * the obvious action is how the app came to show €29 for a flight listed at
-     * €68 elsewhere.
-     */
+    // Which one is loud is a correctness matter (docs/BUSINESS-LOGIC.md §36).
     it('makes Aviasales the loud action and Skyscanner the quiet one', () => {
         const wrapper = sheet()
 
@@ -111,13 +73,6 @@ describe('DaySheet', () => {
         expect(compare(wrapper).classes()).not.toContain('action--solid')
     })
 
-    /*
-     * AND THE QUIET ONE IS A BUTTON. It was a 12 px centred text link under the
-     * row, in the same grey as the disclaimer beneath it — the owner reported
-     * that it does not read as something you can press. Both hand-offs are now
-     * the same control in the same row, sized rather than styled apart, which is
-     * also what Components/route/BookingCta.vue draws. `action` is that control.
-     */
     it('draws the second opinion as a button beside the first, not as small print', () => {
         const wrapper = sheet()
 
@@ -129,23 +84,12 @@ describe('DaySheet', () => {
         ])
     })
 
-    /*
-     * THE SWATCH SAYS WHAT IT IS OF. It is a 54 px square of a colour whose
-     * whole meaning is a comparison — where this day's fare sits between the
-     * cheapest and dearest day of this month, on the grid's own ramp — and
-     * without the grid in front of you that is unguessable. The UX pass read it
-     * as decoration.
-     */
     it('labels the heat swatch', () => {
         expect(sheet().get('.sheet__swatch-label').text()).toBe('Price vs month')
     })
 
-    /*
-     * The date is a calendar day with no zone (docs/API.md). Anything that
-     * routes it through a `Date` re-reads it in the viewer's own timezone and
-     * books the day before for half the planet — so the first of a month, which
-     * is where that fault surfaces, is checked explicitly, on both links.
-     */
+    // The date is a calendar day with no zone (docs/API.md) — a month's first
+    // day, where a `Date` re-read would slide, is checked on both links.
     it('does not slide the date into another timezone', () => {
         const wrapper = sheet({ fare: { date: '2027-01-01', price: 61, verdict: 'mid' } })
 
@@ -158,20 +102,12 @@ describe('DaySheet', () => {
             const rel = link.attributes('rel')
 
             expect(rel).toContain('noopener')
-            // The affiliate attribution rides on the referrer; see BookingCta.
+            // The affiliate attribution rides on the referrer (docs/BUSINESS-LOGIC.md §36).
             expect(rel).not.toContain('noreferrer')
             expect(link.attributes('target')).toBe('_blank')
         }
     })
 
-    // -- How old the price is -------------------------------------------------
-
-    /*
-     * THE LINE THE WHOLE FEATURE EXISTS FOR. The sheet is the screen with a
-     * booking link on it, so a big confident number over it was the app
-     * implying a fare is on sale right now — when it may be a cached price
-     * somebody's search turned up days ago.
-     */
     it.each([
         ['2026-09-11T11:30:00+02:00', 'Seen just now'],
         ['2026-09-11T09:00:00+02:00', 'Seen 3 hours ago'],
@@ -182,12 +118,7 @@ describe('DaySheet', () => {
         expect(wrapper.get('.sheet__seen').text()).toBe(expected)
     })
 
-    /*
-     * AND SAYS NOTHING WHEN IT DOES NOT KNOW. `foundAt` is null for any row
-     * written before the column existed. A "Seen just now" there would be a
-     * claim rather than an omission, and worse than the silence this replaced —
-     * so the element is ABSENT, not empty.
-     */
+    // Null is "not known" (docs/BUSINESS-LOGIC.md §2) — the element is ABSENT.
     it('draws no freshness line at all when the age is unknown', () => {
         const wrapper = sheet()
 
@@ -195,13 +126,8 @@ describe('DaySheet', () => {
         expect(wrapper.text()).not.toContain('Seen')
     })
 
-    /*
-     * THE EXPECTATION LINE, WORD FOR WORD, and it is asserted here because it
-     * is duplicated in Components/route/BookingCta.vue rather than shared — the
-     * two must not be able to drift. It MERGED the old "we don't sell tickets"
-     * disclaimer rather than being stacked under it: two greyed sentences read
-     * as small print, and small print is not read.
-     */
+    // Word for word BookingCta.vue's — duplicated, not shared, so this
+    // catches drift (docs/BUSINESS-LOGIC.md §36).
     it('sets one expectation about the price, next to the hand-off', () => {
         const wrapper = sheet()
 
@@ -229,10 +155,7 @@ describe('DaySheet', () => {
         expect(wrapper.get('.sheet__price').text()).toBe('€44')
     })
 
-    /*
-     * A response carrying only one of the two — an older build, or a config
-     * without an Aviasales base — costs that link and not the other.
-     */
+    // An older build or config without an Aviasales base costs that link only.
     it('draws whichever hand-offs it was given', () => {
         const only = sheet({ booking: { skyscanner: BOOKING.skyscanner } })
 
@@ -240,11 +163,8 @@ describe('DaySheet', () => {
         expect(only.get('.compare').attributes('href')).toContain('skyscanner')
     })
 
-    /*
-     * The actions sit INSIDE the sheet and the backdrop is its sibling, so a
-     * tap on either cannot also dismiss. Both dismissals are re-checked here
-     * because adding tappable things to a dialog is exactly when they break.
-     */
+    // The actions sit INSIDE the sheet; the backdrop is its sibling, so a
+    // tap on either cannot also dismiss.
     it('still closes on the backdrop and on Escape, and not on its own actions', async () => {
         const wrapper = sheet()
 
