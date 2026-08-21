@@ -20,19 +20,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Infrastructure\Pricing\TravelpayoutsPriceProvider;
 
 /**
- * The wiring, and the whole way through.
- *
- * tests/Unit/Infrastructure/TravelpayoutsPriceProviderTest is about what the
- * adapter makes of an answer. This is about the two things either side of it:
- * that `ORBIT_PRICE_PROVIDER=travelpayouts` reaches the container at all, and
- * that a poll driven by real recorded fares writes the calendar and the day's
- * observation the same way the fake one does.
- *
- * THE SECOND HALF IS THE ONE THAT MATTERS AT SWITCH TIME. Every poller test in
- * the suite runs on the fake provider, which answers for EVERY day of the
- * window. A real one does not — the whole app has never once been exercised
- * against a calendar with holes in it, and the holes are what a poll is going
- * to get from Tuesday onwards.
+ * The wiring, and the whole way through on REAL recorded fares with holes in
+ * them — every other poller test runs on the fake, which has none.
  */
 final class TravelpayoutsPollTest extends TestCase
 {
@@ -50,24 +39,8 @@ final class TravelpayoutsPollTest extends TestCase
          */
         Date::setTestNow('2026-08-15 06:10:00');
 
-        /*
-         * AND THE WINDOW THEY WERE RECORDED FOR, PINNED, which is not the one
-         * production polls any more — `orbit.poll.window_days` is six months
-         * since PR "six-month fare horizon".
-         *
-         * These four files are a recording of four real calendar months of
-         * AMS-LIS on 2026-08-15, and the numbers this test asserts (79 covered
-         * days, €80 the cheapest) are facts about that recording. Running them
-         * against a six-month window would ask for three months nobody
-         * recorded, and `Http::preventStrayRequests()` would fail the test —
-         * correctly, because the alternative is inventing fares for the missing
-         * months and then asserting on them.
-         *
-         * WHAT THIS TEST IS FOR is unchanged by that: it is the one place the
-         * app is driven end to end on REAL fares with holes in them. How wide
-         * the window is belongs to tests/Feature/PollersTest and to the budget
-         * assertion in tests/Unit/Infrastructure/TravelpayoutsPriceProviderTest.
-         */
+        // Pinned to the window the fixtures were recorded for, not production's
+        // six months — those months were never recorded (docs/BUSINESS-LOGIC.md §36).
         config(['orbit.poll.window_days' => 90]);
 
         Http::preventStrayRequests();
@@ -80,16 +53,11 @@ final class TravelpayoutsPollTest extends TestCase
         parent::tearDown();
     }
 
-    // ------------------------------------------------------------------ wiring
-
     #[Test]
     public function the_default_is_still_the_fake_provider(): void
     {
-        /*
-         * THE ASSERTION THIS PR IS MOST ABOUT. Shipping the adapter and
-         * switching production to it are two separate decisions, and only the
-         * first one is in this branch.
-         */
+        // Shipping the adapter and switching production to it are two
+        // separate decisions — only the first is in this branch.
         $this->assertSame('fake', config('orbit.providers.price'));
         $this->assertInstanceOf(FakePriceProvider::class, $this->app->make(PriceProvider::class));
     }
@@ -119,11 +87,8 @@ final class TravelpayoutsPollTest extends TestCase
     }
 
     /**
-     * THE TIMEOUTS AND THE RETRY ARE ONLY REAL IF THEY ARRIVE. They cannot be
-     * asserted through `Http::fake()` — a faked response never times out — so
-     * this reads them off the object the container built. A config key renamed
-     * in one of the two files and not the other is otherwise a silent fall back
-     * to Guzzle's defaults, which is no timeout at all.
+     * `Http::fake()` never times out, so this reads the timeouts and retry
+     * off the object the container actually built.
      */
     #[Test]
     public function the_configured_timeouts_and_retry_reach_the_adapter(): void
@@ -149,8 +114,6 @@ final class TravelpayoutsPollTest extends TestCase
         $this->assertSame(7, $this->readProperty($provider, 'warnEveryMinutes'));
     }
 
-    // ------------------------------------------------------------ the whole way
-
     #[Test]
     public function a_poll_on_real_fares_fills_the_calendar_and_records_the_day(): void
     {
@@ -161,11 +124,8 @@ final class TravelpayoutsPollTest extends TestCase
 
         PollRoutePrices::dispatchSync($route->id);
 
-        /*
-         * 79 of the window's 91 days, which is what AMS-LIS actually had on the
-         * morning these were recorded. The fake provider would have written 91.
-         * That gap IS the feature.
-         */
+        // 79 of the window's 91 days — the fake provider would have written
+        // 91. That gap IS the feature.
         $this->assertSame(79, CalendarFare::query()->where('route_id', $route->id)->count());
 
         $observation = PriceObservation::query()->where('route_id', $route->id)->firstOrFail();
@@ -182,19 +142,8 @@ final class TravelpayoutsPollTest extends TestCase
     }
 
     /**
-     * THE WHOLE WAY THROUGH, FOR THE ONE FIELD THIS ALL EXISTS FOR.
-     *
-     * The unit test proves the adapter reads `found_at` out of a response. This
-     * proves it survives the port, the job and the upsert and lands in a column
-     * — which is three places it could quietly be dropped, and the failure would
-     * be a screen that simply never says how old anything is.
-     *
-     * AND THAT IT IS NOT `fetched_at`, which is the actual bug. Both timestamps
-     * are on the same row and only one of them is about the price. The poll runs
-     * at 06:10 on the 15th; the recorded fares were found on the 14th and the
-     * 15th, by other people's searches, before Orbit asked. If those two columns
-     * ever come to hold the same value, the app is back to implying every price
-     * is live.
+     * The whole way through, for the one field this all exists for — proves
+     * `found_at` survives the port, the job and the upsert (docs/BUSINESS-LOGIC.md §2).
      */
     #[Test]
     public function the_calendar_records_when_each_price_was_found_and_not_only_when_it_was_fetched(): void
@@ -211,11 +160,8 @@ final class TravelpayoutsPollTest extends TestCase
         /* Every recorded entry carries one, so every row must have one. */
         $this->assertSame(0, $fares->whereNull('found_at')->count(), 'a polled fare has no find time');
 
-        /*
-         * THE FIXTURE'S OWN VALUE, looked up rather than restated: the 16th of
-         * August's fare in the recording was found at a particular moment and
-         * that moment must be what is in the column.
-         */
+        // The fixture's own value, looked up rather than restated as a
+        // literal, so a fixture edit can't silently agree with itself.
         $found = $this->recordedFindTime('month-matrix-ams-lis-2026-08', '2026-08-16');
 
         $row = $fares->first(
@@ -238,25 +184,16 @@ final class TravelpayoutsPollTest extends TestCase
     }
 
     /**
-     * A RE-POLL MOVES IT, INCLUDING BACKWARDS.
-     *
-     * `found_at` is in the upsert's update list, so a date whose price is
-     * re-quoted with an OLDER find time gets the older one. That direction is
-     * the one worth pinning: the provider's cache is not monotonic, and a column
-     * that could only ever move forward would freeze the first age a row was
-     * given and quietly become a lie in the reassuring direction.
+     * A re-poll moves `found_at`, including backwards — the provider's cache
+     * is not monotonic (docs/BUSINESS-LOGIC.md §2).
      */
     #[Test]
     public function a_later_poll_rewrites_the_find_time_even_when_it_is_older(): void
     {
         $this->useTravelpayouts();
 
-        /*
-         * A WINDOW NARROW ENOUGH TO BE ONE REQUEST, so the two polls below are
-         * request one and request two of a sequence rather than fourteen. The
-         * production window is six months and touches seven calendar months;
-         * nothing about THIS test is the window's business.
-         */
+        // A window narrow enough to be one request, so the two polls below
+        // are request one and two of a sequence, not fourteen.
         Date::setTestNow('2026-09-01 06:10:00');
         config(['orbit.poll.window_days' => 20]);
 
@@ -275,13 +212,8 @@ final class TravelpayoutsPollTest extends TestCase
             ]],
         ];
 
-        /*
-         * ONE SEQUENCE RATHER THAN TWO `Http::fake()` CALLS. A second `fake()`
-         * for a URL that already has a stub does not replace it — the first
-         * registered matcher keeps winning — so the "next morning" response
-         * would silently be the previous one and this test would pass against a
-         * `found_at` that never moved.
-         */
+        // DO NOT split into two `Http::fake()` calls: a second fake() for a
+        // URL that already has a stub does not replace it (docs/BUSINESS-LOGIC.md §36).
         Http::fake([self::ENDPOINT => Http::sequence()
             ->push($answer('2026-08-14T13:51:45Z'))
             ->push($answer('2026-08-09T02:00:00Z')),
@@ -315,11 +247,8 @@ final class TravelpayoutsPollTest extends TestCase
 
         PollRoutePrices::dispatchSync($route->id);
 
-        /*
-         * November's recording runs to the 30th and the window closes on the
-         * 13th — the calendar must stop there rather than carrying a fortnight
-         * of departures the "cheapest in the next 90 days" banner never meant.
-         */
+        // November's recording runs to the 30th; the window closes on the
+        // 13th, and the calendar must stop there.
         $this->assertSame(0, CalendarFare::query()
             ->where('route_id', $route->id)
             ->where('departure_date', '>', '2026-11-13')
@@ -348,18 +277,11 @@ final class TravelpayoutsPollTest extends TestCase
 
         PollRoutePrices::dispatchSync($route->id);
 
-        /*
-         * App\Jobs\PollRoutePrices returns without writing when the provider
-         * answers with nothing, so the calendar keeps what it had. One
-         * departure date (the 15th) has gone by, which the job would have
-         * deleted — it never gets that far, and that is the point: an outage
-         * changes nothing at all.
-         */
+        // Returns without writing on an empty answer, so a departure that
+        // would have been deleted never gets that far (docs/BUSINESS-LOGIC.md §4).
         $this->assertSame($yesterday, CalendarFare::query()->where('route_id', $route->id)->count());
         $this->assertSame(1, PriceObservation::query()->where('route_id', $route->id)->count());
     }
-
-    // ----------------------------------------------------------------- helpers
 
     private function useTravelpayouts(): void
     {
@@ -385,9 +307,8 @@ final class TravelpayoutsPollTest extends TestCase
     }
 
     /**
-     * The `found_at` a recording actually holds for one departure date — read
-     * out of the fixture rather than restated, so the assertion is about the
-     * value surviving the trip rather than about a string typed twice.
+     * The `found_at` a recording actually holds for one date — read out of
+     * the fixture, not restated as a literal.
      */
     private function recordedFindTime(string $fixture, string $departDate): string
     {
