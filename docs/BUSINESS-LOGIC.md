@@ -1119,11 +1119,13 @@ form and the answer does not change.
 
 **Half the world's climate profiles are upside down, which is new.** Cape Town,
 Sydney and Buenos Aires are 5 in January and 2 in July, so "somewhere warm in
-the winter" finally has an answer beyond the Canaries. Two honest strains on the
-1–5 scale are documented where they live, in `world_destinations.php`: a
-tropical **wet** season is rated 4 rather than 5 (the thermometer says beach and
-the afternoon does not), and a Gulf summer is 5 because "beach" is the hottest
-thing this vocabulary can say — a ceiling, not a recommendation.
+the winter" finally has an answer beyond the Canaries. Two honest strains on
+the 1–5 scale: a tropical **wet** season is rated 4 rather than 5 (the
+thermometer says beach and the afternoon does not), and a Gulf summer is 5
+because "beach" is the hottest thing this vocabulary can say — a ceiling, not
+a recommendation.
+
+**`world_destinations.php` is tier 2 of two, and the distinction is the whole feature.** Tier 1 (`world_airports.csv`, seeded by `WorldAirportSeeder`) is 3,270 airports with coordinates and a name and nothing else, since nobody has sat down and decided what Ouagadougou is *for*; this file is the places the rule engine may actually send somebody, matched against `vibes`/`warmth` and never against the raw airports table, because a rule that could fire on all 3,270 would be a rule fired on rows nobody ever looked at. **One airport per city, deliberately** — Tokyo is HND, not also NRT; New York is JFK, not also EWR and LGA — because both codes stay watchable through tier 1, but a curated list with two Tokyos in it matches every Tokyo rule twice and spends the sweep budget on the same city. Where this disagrees with the OurAirports snapshot, this wins, and `WorldAirportSeeder` is written so it does: some disagreements are editorial (a boarding-pass row has no room for "John F. Kennedy International Airport" or "Sydney (Mascot)"), one is a correction (Dakar is DSS, not the DKR the snapshot still marks served, because that airport closed in 2017). Four climate profiles are reused from `european_destinations.php` by name rather than redefined — `continental` (New York, Seoul), `nordic` (Calgary, Sapporo), `oceanic` (Vancouver, Seattle), `north-africa` (Cairo) — and the seeder refuses to start if a shared name means two different things in the two files.
 
 **The 3,270 airports in tier 1 are not in any of this.** They have no
 `destinations` row, so no vibe, no warmth, and no rule can ever match them (§1).
