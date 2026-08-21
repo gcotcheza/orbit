@@ -9,17 +9,14 @@ use PHPUnit\Framework\Attributes\Test;
 use App\Domain\Discovery\GoogleVerdict;
 
 /**
- * The rule that decides whether a card may say "verified", and the three real
- * measurements that decided what the rule had to be.
- *
- * The most important test in the feature: the only place Orbit puts another company's name on its own claim, so
- * getting it wrong is worse than no badge (docs/BUSINESS-LOGIC.md §16).
+ * The rule that decides whether a card may say "verified" — the only place
+ * Orbit puts another company's name on its own claim (docs/BUSINESS-LOGIC.md §16).
  */
 final class GoogleVerdictTest extends TestCase
 {
     /**
-     * THE REGRESSION THAT DEFINES THE RULE: three real Google Flights finalists, each under its typical-range low. DO NOT let confirmsCheap() return true
-     * here — that means the badge is vouching for itself again (docs/BUSINESS-LOGIC.md §16).
+     * DO NOT let `confirmsCheap()` return true here — that means the badge
+     * is vouching for itself again (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function it_refuses_to_confirm_a_fare_google_cannot_find(): void
@@ -55,8 +52,8 @@ final class GoogleVerdictTest extends TestCase
         $this->assertTrue($verdict->confirmsCheap());
     }
 
-    // The other half of the rule: Google's own cheapest at/under its typical-band low counts as confirmation too — same
-    // claim, made with numbers instead of the word (docs/BUSINESS-LOGIC.md §16).
+    // The other half: Google's own cheapest at/under its typical-band low
+    // counts as confirmation too (docs/BUSINESS-LOGIC.md §16).
     #[Test]
     public function googles_own_cheapest_under_its_typical_low_is_also_enough(): void
     {
@@ -65,8 +62,8 @@ final class GoogleVerdictTest extends TestCase
         $this->assertFalse((new GoogleVerdict('typical', 5600, 5500, 17500))->confirmsCheap());
     }
 
-    // A thin route with no `price_insights` at all (EIN-VNO's sibling shape); "no opinion" is a real answer, and not
-    // permission to confirm (docs/BUSINESS-LOGIC.md §16).
+    // A thin route with no `price_insights` at all — "no opinion" is a real
+    // answer, not permission to confirm (docs/BUSINESS-LOGIC.md §16).
     #[Test]
     public function no_opinion_confirms_nothing(): void
     {
@@ -81,8 +78,8 @@ final class GoogleVerdictTest extends TestCase
         $this->assertFalse((new GoogleVerdict('high', 20000, 5500, 17500))->confirmsCheap());
     }
 
-    // `confirmed` is stored, not recomputed, so a rule retuned next month can't silently restate what last month's cards
-    // claimed (same argument as AlertResource) (docs/BUSINESS-LOGIC.md §16).
+    // `confirmed` is stored, not recomputed, so a rule retuned next month
+    // can't silently restate what last month's cards claimed.
     #[Test]
     public function it_stores_the_facts_and_the_conclusion(): void
     {

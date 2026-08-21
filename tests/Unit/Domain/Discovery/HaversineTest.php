@@ -9,8 +9,8 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
- * The distance the discovery ranking is built on. Plain PHPUnit\TestCase, not Tests\TestCase — matches App\Domain's
- * framework-free design (docs/BUSINESS-LOGIC.md §16).
+ * The distance the discovery ranking is built on — plain PHPUnit TestCase,
+ * matching App\Domain's framework-free design.
  */
 final class HaversineTest extends TestCase
 {
@@ -32,10 +32,8 @@ final class HaversineTest extends TestCase
     #[Test]
     public function it_agrees_with_the_provider_on_the_hops_the_provider_gets_right(): void
     {
-        /*
-         * From the 2026-08-16 AMS sweep; asserted to 2%, not exact — the provider publishes a rounded figure, not a haversine
-         * (docs/BUSINESS-LOGIC.md §16).
-         */
+        // From the 2026-08-16 AMS sweep; asserted to 2%, not exact — the
+        // provider publishes a rounded figure, not a haversine.
         $expected = [
             'AGP' => 1883,
             'RAK' => 2524,
@@ -63,8 +61,8 @@ final class HaversineTest extends TestCase
     }
 
     /**
-     * THE ROW THAT JUSTIFIES THIS CLASS EXISTING: AMS-BRU's provider distance (5951 km) was wrong by ~40x, ranking a bad
-     * fare as the day's best deal (docs/BUSINESS-LOGIC.md §16).
+     * The row that justifies this class existing: AMS-BRU's provider distance
+     * was wrong by ~40x, ranking a bad fare as the day's best (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function it_refuses_the_one_distance_the_provider_got_catastrophically_wrong(): void

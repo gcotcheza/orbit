@@ -12,21 +12,16 @@ use App\Domain\Discovery\CandidateScorer;
 use App\Domain\Discovery\DiscoveryPolicy;
 
 /**
- * The cheap half of the discovery funnel, which is arithmetic and is therefore
- * pinned here rather than inferred from a job's output.
- *
- * The candidates are real rows from the 2026-08-16 sweep — the thresholds were chosen by looking at this data;
- * invented numbers would prove nothing (docs/BUSINESS-LOGIC.md §16).
+ * The cheap half of the discovery funnel, pinned here rather than inferred
+ * from a job's output. Real rows from the 2026-08-16 sweep (docs/BUSINESS-LOGIC.md §16).
  */
 final class CandidateScorerTest extends TestCase
 {
     private const NOW = '2026-08-16 08:00:00';
 
     /**
-     * config/orbit.php's shipped defaults, with one knob at a time moved.
-     *
-     * Written out rather than read from config — a pure unit test can't read config, and reading the file it checks could
-     * never catch drift (docs/BUSINESS-LOGIC.md §16).
+     * config/orbit.php's shipped defaults, written out rather than read —
+     * a pure unit test can't read config (docs/BUSINESS-LOGIC.md §16).
      */
     private function policy(
         float $minKilometres = 400.0,
@@ -78,11 +73,11 @@ final class CandidateScorerTest extends TestCase
         $scorer = new CandidateScorer($this->policy());
 
         $ranked = $scorer->admit([
-            $this->candidate('DUS', 'AGP', 29, 1853),   // 15.6 m€/km
-            $this->candidate('DUS', 'RAK', 27, 2502),   // 10.8
-            $this->candidate('EIN', 'VNO', 18, 1372),   // 13.1
-            $this->candidate('DUS', 'TNG', 23, 2003),   // 11.5
-            $this->candidate('DUS', 'PSR', 16, 1134),   // 14.1
+            $this->candidate('DUS', 'AGP', 29, 1853),
+            $this->candidate('DUS', 'RAK', 27, 2502),
+            $this->candidate('EIN', 'VNO', 18, 1372),
+            $this->candidate('DUS', 'TNG', 23, 2003),
+            $this->candidate('DUS', 'PSR', 16, 1134),
         ], new DateTimeImmutable(self::NOW));
 
         $this->assertSame(
@@ -92,8 +87,8 @@ final class CandidateScorerTest extends TestCase
     }
 
     /**
-     * Singapore at €287 is 27.3 m€/km — comfortably under the ratio threshold, and genuinely remarkable — yet not what
-     * this screen promises (docs/BUSINESS-LOGIC.md §16).
+     * Singapore at €287 comfortably clears the ratio threshold — yet not
+     * what this screen promises (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function the_price_ceiling_keeps_long_haul_off_a_screen_about_impulse_fares(): void
@@ -144,9 +139,9 @@ final class CandidateScorerTest extends TestCase
         $scorer = new CandidateScorer($this->policy());
         $now = new DateTimeImmutable(self::NOW);
 
-        $fresh = $this->candidate('DUS', 'RAK', 27, 2502, '2026-08-15 08:00:00');   // 1 day
-        $edge = $this->candidate('DUS', 'TNG', 23, 2003, '2026-08-13 08:00:00');    // exactly 3
-        $stale = $this->candidate('EIN', 'VNO', 18, 1372, '2026-08-12 07:00:00');   // 4 days
+        $fresh = $this->candidate('DUS', 'RAK', 27, 2502, '2026-08-15 08:00:00');
+        $edge = $this->candidate('DUS', 'TNG', 23, 2003, '2026-08-13 08:00:00');
+        $stale = $this->candidate('EIN', 'VNO', 18, 1372, '2026-08-12 07:00:00');
 
         $codes = array_map(
             static fn (DealCandidate $c): string => $c->routeCode(),
@@ -159,8 +154,8 @@ final class CandidateScorerTest extends TestCase
     }
 
     /**
-     * The opposite of what AlertPolicy does with the same fact, deliberately — see DealCandidate::ageInDays(). Unknown
-     * vintage must not be shown (docs/BUSINESS-LOGIC.md §16).
+     * The opposite of what AlertPolicy does with the same fact, deliberately
+     * — unknown vintage must not be shown (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_price_of_unknown_age_is_treated_as_too_old(): void
@@ -191,8 +186,8 @@ final class CandidateScorerTest extends TestCase
     }
 
     /**
-     * Málaga appeared in both the DUS (€29) and EIN (€31) sweeps on 2026-08-16 — verifying both wastes two of five Google
-     * searches on one thing (docs/BUSINESS-LOGIC.md §16).
+     * Málaga appeared in both the DUS and EIN sweeps — verifying both wastes
+     * two of five Google searches on one thing (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function it_never_spends_two_slots_on_the_same_city(): void
@@ -250,8 +245,8 @@ final class CandidateScorerTest extends TestCase
     }
 
     /**
-     * Strictly cheaper: a flat window puts the candidate at 0, not 100 — the savings floor is what refuses it; each rule
-     * is blind to what the other catches (docs/BUSINESS-LOGIC.md §16).
+     * Strictly cheaper: a flat window puts the candidate at 0, not 100 — the
+     * savings floor is what refuses it (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_flat_window_scores_zero_and_is_refused_on_savings_instead(): void
@@ -278,8 +273,8 @@ final class CandidateScorerTest extends TestCase
     }
 
     /**
-     * The median must be a fare somebody was actually offered — it's subtracted from a real price to produce the saving
-     * the screen states (docs/BUSINESS-LOGIC.md §16).
+     * The median must be a fare somebody was actually offered — it's
+     * subtracted from a real price to produce the saving the screen states.
      */
     #[Test]
     public function the_median_of_an_even_window_is_an_observed_fare(): void

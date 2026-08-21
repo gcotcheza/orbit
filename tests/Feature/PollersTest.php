@@ -23,11 +23,8 @@ use App\Application\Ports\PriceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * The two jobs that make the app move, and the two commands that fan them out.
- *
- * The jobs are run DIRECTLY rather than through a queue: the fake provider is
- * deterministic, so a real number can be asserted, and the thing under test is
- * what lands in the database rather than whether Laravel can dispatch.
+ * The two jobs that make the app move, and the two commands that fan them out
+ * (docs/BUSINESS-LOGIC.md §4).
  */
 final class PollersTest extends TestCase
 {
@@ -63,13 +60,8 @@ final class PollersTest extends TestCase
     }
 
     /**
-     * Bind a provider that answers with exactly these departure dates and
-     * prices, dropping any that fall outside the window it is asked for.
-     *
-     * THE FAKE CANNOT PRODUCE THE CASES BELOW: it prices every day of whatever
-     * window it is handed, always, so "a cheap fare only the far run can see" is
-     * not a shape it can make. Same stub as tests/Feature/StaleCalendarFaresTest,
-     * with the price named rather than derived.
+     * Bind a provider that answers with exactly these dates and prices,
+     * dropping any outside the window it is asked for.
      *
      * @param  array<string, int>  $fares  'Y-m-d' => cents
      */
@@ -106,8 +98,6 @@ final class PollersTest extends TestCase
         });
     }
 
-    // ------------------------------------------------------ PollRoutePrices
-
     #[Test]
     public function a_poll_fills_the_calendar_and_records_one_observation(): void
     {
@@ -130,11 +120,8 @@ final class PollersTest extends TestCase
     }
 
     /**
-     * THE NEAR WINDOW ITSELF, WRITTEN OUT AS DATES. Every other test here asks
-     * the config what the window is and would go on passing if it said a
-     * fortnight; this one is the statement that an ordinary morning fetches six
-     * months of departures, and it fails the day somebody edits that number
-     * without meaning to.
+     * The near window written out as dates, so this fails if the config number
+     * ever drifts (docs/BUSINESS-LOGIC.md §4).
      */
     #[Test]
     public function the_window_is_six_months_of_departures(): void
@@ -160,11 +147,8 @@ final class PollersTest extends TestCase
     }
 
     /**
-     * AND THE HORIZON, THE SAME WAY. `orbit:poll-fares --far` runs once a week
-     * and is the only thing in the app that reaches months 7 to 11; this is the
-     * statement that "eleven months" is eleven months, in dates, so that a
-     * horizon quietly edited to 300 fails here rather than on the far end of the
-     * calendar screen months later.
+     * The horizon, the same way — so a quietly edited horizon fails here
+     * rather than on the calendar screen months later (docs/BUSINESS-LOGIC.md §4).
      */
     #[Test]
     public function the_far_run_reaches_eleven_months_of_departures(): void
@@ -186,19 +170,8 @@ final class PollersTest extends TestCase
     }
 
     /**
-     * THE ONE THING THE FAR RUN MUST NOT DO: move the history.
-     *
-     * `route_price_history` is one row a morning and every row means "the
-     * cheapest fare in the next six months" — it is `price.current`, the
-     * sparkline, and the trend quarter of the deal score. If the weekly
-     * eleven-month run took its minimum over everything it fetched, every route
-     * would post a lower figure on Saturdays and recover on Sundays: a sawtooth
-     * through the one series in this app nobody can re-derive, read by the trend
-     * component as a fall and a recovery, week after week.
-     *
-     * The stub answers with a dear fare inside the near window and a much
-     * cheaper one beyond it, which is exactly the shape of a cheap February that
-     * only the far run can see.
+     * The one thing the far run must not do: move the history — always the
+     * near window's minimum, however deep the fetch went (docs/BUSINESS-LOGIC.md §4).
      */
     #[Test]
     public function a_far_poll_records_the_near_windows_cheapest_fare_and_not_its_own(): void
@@ -222,9 +195,8 @@ final class PollersTest extends TestCase
     }
 
     /**
-     * And the far tranche is not silently priced by an ordinary morning either:
-     * a poll asked for the near window writes six months and stops, which is
-     * what makes the weekly run the only thing that pays for the other five.
+     * The far tranche is not silently priced by an ordinary morning either —
+     * the weekly run is the only thing that pays for the other five months.
      */
     #[Test]
     public function an_ordinary_poll_does_not_reach_the_far_months(): void
@@ -243,11 +215,8 @@ final class PollersTest extends TestCase
     }
 
     /**
-     * THE SWEEP'S HALF OF THE ASYMMETRY, from the job's side. A poll can be
-     * asked for a narrower window than the watchlist gets
-     * (`orbit.rules.sweep_horizon_days`, see App\Jobs\SweepRuleFares), and the
-     * request it makes has to actually be that narrow — the whole point is the
-     * provider calls it does NOT make.
+     * The sweep's half of the asymmetry: a poll can be asked for a narrower
+     * window than the watchlist gets, and the request has to stay that narrow.
      */
     #[Test]
     public function a_poll_can_be_asked_for_a_shorter_window_than_the_watchlist_gets(): void
@@ -266,18 +235,9 @@ final class PollersTest extends TestCase
     }
 
     /**
-     * A POLL THAT WAS ALREADY ON THE QUEUE WHEN THE WINDOW ARGUMENT SHIPPED.
-     *
-     * Redis holds `serialize($job)`, and a payload written by the one-argument
-     * version carries no `windowDays` at all — which leaves the promoted
-     * property UNINITIALISED rather than null, because a constructor default is
-     * a parameter default and not a property one. Reading it directly would
-     * throw "must not be accessed before initialization" in a worker, on the
-     * deploy, for every poll queued in the seconds before it.
-     *
-     * `?? config(...)` is what makes that safe: `isset()` on an uninitialised
-     * typed property is false rather than an error. The literal payload below
-     * is what the old class actually serialised to.
+     * DO NOT REMOVE the `?? config(...)` fallback: a job already on the queue
+     * when `windowDays` shipped deserialises with it UNINITIALISED, not null
+     * (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_poll_queued_before_the_window_argument_existed_still_gets_the_full_window(): void
@@ -349,8 +309,6 @@ final class PollersTest extends TestCase
         $this->assertSame(0, CalendarFare::query()->count());
     }
 
-    // ---------------------------------------------------- RefreshRouteStats
-
     #[Test]
     public function a_stats_refresh_writes_one_sorted_row_per_route(): void
     {
@@ -380,8 +338,6 @@ final class PollersTest extends TestCase
 
         $this->assertSame(1, RouteStats::query()->where('route_id', $route->id)->count());
     }
-
-    // ------------------------------------------------------------- commands
 
     #[Test]
     public function the_poll_command_queues_one_job_per_active_route_and_staggers_them(): void
@@ -415,12 +371,8 @@ final class PollersTest extends TestCase
     }
 
     /**
-     * THE SECOND SPEED. `orbit:poll-fares --far` is the same fan-out asking for
-     * the whole horizon, and the depth is in the PAYLOAD rather than in the job:
-     * a poll that decided for itself which day of the week it was would fetch a
-     * different window on a retry than the one it was queued for, and would make
-     * a person's synchronous lookup cost twelve provider calls one morning a
-     * week (App\Application\Routes\FareFreshness dispatches the same job).
+     * The second speed — the depth is in the PAYLOAD, never decided from the
+     * day of the week inside the job (docs/BUSINESS-LOGIC.md §4).
      */
     #[Test]
     public function the_far_flag_queues_the_same_fan_out_asking_for_the_whole_horizon(): void

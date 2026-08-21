@@ -13,8 +13,8 @@ use App\Domain\Rules\RuleVocabulary;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
- * The chips, and taking one off. Protects a property the create screen can't check itself: chips and criteria are the
- * same statement twice, round-tripped (docs/BUSINESS-LOGIC.md §11).
+ * The chips, and taking one off — chips and criteria are the same statement
+ * twice, round-tripped (docs/BUSINESS-LOGIC.md §11).
  */
 final class ParsedRuleTest extends TestCase
 {
@@ -69,8 +69,8 @@ final class ParsedRuleTest extends TestCase
     }
 
     /**
-     * The id is kind+value, never a position — the client holds removed ids across a re-parse, and an index would silently
-     * remove the wrong chip (docs/BUSINESS-LOGIC.md §11).
+     * The id is kind+value, never a position — an index would silently
+     * remove the wrong chip across a re-parse (docs/BUSINESS-LOGIC.md §11).
      */
     #[Test]
     public function a_chips_id_does_not_move_when_the_chips_around_it_do(): void
@@ -103,8 +103,8 @@ final class ParsedRuleTest extends TestCase
     }
 
     /**
-     * Removing WIDENS: a price ceiling taken off means any price, not no results — looser, not broken
-     * (docs/BUSINESS-LOGIC.md §11).
+     * Removing WIDENS: a price ceiling taken off means any price, not no
+     * results (docs/BUSINESS-LOGIC.md §11).
      */
     #[Test]
     public function removing_the_price_chip_removes_the_ceiling(): void
@@ -128,8 +128,8 @@ final class ParsedRuleTest extends TestCase
     }
 
     /**
-     * Removed ids outlive the parse they came from — re-read on every keystroke — so a stale id is the ordinary case, not
-     * a bad request (docs/BUSINESS-LOGIC.md §11).
+     * Removed ids outlive the parse they came from — a stale id is the
+     * ordinary case, not a bad request (docs/BUSINESS-LOGIC.md §11).
      */
     #[Test]
     public function an_id_for_a_chip_that_no_longer_exists_is_ignored(): void

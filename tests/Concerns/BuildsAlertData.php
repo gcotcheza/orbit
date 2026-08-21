@@ -39,8 +39,8 @@ trait BuildsAlertData
     protected const ORDINARY_CENTS = 9300;
 
     /**
-     * A route this account watches, priced at `$cents` today — one price, deliberately, not a trend series
-     * (docs/BUSINESS-LOGIC.md §10).
+     * A route this account watches, priced at `$cents` today — one price, not a
+     * trend series (docs/BUSINESS-LOGIC.md §10).
      */
     protected function watchedRoute(User $user, string $destination, int $cents, bool $active = true): Route
     {
@@ -62,8 +62,8 @@ trait BuildsAlertData
     }
 
     /**
-     * Today's price on a route old enough to have a score — `trackedSince()` is what clears the maturity gate
-     * (docs/BUSINESS-LOGIC.md §10).
+     * Today's price on a route old enough to have a score — `trackedSince()`
+     * clears the maturity gate (docs/BUSINESS-LOGIC.md §10).
      */
     protected function priceRoute(Route $route, int $cents, string $departure = '2026-09-04'): void
     {
@@ -125,8 +125,8 @@ trait BuildsAlertData
     }
 
     /**
-     * Everything that actually reached the transport — array mailer, not `Mail::fake()`, so `delivered_at` assertions
-     * still work (docs/BUSINESS-LOGIC.md §10).
+     * Everything that reached the transport — array mailer, not `Mail::fake()`,
+     * so `delivered_at` assertions still work (docs/BUSINESS-LOGIC.md §10).
      *
      * @return list<Email>
      */

@@ -194,6 +194,12 @@ region is *not* the single commonest one. A photographic earth measures in the
 thousands of colours; a black planet, a failed texture or a lost context
 measures in single digits. There is nothing in between to tune a tolerance for.
 
+`waitForGlobe()` polls `sampleCanvas()` rather than waiting for the earth
+texture's network response, because the texture is 1.4 MB with a week-long
+`Cache-Control` (docker/web/nginx.conf) — the second screen in a run that
+visits Home twice never requests it again, and a helper built on
+`waitForResponse` would hang there forever.
+
 ---
 
 ## The console guard
@@ -330,6 +336,15 @@ one in what a wait actually proves:
 - **Live class selectors.** `.chip:not(.chip--active)` re-evaluates after the
   click and then resolves to a *different* element. Capture the text first and
   re-find by it.
+- **A dated premise that expires.** `rules.spec.js`'s `monthWithNoFares()`
+  needs a date window that matches nothing; it used to say "spring" on the
+  argument that the fake provider's 90-day window couldn't reach March in
+  August — true then, false the moment the calendar rolled far enough, and a
+  test that goes red on a date rather than a change takes an afternoon to
+  diagnose. It now asks the app: it walks `GET /api/routes/{code}/calendar`
+  forward until a month comes back `days: []`, so the premise is stated
+  directly rather than inferred from a constant that has already drifted once
+  (`poll.window_days` widened from three months to six).
 - **A wait that is already over.** `toHaveCount(0)` on a screen that has not
   fetched anything yet passes in 5 ms, and `toHaveCount(8)` passes on the
   *previous* sentence's eight chips 400 ms before the debounce for yours has

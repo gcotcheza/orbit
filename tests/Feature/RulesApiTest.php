@@ -18,19 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The five endpoints behind the create screen and the watch screen's rules
- * section (design/README.md §4 and §5).
- *
- * THE QUEUE IS FAKED FOR THE WHOLE FILE, for the reason WatchlistWritesTest
- * fakes it: creating a rule dispatches App\Jobs\SweepRuleFares, and under the
- * runner's `sync` connection that would run thirty polls inside the request —
- * so assertions about what a brand-new rule matches would be testing the fake
- * provider rather than the endpoint. It is also what production does
- * structurally: the job goes to redis and the response is written first. The
- * sweep has its own file.
- *
- * THE CLOCK IS PINNED, because half of what a rule means is a date. "In
- * spring" resolves against today, and a suite that passed in July and failed
- * in April would be a suite nobody trusts in April.
+ * section — queue faked for the whole file (docs/BUSINESS-LOGIC.md §36).
  */
 final class RulesApiTest extends TestCase
 {
@@ -65,8 +53,6 @@ final class RulesApiTest extends TestCase
         parent::tearDown();
     }
 
-    // -- Nobody signed in ----------------------------------------------------
-
     #[Test]
     public function a_guest_gets_401_from_every_rules_endpoint(): void
     {
@@ -78,8 +64,6 @@ final class RulesApiTest extends TestCase
         $this->patchJson('/api/rules/'.$rule->id, ['active' => false])->assertUnauthorized();
         $this->deleteJson('/api/rules/'.$rule->id)->assertUnauthorized();
     }
-
-    // -- Reading a sentence --------------------------------------------------
 
     #[Test]
     public function parsing_answers_with_chips_criteria_and_what_they_match(): void
@@ -97,11 +81,8 @@ final class RulesApiTest extends TestCase
         $response->assertJsonPath('data.criteria.departDows', [5]);
         $response->assertJsonPath('data.criteria.vibes', ['sunny']);
 
-        /*
-         * AMS-FAO at €34 and EIN-LIS at €58 are both sunny Fridays under €80;
-         * AMS-OSL is a Friday under €80 to a city that is not sunny, and the
-         * €99 fare on AMS-FAO is over the ceiling.
-         */
+        // AMS-FAO and EIN-LIS are sunny Fridays under €80; AMS-OSL is not
+        // sunny and AMS-FAO's €99 fare is over the ceiling.
         $response->assertJsonPath('data.matches.count', 2);
         $response->assertJsonPath('data.matches.cheapest', 34);
         $response->assertJsonPath('data.matches.sample.0.code', 'AMS-FAO');
@@ -112,20 +93,8 @@ final class RulesApiTest extends TestCase
     }
 
     /**
-     * ============================================================================
-     * THE COUNT IS A FLOOR UNTIL EVERY CANDIDATE HAS A PRICE
-     * ============================================================================
-     * Measured on the running app: the create screen said "2 trips match this
-     * right now" and the rule it saved reported 32 a minute later. Neither
-     * number was wrong — the second one is what App\Jobs\SweepRuleFares found —
-     * but the first was stated as a total, so the app read as having been
-     * mistaken about the thing it exists to answer, at the exact moment
-     * somebody was deciding whether to save the rule.
-     *
-     * `partial` is that gap, published. This fixture is exactly the shape that
-     * produces it: "somewhere sunny" ranks FAO and LIS, which is six candidate
-     * routes across the three origins, and only two of them have ever been
-     * priced.
+     * The count is a floor until every candidate has a price, published as
+     * `matches.partial` (docs/BUSINESS-LOGIC.md §11).
      */
     #[Test]
     public function the_count_is_flagged_as_a_floor_while_candidates_are_unpriced(): void
@@ -138,13 +107,8 @@ final class RulesApiTest extends TestCase
     }
 
     /**
-     * And it stops being a floor the moment there is nothing left to price.
-     *
-     * The four routes added here are deliberately given a fare OVER the
-     * ceiling: they are answered, and the answer is no. A candidate that has
-     * been priced and does not match is not pending — pending is about missing
-     * information, not about missing matches — so the count is unchanged and
-     * only the flag moves.
+     * Stops being a floor once nothing is left to price — a priced non-match
+     * is not pending (docs/BUSINESS-LOGIC.md §11).
      */
     #[Test]
     public function the_count_is_final_once_every_candidate_has_a_price(): void
@@ -162,10 +126,8 @@ final class RulesApiTest extends TestCase
     }
 
     /**
-     * A sentence that asks for nothing is not a sentence that is still being
-     * answered: there is no candidate set, so there is nothing pending and the
-     * screen's "name a price, a season…" prompt is the right thing to show
-     * rather than "still pricing".
+     * No candidate set means nothing pending — the empty prompt, not "still
+     * pricing".
      */
     #[Test]
     public function an_empty_sentence_is_not_reported_as_a_floor(): void
@@ -245,9 +207,8 @@ final class RulesApiTest extends TestCase
     }
 
     /**
-     * Twenty a minute. The endpoint runs regexes today and becomes a metered
-     * third-party call the day config('orbit.nlp.parser') flips — a limiter
-     * added on that day would be a limiter tuned next to a bill.
+     * Twenty a minute — runs regexes today, becomes a metered call the day
+     * `orbit.nlp.parser` flips (docs/BUSINESS-LOGIC.md §11).
      */
     #[Test]
     public function parsing_is_throttled(): void
@@ -258,8 +219,6 @@ final class RulesApiTest extends TestCase
 
         $this->actingAs($this->owner)->postJson('/api/rules/parse', ['text' => 'sunny'])->assertStatus(429);
     }
-
-    // -- Saving one ----------------------------------------------------------
 
     #[Test]
     public function creating_a_rule_stores_the_text_and_the_criteria_and_queues_a_sweep(): void
@@ -325,8 +284,6 @@ final class RulesApiTest extends TestCase
         $this->assertSame(0, DealRule::query()->count());
     }
 
-    // -- The list ------------------------------------------------------------
-
     #[Test]
     public function the_list_is_newest_first_with_a_count_of_the_active_ones(): void
     {
@@ -344,8 +301,7 @@ final class RulesApiTest extends TestCase
 
     /**
      * A stored rule's chips come from its CRITERIA, never from re-parsing its
-     * text — the criteria are what the owner accepted after removing chips,
-     * and a re-parse would put every one of them straight back.
+     * text — a re-parse would put a removed chip straight back.
      */
     #[Test]
     public function a_stored_rules_chips_are_rebuilt_from_what_was_saved(): void
@@ -372,8 +328,6 @@ final class RulesApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.count', 0);
     }
-
-    // -- Pausing and dropping ------------------------------------------------
 
     #[Test]
     public function a_rule_can_be_paused_and_started_again(): void
@@ -435,13 +389,9 @@ final class RulesApiTest extends TestCase
         $this->actingAs($this->owner)->deleteJson('/api/rules/not-a-number')->assertNotFound();
     }
 
-    // -- Promoting a match to the watchlist ----------------------------------
-
     /**
-     * The one-tap "watch" on a rule's match is the EXISTING watchlist write,
-     * not a new one — docs/PLAN.md is explicit that a rule never adds a route
-     * on the owner's behalf. What has to hold is that the match then knows it,
-     * so the button stops offering to add something that is already there.
+     * The one-tap "watch" on a match is the EXISTING watchlist write, not a
+     * new one — the match must then know it, so the button stops offering.
      */
     #[Test]
     public function a_match_promoted_to_the_watchlist_comes_back_marked_watched(): void

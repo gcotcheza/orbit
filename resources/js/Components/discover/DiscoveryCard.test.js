@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-// The discovery card and its verified/unverified badge — the part worth
-// testing since it makes a claim, not just prints fields.
-// Why: docs/BUSINESS-LOGIC.md §16.
+// The verified/unverified badge — worth testing since it makes a claim,
+// not just prints fields (docs/BUSINESS-LOGIC.md §16).
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
@@ -50,10 +49,8 @@ describe('what the card says', () => {
         expect(card().find('.find__when').text()).toBe('Sat, Oct 24')
     })
 
-    /*
-     * The card links into the existing route lookup flow rather than duplicating booking/watch behaviour here
-     * (docs/BUSINESS-LOGIC.md §16).
-     */
+    // Links into the existing route lookup rather than duplicating
+    // booking/watch behaviour here (docs/BUSINESS-LOGIC.md §16).
     it('is a link into the ordinary route screen', () => {
         expect(card().find('a').attributes('data-to')).toBe('DUS-AGP')
     })
@@ -101,10 +98,7 @@ describe('the evidence line', () => {
             .toBe('Cheaper than 92% of dates · €30 under its usual')
     })
 
-    /*
-     * A null window is the ordinary outcome for an obscure pair, so it renders no line at all — never "0%"
-     * (docs/BUSINESS-LOGIC.md §16).
-     */
+    // A null window renders no line at all — never "0%" (docs/BUSINESS-LOGIC.md §16).
     it('is absent when the window could not be measured', () => {
         expect(card({ percentile: null, savings: null }).find('.find__evidence').exists()).toBe(false)
     })
@@ -124,19 +118,13 @@ describe('how old the price is', () => {
         vi.useRealTimers()
     })
 
-    /*
-     * Null renders as nothing, never as fresh — a DiscoveryPolicy contract.
-     * Why: docs/BUSINESS-LOGIC.md §16.
-     */
+    // Null renders as nothing, never as fresh (docs/BUSINESS-LOGIC.md §16).
     it('says nothing at all rather than guessing', () => {
         expect(card({ foundAt: null }).find('.find__seen').exists()).toBe(false)
     })
 })
 
-/*
- * Only relative finds get an explanatory sentence — their price alone reads ordinary.
- * Why: docs/BUSINESS-LOGIC.md §16.
- */
+// Only relative finds get an explanatory sentence (docs/BUSINESS-LOGIC.md §16).
 describe('which argument the card is making', () => {
     it('says nothing extra on an absolute find', () => {
         expect(card().find('.find__lane').exists()).toBe(false)
@@ -154,20 +142,14 @@ describe('which argument the card is making', () => {
         expect(wrapper.find('.find__lane').text()).toBe('Rare price for this route')
     })
 
-    /*
-     * `.find__from` stays route-pair-only — e2e reads it to navigate.
-     * Why: docs/BUSINESS-LOGIC.md §16.
-     */
+    // `.find__from` stays route-pair-only — e2e reads it to navigate.
     it('leaves the route pair alone', () => {
         const wrapper = card({ lane: 'relative' })
 
         expect(wrapper.find('.find__from').text()).toBe('DUS → AGP')
     })
 
-    /*
-     * An unknown lane says less, not more — the safe default, matching foundAt: null.
-     * Why: docs/BUSINESS-LOGIC.md §16.
-     */
+    // An unknown lane says less, not more — the safe default.
     it('says nothing when it does not recognise the lane', () => {
         expect(card({ lane: undefined }).find('.find__lane').exists()).toBe(false)
     })

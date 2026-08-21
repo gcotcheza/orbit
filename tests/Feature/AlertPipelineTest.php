@@ -26,16 +26,8 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * The 06:55 run: what is worth saying, and what is worth saying it about.
- *
- * TIME IS FROZEN IN EVERY TEST HERE, and at a specific hour rather than at a
- * convenient one. 06:55 UTC is 08:55 in Amsterdam — five minutes after the
- * default quiet window ends — so the ordinary tests run at the boundary rather
- * than in the middle of the afternoon, where a timezone bug would hide.
- *
- * THE SCORES ARE ARITHMETIC A READER CAN CHECK. Every route is priced against
- * one set of statistics (Tests\Concerns\BuildsAlertData): €44 scores 94, €60
- * scores 72, €93 scores 40. One on each side of every sensitivity.
+ * The 06:55 run: what is worth saying, and what is worth saying it about
+ * (docs/BUSINESS-LOGIC.md §10, docs/BUSINESS-LOGIC.md §36).
  */
 final class AlertPipelineTest extends TestCase
 {
@@ -60,9 +52,8 @@ final class AlertPipelineTest extends TestCase
     }
 
     /**
-     * Run the evaluation here and now, with its dependencies from the
-     * container — the same reasoning RuleSweepTest documents for the sweep:
-     * `dispatchSync()` under `Queue::fake()` records a job it never runs.
+     * Same reasoning as RuleSweepTest: `dispatchSync()` under `Queue::fake()`
+     * records a job it never runs (docs/BUSINESS-LOGIC.md §36).
      */
     private function evaluate(): void
     {
@@ -73,8 +64,6 @@ final class AlertPipelineTest extends TestCase
     {
         return UserSettings::for($this->owner);
     }
-
-    // -- A watched route -----------------------------------------------------
 
     #[Test]
     public function an_insane_deal_on_a_watched_route_is_alerted_and_written_down(): void
@@ -196,22 +185,9 @@ final class AlertPipelineTest extends TestCase
         $this->assertSame(0, Alert::query()->count());
     }
 
-    // -- Routes Orbit has only just met --------------------------------------
-
     /**
-     * THE MORNING AFTER A WATCHLIST IS FILLED IN, which is the shape of the
-     * production incident this section exists for: `ORBIT_STATS_PROVIDER=self`
-     * computes a route's usual price from the fares Orbit itself has fetched,
-     * so on day one the current fare is the route's own minimum, median and
-     * maximum and every route scores 100/insane/confident. These three would
-     * have been three "insane deal" mails about nothing, at 06:55, on the first
-     * morning the owner was paying attention.
-     *
-     * THE FIXTURE IS HARSHER THAN REALITY ON PURPOSE. `brandNewRoute()` gives
-     * each route the FULL set of statistics — so each really is scoring 94 on
-     * the numbers — and the gate still holds them. Nothing here depends on the
-     * degenerate day-1 statistics also producing a low score, because they do
-     * not: they produce the highest one there is.
+     * The day-1 floor exists for exactly this: an unscored fixture would score
+     * 100/insane/confident (docs/BUSINESS-LOGIC.md §7, docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_watchlist_filled_in_this_morning_sends_nothing_at_all(): void
@@ -226,24 +202,14 @@ final class AlertPipelineTest extends TestCase
 
         Notification::assertNothingSent();
 
-        /*
-         * AND NO LEDGER ROW EITHER, exactly like a below-threshold or a
-         * cooling-down route. The ledger is what Orbit SAID; a row here would
-         * start a 24-hour cooldown on a route nobody was told about, so the
-         * genuine alert on the day the route matures would be suppressed.
-         */
+        // No ledger row either — a row here would start a cooldown on a route
+        // nobody was told about (docs/BUSINESS-LOGIC.md §10).
         $this->assertSame(0, Alert::query()->count());
     }
 
     /**
-     * The other side of the boundary, through the whole pipeline: a week of
-     * mornings and the same fare is news.
-     *
-     * IT SCORES 83 RATHER THAN THE FIXTURE'S 94 because seven observations give
-     * the scorer a trend to fold in — flat, so 50 out of 25 points — and the
-     * weights renormalise over three components instead of two: 0.75 × 94 +
-     * 12.5. Still insane, which is the point: the maturity gate changes WHEN
-     * Orbit is allowed to have an opinion, not what the opinion is.
+     * The other side of the maturity boundary: renormalised over three
+     * components once a trend exists, still insane (docs/BUSINESS-LOGIC.md §7).
      */
     #[Test]
     public function seven_mornings_in_the_same_fare_is_worth_an_alert(): void
@@ -266,12 +232,8 @@ final class AlertPipelineTest extends TestCase
     }
 
     /**
-     * THE ASYMMETRY, THROUGH THE WHOLE PIPELINE. Every route this rule matches
-     * has fares and no observations at all — `trackingDays: 0`, the youngest a
-     * route can be — and the mail goes out anyway, because "under €80" is a
-     * number the owner wrote down rather than an inference from a distribution
-     * Orbit has not observed yet. Gating rules on maturity would silence the
-     * one feature whose entire purpose is finding routes nobody was watching.
+     * A rule fires on a route Orbit has never watched — rules are ungated by
+     * maturity or sensitivity, deliberately (docs/BUSINESS-LOGIC.md §10).
      */
     #[Test]
     public function a_rule_still_fires_on_routes_orbit_has_never_watched(): void
@@ -289,10 +251,8 @@ final class AlertPipelineTest extends TestCase
     }
 
     /**
-     * BOTH HALVES OF ONE MORNING, which is the state the app is actually in
-     * tonight: a watchlist too young to score and a standing rule that is not.
-     * The run has to be silent about one and loud about the other in the same
-     * pass — a gate applied one level too high would take the rule mail with it.
+     * A young watchlist and a mature rule in the same run — gating the wrong
+     * layer would take the rule mail with it (docs/BUSINESS-LOGIC.md §10).
      */
     #[Test]
     public function a_young_watchlist_is_silent_while_its_rules_still_speak(): void
@@ -309,8 +269,6 @@ final class AlertPipelineTest extends TestCase
 
         $this->assertSame(0, Alert::query()->where('type', AlertType::RouteDeal)->count());
     }
-
-    // -- The cooldown --------------------------------------------------------
 
     #[Test]
     public function a_route_alerted_this_morning_is_not_alerted_again(): void
@@ -394,8 +352,6 @@ final class AlertPipelineTest extends TestCase
         $this->assertSame(2, Alert::query()->count());
     }
 
-    // -- Quiet hours ---------------------------------------------------------
-
     #[Test]
     public function nothing_is_delayed_outside_the_quiet_window(): void
     {
@@ -439,10 +395,8 @@ final class AlertPipelineTest extends TestCase
     }
 
     /**
-     * THE OTHER SIDE OF MIDNIGHT, which is the half a naive
-     * `>= start AND < end` gets wrong: 01:00 UTC is 03:00 in Amsterdam, still
-     * inside a window that began the previous evening, and the mail is due at
-     * eight o'clock THIS morning rather than tomorrow's.
+     * A naive `>= start AND < end` gets this wrong across midnight
+     * (docs/BUSINESS-LOGIC.md §10).
      */
     #[Test]
     public function a_deal_found_in_the_small_hours_is_held_until_the_same_morning(): void
@@ -479,12 +433,9 @@ final class AlertPipelineTest extends TestCase
         );
     }
 
-    // -- The settings gate ---------------------------------------------------
-
     /**
-     * The decision is still recorded. Orbit found the deal; the account has
-     * asked not to be mailed about it, and `delivered_at` staying null is the
-     * honest record of both facts.
+     * The decision is recorded even though nothing is sent — `delivered_at`
+     * stays null (docs/BUSINESS-LOGIC.md §10).
      */
     #[Test]
     public function mail_switched_off_records_the_decision_and_sends_nothing(): void
@@ -502,12 +453,9 @@ final class AlertPipelineTest extends TestCase
         $this->assertNull($alert->delivered_at);
     }
 
-    // -- Delivery ------------------------------------------------------------
-
     /**
-     * The whole pipeline with only the socket missing: the notification is
-     * queued (sync, in the runner), rendered, handed to the array transport,
-     * and NotificationSent stamps the ledger.
+     * Whole pipeline, socket only missing: queued, rendered, and
+     * `NotificationSent` stamps the ledger (docs/BUSINESS-LOGIC.md §10).
      */
     #[Test]
     public function delivery_is_stamped_when_the_mail_actually_goes_out(): void
@@ -527,17 +475,10 @@ final class AlertPipelineTest extends TestCase
         $body = (string) $mail[0]->getHtmlBody();
         $this->assertStringContainsString('AMS→OPO', $body);
         $this->assertStringContainsString('53% below', $body);
-        /*
-         * AVIASALES, WHICH IS WHERE THE PRICE IN THIS MAIL CAME FROM. A mail is
-         * the one place a reader cannot see two links and pick, so it carries
-         * the primary hand-off alone — the search Orbit's fares come out of
-         * rather than a different meta-search that may never have had the fare.
-         * See App\Application\Routes\BookingLink.
-         */
+        // Mail carries the primary hand-off alone, no second link to pick
+        // between (docs/BUSINESS-LOGIC.md §12).
         $this->assertStringContainsString('aviasales', $body);
     }
-
-    // -- Rules ---------------------------------------------------------------
 
     /**
      * Three beaches, priced cheapest-first, and a rule that wants them.
@@ -685,8 +626,6 @@ final class AlertPipelineTest extends TestCase
             fn (RuleMatchAlert $alert): bool => $alert->notice->ruleId === $second->id,
         );
     }
-
-    // -- The command ---------------------------------------------------------
 
     #[Test]
     public function the_command_queues_one_evaluation_per_account(): void

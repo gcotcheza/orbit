@@ -53,9 +53,6 @@ export const useDestinationsStore = defineStore('destinations', () => {
     return { destinations, status, load }
 })
 
-// ----------------------------------------------------------------------------- The search
-// -----------------------------------------------------------------------------
-
 /** How many suggestions a phone can show without becoming a page. */
 export const MAX_SUGGESTIONS = 8
 
@@ -153,8 +150,7 @@ export function markRow(row, query) {
     }
 }
 
-// --- The typo fallback ------------------------------------------------------
-// Edit distance ≤ 2 against city names only, and only when the ordinary search found nothing.
+// Edit distance ≤ 2 against city names only (docs/BUSINESS-LOGIC.md §36).
 
 /** One transposition plus one slip. Three is a different word. */
 export const MAX_TYPO_DISTANCE = 2

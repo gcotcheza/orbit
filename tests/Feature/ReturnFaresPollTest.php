@@ -28,11 +28,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
 
 /**
- * The round-trip foundation, end to end: the switch, the fake, the job, the table and the command (the adapter itself
- * is unit-tested separately).
- *
- * WARNING: the schedule TIME is asserted in ScheduleTest, not here — this only guards that the `orbit:poll-returns`
- * entry still exists (docs/BUSINESS-LOGIC.md §15).
+ * The round-trip foundation, end to end: the switch, the fake, the job, the
+ * table and the command (docs/BUSINESS-LOGIC.md §15).
  */
 final class ReturnFaresPollTest extends TestCase
 {
@@ -57,8 +54,7 @@ final class ReturnFaresPollTest extends TestCase
     public function the_default_is_the_fake_provider(): void
     {
         // Shipping the adapter and switching production to it are two
-        // separate decisions — only the first is in this branch (same as the
-        // one-way PR).
+        // separate decisions — only the first is in this branch.
         $this->assertSame('fake', config('orbit.providers.returns'));
         $this->assertInstanceOf(FakeReturnProvider::class, $this->app->make(ReturnTripProvider::class));
     }
@@ -100,9 +96,8 @@ final class ReturnFaresPollTest extends TestCase
     #[Test]
     public function the_two_fare_switches_are_independent(): void
     {
-        // Two separate provider keys — a box can run real one-way fares
-        // (which every score/alert depends on) while returns still come
-        // from the fake.
+        // Two separate provider keys — a box can run real one-way fares while
+        // returns still come from the fake.
         config([
             'orbit.providers.price'     => 'travelpayouts',
             'orbit.travelpayouts.token' => 'test-token',
@@ -127,8 +122,8 @@ final class ReturnFaresPollTest extends TestCase
     {
         $trips = $this->fakeTrips();
 
-        // Deliberately sparse, unlike the one-way fake (which answers every day): real round-trip coverage was 7.7%-33.5% of
-        // window dates (docs/BUSINESS-LOGIC.md §15).
+        // Deliberately sparse, unlike the one-way fake: real round-trip
+        // coverage was 7.7%-33.5% of window dates (docs/BUSINESS-LOGIC.md §15).
         $dates = array_unique(array_map(fn (ReturnTrip $t): string => $t->departureDate->format('Y-m-d'), $trips));
 
         $this->assertLessThan(182, count($dates), 'A dense fake would hide every empty-state path.');
@@ -184,8 +179,8 @@ final class ReturnFaresPollTest extends TestCase
     #[Test]
     public function a_return_costs_more_than_a_one_way_and_less_than_two_of_them(): void
     {
-        // The measured relation (this milestone's premise): a return was 1.45x-1.74x the cheapest one-way on the routes
-        // recorded 2026-08-16 (docs/BUSINESS-LOGIC.md §15).
+        // The measured relation: a return was 1.45x-1.74x the cheapest one-way
+        // on the routes recorded 2026-08-16 (docs/BUSINESS-LOGIC.md §15).
         $trips = $this->fakeTrips();
         $oneWay = $this->app->make(PriceProvider::class)->cheapestPerDay(
             'AMS',
@@ -269,8 +264,7 @@ final class ReturnFaresPollTest extends TestCase
         $this->assertSame(13400, $fare->price_cents);
 
         // The age can go backwards too — the cache isn't monotonic, so
-        // `found_at` is in the update list; omitting it would freeze the
-        // first age forever.
+        // omitting `found_at` from the update list would freeze it forever.
         $this->assertSame('2026-08-15 09:00:00', $fare->found_at?->format('Y-m-d H:i:s'));
     }
 
@@ -435,10 +429,8 @@ final class ReturnFaresPollTest extends TestCase
     #[Test]
     public function the_returns_poll_is_on_the_schedule(): void
     {
-        // This test used to assert the OPPOSITE — the daily poll (once run
-        // by an outside cron) moved into this repo's own schedule. Time and
-        // timezone details live in ScheduleTest; this only guards the entry exists.
-        // Why: docs/BUSINESS-LOGIC.md §15.
+        // Time and timezone live in ScheduleTest; this only guards the entry
+        // exists (docs/BUSINESS-LOGIC.md §15).
         $commands = array_map(
             static fn (Event $event): string => (string) $event->command,
             app(Schedule::class)->events(),
@@ -453,10 +445,8 @@ final class ReturnFaresPollTest extends TestCase
     #[Test]
     public function returns_are_maintained_exactly_as_deep_as_the_one_way_calendar(): void
     {
-        // The drift guard `selfstats.cross_section_days` also carries: two
-        // different decisions that happen to agree, so widening one means
-        // reconsidering the other.
-        // Why: docs/BUSINESS-LOGIC.md §15.
+        // Two different decisions that happen to agree, the same drift guard
+        // `selfstats.cross_section_days` carries (docs/BUSINESS-LOGIC.md §15).
         $this->assertSame(
             (int) config('orbit.poll.horizon_days'),
             (int) config('orbit.returns.window_days'),
@@ -480,8 +470,7 @@ final class ReturnFaresPollTest extends TestCase
 
     /**
      * Bind a provider that answers with exactly these trips — the fake's
-     * hash-driven coverage can't produce arbitrary cases (same arrangement
-     * as PollersTest's one-way poller, price named not derived).
+     * hash-driven coverage can't produce arbitrary cases.
      *
      * @param  list<array{string, int, int}|array{string, int, int, string|null}>  $trips
      */
@@ -548,10 +537,8 @@ final class ReturnFaresPollTest extends TestCase
     }
 
     /**
-     * A row that is already in the table when the poll runs.
-     *
-     * WARNING: uses `insert` + a bare 'Y-m-d' — matches exactly what the job's upsert writes. `create()`'s date cast round-trips differently on SQLite (this
-     * suite's DB) than Postgres, silently breaking every `where('departure_date', ...)` below.
+     * WARNING: uses `insert` + a bare 'Y-m-d', matching the job's upsert —
+     * `create()`'s date cast round-trips differently on SQLite than Postgres.
      */
     private function seedFare(Route $route, string $departure, int $nights, ?string $fetchedAt = null): void
     {

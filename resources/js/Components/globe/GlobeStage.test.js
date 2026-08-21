@@ -1,12 +1,6 @@
 // @vitest-environment jsdom
-// This file tests ORDER and CANCELLATION only (arithmetic/timetable are
-// covered by lib/geo.test.js and lib/tour.test.js); globe.gl and the browser
-// clock are replaced with fakes so timing bugs are inspectable.
-// Why: docs/BUSINESS-LOGIC.md §36.
-//
-// jsdom lacks matchMedia/ResizeObserver (both legitimately used by this
-// component), so they're stubbed in beforeEach rather than in the component.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// Order and cancellation only — arithmetic/timetable are covered by
+// lib/geo.test.js and lib/tour.test.js (docs/BUSINESS-LOGIC.md §36).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -24,8 +18,8 @@ const scene = {
 
 const createGlobeScene = vi.fn(async () => scene)
 
-// vi.mock is hoisted above imports, so this factory runs before the two consts above exist — both references are
-// deferred in functions because of it (docs/BUSINESS-LOGIC.md §36).
+// vi.mock is hoisted above imports, so this factory runs before the two
+// consts above exist — references to them are deferred inside functions.
 vi.mock('./globeScene', () => ({
     hasWebgl: () => true,
     createGlobeScene: (...args) => createGlobeScene(...args),
@@ -63,10 +57,8 @@ function stubBrowserApis() {
     }
 }
 
-/**
- * Mount the stage and let its async globe.gl import settle. Wrapper is remembered for afterEach: jsdom's document outlives the test, so a stage left
- * mounted keeps answering visibilitychange for every test after it (docs/BUSINESS-LOGIC.md §36).
- */
+// Wrapper is remembered for afterEach: a stage left mounted keeps answering
+// visibilitychange for every test after it (docs/BUSINESS-LOGIC.md §36).
 let stage = null
 
 async function mountStage(routes = [AMS_LIS, AMS_OPO]) {
@@ -143,8 +135,8 @@ describe('the sequence', () => {
     it('shows the plane only while it is in the air, pointed where it is going', async () => {
         const wrapper = await mountStage()
 
-        // v-show read off style attr, not VTU's isVisible(): it has opinions about SVG in a detached tree
-        // (docs/BUSINESS-LOGIC.md §36).
+        // v-show read off style attr, not VTU's isVisible(): it has opinions
+        // about SVG in a detached tree.
         const planeStyle = () => wrapper.find('.plane').attributes('style')
 
         expect(planeStyle()).toContain('display: none')
@@ -217,8 +209,8 @@ describe('cancellation', () => {
     })
 
     it('is born asleep when the screen was hidden while the globe was loading', async () => {
-        // Import can be backgrounded before it settles, so pause() may run before there's anything to pause
-        // (docs/BUSINESS-LOGIC.md §36).
+        // Import can be backgrounded before it settles, so pause() may run
+        // before there's anything to pause.
         stage = mount(GlobeStage, { props: { routes: [AMS_LIS], activeCode: AMS_LIS.code } })
 
         Object.defineProperty(document, 'hidden', { value: true, configurable: true })

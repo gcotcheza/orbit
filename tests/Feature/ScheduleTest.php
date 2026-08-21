@@ -10,10 +10,8 @@ use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 
 /**
- * The clock, asserted rather than remembered.
- *
- * A wrong schedule is invisible — nothing errors, prices just look a day old, and a missing timezone drifts an hour
- * twice a year unnoticed (docs/BUSINESS-LOGIC.md §13).
+ * The clock, asserted rather than remembered — a wrong schedule is invisible
+ * (docs/BUSINESS-LOGIC.md §13, docs/BUSINESS-LOGIC.md §36).
  */
 final class ScheduleTest extends TestCase
 {
@@ -52,11 +50,8 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * The second speed, and the hour is the point of it: months 7-11 cost 12 calls/route vs. 7 daily, so this runs in the
-     * empty 04:00 hour, not 06:00.
-     *
-     * Does not replace that day's poll — the daily entry still runs four hours later, both writing the same near-window
-     * observation (docs/BUSINESS-LOGIC.md §13).
+     * The second speed runs in the empty 04:00 hour, not 06:00 — and does not
+     * replace that day's ordinary poll (docs/BUSINESS-LOGIC.md §13).
      */
     #[Test]
     public function the_far_months_are_refreshed_once_a_week_in_an_hour_of_their_own(): void
@@ -81,8 +76,8 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * Round trips go where there is room, not where the other polls are: the 06:00 hour is already at 183/~200; 04:00 has
-     * 108 on Saturday, 0 otherwise (docs/BUSINESS-LOGIC.md §13).
+     * Round trips go where there is room, not where the other polls are
+     * (docs/BUSINESS-LOGIC.md §13).
      */
     #[Test]
     public function round_trips_are_polled_in_the_hour_the_budget_left_free(): void
@@ -103,8 +98,8 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * The gap is the per-minute limit, not the hourly one: nine routes stagger over 24 minutes, so returns must start
-     * after the far poll's fan-out ends (docs/BUSINESS-LOGIC.md §13).
+     * The gap is the per-minute limit, not the hourly one — returns must
+     * start after the far poll's fan-out ends (docs/BUSINESS-LOGIC.md §13).
      */
     #[Test]
     public function the_returns_run_starts_after_the_far_polls_fan_out_is_away(): void
@@ -157,8 +152,7 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * The order is load-bearing, not a preference: sweeping before the poll wastes budget re-fetching the watchlist;
-     * alerts before both mails stale prices (docs/BUSINESS-LOGIC.md §13).
+     * The order is load-bearing, not a preference (docs/BUSINESS-LOGIC.md §13).
      */
     #[Test]
     public function the_morning_runs_in_the_order_each_one_depends_on(): void
@@ -179,8 +173,8 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * `vite.config.js` stops the build emptying public/build, so this is the only thing that deletes an old chunk; the
-     * schedule backstops the deploy step (docs/BUSINESS-LOGIC.md §13).
+     * `vite.config.js` never empties public/build — this is the only thing
+     * that deletes an old chunk (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function old_builds_are_pruned_nightly(): void
@@ -208,8 +202,8 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * The schedule names commands, never closures that would enumerate routes — routes/console.php loads on every artisan
-     * call, even `migrate` on empty DB (docs/BUSINESS-LOGIC.md §13).
+     * Named commands, never closures that would enumerate routes —
+     * `routes/console.php` loads on every artisan call, even on an empty DB.
      */
     #[Test]
     public function nothing_scheduled_queries_the_database_to_be_defined(): void

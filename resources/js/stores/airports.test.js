@@ -1,12 +1,6 @@
 // @vitest-environment jsdom
-// The world half of the typeahead — a network search, so everything worth testing is a race (debounce, abort, sequence guard).
-// Why: docs/BUSINESS-LOGIC.md §36.
-//
-// Fake timers throughout: the debounce is 250ms, and waiting for it for real
-// would make this suite slow and flaky.
-//
-// A composable, not a singleton store — each test calls useAirportSearch() for its own box.
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The world half of the typeahead: a network search, so everything worth
+// testing is a race (debounce, abort, sequence guard) (docs/BUSINESS-LOGIC.md §36).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const get = vi.fn()
@@ -128,10 +122,7 @@ describe('the airport search', () => {
         expect(box.results.value).toEqual([EWR])
     })
 
-    /**
-     * The one the debounce and the abort both miss — an in-flight request can still resolve after being replaced, so only
-     * the sequence guard stops flicker (docs/BUSINESS-LOGIC.md §36).
-     */
+    // The one the debounce and abort both miss (docs/BUSINESS-LOGIC.md §36).
     it('ignores an answer to a query that has been typed past', async () => {
         const slow = deferred()
 
@@ -168,10 +159,7 @@ describe('the airport search', () => {
         expect(box.status.value).toBe('failed')
     })
 
-    /**
-     * An abort rejects exactly like a 500 does — told apart by the sequence
-     * guard, not by what axios calls a cancellation this year.
-     */
+    // An abort rejects like a 500 does — told apart by the sequence guard.
     it('does not report its own cancellation as a failure', async () => {
         const cancelled = deferred()
 

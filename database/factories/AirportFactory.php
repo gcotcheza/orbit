@@ -19,12 +19,7 @@ final class AirportFactory extends Factory
      */
     public function definition(): array
     {
-        /*
-         * A UNIQUE THREE-LETTER CODE, generated rather than faked from a word
-         * list: `iata` is unique in the schema and a test that creates eight
-         * airports must not fail one time in a hundred because Faker picked
-         * the same letters twice.
-         */
+        // Generated, not a word list — `iata` is unique in the schema.
         return [
             'iata'         => mb_strtoupper($this->faker->unique()->lexify('???')),
             'name'         => $this->faker->city().' Airport',

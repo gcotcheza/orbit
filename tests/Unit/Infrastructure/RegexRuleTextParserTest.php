@@ -12,16 +12,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use App\Infrastructure\Nlp\RegexRuleTextParser;
 
 /**
- * Reading English without a key.
- *
- * The first test is the contract — design/README.md §4's example sentence must produce its six chips exactly; this app
- * ships that sentence pre-typed.
- *
- * Loads the real config/orbit.php, not a test vocabulary — the claim is that production's words can read it, not just
- * some regex can.
- *
- * A plain PHPUnit TestCase, no database — the whole reason App\Domain\Rules\RuleVocabulary exists
- * (docs/BUSINESS-LOGIC.md §11).
+ * Reading English without a key. Loads the real config/orbit.php, not a test
+ * vocabulary — production's words, not just some regex (docs/BUSINESS-LOGIC.md §11).
  */
 final class RegexRuleTextParserTest extends TestCase
 {
@@ -74,8 +66,8 @@ final class RegexRuleTextParserTest extends TestCase
         $this->assertSame(8000, $criteria->maxPriceCents);
         $this->assertSame([2, 3], $criteria->tripLengthNights);
         $this->assertSame(['sunny'], $criteria->vibes);
-        // FRIDAY ALONE: a named day refines "weekend" rather than joining it, so weekend + Friday narrows to Friday, not
-        // Friday-and-Saturday (docs/BUSINESS-LOGIC.md §11).
+        // FRIDAY ALONE: a named day refines "weekend" rather than joining
+        // it, narrowing to Friday, not Friday-and-Saturday (docs/BUSINESS-LOGIC.md §11).
         $this->assertSame([5], $criteria->departDows);
         $this->assertNotNull($criteria->dateWindow);
         $this->assertSame(3, $criteria->dateWindow->from);
@@ -96,8 +88,8 @@ final class RegexRuleTextParserTest extends TestCase
             'a bare symbol'            => ['ski trip €150', 15000],
             'a trailing currency word' => ['ski trip 150 euros', 15000],
 
-            // A BARE NUMBER IS NEVER A PRICE: "3 nights" shares sentences with real prices, so a naive reader would turn trip
-            // length into a price (docs/BUSINESS-LOGIC.md §11).
+            // A BARE NUMBER IS NEVER A PRICE: "3 nights" shares sentences
+            // with real prices (docs/BUSINESS-LOGIC.md §11).
             'a night count is not a price'   => ['somewhere sunny for 3 nights', null],
             'a weekday is not a price'       => ['leaving Friday', null],
             'the word cheap is not a number' => ['somewhere cheap and sunny', null],
@@ -125,8 +117,8 @@ final class RegexRuleTextParserTest extends TestCase
             'two of them, in config order'    => ['city break from DUS or AMS', ['AMS', 'DUS']],
             'an umlaut somebody did not type' => ['ski from dusseldorf', ['DUS']],
 
-            // Silence is not "all three chips": empty means all-three once MATCHED (RuleCriteria::originsOrAll), but understanding
-            // must not overclaim (docs/BUSINESS-LOGIC.md §11).
+            // Silence is not "all three chips": empty means all-three once
+            // MATCHED, but understanding must not overclaim (docs/BUSINESS-LOGIC.md §11).
             'silence claims nothing'            => ['somewhere sunny under €80', []],
             'anywhere is about the destination' => ['fly anywhere under €50', []],
         ];
@@ -230,8 +222,8 @@ final class RegexRuleTextParserTest extends TestCase
             'snow means ski'                       => ['somewhere with snow', ['ski']],
             'several at once, in vocabulary order' => ['a sunny beach with nightlife', ['sunny', 'beach', 'party']],
 
-            // "sun" is vocabulary and "sunny" contains it — whole-word matching keeps that from being two vibes (and "mar" out of
-            // "market") (docs/BUSINESS-LOGIC.md §11).
+            // "sun" is vocabulary and "sunny" contains it — whole-word
+            // matching keeps that from being two vibes (docs/BUSINESS-LOGIC.md §11).
             'a substring is not a word' => ['a trip to the supermarket', []],
             'silence'                   => ['under €80 from AMS', []],
         ];

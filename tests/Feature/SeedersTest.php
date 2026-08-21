@@ -66,8 +66,8 @@ final class SeedersTest extends TestCase
         }
     }
 
-    // `config('orbit.origins')` and the seeder's `is_origin` flag name the same three airports; this is the line that stops them drifting apart.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // `config('orbit.origins')` and the seeder's `is_origin` flag name the
+    // same three airports (docs/BUSINESS-LOGIC.md §36).
     #[Test]
     public function the_configured_origins_are_the_airports_the_seeder_flags_as_such(): void
     {
@@ -83,8 +83,8 @@ final class SeedersTest extends TestCase
         );
     }
 
-    // Drift guard, one layer up: the rule parser's vibe vocabulary (`orbit.nlp.vibe_words`) must exactly match the tags the seeder writes, or matching silently breaks in either direction.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Drift guard: the rule parser's vibe vocabulary must exactly match the
+    // tags the seeder writes (docs/BUSINESS-LOGIC.md §36).
     #[Test]
     public function the_parsers_vibe_vocabulary_is_exactly_the_one_the_seeder_writes(): void
     {
@@ -118,8 +118,8 @@ final class SeedersTest extends TestCase
         }
     }
 
-    // Aliases (`orbit.nlp.origin_aliases`) must point only at configured origins; a stray alias would name a route Orbit cannot fly from.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Aliases must point only at configured origins — a stray one would name
+    // a route Orbit cannot fly from (docs/BUSINESS-LOGIC.md §36).
     #[Test]
     public function every_origin_alias_names_a_configured_origin_and_every_origin_has_one(): void
     {
@@ -155,11 +155,8 @@ final class SeedersTest extends TestCase
         $this->assertSame($before, Airport::query()->count());
     }
 
-    // Tier 1: every scheduled airport on Earth (third-party snapshot, not curated) so any IATA code can be watched; the rule engine never touches it.
-    // Why: docs/BUSINESS-LOGIC.md §36.
-
-    // 184 curated destinations (rule-matchable) vs 3,270 total airports (`exists:airports,iata`); they overlap at 187, so the world import adds 3,083 more.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // 184 curated destinations vs 3,270 total airports; they overlap at 187,
+    // so the world import adds 3,083 more (docs/BUSINESS-LOGIC.md §1).
     #[Test]
     public function the_world_import_adds_every_airport_the_curated_files_do_not_name(): void
     {
@@ -179,8 +176,8 @@ final class SeedersTest extends TestCase
         $this->assertCount(187, array_unique(DestinationSeeder::curatedCodes()));
     }
 
-    // The world import never overwrites a curated row (and runs second): re-seeding happens on every deploy, so an upsert would silently undo the editorial naming pass each time.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // The world import never overwrites a curated row, and runs second
+    // (docs/BUSINESS-LOGIC.md §36).
     #[Test]
     public function the_import_does_not_overwrite_a_row_somebody_wrote_by_hand(): void
     {
@@ -204,8 +201,8 @@ final class SeedersTest extends TestCase
         $this->assertNull($newark->destination);
     }
 
-    // `is_origin` is a fact about a person, not an airport: the snapshot import never touches it, so no data refresh can add a fourth origin or unset one of the three.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // `is_origin` is a fact about a person, not an airport — the snapshot
+    // import never touches it (docs/BUSINESS-LOGIC.md §36).
     #[Test]
     public function the_import_cannot_change_which_airports_are_origins(): void
     {
@@ -235,8 +232,8 @@ final class SeedersTest extends TestCase
         $this->assertSame($jfk, Airport::query()->where('iata', 'JFK')->firstOrFail()->only(['name', 'city']));
     }
 
-    // The two seeders write disjoint airport sets (no overwrite, no merge), so seeder order only affects completeness, not correctness; WorldAirportSeeder alone leaves no AMS — always run both via `db:seed` (docs/GO-LIVE.md).
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Disjoint sets, so order only affects completeness, not correctness —
+    // always run both via `db:seed` (docs/BUSINESS-LOGIC.md §36).
     #[Test]
     public function the_import_and_the_curated_pass_write_disjoint_sets_of_airports(): void
     {
@@ -254,8 +251,8 @@ final class SeedersTest extends TestCase
         $this->assertSame('John F. Kennedy', Airport::query()->where('iata', 'JFK')->firstOrFail()->name);
     }
 
-    // Validates snapshot row shape; this test exists for the NEXT refresh (world_airports.README.md), so a bad refresh fails here by name, not mid-production `db:seed`.
-    // Why: docs/BUSINESS-LOGIC.md §36.
+    // Validates snapshot row shape — exists for the NEXT refresh, so a bad
+    // one fails here by name, not mid-production `db:seed` (docs/BUSINESS-LOGIC.md §36).
     #[Test]
     public function every_row_of_the_snapshot_is_the_shape_the_table_expects(): void
     {
@@ -351,8 +348,8 @@ final class SeedersTest extends TestCase
         $this->assertSame(10, PriceObservation::query()->where('route_id', $route->id)->count());
         $this->assertSame(6, RouteStats::query()->count());
 
-        // Asserted against the frozen $frozen value (not a literal date, which would rot); FakeHistorySeeder's `finally` restores rather than clears the test clock, so hasTestNow() stays true here — this checks no backfill date leaked through.
-        // Why: docs/BUSINESS-LOGIC.md §36.
+        // Against $frozen, not a literal date: FakeHistorySeeder's `finally`
+        // restores rather than clears the clock (docs/BUSINESS-LOGIC.md §36).
         $this->assertSame($frozen, Date::now()->toDateTimeString());
 
         // Second run: today is re-polled, the backfill is not repeated.

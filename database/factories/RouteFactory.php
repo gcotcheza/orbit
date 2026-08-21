@@ -24,14 +24,9 @@ final class RouteFactory extends Factory
             'origin_airport_id'      => Airport::factory()->origin(),
             'destination_airport_id' => Airport::factory(),
 
-            /*
-             * A CLOSURE, so it runs after the two nested factories above have
-             * been resolved to real ids. The code is derived data and the
-             * model owns the derivation — a factory that formatted its own
-             * would be a second definition waiting to disagree with the seeder.
-             *
-             * @param  array<string, mixed>  $attributes
-             */
+            // A closure, so it runs after the two nested factories above
+            // resolve to real ids; the model owns the code's derivation.
+            /** @param  array<string, mixed>  $attributes */
             'code' => fn (array $attributes): string => Route::codeFor(
                 Airport::query()->whereKey($attributes['origin_airport_id'])->firstOrFail()->iata,
                 Airport::query()->whereKey($attributes['destination_airport_id'])->firstOrFail()->iata,

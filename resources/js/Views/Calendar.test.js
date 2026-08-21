@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-// The calendar's month navigation and the empty-far-month edge; not covered
-// by e2e/specs/calendar.spec.js (computed colours only).
-// Why: docs/BUSINESS-LOGIC.md §36.
+// The calendar's month navigation and the empty-far-month edge — not covered
+// by e2e/specs/calendar.spec.js (docs/BUSINESS-LOGIC.md §36).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia } from 'pinia'
 import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
@@ -180,8 +179,8 @@ describe('a month at the far end with no fares in it', () => {
     })
 })
 
-// Which month it opens on: the watched route's cheapest-departure month, clamped into the eleven-month arrow window
-// and never in the past (docs/BUSINESS-LOGIC.md §36).
+// The watched route's cheapest-departure month, clamped into the
+// eleven-month arrow window and never in the past (docs/BUSINESS-LOGIC.md §36).
 describe('which month it opens on', () => {
     /** One watched route whose cheapest departure is on `date`. */
     function watching(date) {

@@ -11,33 +11,8 @@ use Illuminate\Database\Seeder;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 /**
- * The places Orbit has an OPINION about.
- *
- * Three origin airports and a hundred and eighty-four destinations, from the
- * two checked-in data files below — see either of them for where the vibes and
- * the monthly warmth ratings come from and why they are a list rather than an
- * API call.
- *
- * TWO FILES, ONE SEEDER, AND THE SPLIT IS EDITORIAL RATHER THAN TECHNICAL.
- * european_destinations.php is the short-haul list the app was built around;
- * world_destinations.php is the long-haul tranche added with world flights.
- * They have the same shape and are seeded identically; they are separate
- * because they are argued with separately, and because a single 300-row file
- * is one nobody reads before editing.
- *
- * WHAT THIS SEEDER IS NOT is the airports table. Since world flights, that
- * table also holds 3,270 rows from an OurAirports snapshot
- * (WorldAirportSeeder) so that any IATA code on Earth can be looked up and
- * watched. THESE rows are the ones the rule engine may match — they are the
- * only ones that carry a `destinations` row — and they must therefore win any
- * disagreement with the snapshot about a name or a city. They do: DatabaseSeeder
- * runs this first, and WorldAirportSeeder leaves everything named here alone.
- * That is what `curatedCodes()` is for.
- *
- * IDEMPOTENT AND NON-DESTRUCTIVE. It runs on every deploy, so it updates the
- * facts (a corrected coordinate, a new vibe tag) and creates what is missing,
- * and it never deletes: an airport that leaves this list still has routes,
- * price history and possibly a watchlist row hanging off it.
+ * The places Orbit has an OPINION about — three origins and 184 destinations,
+ * the only rows the rule engine may match (docs/BUSINESS-LOGIC.md §36).
  *
  * @phpstan-type AirportRow array{0: string, 1: string, 2: string, 3: string, 4: string, 5: float, 6: float}
  * @phpstan-type DestinationRow array{0: string, 1: string, 2: string, 3: string, 4: string, 5: float, 6: float, 7: string, 8: list<string>}
@@ -47,15 +22,7 @@ final class DestinationSeeder extends Seeder
 {
     use WithoutModelEvents;
 
-    /**
-     * The curated data files, in the order they are seeded.
-     *
-     * ORDER IS COSMETIC HERE and load-bearing nowhere: the rows are upserted by
-     * IATA and the two files share no codes (SeedersTest asserts it). Europe is
-     * first because it is the list this app was drawn for.
-     *
-     * @var list<string>
-     */
+    /** @var list<string> */
     private const FILES = [
         'european_destinations.php',
         'world_destinations.php',
@@ -96,15 +63,8 @@ final class DestinationSeeder extends Seeder
     }
 
     /**
-     * Every IATA code a human being has written down, origins included.
-     *
-     * WHAT IT IS FOR: WorldAirportSeeder imports 3,270 airports from a
-     * third-party snapshot and must not overwrite any of these — the snapshot
-     * calls JFK "John F. Kennedy International Airport" and Sydney's city
-     * "Sydney (Mascot)", and it still believes Dakar flies from DKR. Reading
-     * the answer out of the data files rather than out of the database is what
-     * makes that rule true on a FRESH box as well as on a re-seed, where "the
-     * rows that were already there" would be nothing at all.
+     * Read from the data files, not the database, so this is true on a FRESH
+     * box too (docs/BUSINESS-LOGIC.md §36).
      *
      * @return list<string>
      */
@@ -128,16 +88,7 @@ final class DestinationSeeder extends Seeder
     }
 
     /**
-     * Both files' climate profiles in one map.
-     *
-     * A NAME MAY BE REUSED ACROSS FILES AND MAY NOT BE REDEFINED. New York's
-     * winter really is Prague's, so world_destinations.php names `continental`
-     * rather than writing the same twelve numbers again — which is the whole
-     * argument for having profiles instead of per-row ratings, applied one
-     * level up. What that buys has to be paid for by refusing the other case:
-     * two files that both define `continental`, differently, would give the
-     * same word two meanings and the file that happened to be read second
-     * would silently win.
+     * A name may be reused across files, never redefined (docs/BUSINESS-LOGIC.md §36).
      *
      * @return array<string, list<int>>
      */
@@ -195,12 +146,7 @@ final class DestinationSeeder extends Seeder
     }
 
     /**
-     * Twelve ratings keyed by month number, 1-12.
-     *
-     * They are written as PHP integers and json_encode turns them into the
-     * object keys `"1"`..`"12"`; json_decode turns those back into integers on
-     * the way out. Both ends agree, which is why App\Models\Destination reads
-     * them with an int — see the note there.
+     * Keyed by month number, 1-12 — see App\Models\Destination::warmthIn().
      *
      * @param  list<int>  $profile  January to December
      * @return array<int, int>

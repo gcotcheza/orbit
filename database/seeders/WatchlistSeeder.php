@@ -13,22 +13,8 @@ use Illuminate\Database\Seeder;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 /**
- * The six routes the app opens on.
- *
- * They are the design's own set (design/README.md §1 — "6 routes orbiting"),
- * which is what makes the globe's auto-tour, the route rail and the watchlist
- * look like the screenshots on a fresh install. Real ones replace them the
- * moment the owner adds their own; nothing else in the app treats these six
- * specially.
- *
- * ROUTES ARE FACTS, WATCHLIST ROWS ARE CHOICES, and the two are seeded
- * differently on purpose:
- *
- *   - the route is `updateOrCreate`d, because "AMS-LIS is Amsterdam to Lisbon"
- *     cannot become wrong;
- *   - the watchlist row is `firstOrCreate`d, because `active` is the owner's
- *     toggle and a deploy that silently un-paused every route they had paused
- *     would be the app arguing with its user.
+ * The six routes the app opens on — the design's own set, replaced the
+ * moment the owner adds their own (docs/BUSINESS-LOGIC.md §36).
  */
 final class WatchlistSeeder extends Seeder
 {
@@ -82,8 +68,7 @@ final class WatchlistSeeder extends Seeder
         $airport = Airport::query()->where('iata', $iata)->first();
 
         if ($airport === null) {
-            // DestinationSeeder runs first and owns every code used above, so
-            // this can only mean the two files have drifted apart.
+            // Can only mean DestinationSeeder and this file have drifted apart.
             throw new RuntimeException("Airport {$iata} is not seeded; DestinationSeeder must run first.");
         }
 

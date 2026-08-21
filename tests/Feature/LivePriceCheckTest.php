@@ -17,9 +17,8 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * POST /api/routes/{code}/live-price — guardrails between one tap and a month's SerpAPI
- * quota (docs/BUSINESS-LOGIC.md §17).
- * ⚠ NO REAL SERPAPI REQUEST IS MADE HERE — fixtures recorded 2026-08-16.
+ * POST /api/routes/{code}/live-price — guardrails between one tap and a
+ * month's SerpAPI quota. ⚠ No real SerpAPI request here (docs/BUSINESS-LOGIC.md §17).
  */
 final class LivePriceCheckTest extends TestCase
 {
@@ -320,8 +319,8 @@ final class LivePriceCheckTest extends TestCase
     }
 
     /**
-     * Billed vs not billed: Google answering without price_insights on a thin route still counted as a billed search, so the row is written and cooldown
-     * covers it — everything below is a search that never happened (no row, button still there) (docs/BUSINESS-LOGIC.md §17).
+     * Billed vs not billed: no `price_insights` is still a billed search, so
+     * the row is written and the cooldown covers it (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_silent_answer_is_recorded_rather_than_re_bought(): void
@@ -414,8 +413,8 @@ final class LivePriceCheckTest extends TestCase
     }
 
     /**
-     * ⚠ Two taps that race: a paid answer must never come back as a 500. Both spend a search; the unique key lets exactly
-     * one row through — the listener below mimics the other request committing mid-flight (docs/BUSINESS-LOGIC.md §17).
+     * ⚠ Two taps that race: a paid answer must never come back as a 500 — the
+     * unique key lets exactly one row through (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_tap_that_loses_the_race_serves_the_winners_answer(): void
@@ -506,9 +505,8 @@ final class LivePriceCheckTest extends TestCase
     }
 
     /**
-     * ⚠ NOBODY IS TOLD TO CHECK A PRICE THEY HAVE JUST CHECKED. A silent answer
-     * still cost a search, and the callout has to say that rather than send
-     * them back to the button that is no longer there.
+     * ⚠ Nobody is told to check a price they just checked — a silent answer
+     * still cost a search (docs/BUSINESS-LOGIC.md §17).
      */
     #[Test]
     public function a_silent_answer_stops_the_callout_asking_for_another_check(): void

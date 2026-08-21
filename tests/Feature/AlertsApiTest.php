@@ -16,12 +16,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * `GET /api/alerts` — what Orbit has actually said.
- *
- * THE SHAPE IS ASSERTED AGAINST THE FROZEN PAYLOAD and not against the route it
- * points at, which is the property this endpoint exists to have: a row written
- * in March quotes March's price, and a rule that has since been deleted still
- * explains the mails it caused.
+ * `GET /api/alerts` — what Orbit has actually said (docs/BUSINESS-LOGIC.md §10).
  */
 final class AlertsApiTest extends TestCase
 {
@@ -95,9 +90,8 @@ final class AlertsApiTest extends TestCase
     }
 
     /**
-     * The rule travels in the payload, so deleting the rule does not erase the
-     * reason a mail was sent — docs/API.md promises the same about the routes a
-     * rule surfaced.
+     * The rule travels in the payload — deleting it does not erase why a mail
+     * was sent (docs/BUSINESS-LOGIC.md §10).
      */
     #[Test]
     public function a_rule_match_carries_the_rule_that_found_it_even_after_it_is_deleted(): void

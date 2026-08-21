@@ -1,13 +1,5 @@
-// =============================================================================
-// The tour's timetable, checked
-// =============================================================================
-// The timings in design/README.md §1 are relative to each other ("after ~1.3s",
-// "after another 2.5s"), so the numbers a reader has to trust are the SUMS —
-// and a sum is exactly what nobody recomputes when one of the delays is nudged.
-// These tests pin the absolute moments, so that changing a delay shows up as a
-// deliberate edit to a number here rather than as a flight that starts before
-// the camera has finished diving.
-// =============================================================================
+// The tour's timetable, pinned as absolute moments rather than as the
+// relative delays design/README.md §1 states them as (docs/BUSINESS-LOGIC.md §36).
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_MOTION, DWELL_MS, TIMING, flightSequence, nextIndex } from './tour'
 
@@ -63,9 +55,7 @@ describe('flightSequence', () => {
     })
 
     it('falls back to the default dwell for a motion setting it does not know', () => {
-        // The setting arrives with the settings screen and will be persisted;
-        // a value read back from storage is not to be trusted with the tour's
-        // arithmetic.
+        // A motion value read back from storage is not to be trusted.
         expect(flightSequence({ motion: 'ludicrous' })).toEqual(flightSequence({ motion: DEFAULT_MOTION }))
     })
 })

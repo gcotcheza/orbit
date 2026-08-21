@@ -15,8 +15,8 @@ use App\Domain\Discovery\RelativeLanePolicy;
 use App\Domain\Discovery\RelativeLaneSelector;
 
 /**
- * Pure class, no framework/DB — selection logic is checkable by reading test cases.
- * Why: docs/BUSINESS-LOGIC.md §16.
+ * Pure class, no framework/DB — selection logic is checkable by reading
+ * test cases (docs/BUSINESS-LOGIC.md §16).
  */
 final class RelativeLaneSelectorTest extends TestCase
 {
@@ -116,8 +116,8 @@ final class RelativeLaneSelectorTest extends TestCase
     }
 
     /**
-     * Thin-route guard: a big percentage off a cheap route still must clear the min savings floor.
-     * Why: docs/BUSINESS-LOGIC.md §16.
+     * Thin-route guard: a big percentage off a cheap route still must clear
+     * the min savings floor (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_big_percentage_off_a_cheap_route_still_has_to_save_real_money(): void
@@ -131,8 +131,8 @@ final class RelativeLaneSelectorTest extends TestCase
     }
 
     /**
-     * A known route that isn't rare today is dropped, not re-explored — it becomes explorable again only once its baseline
-     * ages past maxBaselineAgeDays (docs/BUSINESS-LOGIC.md §16).
+     * A known route that isn't rare today is dropped, not re-explored
+     * (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_known_route_that_is_ordinary_today_does_not_fall_back_into_exploration(): void
@@ -156,8 +156,8 @@ final class RelativeLaneSelectorTest extends TestCase
     }
 
     /**
-     * A baseline under minBaselineDays isn't a usual price: the route returns to exploration to be re-measured, not
-     * disqualified — that's what lets a thin measurement heal (docs/BUSINESS-LOGIC.md §16).
+     * A thin baseline returns to exploration to be re-measured, not
+     * disqualified — that's what lets it heal (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_baseline_built_on_too_few_days_is_treated_as_unknown(): void
@@ -270,8 +270,8 @@ final class RelativeLaneSelectorTest extends TestCase
     }
 
     /**
-     * Same city from two origins is one city — a dedup decision so one place never takes two slots.
-     * Why: docs/BUSINESS-LOGIC.md §16.
+     * Same city from two origins is one city — one place never takes two
+     * slots (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function one_city_reached_from_two_origins_takes_a_single_slot(): void
@@ -318,8 +318,7 @@ final class RelativeLaneSelectorTest extends TestCase
     }
 
     /**
-     * Pool order must not decide the answer — a reshuffled or reordered sweep still has to explore the same three routes
-     * (docs/BUSINESS-LOGIC.md §16).
+     * Pool order must not decide the answer (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function the_rotation_does_not_depend_on_the_order_the_sweep_arrived_in(): void
@@ -333,8 +332,8 @@ final class RelativeLaneSelectorTest extends TestCase
     }
 
     /**
-     * The rotation seed includes the day, not just the route — otherwise the same three routes would explore forever and
-     * an unlucky route would stay unlucky permanently (docs/BUSINESS-LOGIC.md §16).
+     * The rotation seed includes the day, not just the route — otherwise
+     * the same three routes explore forever (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function a_different_day_explores_a_different_set(): void
@@ -352,8 +351,8 @@ final class RelativeLaneSelectorTest extends TestCase
     }
 
     /**
-     * The time of day must not change the rotation — a hand-run of orbit:discover has to reproduce the 05:20 schedule's
-     * answer (the job is idempotent by design) (docs/BUSINESS-LOGIC.md §16).
+     * The time of day must not change the rotation — a hand-run has to
+     * reproduce the 05:20 schedule's answer (docs/BUSINESS-LOGIC.md §16).
      */
     #[Test]
     public function the_time_of_day_does_not_change_the_rotation(): void

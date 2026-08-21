@@ -52,8 +52,8 @@ trait BuildsRouteData
     }
 
     /**
-     * Makes a route OLD without making it noisy: one observation placed past config('orbit.alerts.min_tracking_days') and outside the trend window, so
-     * DealScorer sees exactly one price and every score stays hand-checkable (docs/BUSINESS-LOGIC.md §36).
+     * Makes a route OLD without making it noisy: one observation, past the
+     * maturity gate and outside the trend window (docs/BUSINESS-LOGIC.md §36).
      */
     protected function trackedSince(Route $route, int $cents): void
     {

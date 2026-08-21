@@ -15,14 +15,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * GET /api/watchlist — the response the globe home and the watchlist screen
- * are both built from.
- *
- * The arithmetic here is done on paper against the fixture, not read back out
- * of the code: stats €40 / €60 / €80 / €110 / €160 with a steady €50 fare put
- * the price at percentile 0.125, so the components are 87.5, 50 (flat) and 75,
- * and 0.6/0.25/0.15 of those is 76.25. If the scorer's weights are ever
- * changed without meaning to, this is the test that says so.
+ * GET /api/watchlist — the globe home and watchlist screen's response.
+ * Arithmetic done on paper, not read back out of the code (docs/BUSINESS-LOGIC.md §7).
  */
 final class WatchlistApiTest extends TestCase
 {
@@ -81,12 +75,8 @@ final class WatchlistApiTest extends TestCase
                 'destination' => ['iata', 'city', 'country', 'countryCode', 'lat', 'lng'],
                 'price'       => ['current', 'usual', 'pctBelow'],
                 'verdict'     => ['label', 'short', 'tone'],
-                /*
-                 * THE DAY THE PRICE IS FOR, on the summary and not only on the
-                 * detail. Every screen that draws `price.current` was drawing a
-                 * fare with no date attached to it, which is not a fare
-                 * anybody can act on.
-                 */
+                // The day the price is for, on the summary and not only the
+                // detail — a fare with no date attached is not one to act on.
                 'cheapest' => ['date', 'price'],
             ]],
             'meta' => ['count', 'active'],
@@ -94,11 +84,8 @@ final class WatchlistApiTest extends TestCase
     }
 
     /**
-     * The cheapest DEPARTURE, on the list endpoint.
-     *
-     * Ties break to the earliest date, the same way the detail's does — it is
-     * the same snapshot field, which is the point: one number, computed once,
-     * on both shapes.
+     * The cheapest DEPARTURE — ties break to the earliest date, same as the
+     * detail's, because it's the same snapshot field on both shapes.
      */
     #[Test]
     public function every_row_carries_the_day_its_price_is_for(): void
@@ -114,18 +101,8 @@ final class WatchlistApiTest extends TestCase
     }
 
     /**
-     * AND IT IS THE CHEAPEST DEPARTURE IN THE NEAR WINDOW, NOT IN THE CALENDAR.
-     *
-     * docs/API.md defines `cheapest` as "the day `price.current` is for", and
-     * `price.current` is the last observation — which App\Jobs\PollRoutePrices
-     * takes as the minimum over the six-month near window however deep that
-     * morning's fetch went. `calendar_fares` runs eleven months deep now
-     * (`orbit.poll.horizon_days`), so an unbounded MIN would publish a cheap
-     * June fare beside a dearer "current price" the API says is the same number
-     * — and point the booking link at a date nothing was scored on.
-     *
-     * The far fare below is half the price of everything in the near window,
-     * which is exactly the case that would win an unbounded comparison.
+     * The cheapest departure in the near window, not the whole calendar — an
+     * unbounded MIN would disagree with `price.current` (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_fare_beyond_the_near_window_is_not_published_as_the_cheapest_departure(): void
@@ -143,9 +120,8 @@ final class WatchlistApiTest extends TestCase
     }
 
     /**
-     * NULL IS NOT TODAY. A route with no fares has no date to put on a price it
-     * also does not have, and a screen that printed one would be inventing a
-     * departure.
+     * Null is not today — a route with no fares has no date for a price it
+     * also does not have.
      */
     #[Test]
     public function a_route_with_no_fares_has_no_date_either(): void
@@ -216,9 +192,8 @@ final class WatchlistApiTest extends TestCase
     }
 
     /**
-     * The day-1 honesty rule (docs/PLAN.md): a route with no prices yet gets a
-     * score of 0 and `confident: false`, which the screens must render as "no
-     * opinion" and not as a terrible deal.
+     * The day-1 honesty rule: score 0 and `confident: false` must render as
+     * "no opinion," never a terrible deal (docs/BUSINESS-LOGIC.md §8).
      */
     #[Test]
     public function a_brand_new_route_says_it_has_no_opinion(): void
@@ -239,13 +214,8 @@ final class WatchlistApiTest extends TestCase
     }
 
     /**
-     * The same honesty one day later, which is the case that was WRONG in
-     * production: a route with exactly one morning behind it is not a route
-     * with no opinion by accident of having no data — it has data, and the data
-     * says the current fare is the cheapest, dearest and most usual price this
-     * route has ever had. `ORBIT_STATS_PROVIDER=self` summarises the very
-     * observation the current price came from, so the API answered 100 / insane
-     * / confident / "Good price — book" for every route on the watchlist.
+     * The same honesty one day later — the case that was WRONG in production
+     * (docs/BUSINESS-LOGIC.md §7 "The day-1 floor").
      */
     #[Test]
     public function a_route_watched_since_this_morning_still_has_no_opinion(): void
@@ -265,13 +235,8 @@ final class WatchlistApiTest extends TestCase
         $response->assertJsonPath('data.0.verdict.label', 'Not enough data yet');
         $response->assertJsonPath('data.0.verdict.tone', 'normal');
 
-        /*
-         * AND THE ONE WORD THE PILL SHOWS IS 'New', NOT 'Normal'. The short was
-         * the same word a judged-and-unremarkable route wears, so the two
-         * answers Orbit is most careful to keep apart — "we have not learned
-         * this route yet" and "we looked, and it is ordinary" — arrived at the
-         * watchlist identical, on rows sitting next to each other.
-         */
+        // 'New', not 'Normal' — "not learned yet" and "looked, and it's
+        // ordinary" must not read identically on the watchlist.
         $response->assertJsonPath('data.0.verdict.short', 'New');
 
         /* The price itself is real and is still published — only the JUDGEMENT is withheld. */

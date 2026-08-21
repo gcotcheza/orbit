@@ -11,10 +11,8 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
- * The window that crosses midnight.
- *
- * The default window is 22:00-08:00 (user_settings migration) — the ordinary case, not an edge case.
- * Why: docs/BUSINESS-LOGIC.md §10.
+ * The window that crosses midnight — 22:00-08:00 is the ordinary case, not
+ * an edge case (docs/BUSINESS-LOGIC.md §10).
  */
 final class QuietHoursTest extends TestCase
 {
@@ -128,8 +126,8 @@ final class QuietHoursTest extends TestCase
     }
 
     /**
-     * Same Postgres/SQLite `time`-precision difference App\Models\UserSettings trims for. Both must parse here too.
-     * Why: docs/BUSINESS-LOGIC.md §10.
+     * Same Postgres/SQLite `time`-precision difference `UserSettings` trims
+     * for — both must parse here too (docs/BUSINESS-LOGIC.md §10).
      */
     #[Test]
     public function it_reads_both_precisions_the_two_engines_produce(): void

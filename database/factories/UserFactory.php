@@ -12,22 +12,9 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class UserFactory extends Factory
 {
-    /**
-     * The current password being used by the factory.
-     */
     protected static ?string $password;
 
-    /**
-     * Define the model's default state.
-     *
-     * The key type is Larastan's `model-property`, not a plain string: the
-     * parent declares it that way, so the stock `array<string, mixed>` is a
-     * WIDENED return type and PHPStan says so. The narrow one is also what
-     * makes a typo in an attribute name here a static-analysis error rather
-     * than a factory that silently seeds nothing.
-     *
-     * @return array<model-property<User>, mixed>
-     */
+    /** @return array<model-property<User>, mixed> */
     public function definition(): array
     {
         return [
@@ -39,9 +26,6 @@ class UserFactory extends Factory
         ];
     }
 
-    /**
-     * Indicate that the model's email address should be unverified.
-     */
     public function unverified(): static
     {
         return $this->state(fn (array $attributes) => [
