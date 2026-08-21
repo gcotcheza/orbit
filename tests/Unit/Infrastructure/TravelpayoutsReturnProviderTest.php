@@ -18,8 +18,8 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
 
 /**
- * The real round-trip adapter, against fixtures recorded from the live API (tests/Fixtures/travelpayouts/latest-returns-*.json); never touches the
- * network (`Http::preventStrayRequests()`) (docs/BUSINESS-LOGIC.md §15).
+ * The real round-trip adapter, against fixtures recorded from the live API;
+ * never touches the network (docs/BUSINESS-LOGIC.md §15).
  */
 final class TravelpayoutsReturnProviderTest extends TestCase
 {
@@ -102,8 +102,7 @@ final class TravelpayoutsReturnProviderTest extends TestCase
         Http::assertSent(function (Request $request): bool {
             $query = $this->queryOf($request);
 
-            // Four params, each a measured regression if missing (one_way, period_type, limit, currency) (docs/BUSINESS-LOGIC.md
-            // §15).
+            // Four params, each a measured regression if missing (docs/BUSINESS-LOGIC.md §15).
             $this->assertSame('false', $query['one_way'] ?? null);
             $this->assertSame('year', $query['period_type'] ?? null);
             $this->assertSame('1000', $query['limit'] ?? null);
@@ -111,8 +110,8 @@ final class TravelpayoutsReturnProviderTest extends TestCase
             $this->assertSame('AMS', $query['origin'] ?? null);
             $this->assertSame('JFK', $query['destination'] ?? null);
 
-            // `trip_duration` is deliberately NOT sent — documented but a no-op (verified byte-identical with/without it)
-            // (docs/BUSINESS-LOGIC.md §15).
+            // `trip_duration` is deliberately NOT sent — documented but a
+            // no-op, verified byte-identical without it.
             $this->assertArrayNotHasKey('trip_duration', $query);
 
             return true;
@@ -141,8 +140,8 @@ final class TravelpayoutsReturnProviderTest extends TestCase
     {
         Http::fake([self::ENDPOINT => Http::response($this->fixture('latest-returns-ams-lis'))]);
 
-        // One request covers 11 months of round-trip fares vs twelve for the one-way calendar equivalent — this endpoint was
-        // chosen for that budget (docs/BUSINESS-LOGIC.md §15).
+        // One request covers 11 months of round-trip fares — this endpoint
+        // was chosen for that budget (docs/BUSINESS-LOGIC.md §15).
         $this->provider()->cheapestReturns('AMS', 'LIS', $this->windowStart(), $this->to(334));
 
         Http::assertSentCount(1);
@@ -217,8 +216,8 @@ final class TravelpayoutsReturnProviderTest extends TestCase
 
         $trips = $this->provider()->cheapestReturns('AMS', 'LIS', $this->windowStart(), $this->to(365));
 
-        // This endpoint's found_at has no trailing `Z`, unlike the price-matrix endpoint's — copying that format here would
-        // silently return all-null ages (docs/BUSINESS-LOGIC.md §15).
+        // This endpoint's found_at has no trailing `Z`, unlike the
+        // price-matrix endpoint's (docs/BUSINESS-LOGIC.md §15).
         $found = [];
 
         foreach ($trips as $trip) {
@@ -277,9 +276,8 @@ final class TravelpayoutsReturnProviderTest extends TestCase
 
         $trips = $this->provider()->cheapestReturns('AMS', 'LIS', new DateTimeImmutable('2026-09-01'), new DateTimeImmutable('2026-09-30'));
 
-        // 4 of 17 fixture rows survive; round-trip-specific rejections are an
-        // empty return_date (a leaked one-way), an inverted return leg, and an
-        // over-long stay.
+        // 4 of 17 survive; rejections are an empty return_date, an inverted
+        // return leg, and an over-long stay.
         $this->assertCount(4, $trips);
 
         $this->assertSame(
@@ -295,8 +293,8 @@ final class TravelpayoutsReturnProviderTest extends TestCase
 
         $trips = $this->provider()->cheapestReturns('AMS', 'LIS', new DateTimeImmutable('2026-09-01'), new DateTimeImmutable('2026-09-30'));
 
-        // Mirrors the €252-vs-€80 one-way/round-trip mixup, inverted: a lost `one_way` param would file one-way prices as
-        // zero-night round trips (docs/BUSINESS-LOGIC.md §15).
+        // A lost `one_way` param would file one-way prices as zero-night
+        // round trips (docs/BUSINESS-LOGIC.md §15).
         $zeroNights = array_values(array_filter($trips, fn ($trip): bool => $trip->nights === 0));
 
         $this->assertCount(1, $zeroNights);
@@ -328,8 +326,8 @@ final class TravelpayoutsReturnProviderTest extends TestCase
         $logger = new RecordingLogger;
         $trips = $this->provider($logger)->cheapestReturns('EIN', 'BCN', $this->windowStart(), $this->to(365));
 
-        // A sparse route (23/14, ~7.7% of window) is normal and must not warn — a log line per thin route per morning is noise
-        // nobody reads (docs/BUSINESS-LOGIC.md §15).
+        // A sparse route is normal and must not warn — a log line per thin
+        // route per morning is noise nobody reads (docs/BUSINESS-LOGIC.md §15).
         $this->assertCount(23, $trips);
         $this->assertSame([], $logger->lines);
     }
@@ -361,8 +359,8 @@ final class TravelpayoutsReturnProviderTest extends TestCase
 
         $logger = new RecordingLogger;
 
-        // Guards a silent failure: roubles are the API's undocumented default and pass for euros at face value (e.g. "€472"
-        // that's really ₽472) (docs/BUSINESS-LOGIC.md §15).
+        // Guards a silent failure: roubles are the API's undocumented
+        // default and pass for euros at face value (docs/BUSINESS-LOGIC.md §15).
         $this->assertSame([], $this->provider($logger)->cheapestReturns('AMS', 'BKK', $this->windowStart(), $this->to(30)));
         $this->assertStringContainsString('wrong currency', $logger->lines[0]['message']);
     }
@@ -425,8 +423,8 @@ final class TravelpayoutsReturnProviderTest extends TestCase
     {
         Http::fake([self::ENDPOINT => Http::response('', 500)]);
 
-        // Pre-claims the one-way adapter's warning key: if shared, a calendar-poll failure would silence this adapter's
-        // warning too (docs/BUSINESS-LOGIC.md §15).
+        // Pre-claims the one-way adapter's warning key: if shared, a
+        // calendar-poll failure would silence this adapter too.
         $this->app->make('cache.store')->put('orbit:travelpayouts:warned', true, 900);
 
         $logger = new RecordingLogger;
@@ -450,8 +448,8 @@ final class TravelpayoutsReturnProviderTest extends TestCase
     }
 
     /**
-     * The cheapest fare in a set — fails rather than asserts non-empty, since `min([])` is a PHPStan-level-8 TypeError
-     * risk `assertNotEmpty` wouldn't catch.
+     * Fails rather than asserts non-empty, since `min([])` is a
+     * PHPStan-level-8 TypeError risk `assertNotEmpty` wouldn't catch.
      *
      * @param  list<ReturnTrip>  $trips
      */
