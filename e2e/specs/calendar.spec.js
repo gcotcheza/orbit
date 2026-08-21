@@ -1,17 +1,5 @@
-// =============================================================================
-// Price calendar (design/README.md §3)
-// =============================================================================
-// A month grid whose whole meaning is COLOUR: every cell's background is a
-// position on a green→red heat scale interpolated across the month's own
-// min/max. A bug that leaves every cell the same shade is a screen that renders
-// perfectly, has the right numbers on it, and answers the question the screen
-// exists to ask ("when is it cheap?") with nothing at all.
-//
-// Reading the computed backgrounds back out of the browser is the only place
-// that check can be made. `resources/js/Components/calendar/heat.js` has vitest
-// tests for the interpolation itself; this is about whether the result reaches
-// the pixels.
-// =============================================================================
+// Price calendar — a month grid whose whole meaning is COLOUR (docs/E2E.md
+// "Why this exists").
 import { expect, shot, test } from '../fixtures.js'
 
 const MONTHS = [
@@ -30,12 +18,8 @@ const MONTHS = [
 ]
 
 /**
- * `September 15, 2026` → `260915`, the six digits a Skyscanner path carries.
- *
- * Read back out of the SHEET'S OWN HEADING and worked out here from scratch,
- * which is the point: the app builds that URL by substituting into a template
- * the server sent, and a check that re-derived it the same way would agree with
- * a bug. This starts from the date a person can read on the screen.
+ * `September 15, 2026` → `260915` — worked out from the sheet's own heading,
+ * not re-derived the way the app does (docs/BUSINESS-LOGIC.md §12).
  */
 function yymmdd(shown) {
     const [, month, day, year] = shown.match(/^(\w+) (\d+), (\d{4})$/)
@@ -44,13 +28,7 @@ function yymmdd(shown) {
 }
 
 /**
- * `September 15, 2026` → `1509`, the four digits an Aviasales params string
- * carries — DAY BEFORE MONTH, two digits each.
- *
- * Worked out here from the sheet's own heading for the same reason `yymmdd` is:
- * a check that built the string the way the app does would agree with a bug.
- * The order is the thing being checked — `1509` and `0915` are both plausible
- * and only one of them searches September.
+ * `September 15, 2026` → `1509`, day before month (docs/BUSINESS-LOGIC.md §12).
  */
 function ddmm(shown) {
     const [, month, day] = shown.match(/^(\w+) (\d+), (\d{4})$/)
@@ -59,13 +37,8 @@ function ddmm(shown) {
 }
 
 /**
- * The route code out of a chip — `['AMS→LIS', 'AMS', 'LIS']`.
- *
- * READ WITH A REGEX RATHER THAN BY SPLITTING THE CHIP'S TEXT, because a chip is
- * no longer only a code: it carries the destination CITY under it, which is the
- * whole point of that change — six chips reading AMS→OPO, AMS→FAO, EIN→LIS are
- * six anagrams to anybody who does not already know them. `textContent` returns
- * the code and the city run together, so the code is matched out of it.
+ * The route code out of a chip — read with a regex, not split, since the
+ * chip's text also carries the destination city.
  */
 async function chipCode(page, selector = '.chip--active') {
     return (await page.locator(selector).first().textContent()).match(/([A-Z]{3})→([A-Z]{3})/)
@@ -73,10 +46,7 @@ async function chipCode(page, selector = '.chip--active') {
 
 /**
  * The "★ Cheapest this month" figure, or null for a month holding no fares.
- *
- * A month that is still loading renders neither — the grid, the legend and the
- * banner are all inside the same `v-else-if="payload"` — so there is no stale
- * value to read here, only no value.
+ * A still-loading month renders neither, so there is no stale value to read.
  */
 async function cheapestOnScreen(page) {
     const banner = page.locator('.banner')
@@ -89,13 +59,8 @@ async function cheapestOnScreen(page) {
 }
 
 /**
- * One month across, and WAIT FOR THE GRID RATHER THAN FOR THE HEADING.
- *
- * The subtitle changes the instant the arrow is tapped; the fares arrive a
- * request later. Reading the banner in between would be reading a month that
- * is not on screen yet — so this waits for the response and then for the
- * skeleton the screen shows while it is in flight to be gone, which is the
- * moment the new payload has actually rendered.
+ * One month across — waits for the grid, not merely the heading, which
+ * changes instantly while the fares arrive a request later.
  */
 async function step(page, arrow) {
     const landed = page.waitForResponse((response) => response.url().includes('/calendar?'))
@@ -111,31 +76,13 @@ test('the month grid is a heat map, not a table of identical squares', async ({ 
     await expect(page.locator('.calendar__title')).toHaveText('When is it cheap?')
     await expect(page.locator('.calendar__subtitle')).toHaveText(/Cheapest fare per day · /)
 
-    /*
-     * NEXT MONTH, NOT THIS ONE, AND THAT IS ABOUT THE DATA RATHER THAN THE UI.
-     *
-     * The poll window is 181 days FORWARD (config/orbit.php), so the current
-     * month is priced from today onwards and empty behind it — on the 15th it
-     * has 17 priced cells and the grid is half grey, correctly. Next month is
-     * entirely inside the window whatever day the suite runs on, which is what
-     * makes "more than twenty coloured cells" a statement about the heat map
-     * rather than about the calendar date.
-     *
-     * IT WALKS BACK TO THE FIRST MONTH FIRST, and that is new. The screen no
-     * longer opens on the current month: it opens on the month the selected
-     * route's CHEAPEST departure is in (see the landing test below), which is
-     * data-dependent and can be the last month of the window — where "next" is
-     * a disabled arrow and this test would have been asserting against a grid
-     * that never moved. Walking to the near edge and forward one lands on the
-     * same month this test always meant, whatever the fares say.
-     */
+    // Next month, not this one — correctly half-empty vs fully inside
+    // the window (docs/BUSINESS-LOGIC.md §4).
     const month = page.locator('.calendar__subtitle')
     const prev = page.getByRole('button', { name: /^Go to / }).first()
     const next = page.getByRole('button', { name: /^Go to / }).last()
 
-    // The landing month has to have ARRIVED before the arrows mean anything:
-    // the screen starts on the current month and moves to the route's cheapest
-    // one when the watchlist lands. See the bounds test below.
+    // The landing month has to have ARRIVED before the arrows mean anything.
     await expect(page.locator('.cell--fare').first()).toBeVisible()
 
     while (await prev.isEnabled()) {
@@ -152,15 +99,8 @@ test('the month grid is a heat map, not a table of identical squares', async ({ 
     const count = await fares.count()
     expect(count, 'the month has almost no priced days in it').toBeGreaterThan(20)
 
-    /*
-     * EVERY PRICED CELL CARRIES ITS OWN COLOUR, AND THEY ARE NOT ALL THE SAME.
-     *
-     * Two separate failures are being separated here. `background-color` still
-     * being the stylesheet's default on a cell means `cellStyle` never ran —
-     * the inline style is missing. All of them being the SAME non-default
-     * colour means it ran and the scale collapsed, which is what happens when
-     * min and max arrive equal, or null, or as strings.
-     */
+    // Two separate failures: the default colour means `cellStyle` never
+    // ran; all-the-same non-default colour means the heat scale collapsed.
     const backgrounds = await fares.evaluateAll((cells) =>
         cells.map((cell) => getComputedStyle(cell).backgroundColor),
     )
@@ -185,41 +125,16 @@ test('the month grid is a heat map, not a table of identical squares', async ({ 
 })
 
 /**
- * THE EDGE OF THE MAINTAINED HORIZON, walked in a real browser.
- *
- * `orbit.poll.horizon_days` is 334 days — eleven months, the airline booking
- * edge — and 334 can never touch more than twelve calendar months, so the arrows
- * offer this month and eleven more and then stop. The failure this catches is
- * the pair of numbers drifting apart: a horizon widened without the screen
- * following it hides months of real fares behind a disabled arrow, and a screen
- * that walks further than the poller reaches promises months that can never have
- * anything in them.
- *
- * WHAT THE MONTHS CONTAIN IS NOT ASSERTED HERE, deliberately, and that matters
- * more now than it did at six months. The sandbox seeds fares by polling with
- * the NEAR window, so months 7 to 11 are legitimately empty here — as they are
- * in production for a route added since the last weekly far run, and as the far
- * end is whenever a horizon opens early in a month. A suite that only passed
- * with a full grid at the far end would be asserting the seed rather than the
- * app. That the empty state renders is pinned deterministically in
- * resources/js/Views/Calendar.test.js, against a stubbed endpoint. What matters
- * HERE is that the screen is showing a calendar rather than an error at the far
- * end.
+ * The edge of the maintained horizon, walked in a real browser — the arrows
+ * offer this month and eleven more, then stop (docs/BUSINESS-LOGIC.md §4).
  */
 test('the month arrows walk eleven months forward and stop', async ({ page }) => {
     await page.goto('/calendar')
 
     const subtitle = page.locator('.calendar__subtitle')
 
-    /*
-     * WAIT FOR THE FIRST GRID, not merely for the heading, and this is the one
-     * line the landing change cost this test. The subtitle reads "Cheapest fare
-     * per day · August 2026" from the first frame — `month` starts at the
-     * current month and is MOVED to the route's cheapest month once the
-     * watchlist lands. Walking the arrows before that arrives means walking
-     * from a month the screen is about to leave, and every assertion after it
-     * is off by however far the landing jumped.
-     */
+    // Wait for the first grid, not merely the heading — `month` moves to
+    // the route's cheapest month once the watchlist lands.
     await expect(page.locator('.cell--fare').first()).toBeVisible()
 
     const prev = page.locator('.month-nav__button').first()
@@ -233,17 +148,8 @@ test('the month arrows walk eleven months forward and stop', async ({ page }) =>
         return `${MONTHS[month.getUTCMonth()]} ${month.getUTCFullYear()}`
     }
 
-    /*
-     * BACK TO THE NEAR EDGE BEFORE COUNTING FORWARD, and that is the one thing
-     * this test had to learn from the landing change. The screen no longer
-     * opens on the current month — it opens on the month the selected route's
-     * CHEAPEST departure is in — so "walk eleven and stop" has to start from the
-     * edge rather than from wherever the fares put it.
-     *
-     * Which is also the clamp, asserted: the landing month is inside
-     * FIRST_MONTH..LAST_MONTH, so walking back from it always ARRIVES at this
-     * month rather than at some month behind it.
-     */
+    // Back to the near edge before counting forward — the screen opens on
+    // the route's cheapest month, not the current one.
     while (await prev.isEnabled()) {
         await step(page, prev)
     }
@@ -271,21 +177,9 @@ test('the month arrows walk eleven months forward and stop', async ({ page }) =>
     }
 })
 
-/*
- * ============================================================================
- * IT OPENS ON THE MONTH WORTH LOOKING AT
- * ============================================================================
- * The screen always opened on the CURRENT month, which is the one month the
- * poll window only half covers — everything before today is gone. "When is it
- * cheap?" was therefore answered with a half-grey grid while the route's
- * actual cheapest day sat two taps away in another month, unmentioned, under a
- * banner that says "cheapest THIS month" and never said which month to be in.
- *
- * THE ASSERTION IS MADE FROM THE SCREEN ALONE. Every month in the window is
- * walked and its banner read, and the landing month has to be one of the ones
- * holding the cheapest fare of the lot. Nothing here re-derives the answer the
- * way the app does — it reads the prices a person can see and checks the app
- * landed on the best of them.
+/**
+ * It opens on the month worth looking at — every month in the window is
+ * walked and read, from the screen alone (docs/BUSINESS-LOGIC.md §36).
  */
 test('the calendar opens on the month the route is cheapest in', async ({ page }) => {
     await page.goto('/calendar')
@@ -352,9 +246,8 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
     const sheet = page.getByRole('dialog')
     await expect(sheet).toBeVisible()
 
-    // The sheet is about the day that was tapped — not about the first of the
-    // month, which is what an off-by-one in the grid's blank-cell padding
-    // produces and what nothing else would catch.
+    // The day tapped, not the first of the month — what an off-by-one in
+    // the grid's blank-cell padding would produce.
     await expect(sheet.locator('.sheet__date')).toContainText(new RegExp(`\\b${day}\\b`))
     await expect(sheet.locator('.sheet__price')).toHaveText(price)
 
@@ -362,45 +255,16 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
     // calendar and a future alert cannot disagree about what cheap means.
     await expect(sheet.locator('.pill')).not.toBeEmpty()
 
-    /*
-     * HOW OLD THIS PRICE IS, WHICH IS THE LINE THE SHEET GAINED.
-     *
-     * Orbit's fares come from a cache of other people's searches, so a number
-     * in this sheet can be days old — the app showed €36 for a date whose live
-     * cheapest was €56 — and this is the screen with a hand-off button on it.
-     *
-     * "just now", BECAUSE THE SANDBOX'S FAKE PROVIDER STAMPS THE CURRENT CLOCK.
-     * That is a render check rather than an assertion about ageing: what it
-     * proves is that `found_at` survives the adapter, the upsert, the resource
-     * and the props and reaches the pixels. The arithmetic that turns an
-     * instant into "3 hours ago" or "4 days ago" is pinned on paper in
-     * resources/js/lib/format.test.js, where the clock can be moved.
-     */
+    // "just now" because the fake provider stamps the current clock — a
+    // render check that `found_at` reaches the pixels (docs/BUSINESS-LOGIC.md §2).
     await expect(sheet.locator('.sheet__seen')).toHaveText('Seen just now')
 
-    /*
-     * THE HAND-OFFS ARE AIMED AT THE DAY THAT WAS TAPPED, and are checked by
-     * READING THEIR HREFS RATHER THAN BY FOLLOWING THEM. Nothing in this suite
-     * may navigate to aviasales.com or skyscanner.nl: they are third parties,
-     * they are slow, and a run would then fail whenever somebody else's site
-     * was having a bad morning. The hrefs are the whole of what this app
-     * decided.
-     *
-     * The failure this catches is a link that opens perfectly and books the
-     * wrong date — the route's cheapest day, the first of the month, or (for
-     * Aviasales) the day and the month the wrong way round — which is what "the
-     * sheet has a Book button" alone would pass on.
-     */
+    // Hand-offs aimed at the tapped day, checked by reading hrefs rather
+    // than following them — nothing here may navigate to a third party.
     const [, origin, destination] = await chipCode(page)
     const shownDate = await sheet.locator('.sheet__date').textContent()
 
-    /*
-     * AVIASALES IS THE PRIMARY, and that is a correctness matter: Orbit prices
-     * from Aviasales' cache and used to hand readers to Skyscanner, which had
-     * often never had the fare. `?marker=` is optional here because the sandbox
-     * has no TRAVELPAYOUTS_MARKER — its presence is asserted on paper in
-     * tests/Feature/BookingLinkTest.php.
-     */
+    // Aviasales is the primary, a correctness matter (docs/BUSINESS-LOGIC.md §12).
     const book = sheet.getByRole('link', { name: 'See this fare on Aviasales' })
 
     expect(await book.getAttribute('href')).toMatch(
@@ -409,13 +273,8 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
         ),
     )
 
-    /*
-     * And the second opinion, on the same day in its own encoding. It is a
-     * BUTTON beside the one above now rather than a line of grey text under it —
-     * the owner reported that the text link did not read as pressable, and both
-     * hand-offs are the same control in the same row on both booking surfaces
-     * (Components/route/BookingCta.vue draws the other one).
-     */
+    // The second opinion, on the same day in its own encoding — a button
+    // beside the primary, not a line of grey text under it.
     const compare = sheet.getByRole('link', { name: 'Compare on Skyscanner' })
 
     await expect(compare).toHaveClass(/action/)
@@ -423,9 +282,8 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
 
     await expect(compare).toHaveAttribute('href', `https://www.skyscanner.nl/transport/flights/${path}`)
 
-    // They leave the app, so: a new tab, no `window.opener` handle back into
-    // this one — and NO `noreferrer`, which is what the affiliate attribution
-    // rides on (Components/route/BookingCta.vue).
+    // They leave the app: a new tab, no `window.opener` — and NO
+    // `noreferrer`, which is what affiliate attribution rides on.
     for (const link of [book, compare]) {
         await expect(link).toHaveAttribute('target', '_blank')
         await expect(link).toHaveAttribute('rel', 'noopener')
@@ -436,14 +294,8 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
         'Prices come from recent searches — the booking site shows live availability.',
     )
 
-    /*
-     * THE SWATCH SAYS WHAT IT IS OF. It is a 54 px square whose whole meaning is
-     * a comparison — where this day's fare sits between the cheapest and dearest
-     * day of this month, on the same ramp the grid behind the sheet is painted
-     * from — and the sheet covers that grid, so with the swatch unlabelled there
-     * is nothing on screen to read the colour against. The UX pass took it for
-     * decoration.
-     */
+    // The swatch says what it is of — the sheet covers the grid it would
+    // otherwise be read against.
     await expect(sheet.locator('.sheet__swatch-label')).toHaveText('Price vs month')
 
     await shot(page, 'calendar-day-sheet')
@@ -454,20 +306,9 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
     await expect(sheet).toHaveCount(0)
 })
 
-/*
- * ============================================================================
- * THE SHEET IN THE LIGHT PALETTE
- * ============================================================================
- * The sheet gained two quiet elements — the "Seen …" line and the expectation
- * line under the hand-offs — and both are drawn in `--muted` on `--panel`.
- * Muted-on-panel is exactly the pair that survives one theme and disappears in
- * the other: it is the lowest-contrast text in the app by design, and the whole
- * point of these two lines is that somebody about to spend money can read them.
- *
- * A SCREENSHOT AND TWO ASSERTIONS RATHER THAN A BASELINE COMPARISON. What the
- * sheet looks like is for a person to judge (docs/E2E.md says why only three
- * screens are compared automatically); what a test can say is that the lines
- * are present and non-empty in the palette they were not designed in.
+/**
+ * The sheet in the light palette — `--muted` on `--panel` survives one
+ * theme and disappears in the other (docs/E2E.md).
  */
 test('the day sheet reads in the light theme too', async ({ page }) => {
     await page.goto('/alerts')
@@ -489,8 +330,7 @@ test('the day sheet reads in the light theme too', async ({ page }) => {
         'Prices come from recent searches — the booking site shows live availability.',
     )
 
-    // The swatch caption is the third line in this family — same `--muted` on
-    // `--panel`, same reason for checking it in the palette it was not drawn in.
+    // Same `--muted` on `--panel` as the other two quiet lines.
     await expect(sheet.locator('.sheet__swatch-label')).toHaveText('Price vs month')
 
     await shot(page, 'calendar-day-sheet-light')
@@ -503,9 +343,8 @@ test('the day sheet reads in the light theme too', async ({ page }) => {
 })
 
 /**
- * The other half of the sheet: the way out of it that stays in the app. It
- * exists because the sheet used to be a dead end — a date, a price and a
- * verdict, and no way to act on any of them.
+ * The other half of the sheet: the way out of it that stays in the app —
+ * it used to be a dead end.
  */
 test('the day sheet leads to the route it is about', async ({ page }) => {
     await page.goto('/calendar')
@@ -540,16 +379,8 @@ test('switching route redraws the month', async ({ page }) => {
 
     const before = await page.locator('.cell--fare .cell__price').allTextContents()
 
-    /*
-     * THE CHIP IS RE-FOUND BY ITS CODE AFTER THE TAP, not held as a locator.
-     * `.chip:not(.chip--active)` is a live query: the moment the tap lands the
-     * chip stops matching it and the OLD active one starts, so re-asserting on
-     * the same locator reads the wrong element and reports aria-pressed=false.
-     *
-     * By its CODE and not by its whole text, because the chip now has a city
-     * on a second line — `textContent` runs the two together and would match
-     * neither the rendered text nor the accessible name.
-     */
+    // Re-found by its code after the tap, not held as a locator — a live
+    // query re-evaluates and would resolve to a different chip (docs/E2E.md).
     const [wanted] = await chipCode(page, '.chip:not(.chip--active)')
     const chip = page.locator('.chip', { hasText: wanted })
 
@@ -557,9 +388,7 @@ test('switching route redraws the month', async ({ page }) => {
 
     await expect(chip).toHaveAttribute('aria-pressed', 'true')
 
-    // The fake provider is deterministic PER ROUTE, so two routes cannot
-    // produce the same column of prices — if they do, the chip changed the
-    // highlight and not the request.
+    // Deterministic per route — two routes cannot share a column of prices.
     await expect
         .poll(async () => (await page.locator('.cell--fare .cell__price').allTextContents()).join(','))
         .not.toBe(before.join(','))
