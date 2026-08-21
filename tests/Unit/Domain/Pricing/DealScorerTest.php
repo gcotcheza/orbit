@@ -16,24 +16,14 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
- * The one piece of Orbit that is genuinely ours.
- *
- * The cases below are the ones that decide whether an alert fires: a fare at
- * the bottom of its range, one at its usual price, one above it, and every
- * combination of missing input the app will really see on a route it started
- * watching this morning.
+ * The one piece of Orbit that is genuinely ours — every combination of
+ * missing input a newly-watched route will really see (docs/BUSINESS-LOGIC.md §7).
  */
 final class DealScorerTest extends TestCase
 {
     /**
-     * Mornings of history behind every score below, unless the test is about
-     * the maturity floor itself.
-     *
-     * PASSED EXPLICITLY EVERYWHERE. The scorer declines to judge a route under
-     * `ScoringPolicy::$minTrackingDays` days old, and an argument with a
-     * default would let a test quietly assert the floor's behaviour while
-     * appearing to assert the arithmetic — which is how the two got confused in
-     * production in the first place.
+     * Passed explicitly everywhere — a default would let a test quietly
+     * assert the floor's behaviour while appearing to assert the arithmetic.
      */
     private const MATURE = 30;
 
@@ -62,8 +52,6 @@ final class DealScorerTest extends TestCase
     {
         return $this->history(array_fill(0, $days, $cents));
     }
-
-    // ------------------------------------------------------------ the score
 
     #[Test]
     public function the_cheapest_a_route_has_ever_been_scores_at_the_top(): void
@@ -127,8 +115,6 @@ final class DealScorerTest extends TestCase
         $this->assertLessThan(50, $deal->score);
     }
 
-    // ------------------------------------------------- missing-input degrades
-
     #[Test]
     public function a_route_with_no_history_is_scored_on_what_is_left(): void
     {
@@ -184,12 +170,8 @@ final class DealScorerTest extends TestCase
         $deal = (new DealScorer)->score(7000, $flatStats, $this->flat(7000), self::MATURE);
 
         $this->assertTrue($deal->confident);
-        /*
-         * Percentile 50 and trend 50; the absolute component drops out
-         * entirely because a route whose floor IS its usual price gives it
-         * nothing to measure, and the remaining two are renormalised rather
-         * than the score being docked 15 points.
-         */
+        // Percentile 50, trend 50; the absolute component drops out and the
+        // remaining two are renormalised (docs/BUSINESS-LOGIC.md §7).
         $this->assertSame(50, $deal->score);
     }
 
@@ -207,15 +189,9 @@ final class DealScorerTest extends TestCase
         $this->assertGreaterThanOrEqual(80, $deal->score);
     }
 
-    // ------------------------------------------------------- the day-1 floor
-
     /**
-     * THE PRODUCTION BUG, AS A TEST. With `ORBIT_STATS_PROVIDER=self` the
-     * statistics ARE the observations, so on a route's first morning the
-     * current fare is its own minimum, median and maximum: every component
-     * scores it perfectly, and the app announces an insane deal about a route
-     * it knows one number about. The inputs below are exactly that shape —
-     * today's price sitting on the floor of a distribution one price wide.
+     * The production bug, as a test — day-one statistics score a route
+     * perfectly on one number (docs/BUSINESS-LOGIC.md §7 "The day-1 floor").
      */
     #[Test]
     public function a_route_watched_for_one_morning_has_no_opinion_however_well_it_scores(): void
@@ -232,11 +208,8 @@ final class DealScorerTest extends TestCase
     }
 
     /**
-     * The verdict has to degrade with the flag and not merely beside it:
-     * resources/js/Components/globe/SpotlightCard.vue prints `verdict.label`
-     * without asking whether Orbit meant it, so "Good price — book" next to
-     * `confident: false` would be a booking recommendation nobody could see was
-     * a guess.
+     * The verdict has to degrade with the flag, not merely beside it —
+     * `SpotlightCard.vue` prints `verdict.label` without asking.
      */
     #[Test]
     public function the_verdict_degrades_with_the_confidence_and_not_beside_it(): void
@@ -245,22 +218,15 @@ final class DealScorerTest extends TestCase
 
         $this->assertNotSame('Good price — book', $deal->verdict->label);
         $this->assertSame('Not enough data yet', $deal->verdict->label);
-        /*
-         * "PRICING" AND NOT "WATCHING". The sentence is shown on the detail
-         * screen of routes nobody watches — `POST /api/routes/lookup` opens it
-         * on pairs the poller will never visit again — so "started watching"
-         * was a promise the app does not keep, on the very screen offering a
-         * "Watch this route" button. Flagged in PR #29.
-         */
+        // "PRICING" not "WATCHING" — this screen also opens on pairs nobody
+        // watches, where "started watching" is a promise the app doesn't keep.
         $this->assertStringContainsString('only just started pricing', $deal->advice->body);
         $this->assertStringNotContainsString('watching', $deal->advice->body);
     }
 
     /**
-     * The boundary. Six mornings is not a week and seven is — the same floor
-     * App\Domain\Alerts\AlertPolicy gates alerts on, from the same config key,
-     * so a screen cannot say "book it" about a route the alert engine considers
-     * too young to mention.
+     * The boundary — the same floor AlertPolicy gates alerts on, from the
+     * same config key (docs/BUSINESS-LOGIC.md §7).
      */
     #[Test]
     #[DataProvider('maturities')]
@@ -270,11 +236,8 @@ final class DealScorerTest extends TestCase
 
         $this->assertSame($confident, $deal->confident);
 
-        /*
-         * The same 88 the top-of-file case computes (percentile 100, trend 50,
-         * absolute 100), asserted here so the floor is seen to switch between
-         * "the real answer" and "no answer" rather than between two scores.
-         */
+        // The same 88 the top-of-file case computes — the floor switches
+        // between "the real answer" and "no answer," not between two scores.
         $this->assertSame($confident ? 88 : 0, $deal->score);
     }
 
@@ -303,8 +266,6 @@ final class DealScorerTest extends TestCase
 
         $this->assertTrue($scorer->score(4000, $this->stats(), $this->flat(4000), 1)->confident);
     }
-
-    // ---------------------------------------------------------- the verdicts
 
     #[Test]
     public function a_great_score_that_is_still_falling_says_so(): void
@@ -352,8 +313,6 @@ final class DealScorerTest extends TestCase
             }
         }
     }
-
-    // ------------------------------------------------------------ the policy
 
     #[Test]
     public function the_weights_are_configurable_and_are_actually_used(): void
