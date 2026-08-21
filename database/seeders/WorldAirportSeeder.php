@@ -11,54 +11,14 @@ use Illuminate\Database\Seeder;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 /**
- * Every airport on Earth that sells a scheduled seat — the other 3,083 rows.
- *
- * WHY IT EXISTS. Orbit knew eighty airports, all of them European, and the
- * three-letter box in the add-route form was therefore a box that could refuse
- * "JFK". Looking up a route is not a commitment (routes/web.php,
- * `POST /api/routes/lookup`) and watching one is the owner's decision rather
- * than this list's, so the validation rule behind both — `exists:airports,iata`
- * in App\Http\Requests\RoutePairRequest — should be able to say yes to
- * anywhere. It is the same rule it always was; what changed is the table under
- * it.
- *
- * THE SOURCE IS A COMMITTED SNAPSHOT, NOT A DOWNLOAD. See
- * database/seeders/data/world_airports.README.md for the licence (public
- * domain), the filter that took 85,901 rows down to 3,270, and why a seeder
- * that runs on every deploy must not depend on somebody else's CDN.
- *
- * THE CURATED ROWS WIN, ALWAYS, and that is the one rule this seeder has. The
- * hundred and eighty-four airports in DestinationSeeder's data files have
- * names a person chose ("John F. Kennedy", not "John F. Kennedy International
- * Airport"), cities a person would say ("Sydney", not "Sydney (Mascot)") and,
- * in one case, a correction the snapshot has not made — Dakar's DKR closed in
- * 2017 and its flights leave from DSS. Those rows are skipped outright rather
- * than upserted with the snapshot's values, so re-running this seeder on every
- * deploy cannot walk any of it back. tests/Feature/SeedersTest asserts it.
- *
- * IT IS ALSO WHY THIS RUNS AFTER DestinationSeeder in DatabaseSeeder and not
- * before: skipping is cheap, but a fresh box that imported the world first
- * would still have to be corrected afterwards, and the order that needs no
- * correction is the one that cannot drift.
- *
- * WHAT IT NEVER TOUCHES is `is_origin`. An origin is one of the three airports
- * the owner can drive to (config('orbit.origins')), which is a fact about a
- * person and not about an airport; the column is left to its `false` default
- * on insert and left out of the update list entirely, so no snapshot refresh
- * can add a fourth origin or unset one of the three.
+ * Every airport on Earth that sells a scheduled seat — the other 3,083 rows,
+ * so a look-up can say yes to anywhere (docs/BUSINESS-LOGIC.md §36).
  */
 final class WorldAirportSeeder extends Seeder
 {
     use WithoutModelEvents;
 
-    /**
-     * Rows per INSERT.
-     *
-     * 250 × 9 bindings is 2,250, which is comfortably inside SQLite's
-     * parameter ceiling (the suite runs on `:memory:`) and nowhere near
-     * Postgres'. Thirteen statements for the whole file is not worth tuning
-     * further — this is a deploy-time seeder, not a request.
-     */
+    // 250 × 9 bindings stays inside SQLite's parameter ceiling (:memory: suite).
     private const CHUNK = 250;
 
     public function run(): void
@@ -73,7 +33,7 @@ final class WorldAirportSeeder extends Seeder
         $skipped = 0;
 
         foreach ($file as $line => $row) {
-            /* The header, and the empty final line SplFileObject hands back. */
+            // The header, and the empty final line SplFileObject hands back.
             if ($line === 0 || ! is_array($row) || $row === [null] || $row === []) {
                 continue;
             }
@@ -112,23 +72,13 @@ final class WorldAirportSeeder extends Seeder
      */
     private static function upsert(array $rows): void
     {
-        /*
-         * `is_origin` is in NEITHER list: not in the values, so a new row takes
-         * the column's `false` default, and not in the update columns, so an
-         * existing row keeps whatever it has. See the class note.
-         */
+        // `is_origin` is in NEITHER list (docs/BUSINESS-LOGIC.md §36).
         Airport::query()->upsert($rows, ['iata'], ['name', 'city', 'country', 'country_code', 'lat', 'lng']);
     }
 
     /**
-     * One CSV line, checked rather than trusted.
-     *
-     * THE CHECKS ARE FOR THE NEXT SNAPSHOT, not for this one — today's file is
-     * 3,270 rows of exactly this shape. A refreshed OurAirports export that
-     * grew a column, lost a country name or carried a four-letter code would
-     * otherwise reach Postgres as a `value too long for type character(3)`
-     * halfway through a deploy's seed, which is a message that says nothing
-     * about which file or which line.
+     * One CSV line, checked rather than trusted — for the NEXT snapshot,
+     * not this one (docs/BUSINESS-LOGIC.md §36).
      *
      * @param  array<int, string|null>  $row
      * @return array{iata: string, name: string, city: string, country: string, country_code: string, lat: float, lng: float}
