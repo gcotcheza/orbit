@@ -19,10 +19,8 @@ use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * Going and finding out what a rule is worth.
- *
- * A new rule names routes nobody watches; without this job it matches nothing on day one. Mostly about budget — a
- * vibe-less rule is 231 calls (docs/BUSINESS-LOGIC.md §11).
+ * Going and finding out what a rule is worth — mostly about budget, a
+ * vibe-less rule is 231 calls (docs/BUSINESS-LOGIC.md §11, docs/BUSINESS-LOGIC.md §36).
  */
 final class RuleSweepTest extends TestCase
 {
@@ -48,10 +46,8 @@ final class RuleSweepTest extends TestCase
     }
 
     /**
-     * Run the sweep here and now, with its dependencies from the container.
-     *
-     * Not `dispatchSync()` — under `Queue::fake()` that's recorded, not run, so the test would pass even if `handle()`
-     * were deleted (docs/BUSINESS-LOGIC.md §11).
+     * Not `dispatchSync()` — under `Queue::fake()` that's recorded, not run
+     * (docs/BUSINESS-LOGIC.md §36).
      */
     private function sweep(int $ruleId): void
     {
@@ -99,8 +95,8 @@ final class RuleSweepTest extends TestCase
     }
 
     /**
-     * Budget is for provider calls, spent on routes that need one — else a rule overlapping the watchlist never reaches
-     * its own tail (docs/BUSINESS-LOGIC.md §11).
+     * Budget is for provider calls, spent on routes that need one — else a
+     * rule overlapping the watchlist never reaches its own tail.
      */
     #[Test]
     public function routes_already_priced_this_morning_are_skipped_before_the_cap_applies(): void
@@ -175,8 +171,7 @@ final class RuleSweepTest extends TestCase
     }
 
     /**
-     * A sweep is shallower than a poll — a budget decision. Six months for 30 routes would be 210 Travelpayouts requests,
-     * past the ~200/hr cap (docs/BUSINESS-LOGIC.md §11).
+     * A sweep is shallower than a poll — a budget decision (docs/BUSINESS-LOGIC.md §11).
      */
     #[Test]
     public function a_sweep_polls_a_shorter_horizon_than_the_watchlist_gets(): void
@@ -226,8 +221,8 @@ final class RuleSweepTest extends TestCase
     }
 
     /**
-     * Honest limit, asserted not promised: a far month still matches on an already-watched route's fares, just not on
-     * unwatched speculative ones (docs/BUSINESS-LOGIC.md §11).
+     * Honest limit, asserted not promised: a far month still matches on an
+     * already-watched route's fares, just not unwatched ones.
      */
     #[Test]
     public function a_far_month_still_matches_on_a_route_the_watchlist_already_holds_fares_for(): void
@@ -254,13 +249,8 @@ final class RuleSweepTest extends TestCase
     }
 
     /**
-     * The whole point, end to end with nothing faked below the port.
-     *
-     * A never-priced pair gets a trip to show after the sweep, using the same fake provider production runs today
-     * (`orbit.providers.price`).
-     *
-     * No `Queue::fake()` here, deliberately: the runner's `sync` connection runs the whole chain inline, unlike every
-     * other test in this file (docs/BUSINESS-LOGIC.md §11).
+     * The whole point, end to end with nothing faked below the port — no
+     * `Queue::fake()`, so the `sync` connection runs the whole chain inline.
      */
     #[Test]
     public function a_rule_about_a_pair_nobody_has_priced_finds_it_after_the_sweep(): void

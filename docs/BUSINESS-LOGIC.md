@@ -1181,6 +1181,18 @@ how many routes a *given* rule ever gets fares for, but a rule can and does
 match more than 30 when the watchlist or another rule has already priced routes
 it ranks — the cap limits provider calls, not matches.
 
+**The count is a floor until every candidate has a price, published as
+`matches.partial`.** Measured on the running app: the create screen said "2
+trips match this right now" and the rule it saved reported 32 a minute later
+— neither number was wrong (the second is what `SweepRuleFares` found once it
+ran), but the first was stated as a total, so the app read as having been
+mistaken about the thing it exists to answer, at the exact moment somebody was
+deciding whether to save the rule. `partial` is that gap, published: true while
+some candidate route in the rule's fan-out has never been priced, false once
+every candidate has an answer — regardless of whether any of them matched. A
+candidate that has been priced and does not match is not pending; pending is
+about missing information, not missing matches.
+
 ### Implementation notes
 
 `RuleCriteria::from()` must survive JSON an older version of the class wrote —
