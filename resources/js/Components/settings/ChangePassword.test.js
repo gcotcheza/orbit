@@ -1,17 +1,6 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The change-password form
-// =============================================================================
-// The endpoint has its own suite (tests/Feature/PasswordChangeTest); what is
-// under test here is the half no PHP test can see — that the sentences the 422
-// carries reach the box they belong to, that a success collapses the form and
-// leaves nothing typed behind, and that the button cannot be pressed twice into
-// two requests.
-//
-// `PUT /api/profile/password` is stubbed with the shapes docs/API.md publishes,
-// including the rejections: a form's behaviour on the unhappy path IS the
-// feature here.
-// =============================================================================
+// The half tests/Feature/PasswordChangeTest can't see: 422s reaching the
+// right box, success clearing the form, and no double-submit.
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
