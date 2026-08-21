@@ -365,9 +365,32 @@ holds**, inclusive — not since the route was added. A route polled once today 
 "tracking 1 day". Both ends are parsed in the owner's timezone, or the
 difference comes back with a fraction on it.
 
-**The row is a near-window minimum, whatever that morning's run actually fetched.** `PollRoutePrices` bounds the day's observation to `poll.window_days` even on the weekly `--far` run, which reaches eleven months. Taken over the depth of the fetch instead, a Saturday's row would be the cheapest fare in the next *eleven* months — lower on most routes for no reason but how deep the run looked — and the series would dip every Saturday and recover every Sunday. The trend component would read that sawtooth as a fall and a recovery, and the percentile would score an ordinary Saturday as the cheapest morning of the month. The near-window filter compares `'Y-m-d'` strings rather than `DateTimeImmutable`s, because the near edge is midnight in the owner's timezone while a provider's departure date carries whatever zone the adapter built it in — two instants for the same calendar day can be hours apart. If a run somehow fetched nothing inside the near window at all, no row is written: yesterday's row is a better answer than an invented one.
+**The row is a near-window minimum, whatever that morning's run actually
+fetched.** `PollRoutePrices` bounds the day's observation to
+`poll.window_days` even on the weekly `--far` run, which reaches eleven
+months. Taken over the depth of the fetch instead, a Saturday's row would be
+the cheapest fare in the next *eleven* months — lower on most routes for no
+reason but how deep the run looked — and the series would dip every Saturday
+and recover every Sunday. The trend component would read that sawtooth as a
+fall and a recovery, and the percentile would score an ordinary Saturday as
+the cheapest morning of the month. The near-window filter compares `'Y-m-d'`
+strings rather than `DateTimeImmutable`s, because the near edge is midnight in
+the owner's timezone while a provider's departure date carries whatever zone
+the adapter built it in — two instants for the same calendar day can be hours
+apart. If a run somehow fetched nothing inside the near window at all, no row
+is written: yesterday's row is a better answer than an invented one.
 
-**The write is an `upsert` with the date as a bare `'Y-m-d'` string, and `updateOrCreate` is the trap it avoids.** `updateOrCreate` runs the value through the model's date cast on the way *in* but not on the way to the `WHERE` clause, so the lookup compares `'2026-08-14'` against a stored `'2026-08-14 00:00:00'`. Postgres coerces both to its `date` column and never notices; SQLite, which the test suite runs on, stores the string it is given, the two do not match, and every poll inserts a duplicate that hits the unique index. `observed_on` is stamped in the **owner's** timezone rather than UTC for the same class of reason: the poll runs at 06:10 Amsterdam, where both zones agree, but a retry landing at 00:30 local is still yesterday in UTC and would overwrite yesterday's observation with today's price.
+**The write is an `upsert` with the date as a bare `'Y-m-d'` string, and
+`updateOrCreate` is the trap it avoids.** `updateOrCreate` runs the value
+through the model's date cast on the way *in* but not on the way to the
+`WHERE` clause, so the lookup compares `'2026-08-14'` against a stored
+`'2026-08-14 00:00:00'`. Postgres coerces both to its `date` column and never
+notices; SQLite, which the test suite runs on, stores the string it is given,
+the two do not match, and every poll inserts a duplicate that hits the unique
+index. `observed_on` is stamped in the **owner's** timezone rather than UTC
+for the same class of reason: the poll runs at 06:10 Amsterdam, where both
+zones agree, but a retry landing at 00:30 local is still yesterday in UTC and
+would overwrite yesterday's observation with today's price.
 
 ---
 
@@ -867,22 +890,31 @@ at all. Whether a mail leaves the box is `MAIL_MAILER`.
 
 ### Implementation notes
 
-`AlertNotification` implements `ShouldQueue` — without it, `->delay()` for quiet
-hours silently becomes decoration. `AlertCandidate::$alertIds` must stay
+`AlertNotification` implements `ShouldQueue` — without it, `->delay()` for
+quiet hours silently becomes decoration. `AlertCandidate::$alertIds` must stay
 `protected`, never `private` — Laravel's `SerializesModels` reflects on
 parent-class properties and silently drops private ones on the way to the
 queue, surfacing as a fatal deep inside the delivery listener. **This is a
 DO-NOT-REMOVE landmine.** `DigestBuilder` reads only the same classes screens
-read, so the mail can never disagree with what a tap-through shows; routes with
-no observation are skipped (not scored 0), rules with 0 matches are omitted
-rather than shown as "0 matches", and `week()` reads the stored payload rather
-than re-deriving it. An unknown alert-notice type throws rather than being
-dropped — an alert that silently goes nowhere is the worst failure this app
-has, because everything still looks like it's working. `AlertEvaluation` reads the quiet window and the cooldown ledger **once per run**, not per route — the window cannot move while a run is in flight, and a per-route ledger read would be thirty round trips inside a job meant to be short. Its log line carries `routes_too_new` and none of the other three held reasons, because that one explains a *morning* rather than a route: a watchlist filled in yesterday sends nothing today, and `route_alerts: 0` on its own reads like a broken poller. The freshness guard is asked about the fare the mail **points at** — the cheapest calendar fare — not the observation the score came from, the same split `DealSummary::forRoute()` makes: what the reader clicks is what has to be real. The profile button's
-`#account` entrance scrolls only once the settings have settled (`ready` or
-`failed`) — `idle` and `loading` are both "the four cards above it have not
-rendered", and scrolling then lands the reader in the middle of quiet hours a
-moment later.
+read, so the mail can never disagree with what a tap-through shows; routes
+with no observation are skipped (not scored 0), rules with 0 matches are
+omitted rather than shown as "0 matches", and `week()` reads the stored
+payload rather than re-deriving it. An unknown alert-notice type throws rather
+than being dropped — an alert that silently goes nowhere is the worst failure
+this app has, because everything still looks like it's working.
+`AlertEvaluation` reads the quiet window and the cooldown ledger **once per
+run**, not per route — the window cannot move while a run is in flight, and a
+per-route ledger read would be thirty round trips inside a job meant to be
+short. Its log line carries `routes_too_new` and none of the other three held
+reasons, because that one explains a *morning* rather than a route: a
+watchlist filled in yesterday sends nothing today, and `route_alerts: 0` on
+its own reads like a broken poller. The freshness guard is asked about the
+fare the mail **points at** — the cheapest calendar fare — not the observation
+the score came from, the same split `DealSummary::forRoute()` makes: what the
+reader clicks is what has to be real. The profile button's `#account` entrance
+scrolls only once the settings have settled (`ready` or `failed`) — `idle` and
+`loading` are both "the four cards above it have not rendered", and scrolling
+then lands the reader in the middle of quiet hours a moment later.
 
 ---
 
@@ -942,7 +974,13 @@ after the criteria field it folds back into:
 | `date_window` | `dateWindow` | Date window · Mar – May |
 | `vibe` | `vibes[]` | Vibe · ☀ Sunny |
 
-**The eyebrow on a chip is the server's word.** "From", "Max price", "Trip length" arrive on the chip and the client only upper-cases them, because the category names a criteria field the back end owns — a hard-coded list in the component would be a second vocabulary to keep in step, and the failure would be a chip labelled for a field that no longer exists. The chip itself is not clickable either: only the × is, so there is exactly one thing for a keyboard to reach, and its label says which chip it removes rather than "Remove".
+**The eyebrow on a chip is the server's word.** "From", "Max price", "Trip
+length" arrive on the chip and the client only upper-cases them, because the
+category names a criteria field the back end owns — a hard-coded list in the
+component would be a second vocabulary to keep in step, and the failure would
+be a chip labelled for a field that no longer exists. The chip itself is not
+clickable either: only the × is, so there is exactly one thing for a keyboard
+to reach, and its label says which chip it removes rather than "Remove".
 
 **One direction only** — criteria in, chips out, criteria back. Both adapters
 answer with a `RuleCriteria` and hand it to `ParsedRule::of()`; nothing builds
@@ -955,7 +993,11 @@ where it was and Reset is the same parse again. Unknown removed-ids are ignored,
 because the client holds its removed list across re-parses of a sentence
 somebody is still typing.
 
-**A chip's `id` is stable across parses of the same sentence** — it is the kind plus the value, never a position — because the client holds a list of removed ids across a re-parse it did not ask for (every keystroke re-parses, 500ms behind). An index-based id would silently start removing a different chip the moment somebody edited a word earlier in the sentence.
+**A chip's `id` is stable across parses of the same sentence** — it is the
+kind plus the value, never a position — because the client holds a list of
+removed ids across a re-parse it did not ask for (every keystroke re-parses,
+500ms behind). An index-based id would silently start removing a different
+chip the moment somebody edited a word earlier in the sentence.
 
 **A chip's × is never disabled, and a removal never waits.** `Create.vue`
 debounces typing by 500 ms, but disabling the × for that window — or for the
@@ -1792,9 +1834,39 @@ parameterless read behind `auth:sanctum`, on the owner's clock. In the sandbox,
 `SALE_IN_HUNDREDTHS` (22%) is tuned to fill the shortlist, not to match the real
 funnel's ~4.9% pass rate.
 
-The exploration rotation is **deterministic on purpose**: `RelativeLaneSelector` orders the unknown pool by a `crc32` hash of the day and the route code, never `rand()`. A shuffle would make the lane untestable (a feature test could assert only that *something* was explored) and would make two runs on the same morning disagree, which matters because the job is idempotent by design and a hand-run of `orbit:discover` is meant to reproduce the scheduled one. The **day** is in the seed so the rotation moves — hashing the route alone would explore the same three routes every morning forever, a flywheel turning three cogs — and it is the **owner's** day, already resolved to `orbit.timezone` by `DiscoverDeals`, so a 05:20 Amsterdam run seeds on the date the owner would call today. The route code breaks a hash collision, since 32 bits over a few dozen candidates is unlikely but not impossible and the order still has to be total. **One destination appears only once across both lanes and across origins** — Málaga turned up in both the DUS and EIN sweeps on 2026-08-16, and spending an absolute slot *and* a relative slot on the same city pays twice to name one place.
+The exploration rotation is **deterministic on purpose**:
+`RelativeLaneSelector` orders the unknown pool by a `crc32` hash of the day
+and the route code, never `rand()`. A shuffle would make the lane untestable
+(a feature test could assert only that *something* was explored) and would
+make two runs on the same morning disagree, which matters because the job is
+idempotent by design and a hand-run of `orbit:discover` is meant to reproduce
+the scheduled one. The **day** is in the seed so the rotation moves — hashing
+the route alone would explore the same three routes every morning forever, a
+flywheel turning three cogs — and it is the **owner's** day, already resolved
+to `orbit.timezone` by `DiscoverDeals`, so a 05:20 Amsterdam run seeds on the
+date the owner would call today. The route code breaks a hash collision, since
+32 bits over a few dozen candidates is unlikely but not impossible and the
+order still has to be total. **One destination appears only once across both
+lanes and across origins** — Málaga turned up in both the DUS and EIN sweeps
+on 2026-08-16, and spending an absolute slot *and* a relative slot on the same
+city pays twice to name one place.
 
-The relative lane's `maxFareCents` is **deliberately above the absolute lane's €120**: a relative find is by construction *not* remarkable per kilometre — that is what makes it this lane's — so a ceiling tuned for €/km outliers would reject the whole population, and €120 leaves no room for mid-haul routes whose usual is genuinely high. €150 is still a ceiling and is there on purpose, because a percentage is scale-free: a €400 long-haul at half its €800 usual is a real discount but a different product, a trip somebody plans around rather than a fare they book on a Tuesday. Its `minSavingsCents` is the same €15 as `DiscoveryPolicy`'s but is passed in separately rather than read off that object, so the two can be retuned apart. Its `minDiscount = 0.40` sits below both measured cases with margin (DUS-AGP at 62.8%, the owner's Dublin ask at 50%) and comfortably clear of the 20–30% an ordinary route's window spans between its cheap Tuesdays and its median — the thing this must never fire on. Three picks is the only number in the class that costs anything (≤21 requests) and it adds no Google search at all: `serpapi.max_per_run` stays at five, shared across both lanes, absolute first.
+The relative lane's `maxFareCents` is **deliberately above the absolute lane's
+€120**: a relative find is by construction *not* remarkable per kilometre —
+that is what makes it this lane's — so a ceiling tuned for €/km outliers would
+reject the whole population, and €120 leaves no room for mid-haul routes whose
+usual is genuinely high. €150 is still a ceiling and is there on purpose,
+because a percentage is scale-free: a €400 long-haul at half its €800 usual is
+a real discount but a different product, a trip somebody plans around rather
+than a fare they book on a Tuesday. Its `minSavingsCents` is the same €15 as
+`DiscoveryPolicy`'s but is passed in separately rather than read off that
+object, so the two can be retuned apart. Its `minDiscount = 0.40` sits below
+both measured cases with margin (DUS-AGP at 62.8%, the owner's Dublin ask at
+50%) and comfortably clear of the 20–30% an ordinary route's window spans
+between its cheap Tuesdays and its median — the thing this must never fire on.
+Three picks is the only number in the class that costs anything (≤21 requests)
+and it adds no Google search at all: `serpapi.max_per_run` stays at five,
+shared across both lanes, absolute first.
 
 ---
 
@@ -2250,7 +2322,22 @@ would throw someone off the screen they were reading, minutes after a deploy
 they had no part in. A fresh checkout with no build, or an unparseable
 manifest, serves the static shell rather than erroring.
 
-**The three PWA routes are registered with no middleware group at all, and that is what keeps them session-free.** `bootstrap/app.php` loads `routes/pwa.php` from the `then:` callback, outside both the `web` and `api` groups; global middleware (`TrustProxies`, `TrustHosts`) still applies, because that is framework-wide rather than group-scoped. `SESSION_DRIVER=database`, and a browser revalidates `/sw.js` on **every navigation** — inside the `web` group each of those revalidations would start a session, write a `sessions` row for a visitor who is not one, and answer with a `Set-Cookie`. A response carrying a `Set-Cookie` is one Cloudflare will not hold, so the manifest and the offline page would stop being edge-cacheable as well. None of the three reads a session, a CSRF token or a user, so none of them needs the group, and none of them exposes anything: an app name, two colours, a list of build filenames the HTML already links to, and a page of static prose. `tests/Feature/PwaShellTest` asserts they still carry no cookie, because that is exactly the kind of thing a later `->middleware('web')` undoes silently.
+**The three PWA routes are registered with no middleware group at all, and
+that is what keeps them session-free.** `bootstrap/app.php` loads
+`routes/pwa.php` from the `then:` callback, outside both the `web` and `api`
+groups; global middleware (`TrustProxies`, `TrustHosts`) still applies,
+because that is framework-wide rather than group-scoped.
+`SESSION_DRIVER=database`, and a browser revalidates `/sw.js` on **every
+navigation** — inside the `web` group each of those revalidations would start
+a session, write a `sessions` row for a visitor who is not one, and answer
+with a `Set-Cookie`. A response carrying a `Set-Cookie` is one Cloudflare will
+not hold, so the manifest and the offline page would stop being edge-cacheable
+as well. None of the three reads a session, a CSRF token or a user, so none of
+them needs the group, and none of them exposes anything: an app name, two
+colours, a list of build filenames the HTML already links to, and a page of
+static prose. `tests/Feature/PwaShellTest` asserts they still carry no cookie,
+because that is exactly the kind of thing a later `->middleware('web')` undoes
+silently.
 
 ---
 
