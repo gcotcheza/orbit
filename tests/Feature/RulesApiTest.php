@@ -18,7 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The five endpoints behind the create screen and the watch screen's rules
- * section — queue faked for the whole file (docs/BUSINESS-LOGIC.md §11).
+ * section — queue faked for the whole file (docs/BUSINESS-LOGIC.md §36).
  */
 final class RulesApiTest extends TestCase
 {
