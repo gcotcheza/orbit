@@ -20,8 +20,8 @@ use Database\Seeders\WorldAirportSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
- * Long-haul fares from a real recording (2026-08-15, fixtures beside this file) — separate from
- * TravelpayoutsPollTest's short-haul AMS-LIS case. Fixtures are unscrubbed real bodies (docs/BUSINESS-LOGIC.md §36).
+ * Long-haul fares from a real recording — separate from TravelpayoutsPollTest's
+ * short-haul AMS-LIS case (docs/BUSINESS-LOGIC.md §36).
  */
 final class WorldFaresTest extends TestCase
 {
@@ -36,10 +36,8 @@ final class WorldFaresTest extends TestCase
         /* The morning the fixtures were recorded, so their coverage means what it says. */
         Date::setTestNow('2026-08-15 06:10:00');
 
-        /**
-         * Window is 90, not six months: asking for six would request months nobody recorded and Http::preventStrayRequests
-         * would correctly fail — see TravelpayoutsPollTest (docs/BUSINESS-LOGIC.md §36).
-         */
+        // Window is 90, not six months: asking for six would request months
+        // nobody recorded (docs/BUSINESS-LOGIC.md §36).
         config([
             'orbit.poll.window_days'             => 90,
             'orbit.providers.price'              => 'travelpayouts',
@@ -98,8 +96,8 @@ final class WorldFaresTest extends TestCase
     }
 
     /**
-     * Travelpayouts answers AMS-JFK with destination "NYC" (city code) — the adapter must read only
-     * depart_date/value/actual and never the echoed code, or the fare lands wrong (docs/BUSINESS-LOGIC.md §36).
+     * Travelpayouts answers AMS-JFK with destination "NYC" — the adapter must
+     * never trust the echoed code (docs/BUSINESS-LOGIC.md §36).
      */
     #[Test]
     public function a_multi_airport_city_answers_under_its_city_code_and_still_lands_on_the_route(): void
@@ -125,8 +123,8 @@ final class WorldFaresTest extends TestCase
     }
 
     /**
-     * World import: a code unknown a week ago, priced on request. RoutePairRequest's exists:airports,iata rule is unchanged — only the airports table under
-     * it grew, so this now reaches both ends of a pair (see RoutePairRequest's 2026-08-16 origin change) (docs/BUSINESS-LOGIC.md §36).
+     * World import: a code unknown a week ago, priced on request —
+     * `RoutePairRequest`'s rule is unchanged, only the airports table grew.
      */
     #[Test]
     public function the_lookup_endpoint_prices_a_pair_it_only_knows_because_of_the_world_import(): void
@@ -148,10 +146,8 @@ final class WorldFaresTest extends TestCase
         $this->assertSame(69, CalendarFare::query()->where('route_id', $route->id)->count());
         $this->assertSame(0, $route->watchlistItems()->count(), 'A lookup still watches nothing.');
 
-        /**
-         * EWR-JFK: neither airport is in orbit.origins, exactly the pair the origin rule used to refuse. data: [] is a real provider answer (docs/API.md), not a
-         * failure — asserts the request reaches the provider rather than dying in validation (docs/BUSINESS-LOGIC.md §36).
-         */
+        // EWR-JFK: neither is in orbit.origins, the pair the origin rule used
+        // to refuse. `data: []` is a real answer, not a validation failure.
         $this->assertNotNull(Airport::query()->where('iata', 'EWR')->first());
 
         Http::fake([self::ENDPOINT => Http::response(['currency' => 'eur', 'data' => []])]);
