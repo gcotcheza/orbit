@@ -21,6 +21,14 @@ on an iPad 48–68 % of the width is empty.
 | 768–1023 | **Collapsed C**: icon rail 76 px + one pane; the routes list becomes a chip strip under the screen head. |
 | ≥ 1024 | **C**: icon rail 76 px · master pane 352 px · detail pane (rest). |
 
+**Zero regression on the phone is a hard gate, not a goal.** Every desktop rule lives
+behind `@media (min-width: 768px)` (or the tablet/desktop frame components), so the
+phone CSS path is untouched by construction; Phase 0 first records phone screenshot
+baselines for every screen (390×844, light + dark) and every later phase's gate fails
+on any pixel difference against them; the full phone e2e suite runs unchanged on every
+phase; the Opus reviewer of each PR must state "phone renders identical: yes" with the
+diff numbers before the PR goes ready.
+
 Rules that hold everywhere above 768: the globe takes whatever height the detail
 below it does not need (bigger screen, bigger globe); calendar cells stay square; the
 same live WebGL globe, only sized by its pane; no new copy, no new components beyond
@@ -37,9 +45,10 @@ token.
 - `GlobeStage`: stage height driven by its container (`ResizeObserver` → globe.gl
   `width()/height()`), replacing the fixed 360 px and the phone-landscape `40vh` rule.
 - Manifest `orientation` → `any`.
-- e2e: add `tablet` (820×1180) and `desktop` (1280×832) Playwright projects that run a
-  smoke spec (shell renders, nav present, no horizontal overflow) — assertions grow per
-  phase. Gate unchanged.
+- e2e: FIRST record phone screenshot baselines for every screen (390×844, light + dark)
+  and wire a pixel-diff check into the gate; then add `tablet` (820×1180) and `desktop`
+  (1280×832) Playwright projects that run a smoke spec (shell renders, nav present, no
+  horizontal overflow) — assertions grow per phase.
 - Docs: this file + a §36 note. *Effort S. Risk: globe resize jank — verify on a real iPad.*
 
 ### Phase 1 — The frame and the landing page (≥ 768)
@@ -79,6 +88,7 @@ token.
   desktop/tablet projects. *Effort S–M.*
 
 ## Acceptance per phase (what Ghie checks on the iPad)
+Every phase: phone screenshots pixel-identical to the baselines, phone e2e green.
 0. Nothing changed on the phone; the globe still fills its box after rotating the iPad.
 1. Landing page in landscape = list | globe + detail, no empty band; tapping a route
    swaps the detail without leaving; portrait shows rail + one pane with a chip strip.
