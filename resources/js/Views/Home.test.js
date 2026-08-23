@@ -1,14 +1,23 @@
 // @vitest-environment jsdom
 // The home screen's four states — loading, failure, empty, and that the
 // spotlight, rail and tour agree on THE SAME ROUTE (docs/BUSINESS-LOGIC.md §36).
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia } from 'pinia'
 import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
+import { reactive } from 'vue'
 
 const get = vi.fn()
 let webgl = true
 
+/* The screen reads its selected route out of the query and writes it back; this stands in for the
+   real router, which is what makes `?route=` observable here. */
+const currentRoute = reactive({ query: {} })
+
 vi.mock('@/lib/http', () => ({ http: { get: (...args) => get(...args) } }))
+vi.mock('vue-router', () => ({
+    useRoute: () => currentRoute,
+    useRouter: () => ({ replace: ({ query }) => { currentRoute.query = query } }),
+}))
 vi.mock('@/Components/globe/globeScene', () => ({
     hasWebgl: () => webgl,
     createGlobeScene: () => Promise.reject(new Error('not in this test')),
@@ -83,6 +92,7 @@ const stage = (wrapper) => wrapper.findComponent(GlobeStageStub)
 
 beforeEach(() => {
     webgl = true
+    currentRoute.query = {}
     vi.clearAllMocks()
 })
 
@@ -251,5 +261,87 @@ describe('without a GPU', () => {
 
         expect(stage(wrapper).exists()).toBe(false)
         expect(wrapper.findAll('.spotlight')).toHaveLength(2)
+    })
+})
+
+
+/*
+ * 1024px and up: the master pane's rows, and the query that says which one the detail pane is
+ * showing (docs/DESKTOP-LAYOUT-PLAN.md).
+ */
+describe('the landing page above 1024px', () => {
+    const PanelStub = { name: 'RouteDetailPanel', props: ['code'], template: '<div class="panel-stub"></div>' }
+
+    async function mountWide(data = [LIS, OPO, PAUSED]) {
+        window.matchMedia = (media) => ({
+            media,
+            matches: Number(media.match(/min-width: (\d+)px/)[1]) <= 1280
+                && Number(media.match(/min-height: (\d+)px/)[1]) <= 832,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+        })
+
+        get.mockResolvedValue(watchlist(data))
+
+        const wrapper = mount(Home, {
+            global: {
+                plugins: [createPinia()],
+                stubs: { RouterLink: RouterLinkStub, GlobeStage: GlobeStageStub, RouteDetailPanel: PanelStub },
+            },
+        })
+
+        await flushPromises()
+
+        return wrapper
+    }
+
+    const shown = (wrapper) => wrapper.findComponent(PanelStub).props('code')
+
+    afterEach(() => {
+        delete window.matchMedia
+    })
+
+    it('draws a row per active route and opens on the first', async () => {
+        const wrapper = await mountWide()
+
+        const rows = wrapper.findAll('.route-row')
+
+        expect(rows).toHaveLength(2)
+        expect(rows[0].text()).toContain('AMS→LIS')
+        expect(rows[0].classes()).toContain('route-row--active')
+        expect(wrapper.text()).toContain('2 watched')
+        expect(shown(wrapper)).toBe('AMS-LIS')
+        // The phone's spotlight card belongs to the phone; the pane shows the whole detail.
+        expect(wrapper.find('.spotlight').exists()).toBe(false)
+    })
+
+    it('moves the detail pane and the query when a row is picked', async () => {
+        const wrapper = await mountWide()
+
+        await wrapper.findAll('.route-row')[1].trigger('click')
+
+        expect(currentRoute.query).toEqual({ route: 'AMS-OPO' })
+        expect(shown(wrapper)).toBe('AMS-OPO')
+        expect(stage(wrapper).props('activeCode')).toBe('AMS-OPO')
+        expect(wrapper.findAll('.route-row')[1].classes()).toContain('route-row--active')
+    })
+
+    it('opens on the route a shared link names', async () => {
+        currentRoute.query = { route: 'ams-opo' }
+
+        const wrapper = await mountWide()
+
+        expect(shown(wrapper)).toBe('AMS-OPO')
+        expect(stage(wrapper).props('activeCode')).toBe('AMS-OPO')
+    })
+
+    // A code nobody is watching would leave the rows, the globe and the pane disagreeing.
+    it('falls back to the tour when the link names a route that is not watched', async () => {
+        currentRoute.query = { route: 'ZZZ-YYY' }
+
+        const wrapper = await mountWide()
+
+        expect(shown(wrapper)).toBe('AMS-LIS')
+        expect(wrapper.findAll('.route-row')[0].classes()).toContain('route-row--active')
     })
 })
