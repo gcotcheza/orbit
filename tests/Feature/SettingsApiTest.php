@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use Tests\TestCase;
 use App\Models\User;
 use RuntimeException;
+use Mockery\Expectation;
 use App\Models\UserSettings;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
@@ -348,7 +349,9 @@ final class SettingsApiTest extends TestCase
     {
         $this->withKey();
 
-        Cache::partialMock()->shouldReceive('remember')->andThrow(new RuntimeException('redis is gone'));
+        /** @var Expectation $remember */
+        $remember = Cache::partialMock()->shouldReceive('remember');
+        $remember->andThrow(new RuntimeException('redis is gone'));
 
         $this->actingAs($this->owner)
             ->getJson('/api/settings')

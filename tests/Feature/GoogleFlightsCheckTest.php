@@ -317,7 +317,7 @@ final class GoogleFlightsCheckTest extends TestCase
         $this->assertSame(5, config('orbit.serpapi.max_per_run'));
         $this->assertSame('https://serpapi.com', config('orbit.serpapi.base_url'));
     }
-\n
+
     /**
      * ⚠ THE KEY MUST NEVER REACH A LOG FILE. A cURL failure quotes the URL it gave up on,
      * and that URL carries `api_key` — Guzzle redacts only `user:pass`.
@@ -325,7 +325,8 @@ final class GoogleFlightsCheckTest extends TestCase
     #[Test]
     public function a_connection_failure_never_writes_the_api_key_into_the_log(): void
     {
-        $logger = new class extends AbstractLogger {
+        $logger = new class extends AbstractLogger
+        {
             /** @var list<string> */
             public array $wrote = [];
 
@@ -384,4 +385,4 @@ final class GoogleFlightsCheckTest extends TestCase
         /* No Http::fake: preventStrayRequests turns a probe into a failed assertion. */
         $this->assertNull($this->check(key: null)->searchesLeft());
     }
-}\n
+}
