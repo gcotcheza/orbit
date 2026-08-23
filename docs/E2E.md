@@ -236,7 +236,9 @@ suite everybody re-baselines without looking.
 `login`, `settings-dark`, `offline` — are static screens: no fares on them, no
 canvas, no clock, and a pixel difference is a real change to a control or a
 token. The rest are **the phone baselines** (below), which are the same idea
-applied to screens that are not static, by masking the parts that are not.
+applied to screens that are not static: the sandbox clock is frozen, so the
+seeded world is identical on every calendar day, and the fares are masked so a
+layout gate stays a layout gate.
 
 **`e2e/artifacts/screens/` — gitignored, compared to nothing, seventeen files.**
 The globe, the calendar, the watchlist, the route detail, the create screen.
@@ -289,18 +291,84 @@ keeps its box and lets the overlays through; that a globe was drawn at all is
 `globe.spec.js`'s assertion, and `waitForGlobe()` runs in this spec too before
 the shutter.
 
-Two consequences worth knowing before re-recording:
+**The route detail baseline is `AMS-OPO`**, not `AMS-LIS`, because
+`live-price.spec.js` runs earlier and leaves a cached live answer on AMS-LIS
+that would be in the picture.
 
-- **The route detail baseline is `AMS-OPO`**, not `AMS-LIS`, because
-  `live-price.spec.js` runs earlier and leaves a cached live answer on AMS-LIS
-  that would be in the picture.
-- **The images are a promise about a day as well as a renderer.** The fake
-  provider prices a departure date as at an observation date, so the seeded
-  world moves with the calendar: a card's height changes when a route stops
-  being below its usual price, and the calendar's grid changes shape at a month
-  boundary. Re-record when a run reports differences that are all inside the
-  masked regions' geometry, and read `git diff --stat e2e/baselines` before
-  committing.
+Masks stay even though the clock is now frozen (below) and the content is
+therefore deterministic. They are not a tolerance: this gate exists to catch a
+*layout* regression from the desktop work, and no amount of CSS above 768px can
+change a fare. Masking the fares means a deliberate change to the seeder does
+not send eighteen images red for a reason that has nothing to do with the phone.
+
+### A frozen clock
+
+**The sandbox does not run at the current time. It runs at 2026-08-23T09:00:00+02:00,
+every day, on both sides of the browser.** Without this, a committed baseline
+would be a promise about a date: the fake provider prices a departure date *as
+at* an observation date, so the seeded world moves with the calendar — a
+spotlight card loses a line when a route stops being below its usual price, a
+verdict tone changes a border colour, and the month grid changes shape at a
+month boundary. Every one of those is a red gate on a Tuesday for no reason.
+
+| side | how |
+| --- | --- |
+| app | `E2E_FIXED_NOW` in `.env.e2e` → `config('orbit.e2e.fixed_now')` → `Date::setTestNow()` in `SandboxClockServiceProvider::boot()` |
+| browser | `useSandboxClock(page)` from `e2e/fixtures.js` — `clock.install({ time })` + `clock.resume()` — in the three specs that read a label the browser worked out; `phone-baselines.spec.js` adds `timezoneId: 'Europe/Amsterdam'` on top |
+
+`scripts/e2e.sh` owns the value (`E2E_FIXED_NOW` near the top of the script) and
+writes it into the generated `.env.e2e`; `e2e/fixtures.js` reads it back out, so
+the two sides cannot drift apart.
+
+**The browser's clock starts at the instant and then ticks; it is not pinned.**
+`clock.setFixedTime()` is the obvious call and it is the wrong one: a `Date.now()`
+that never moves stops **globe.gl applying its own size**, so the canvas keeps
+its construction default (390x844) instead of following `.stage__globe`, and
+`globe.spec.js`'s landscape test measures a canvas 688px taller than the box it
+lives in. `install({ time })` + `resume()` starts the page at `E2E_FIXED_NOW`
+and lets it advance in real time, which is all the agreement the app needs — a
+run lasts minutes, and every relative label on screen is bucketed in hours.
+
+**Any spec that reads a relative label needs the browser clock too.** Freezing
+only the app is worse than not freezing at all for those: the seeder stamps a
+fare at the frozen instant, a browser on the real clock subtracts the two, and
+`calendar.spec.js`'s "Seen just now" becomes "Seen 1 hour ago" partway through
+the morning — a spec that passes at 07:40 and fails at 08:05. Three specs
+therefore call `useSandboxClock(page)` in a `beforeEach`: `calendar.spec.js`,
+`live-price.spec.js` and `phone-baselines.spec.js`.
+
+**It is opt-in rather than a shared fixture, and that is deliberate.**
+`clock.install()` replaces the page's timers with Playwright's, which is a
+change to the machinery every animation in this app runs on. Applied to the
+whole suite it made `globe.spec.js`'s colour sample marginal — 156 distinct
+colours where it wants 200 — because the tour's camera was somewhere else by
+the time the shutter went. A gate that samples a WebGL render must not be paying
+for a clock it never reads, so specs that only look at the globe do not. **Changing it invalidates every committed
+baseline** — change it, re-record, and read the diff.
+
+**A spec that needs a date must take it from `fixedNow`, never from node.**
+Playwright's own process is not frozen — only the app and the browser are — so
+`new Date()` in a spec is an hour or a month away from the world under test.
+`live-price.spec.js` builds its "three days ago" fare and its "checked at" from
+`fixedNow`; `calendar.spec.js` and `rules.spec.js` count months forward from it.
+Import it from `e2e/fixtures.js`.
+
+**The guard is `ORBIT_E2E`, not `APP_ENV`.** The sandbox deliberately runs as
+`APP_ENV=production` so that the trusted-host list is exercised for real (see
+"The hostname trick"), so an `APP_ENV` check would switch the freeze off in the
+one place it is wanted. `ORBIT_E2E` is already the required compose variable
+that keeps `docker-compose.e2e.yml` off the live `.env`, and production's `.env`
+carries neither it nor `E2E_FIXED_NOW` — two independent locks.
+`tests/Feature/SandboxClockTest.php` covers the honoured case, the
+not-the-sandbox case, the no-instant case and a value that is not a datetime
+(which throws rather than being quietly ignored).
+
+**`SESSION_LIFETIME` is ten years in the sandbox because of this.** Laravel
+stamps the session cookie and `XSRF-TOKEN` with `now + lifetime`, and `now` is
+frozen in 2026: at the usual 120 minutes every cookie the sandbox issues would
+already have expired against the browser's *real* clock on any later day, and
+the whole suite would run as a logged-out guest with 419s on every write. The
+ten years outlive the drift. Nothing else in the app reads that number.
 
 Screenshots are taken with `animations: 'disabled'`, which finishes every
 running animation and transition at its end state first. Without it the price
@@ -416,6 +484,15 @@ one in what a wait actually proves:
   forward until a month comes back `days: []`, so the premise is stated
   directly rather than inferred from a constant that has already drifted once
   (`poll.window_days` widened from three months to six).
+- **A date built from node's clock.** The app and the browser run at
+  `E2E_FIXED_NOW`; the test runner does not. `new Date()` in a spec quietly
+  disagrees with the screen by however far the real clock has moved, which is a
+  spec that passes at 07:40 and fails at 08:05. Use `fixedNow`.
+- **A measurement taken a frame too early.** `GlobeStage`'s `ResizeObserver`
+  hands the renderer its new size on the next animation frame, so the canvas is
+  one frame behind its element — and `shot(page, …)` resizes the viewport under
+  both of them while it captures a full page. Poll for the two boxes *together*
+  rather than reading them at two different moments.
 - **A wait that is already over.** `toHaveCount(0)` on a screen that has not
   fetched anything yet passes in 5 ms, and `toHaveCount(8)` passes on the
   *previous* sentence's eight chips 400 ms before the debounce for yours has
@@ -437,6 +514,7 @@ one in what a wait actually proves:
 | `cannot talk to docker` | run it as root, not `sudo -u orbit`. |
 | `EACCES … mkdir '/work/e2e/baselines'` | the checkout is root-owned. `chown -R orbit:orbit .` — this is the `git pull` as root trap the deploy runbook warns about. |
 | `.env.e2e is missing` | run `scripts/e2e.sh`, which generates it. |
+| `.env.e2e has no E2E_FIXED_NOW` | a file written before the frozen clock; `scripts/e2e.sh` regenerates it by itself. |
 | the globe times out in `waitForGlobe` | the earth texture 404'd, or `--enable-unsafe-swiftshader` stopped being accepted by a newer Chromium. Check `e2e/artifacts/report/index.html`. |
 | a baseline fails after a legitimate change | `scripts/e2e.sh -- --update-snapshots`, then read `git diff --stat e2e/baselines` before committing. |
 | `429` on login | the 5/min throttle. Wait a minute; a full run only spends three attempts. |
