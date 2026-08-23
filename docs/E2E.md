@@ -232,13 +232,17 @@ at a time, next to the assertion that makes it true:
 Two different things, and conflating them is how a screenshot suite becomes a
 suite everybody re-baselines without looking.
 
-**`e2e/baselines/` — committed, compared.** Two kinds. Three of them —
-`login`, `settings-dark`, `offline` — are static screens: no fares on them, no
-canvas, no clock, and a pixel difference is a real change to a control or a
-token. The rest are **the phone baselines** (below), which are the same idea
-applied to screens that are not static: the sandbox clock is frozen, so the
-seeded world is identical on every calendar day, and the fares are masked so a
-layout gate stays a layout gate.
+**`e2e/baselines/` — committed, compared, nineteen files.** Eighteen are **the
+phone baselines** (below): every screen, both themes, at `maxDiffPixels: 0`. The
+nineteenth is `offline`, which is a static page the app serves with no bundle
+behind it and has no equivalent in the phone set.
+
+There used to be a second regime — `login` and `settings-dark`, photographed by
+`login.spec.js` and `theme.spec.js`. Both are gone: `login-dark`/`login-light`
+and `alerts-dark`/`alerts-light` are the same two screens at the same viewport
+with no masks on them, so the old pair was a second promise about the same
+pixels. Those two tests kept everything else they asserted — the guest screen
+renders, the palette really swaps — and now only leave an artefact behind.
 
 **`e2e/artifacts/screens/` — gitignored, compared to nothing, seventeen files.**
 The globe, the calendar, the watchlist, the route detail, the create screen.
@@ -314,7 +318,7 @@ month boundary. Every one of those is a red gate on a Tuesday for no reason.
 | side | how |
 | --- | --- |
 | app | `E2E_FIXED_NOW` in `.env.e2e` → `config('orbit.e2e.fixed_now')` → `Date::setTestNow()` in `SandboxClockServiceProvider::boot()` |
-| browser | `useSandboxClock(page)` from `e2e/fixtures.js` — `clock.install({ time })` + `clock.resume()` — in the three specs that read a label the browser worked out; `phone-baselines.spec.js` adds `timezoneId: 'Europe/Amsterdam'` on top |
+| browser | the shared `page` fixture in `e2e/fixtures.js` runs `clock.install({ time })` + `clock.resume()` for **every** spec; `phone-baselines.spec.js` adds `timezoneId: 'Europe/Amsterdam'` on top |
 
 `scripts/e2e.sh` owns the value (`E2E_FIXED_NOW` near the top of the script) and
 writes it into the generated `.env.e2e`; `e2e/fixtures.js` reads it back out, so
@@ -329,21 +333,27 @@ lives in. `install({ time })` + `resume()` starts the page at `E2E_FIXED_NOW`
 and lets it advance in real time, which is all the agreement the app needs — a
 run lasts minutes, and every relative label on screen is bucketed in hours.
 
-**Any spec that reads a relative label needs the browser clock too.** Freezing
-only the app is worse than not freezing at all for those: the seeder stamps a
-fare at the frozen instant, a browser on the real clock subtracts the two, and
+**On by default, because a spec should not have to remember.** Freezing only
+the app is worse than not freezing at all: the seeder stamps a fare at the
+frozen instant, a browser on the real clock subtracts the two, and
 `calendar.spec.js`'s "Seen just now" becomes "Seen 1 hour ago" partway through
-the morning — a spec that passes at 07:40 and fails at 08:05. Three specs
-therefore call `useSandboxClock(page)` in a `beforeEach`: `calendar.spec.js`,
-`live-price.spec.js` and `phone-baselines.spec.js`.
+the morning — a spec that passes at 07:40 and fails at 08:05. `detail.spec.js`
+carried the same fault more quietly (`expect('.price__seen').toHaveCount(0)` is
+a freshness threshold read against the browser's clock). Every such assertion is
+now stable by construction rather than by the author having remembered.
 
-**It is opt-in rather than a shared fixture, and that is deliberate.**
+**One spec opts out**, through the `sandboxClock` test option:
+
+```js
+test.use({ sandboxClock: false })   // globe.spec.js
+```
+
 `clock.install()` replaces the page's timers with Playwright's, which is a
-change to the machinery every animation in this app runs on. Applied to the
-whole suite it made `globe.spec.js`'s colour sample marginal — 156 distinct
-colours where it wants 200 — because the tour's camera was somewhere else by
-the time the shutter went. A gate that samples a WebGL render must not be paying
-for a clock it never reads, so specs that only look at the globe do not. **Changing it invalidates every committed
+change to the machinery every animation runs on. `globe.spec.js` samples what
+the tour actually drew, and with fake timers its colour histogram went marginal
+— 156 distinct colours where it asserts 200 — because the camera was somewhere
+else by the time the shutter went. Nothing in that file reads a clock, so it
+takes the real one. **Opt out only for that reason, and say so on the line.** **Changing it invalidates every committed
 baseline** — change it, re-record, and read the diff.
 
 **A spec that needs a date must take it from `fixedNow`, never from node.**

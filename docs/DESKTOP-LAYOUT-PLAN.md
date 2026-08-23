@@ -37,18 +37,30 @@ token.
 
 ## Phases — one PR each, draft → Opus review → ready → Ghie merges → watcher deploys
 
-### Phase 0 — Foundations (no visible change on phone)
-- Tokens: `--bp-tablet: 768px`, `--bp-desktop: 1024px`; `--rail-width: 76px`,
-  `--master-width: 352px`.
-- Make the four `max-width: var(--app-width)` clamps (`.app-shell`, `.tab-bar`, `.sheet`,
-  `.toast`) layout-aware instead of absolute.
-- `GlobeStage`: stage height driven by its container (`ResizeObserver` → globe.gl
-  `width()/height()`), replacing the fixed 360 px and the phone-landscape `40vh` rule.
-- Manifest `orientation` → `any`.
-- e2e: FIRST record phone screenshot baselines for every screen (390×844, light + dark)
-  and wire a pixel-diff check into the gate; then add `tablet` (820×1180) and `desktop`
-  (1280×832) Playwright projects that run a smoke spec (shell renders, nav present, no
-  horizontal overflow) — assertions grow per phase.
+### Phase 0 — Foundations (no visible change on phone) — **SHIPPED**
+What was actually built, which differs from the first sketch in three places:
+- Tokens: `--shell-max` (defined as `var(--app-width)`, so it resolves to the same 430 px
+  today), `--rail-width: 76px`, `--master-width: 352px`.
+- **No `--bp-*` tokens.** A CSS custom property cannot be used in a `@media` query at all,
+  so a `--bp-tablet` would look authoritative and be silently ignored by every media query
+  that read it. The two breakpoints are written as literals (768 px, 1024 px) and explained
+  in `docs/BUSINESS-LOGIC.md` §36 instead.
+- The four `max-width: var(--app-width)` clamps (`.app-shell`, `.tab-bar`, `.sheet`,
+  `.toast`) now read `--shell-max`, so a later breakpoint retargets one value, not four
+  rules in four files.
+- `GlobeStage`: the renderer follows its container (`ResizeObserver` on `.stage__globe` →
+  globe.gl `width()/height()`, coalesced to one animation frame). **The `360px` stage height
+  and the phone-landscape `40vh` rule are KEPT** — they are the phone guarantee, and the
+  observer is what lets a later phase size the stage with flex without touching them.
+- **Manifest `orientation` stays `portrait`.** Changing it is a visible change to the
+  installed app, which Phase 0 promised not to make. It becomes a Phase 4 decision for
+  Ghie: *allow landscape on an installed iPad?*
+- e2e: phone screenshot baselines FIRST (every screen, 390×844, light + dark, masked and
+  compared at `maxDiffPixels: 0`), then `tablet` (820×1180) and `desktop` (1280×832)
+  projects running a smoke spec (shell renders, nav present, no horizontal overflow) —
+  assertions grow per phase. The sandbox clock is frozen on both sides
+  (`E2E_FIXED_NOW`) so those baselines are valid on any day, not just the day they were
+  recorded: `docs/E2E.md` "A frozen clock".
 - Docs: this file + a §36 note. *Effort S. Risk: globe resize jank — verify on a real iPad.*
 
 ### Phase 1 — The frame and the landing page (≥ 768)
@@ -84,6 +96,11 @@ token.
 - Dark theme pass on every desktop screen; focus order and keyboard use of the rail;
   reduced-motion; hover states on the rail/rows; desktop screenshot baselines
   (light + dark) in e2e; perf check of the globe at 852×440+.
+- **Ghie's call, deferred from Phase 0: allow landscape on an installed iPad?** The
+  manifest is `orientation: portrait` today. Changing it to `any` is what lets the
+  home-screen app rotate into the master–detail layout at all; leaving it is what keeps
+  the installed phone app from ever turning sideways. One line, and it is a product
+  decision rather than a layout one.
 - Docs: `docs/BUSINESS-LOGIC.md` §36 frontend notes updated; `docs/E2E.md` gains the
   desktop/tablet projects. *Effort S–M.*
 
