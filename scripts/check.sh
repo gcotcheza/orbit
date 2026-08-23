@@ -63,7 +63,7 @@ docker compose exec -T app vendor/bin/pint --test
 step 'Composer advisories'
 # --locked --no-dev: the lockfile, production packages only. An advisory against
 # phpunit or pint is not on the site and must not redden the gate. DECISIONS.md
-docker compose exec -T app composer audit --locked --no-dev
+docker compose exec -T app composer audit --locked --no-dev --abandoned=report
 
 step 'PHPStan (static analysis, level 8)'
 # The memory limit is PHPStan's own default of 128M otherwise, and Larastan

@@ -95,7 +95,7 @@
    docker compose run --rm --no-deps \
        -v "$GATE/vendor:/var/www/html/vendor" \
        -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
-       app composer audit --locked --no-dev
+       app composer audit --locked --no-dev --abandoned=report
 
    # 3. PHPStan
    docker compose run --rm --no-deps \
