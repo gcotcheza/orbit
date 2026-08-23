@@ -3,7 +3,7 @@
 // spotlight, rail and tour agree on THE SAME ROUTE (docs/BUSINESS-LOGIC.md §36).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia } from 'pinia'
-import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
+import { RouterLinkStub, enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { reactive } from 'vue'
 
 const get = vi.fn()
@@ -89,6 +89,10 @@ async function mountHome(data = [LIS, OPO]) {
 }
 
 const stage = (wrapper) => wrapper.findComponent(GlobeStageStub)
+
+/* Every screen here shares one route mock, so a wrapper left mounted goes on watching the query
+   somebody else's test just wrote. */
+enableAutoUnmount(afterEach)
 
 beforeEach(() => {
     webgl = true
@@ -343,5 +347,22 @@ describe('the landing page above 1024px', () => {
 
         expect(shown(wrapper)).toBe('AMS-LIS')
         expect(wrapper.findAll('.route-row')[0].classes()).toContain('route-row--active')
+        // And the address bar stops offering a route that is not on screen.
+        expect(currentRoute.query).toEqual({ route: 'AMS-LIS' })
+    })
+
+    it('leaves a URL that already agrees with the pane alone', async () => {
+        currentRoute.query = { route: 'AMS-OPO' }
+
+        await mountWide()
+
+        expect(currentRoute.query).toEqual({ route: 'AMS-OPO' })
+    })
+
+    // The rail carries the account link at these widths (Components/IconRail.vue).
+    it('does not repeat the rail\'s account link in its own header', async () => {
+        const wrapper = await mountWide()
+
+        expect(wrapper.find('.home__profile').exists()).toBe(false)
     })
 })

@@ -3,7 +3,7 @@
  * Home — the Orbit globe (design/README.md §1). `name` must stay 'Home' for App.vue's
  * <KeepAlive>; the list is shared and the tour is keyed by route code (docs/BUSINESS-LOGIC.md §36).
  */
-import { computed, onActivated, onMounted, ref } from 'vue'
+import { computed, onActivated, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { nextIndex } from '@/lib/tour'
@@ -58,6 +58,14 @@ function select(code) {
   activeCode.value = code
   router.replace({ query: { ...route.query, route: code } })
 }
+
+/* A link naming a route nobody is watching opens the tour's own; the address bar has to say so, or
+   it goes on offering a route that is not on screen. */
+watch([selected, () => route.query.route], ([chosen, asked]) => {
+  if (chosen && asked && asked !== chosen.code) {
+    router.replace({ query: { ...route.query, route: chosen.code } })
+  }
+})
 
 /**
  * "Good morning", by the phone's clock. Deliberately local time, not the owner's configured
@@ -200,16 +208,8 @@ onActivated(() => {
           <h1 class="home__greeting">{{ greeting }}</h1>
         </div>
 
-        <RouterLink
-          class="home__profile"
-          :to="{ name: 'alerts', hash: '#account' }"
-          aria-label="Your account and alert settings"
-        >
-          <svg width="19" height="19" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <circle cx="10" cy="6.5" r="3.2" stroke="var(--ink2)" stroke-width="1.5" />
-            <path d="M4 16.5c0-3 2.7-5 6-5s6 2 6 5" stroke="var(--ink2)" stroke-width="1.5" stroke-linecap="round" />
-          </svg>
-        </RouterLink>
+        <!-- No profile button: the rail carries the account link at these widths, and two links of
+             the same name to the same place is one too many. -->
       </header>
 
       <template v-if="!loading && !failed && activeRoutes.length > 0">
@@ -290,7 +290,7 @@ onActivated(() => {
         />
 
         <div class="home__panel">
-          <RouteDetailPanel :code="selected.code" />
+          <RouteDetailPanel :code="selected.code" embedded />
         </div>
       </template>
     </section>

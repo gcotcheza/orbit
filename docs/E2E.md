@@ -421,7 +421,8 @@ and the suite grows by seconds rather than by minutes.
 
 Both projects assert the frame: the icon rail is on the screen, the tab bar is
 **gone** (two navigations offering the same five destinations is what a frame
-failing to take over looks like), the rail carries all five, and
+failing to take over looks like), the rail carries all five, exactly one
+account link is on the page (the landing head used to repeat the rail's), and
 `documentElement.scrollWidth` equals `innerWidth` on the five tabbed screens.
 The rest is split by width with `test.skip(({ viewport }) => …)`, because the
 two widths are two different layouts rather than one layout at two sizes:

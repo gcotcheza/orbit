@@ -81,7 +81,10 @@ is a decision worth keeping:
   phone on its side is 844×390 — wider than 768 and still a phone — and the browser
   gate proved it, collapsing a detail pane to zero height in `globe.spec.js`'s
   landscape test. The number is written out in `lib/layout.js` and in every `@media`
-  rule, and those must be edited together.
+  rule, and those must be edited together. **The cost, stated plainly:** a desktop window
+  shorter than 600px — a laptop with the devtools open, a short split-screen — falls back
+  to the phone column rather than the frame. That is the safe direction to fail in, and it
+  is the same trade the `GlobeStage` landscape rule already makes.
 - **`--shell-max: none` is set on `.app-shell--rail`, not on `:root`.** A screen with
   no rail — the route detail, the login — keeps the phone column at any width, which
   is what "the other screens are unchanged this phase" has to mean. The update toast
@@ -104,6 +107,9 @@ is a decision worth keeping:
 *Effort L (the core). Phone: 19 baselines at 0 diff, phone suite unchanged.*
 
 ### Phase 2 — Calendar and Watch in C
+- **Hoist the Home header shared by the phone and wide branches.** Phase 1 left ~20 lines of
+  eyebrow/greeting duplicated between the two, which was the cheap way to keep the phone's DOM
+  byte-identical; a second screen growing a wide branch is what makes one component worth it.
 - Calendar: master = routes list; detail = month grid scaled to the pane (square cells,
   gap absorbs height) + the day sheet's content docked as a side panel at ≥ 1024
   (bottom sheet below).

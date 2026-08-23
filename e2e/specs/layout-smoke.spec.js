@@ -26,6 +26,9 @@ test('the icon rail carries the navigation, and the tab bar is gone', async ({ p
     for (const name of DESTINATIONS) {
         await expect(rail.getByRole('link', { name, exact: true })).toBeVisible()
     }
+
+    // The rail carries the account link; the landing head used to repeat it.
+    await expect(page.getByRole('link', { name: 'Your account and alert settings' })).toHaveCount(1)
 })
 
 test('no tabbed screen scrolls sideways', async ({ page }) => {

@@ -33,13 +33,20 @@ export function useLayout() {
 
     queries.forEach((query) => query.addEventListener('change', update))
 
+    function stop() {
+        queries.forEach((query) => query.removeEventListener('change', update))
+    }
+
+    // A component's own scope disposes this; anywhere else the caller MUST call `stop` itself, or
+    // the two listeners outlive whatever asked for them.
     if (getCurrentScope()) {
-        onScopeDispose(() => queries.forEach((query) => query.removeEventListener('change', update)))
+        onScopeDispose(stop)
     }
 
     return {
         layout,
         isPhone: computed(() => layout.value === 'phone'),
         isDesktop: computed(() => layout.value === 'desktop'),
+        stop,
     }
 }

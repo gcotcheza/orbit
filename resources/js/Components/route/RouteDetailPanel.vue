@@ -3,7 +3,7 @@
  * One route: what it costs, what it usually costs, what we think of that (design/README.md §2).
  * Everything the detail shows below the back bar, so a pane can show it too (§36).
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onActivated, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { http } from '@/lib/http'
 import { useWatchlistStore } from '@/stores/watchlist'
@@ -32,6 +32,8 @@ const LIVE_CHECK_TIMEOUT_MS = 30_000
 const props = defineProps({
   /** The pair, `AMS-LIS`; case is normalised here rather than by every caller. */
   code: { type: String, required: true },
+  /** In a pane rather than on a screen of its own: there is no page to go back from. */
+  embedded: { type: Boolean, default: false },
 })
 
 const router = useRouter()
@@ -202,10 +204,14 @@ const caption = computed(() => {
 // mounted and only changes the prop.
 let request = 0
 
-async function load() {
+/**
+ * `quiet` keeps what is on screen while the refetch runs — the way back into a kept-alive pane,
+ * where a skeleton drawn over readable fares would be a step backwards.
+ */
+async function load({ quiet = false } = {}) {
   const mine = (request += 1)
 
-  loading.value = true
+  loading.value = !quiet
   checking.value = false
   notFound.value = false
   failed.value = false
@@ -423,7 +429,18 @@ async function watchRoute() {
   }
 }
 
-watch(pair, load, { immediate: true })
+// Called rather than passed: `watch` hands the callback the new value, which is not an options bag.
+watch(pair, () => load(), { immediate: true })
+
+/*
+ * Home is kept alive and this pane with it (App.vue), so its fares can be hours old by the time
+ * anybody looks again — refetched on the way back in, quietly (docs/BUSINESS-LOGIC.md §36).
+ */
+onActivated(() => {
+  if (detail.value !== null) {
+    load({ quiet: true })
+  }
+})
 </script>
 
 <template>
@@ -453,13 +470,13 @@ watch(pair, load, { immediate: true })
     <!-- The server's own sentence, when there is one — says which HALF of the
          pair (origin vs destination) is the problem. -->
     <p v-if="failedBody" class="empty__why">{{ failedBody }}</p>
-    <button class="empty__action" @click="goBack(router)">Go back</button>
+    <button v-if="!embedded" class="empty__action" @click="goBack(router)">Go back</button>
   </div>
 
   <div v-else-if="failed" class="empty">
     <h1 class="empty__title">Could not load this route</h1>
     <p class="empty__body">{{ failedBody || 'The connection dropped, or the server is having a moment.' }}</p>
-    <button class="empty__action" @click="load">Try again</button>
+    <button class="empty__action" @click="load()">Try again</button>
   </div>
 
   <template v-else-if="detail">

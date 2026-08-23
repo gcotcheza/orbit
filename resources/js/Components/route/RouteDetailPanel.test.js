@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
+import { h, KeepAlive, ref } from 'vue'
 
 const get = vi.fn()
 
@@ -87,5 +88,94 @@ describe('the route detail panel', () => {
         await flushPromises()
 
         expect(get).toHaveBeenCalledWith('/api/routes/AMS-LIS')
+    })
+})
+
+describe('the back way out', () => {
+    it('offers one on a screen of its own', async () => {
+        const wrapper = mount(RouteDetailPanel, {
+            props: { code: 'ZZ-YY' },
+            global: { plugins: [createPinia()] },
+        })
+        await flushPromises()
+
+        expect(wrapper.get('.empty__title').text()).toBe('No such route')
+        expect(wrapper.get('.empty__action').text()).toBe('Go back')
+    })
+
+    // Inside the landing pane, "back" would leave the page nobody navigated away from.
+    it('offers none inside a pane', async () => {
+        const wrapper = mount(RouteDetailPanel, {
+            props: { code: 'ZZ-YY', embedded: true },
+            global: { plugins: [createPinia()] },
+        })
+        await flushPromises()
+
+        expect(wrapper.get('.empty__title').text()).toBe('No such route')
+        expect(wrapper.find('.empty__action').exists()).toBe(false)
+    })
+})
+
+/*
+ * The pane rides inside Home's <KeepAlive> (App.vue), so it is the one place in this app where a
+ * detail document survives a navigation and can go stale.
+ */
+describe('coming back to a pane that was cached', () => {
+    /** Home, as far as this panel can tell: a KeepAlive that can be switched off and on. */
+    function cached() {
+        const shown = ref(true)
+        const wrapper = mount(
+            {
+                setup: () => () => h(KeepAlive, null, {
+                    default: () => (shown.value ? h(RouteDetailPanel, { code: 'AMS-LIS' }) : null),
+                }),
+            },
+            { global: { plugins: [createPinia()] } },
+        )
+
+        return { shown, wrapper }
+    }
+
+    it('refetches the fares rather than showing the ones it cached', async () => {
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75))
+
+        const { shown, wrapper } = cached()
+        await flushPromises()
+
+        expect(get).toHaveBeenCalledTimes(1)
+
+        shown.value = false
+        await flushPromises()
+
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 61))
+        shown.value = true
+        await flushPromises()
+
+        expect(get).toHaveBeenCalledTimes(2)
+        expect(wrapper.get('.price__value').text()).toBe('€61')
+    })
+
+    // Quietly: a skeleton drawn over fares somebody can already read is a step backwards.
+    it('keeps the fares on screen while the refetch runs', async () => {
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75))
+
+        const { shown, wrapper } = cached()
+        await flushPromises()
+
+        shown.value = false
+        await flushPromises()
+
+        let answer
+        get.mockReturnValue(new Promise((resolve) => { answer = resolve }))
+        shown.value = true
+        await flushPromises()
+
+        expect(wrapper.find('.skeleton').exists()).toBe(false)
+        expect(wrapper.get('.price__value').text()).toBe('€75')
+
+        answer(document_('AMS-LIS', 'Lisbon', 61))
+        await flushPromises()
+
+        expect(wrapper.get('.price__value').text()).toBe('€61')
     })
 })

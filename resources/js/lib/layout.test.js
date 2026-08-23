@@ -100,6 +100,18 @@ describe('the frame a window is wide enough for', () => {
         expect(isPhone.value).toBe(true)
     })
 
+    // Outside a component there is no scope to dispose it, so the caller is handed the stop.
+    it('hands back a stop for a caller with no scope to dispose it', () => {
+        const fake = windowOf(390)
+        const { stop } = useLayout()
+
+        expect(fake.lists.every((list) => list.handlers.size === 1)).toBe(true)
+
+        stop()
+
+        expect(fake.lists.every((list) => list.handlers.size === 0)).toBe(true)
+    })
+
     it('stops listening when the component using it goes away', () => {
         const fake = windowOf(390)
         const scope = effectScope()
