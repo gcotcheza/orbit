@@ -4,13 +4,15 @@
 # =============================================================================
 #   scripts/check.sh
 #
-# Five checks, in this order, stopping at the first failure:
+# Seven checks, in this order, stopping at the first failure:
 #
 #   1. pint --test      code style (report only; `pint` alone rewrites)
-#   2. phpstan          static analysis at level 8, no baseline
-#   3. eslint           the browser half, which no PHP test can see
-#   4. vitest           the browser half's own unit tests (PR6 onwards)
-#   5. artisan test     the suite
+#   2. composer audit   advisories against the production PHP packages
+#   3. phpstan          static analysis at level 8, no baseline
+#   4. npm audit        advisories against the production node packages
+#   5. eslint           the browser half, which no PHP test can see
+#   6. vitest           the browser half's own unit tests (PR6 onwards)
+#   7. artisan test     the suite
 #
 # ORDER IS DELIBERATE: cheapest and most mechanical first. A style failure that
 # takes four seconds to find should not be discovered after a ninety-second
@@ -58,10 +60,21 @@ step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 step 'Pint (code style)'
 docker compose exec -T app vendor/bin/pint --test
 
+step 'Composer advisories'
+# --locked --no-dev: the lockfile, production packages only. An advisory against
+# phpunit or pint is not on the site and must not redden the gate. DECISIONS.md
+docker compose exec -T app composer audit --locked --no-dev
+
 step 'PHPStan (static analysis, level 8)'
 # The memory limit is PHPStan's own default of 128M otherwise, and Larastan
 # boots the whole framework to read the models — 512M is what one process needs.
 docker compose exec -T app vendor/bin/phpstan analyse --no-progress --memory-limit=512M
+
+step 'npm advisories'
+# Beside ESLint rather than beside the composer half: this is the first step
+# that needs node_modules, and a cold `npm ci` must not precede PHPStan.
+docker compose --profile build run --rm --entrypoint sh assets -c \
+    '[ -d node_modules ] || npm ci --no-audit --fund=false && npm audit --omit=dev --audit-level=high'
 
 step 'ESLint (front end)'
 # `npm ci` only when node_modules is missing: it deletes and reinstalls the tree
@@ -72,7 +85,7 @@ step 'ESLint (front end)'
 # `run --rm` rather than `exec`: the assets service is profile-gated and is not
 # running, because it is a task and not a service.
 docker compose --profile build run --rm --entrypoint sh assets -c \
-    '[ -d node_modules ] || npm ci --no-audit --fund=false; npm run lint'
+    '[ -d node_modules ] || npm ci --no-audit --fund=false && npm run lint'
 
 step 'Vitest (front-end unit tests)'
 # The globe's flight arithmetic and the tour's timetable (resources/js/lib/),
