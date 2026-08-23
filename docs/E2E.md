@@ -532,6 +532,32 @@ Run one of them on its own with the `--` pass-through:
 scripts/e2e.sh -- --project=desktop
 ```
 
+### A spec that writes must clean up, and prove that it did
+
+The create-screen test in `layout-screens.spec.js` makes a real deal rule (nothing
+seeds one) and removes it in a `finally`. Two things about that were wrong the
+first time and are worth writing down, because the next spec that writes will hit
+both:
+
+- **`page.request` shares the browser's cookies and none of its headers.** These
+  routes live in `routes/web.php` behind the `web` group, so CSRF is on; axios
+  sends `X-XSRF-TOKEN` (plus `X-Requested-With` and `Accept: application/json`)
+  from `lib/http.js`, and `page.request` sends none of it. A bare
+  `page.request.delete('/api/rules/1')` answers **419** and deletes nothing. The
+  `writeHeaders()` helper reads the `XSRF-TOKEN` cookie out of
+  `page.context().cookies()`, URL-decodes it and sends the three headers; the same
+  call then answers **204**. Every cleanup write asserts `response.ok()`, because a
+  cleanup that quietly does nothing is worse than no cleanup — it looks green.
+- **A DOM count cannot answer "is it gone".** The obvious check —
+  `page.goto('/create')` then `expect(rows).toHaveCount(before)` — passes whether
+  the cleanup worked or not, because an empty list and a list whose `GET /api/rules`
+  has not landed yet are both zero `.rule` elements, and `toHaveCount` resolves on
+  the first poll that matches. Waiting for `.rules` to be visible does not help
+  either: the section draws its heading immediately and the rows arrive later. So
+  the assertion is against the API — `ruleIds()` before and after — and the DOM
+  count only appears inside the test where it is checking for a *non-zero* count,
+  which is a claim a race cannot fake.
+
 **`auth.setup.js` is not an optimisation.** `POST /login` is throttled 5/min on
 `email|ip` and the throttle runs *before* validation. Eight specs each signing in
 for themselves is eight attempts from one address inside a minute, and the fifth

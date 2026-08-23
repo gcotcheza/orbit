@@ -16,6 +16,31 @@ async function expectNoSidewaysScroll(page, where) {
     expect(width.scroll, `${where} is wider than the window`).toBe(width.inner)
 }
 
+/** The saved rules' ids, straight from the API — the authority the screen only reflects. */
+async function ruleIds(page) {
+    const response = await page.request.get('/api/rules')
+
+    expect(response.ok(), `GET /api/rules answered ${response.status()}`).toBe(true)
+
+    return ((await response.json()).data ?? []).map((one) => one.id)
+}
+
+/*
+ * What `lib/http.js` sends on every write. `page.request` shares the browser's cookies but none of
+ * its headers, and these routes are the `web` group with CSRF on (routes/web.php).
+ */
+async function writeHeaders(page) {
+    const xsrf = (await page.context().cookies()).find((one) => one.name === 'XSRF-TOKEN')
+
+    expect(xsrf, 'no XSRF-TOKEN cookie to sign the cleanup with').toBeTruthy()
+
+    return {
+        'X-XSRF-TOKEN': decodeURIComponent(xsrf.value),
+        'X-Requested-With': 'XMLHttpRequest',
+        Accept: 'application/json',
+    }
+}
+
 test.describe('the calendar in the frame', () => {
     test.skip(({ viewport }) => viewport.width < 1024, 'the master pane needs 1024px')
 
@@ -272,8 +297,7 @@ test.describe('the new rule screen in the frame', () => {
 
         const rows = page.locator('.screen__master .rule')
         const before = await rows.count()
-        const known = await page.request.get('/api/rules')
-        const ids = ((await known.json()).data ?? []).map((one) => one.id)
+        const ids = await ruleIds(page)
 
         try {
             await expect(page.locator('.cta')).toBeEnabled()
@@ -286,19 +310,23 @@ test.describe('the new rule screen in the frame', () => {
             await expectNoSidewaysScroll(page, '/create with a rule created')
             await shot(page, 'create-desktop-done')
         } finally {
-            // Through the API, and in `finally`: a failed assertion above must not leave a row behind
-            // for the next spec (docs/E2E.md "The specs").
-            const now = await page.request.get('/api/rules')
+            // In `finally`, so a failed assertion above cannot leave a row behind for the next spec,
+            // and asserted, so a cleanup that silently does nothing fails loudly (docs/E2E.md).
+            const headers = await writeHeaders(page)
 
-            for (const one of (await now.json()).data ?? []) {
-                if (!ids.includes(one.id)) {
-                    await page.request.delete(`/api/rules/${one.id}`)
-                }
+            for (const id of (await ruleIds(page)).filter((one) => !ids.includes(one))) {
+                const gone = await page.request.delete(`/api/rules/${id}`, { headers })
+
+                expect(gone.ok(), `the cleanup delete answered ${gone.status()}`).toBe(true)
             }
         }
 
-        await page.goto('/create')
-        await expect(rows).toHaveCount(before)
+        /*
+         * THE SERVER, NOT THE SCREEN, and this is the whole assertion. A `.rule` count cannot answer
+         * "is it gone": an empty list and a list that has not loaded yet are the same zero rows, so a
+         * leaked rule and a clean database both read 0 here. Measured, not assumed — see docs/E2E.md.
+         */
+        expect(await ruleIds(page), 'the rule this test made is gone again').toEqual(ids)
     })
 
     test('re-reads the sentence when a chip is dropped, without leaving the pane', async ({ page }) => {
