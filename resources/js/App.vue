@@ -18,15 +18,21 @@ import { applyUpdate, dismissUpdate, updateReady } from '@/lib/pwa'
 const KEPT_ALIVE = ['Home']
 
 const route = useRoute()
-const { isPhone } = useLayout()
+const { isDesktop, isPhone } = useLayout()
 
 const hasTabBar = computed(() => route.meta.layout === 'tabs' && isPhone.value)
 
 /* The same five destinations, upright, from 768px — one bar or one rail, never both. */
 const hasRail = computed(() => route.meta.layout === 'tabs' && !isPhone.value)
 
+/* `meta.wide: true` owns the frame from 768px; `'desktop'` owns it from 1024 and keeps the phone
+   column below that (docs/DESKTOP-LAYOUT-PLAN.md). */
+const ownsFrame = computed(
+  () => route.meta.wide === true || (route.meta.wide === 'desktop' && isDesktop.value),
+)
+
 /** A screen with no pane of its own keeps the phone column, centred in what the rail leaves. */
-const isColumn = computed(() => hasRail.value && route.meta.wide !== true)
+const isColumn = computed(() => hasRail.value && !ownsFrame.value)
 </script>
 
 <template>

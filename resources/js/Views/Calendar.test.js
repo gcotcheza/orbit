@@ -4,10 +4,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia } from 'pinia'
 import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
+import { computed, ref } from 'vue'
 
 const get = vi.fn()
 
+/* jsdom has no matchMedia, so the real composable would answer 'phone' and nothing else; this is
+   the switch the wide branch is behind. Deferred inside the arrow, as vi.mock is hoisted. */
+const desktop = ref(false)
+
 vi.mock('@/lib/http', () => ({ http: { get: (...args) => get(...args) } }))
+vi.mock('@/lib/layout', () => ({
+    useLayout: () => ({
+        layout: computed(() => (desktop.value ? 'desktop' : 'phone')),
+        isPhone: computed(() => !desktop.value),
+        isDesktop: desktop,
+        stop: () => {},
+    }),
+}))
 
 import Calendar from './Calendar.vue'
 import { addMonths, currentMonthKey, monthLabel } from '@/Components/calendar/month'
@@ -70,6 +83,10 @@ function answering({ emptyMonths = [] } = {}) {
         return Promise.resolve({ data: emptyMonths.includes(month) ? EMPTY : priced(month) })
     })
 }
+
+beforeEach(() => {
+    desktop.value = false
+})
 
 async function mountCalendar() {
     const wrapper = mount(Calendar, {
@@ -268,3 +285,63 @@ describe('which month it opens on', () => {
         expect(get).toHaveBeenLastCalledWith('/api/routes/AMS-OPO/calendar', { params: { month: second } })
     })
 })
+
+// 1024px and up: the master pane's rows replace the chip strip, and a tapped day is a card beside
+// the month rather than a sheet over it (docs/DESKTOP-LAYOUT-PLAN.md phase 2).
+describe('inside the frame', () => {
+    beforeEach(() => {
+        desktop.value = true
+    })
+
+    it('lists the routes as rows instead of chips, on the same selection', async () => {
+        answering()
+
+        const wrapper = await mountCalendar()
+
+        expect(wrapper.get('.calendar').classes()).toContain('calendar--wide')
+        expect(wrapper.find('.chips').exists()).toBe(false)
+
+        const rows = wrapper.findAll('.route-row')
+
+        expect(rows).toHaveLength(1)
+        expect(rows[0].attributes('data-code')).toBe('AMS-LIS')
+        expect(rows[0].classes()).toContain('route-row--active')
+    })
+
+    it('docks the day beside the month, with no backdrop and no dialog', async () => {
+        answering()
+
+        const wrapper = await mountCalendar()
+        await wrapper.get('.cell--fare').trigger('click')
+
+        const panel = wrapper.get('.calendar__day .sheet')
+
+        expect(panel.classes()).toContain('sheet--docked')
+        expect(panel.attributes('role')).toBe('region')
+        expect(wrapper.find('.backdrop').exists()).toBe(false)
+        expect(panel.get('.sheet__price').text()).toBe('€74')
+    })
+
+    it('keeps the month nav out of the master head', async () => {
+        answering()
+
+        const wrapper = await mountCalendar()
+
+        expect(wrapper.findAll('.month-nav')).toHaveLength(1)
+        expect(wrapper.get('.calendar__nav .month-nav')).toBeTruthy()
+    })
+
+    // The phone is the branch every baseline was recorded against.
+    it('is a chip strip and a teleported sheet on a phone', async () => {
+        desktop.value = false
+        answering()
+
+        const wrapper = await mountCalendar()
+        await wrapper.get('.cell--fare').trigger('click')
+
+        expect(wrapper.find('.chips').exists()).toBe(true)
+        expect(wrapper.find('.route-rows').exists()).toBe(false)
+        expect(wrapper.find('.sheet--docked').exists()).toBe(false)
+    })
+})
+

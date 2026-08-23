@@ -179,3 +179,34 @@ describe('DaySheet', () => {
         expect(wrapper.emitted('close')).toHaveLength(2)
     })
 })
+
+// >=1024 the calendar docks this body beside the month instead of teleporting it over one
+// (Views/Calendar.vue, docs/DESKTOP-LAYOUT-PLAN.md phase 2).
+describe('docked', () => {
+    it('drops the backdrop and stops claiming to be modal', () => {
+        const wrapper = sheet({ docked: true })
+        const panel = wrapper.get('.sheet')
+
+        expect(wrapper.find('.backdrop').exists()).toBe(false)
+        expect(panel.classes()).toContain('sheet--docked')
+        expect(panel.attributes('role')).toBe('region')
+        expect(panel.attributes('aria-modal')).toBeUndefined()
+    })
+
+    it('is the same body, named by the same day', () => {
+        const wrapper = sheet({ docked: true })
+
+        expect(wrapper.get('.sheet').attributes('aria-label')).toBe('September 15, 2026')
+        expect(wrapper.get('.sheet__price').text()).toBe('€44')
+        expect(booking(wrapper).attributes('href')).toContain('AMS1509OPO1')
+    })
+
+    it('is a bottom sheet everywhere else', () => {
+        const wrapper = sheet()
+
+        expect(wrapper.find('.backdrop').exists()).toBe(true)
+        expect(wrapper.get('.sheet').attributes('role')).toBe('dialog')
+        expect(wrapper.get('.sheet').attributes('aria-modal')).toBe('true')
+    })
+})
+

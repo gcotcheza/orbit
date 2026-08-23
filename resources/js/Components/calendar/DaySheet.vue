@@ -20,6 +20,12 @@ const props = defineProps({
    * are the SERVER's. Null-tolerant, so an older build's response still opens a sheet.
    */
   booking: { type: Object, default: null },
+
+  /*
+   * Beside the grid rather than over it (Views/Calendar.vue, >=1024). Nothing is covered, so there
+   * is no backdrop to dismiss and no dialog to be modal.
+   */
+  docked: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['close'])
@@ -59,9 +65,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
-  <div class="backdrop" @click="$emit('close')"></div>
+  <div v-if="!docked" class="backdrop" @click="$emit('close')"></div>
 
-  <div class="sheet" role="dialog" aria-modal="true" :aria-label="dayLabel(fare.date, { withYear: true })">
+  <div
+    class="sheet"
+    :class="{ 'sheet--docked': docked }"
+    :role="docked ? 'region' : 'dialog'"
+    :aria-modal="docked ? null : 'true'"
+    :aria-label="dayLabel(fare.date, { withYear: true })"
+  >
     <div class="sheet__handle" aria-hidden="true"></div>
 
     <div class="sheet__head">
@@ -149,6 +161,30 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   background: var(--panel);
   box-shadow: 0 -10px 40px rgb(0 0 0 / 20%);
   animation: sheet-rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/*
+ * A card in the pane: no viewport pinning, no slide-up, and the grab handle goes with the gesture
+ * it belonged to. The recipe is the design canvas's `.day` (docs/DESKTOP-LAYOUT-PLAN.md).
+ */
+.sheet--docked {
+  position: static;
+  max-width: none;
+  margin-inline: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  box-shadow: var(--shadow);
+  animation: none;
+}
+
+.sheet--docked .sheet__handle {
+  display: none;
+}
+
+/* The panel is a column roughly a fifth of the window wide; the pair does not fit side by side. */
+.sheet--docked .actions {
+  flex-direction: column;
 }
 
 .sheet__handle {
