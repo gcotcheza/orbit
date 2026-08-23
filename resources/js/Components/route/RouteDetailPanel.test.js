@@ -77,6 +77,29 @@ describe('the route detail panel', () => {
         expect(wrapper.get('.price__value').text()).toBe('€44')
     })
 
+    /*
+     * ⚠ The other side of that guard: a pair CHANGE that fails must not keep the previous route's
+     * document, or one route's fares end up under another route's name.
+     */
+    it('does not leave the old route on screen when a new pair fails to load', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75))
+
+        const wrapper = mount(RouteDetailPanel, {
+            props: { code: 'AMS-LIS' },
+            global: { plugins: [createPinia()] },
+        })
+        await flushPromises()
+
+        get.mockRejectedValue({ response: { status: 500 } })
+        await wrapper.setProps({ code: 'AMS-OPO' })
+        await flushPromises()
+
+        expect(wrapper.get('.empty__title').text()).toBe('Could not load this route')
+        expect(wrapper.find('.price__value').exists()).toBe(false)
+        expect(wrapper.text()).not.toContain('€75')
+    })
+
     // A pasted lower-case link is normalised here rather than by every caller.
     it('normalises the case of the pair it is handed', async () => {
         get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75))
@@ -153,6 +176,27 @@ describe('coming back to a pane that was cached', () => {
 
         expect(get).toHaveBeenCalledTimes(2)
         expect(wrapper.get('.price__value').text()).toBe('€61')
+    })
+
+    // A flaky connection on the way back in is a refresh that did not happen, not a screen that
+    // broke — and the fares it already had are the same fares.
+    it('keeps the fares on screen when the refetch on the way back in fails', async () => {
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75))
+
+        const { shown, wrapper } = cached()
+        await flushPromises()
+
+        shown.value = false
+        await flushPromises()
+
+        get.mockRejectedValue({ response: { status: 500 } })
+        shown.value = true
+        await flushPromises()
+
+        expect(wrapper.get('.price__value').text()).toBe('€75')
+        expect(wrapper.find('.empty__title').exists()).toBe(false)
+        expect(wrapper.get('.detail__notice--quiet').text()).toContain('Could not check today’s fares')
+        expect(wrapper.get('.detail__notice--quiet').text()).toContain('Aug 14')
     })
 
     // Quietly: a skeleton drawn over fares somebody can already read is a step backwards.

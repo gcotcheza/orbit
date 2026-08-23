@@ -259,6 +259,14 @@ async function load({ quiet = false } = {}) {
       return
     }
 
+    // ⚠ `quiet` AND NOT merely "detail is not null": a pair change leaves the PREVIOUS route's
+    // document here, and keeping that would put one route's fares under another's name.
+    if (quiet && detail.value !== null) {
+      reportFailedRefresh(error.response?.status)
+
+      return
+    }
+
     detail.value = null
     meta.value = null
     loading.value = false
@@ -299,6 +307,15 @@ async function lookUp(mine) {
   }
 }
 
+/** Says the refresh did not happen, over fares that are still worth reading. */
+function reportFailedRefresh(status) {
+  const since = lastChecked.value === null ? '' : ` from ${lastChecked.value}`
+
+  refreshNotice.value = status === 429
+    ? `Orbit has looked up a lot of routes just now — these are its fares${since}.`
+    : `Could not check today’s fares. These are the ones Orbit already had${since}.`
+}
+
 /** THE ORDER OF THESE BRANCHES IS THE JUDGEMENT: 422 means unpriceable, and a price already on
  *  screen says "refresh failed". */
 function describeLookupFailure(error) {
@@ -313,11 +330,7 @@ function describeLookupFailure(error) {
   }
 
   if (detail.value !== null) {
-    const since = lastChecked.value === null ? '' : ` from ${lastChecked.value}`
-
-    refreshNotice.value = status === 429
-      ? `Orbit has looked up a lot of routes just now — these are its fares${since}.`
-      : `Could not check today’s fares. These are the ones Orbit already had${since}.`
+    reportFailedRefresh(status)
 
     return
   }
