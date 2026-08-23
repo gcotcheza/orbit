@@ -3,16 +3,24 @@
  * Home — the Orbit globe (design/README.md §1). `name` must stay 'Home' for App.vue's
  * <KeepAlive>; the list is shared and the tour is keyed by route code (docs/BUSINESS-LOGIC.md §36).
  */
-import { computed, onActivated, onMounted, ref } from 'vue'
+import { computed, onActivated, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useRoute, useRouter } from 'vue-router'
 import { nextIndex } from '@/lib/tour'
 import GlobeStage from '@/Components/globe/GlobeStage.vue'
 import RouteRail from '@/Components/globe/RouteRail.vue'
 import SpotlightCard from '@/Components/globe/SpotlightCard.vue'
+import RouteDetailPanel from '@/Components/route/RouteDetailPanel.vue'
 import { hasWebgl } from '@/Components/globe/globeScene'
+import { euro } from '@/lib/format'
+import { useLayout } from '@/lib/layout'
 import { useWatchlistStore } from '@/stores/watchlist'
 
 defineOptions({ name: 'Home' })
+
+const route = useRoute()
+const router = useRouter()
+const { isPhone, isDesktop } = useLayout()
 
 const watchlist = useWatchlistStore()
 const { routes, status } = storeToRefs(watchlist)
@@ -29,11 +37,35 @@ const activeCode = ref(null)
 const globeAvailable = ref(hasWebgl())
 
 /** Paused routes are in the payload with `active: false`; the tour skips them. */
-const activeRoutes = computed(() => routes.value.filter((route) => route.active))
+const activeRoutes = computed(() => routes.value.filter((one) => one.active))
 
 const activeRoute = computed(
-  () => activeRoutes.value.find((route) => route.code === activeCode.value) ?? activeRoutes.value[0],
+  () => activeRoutes.value.find((one) => one.code === activeCode.value) ?? activeRoutes.value[0],
 )
+
+/*
+ * The pane's route, deep-linkable as `/?route=AMS-LIS`. A code that is not on the watchlist falls
+ * back to the tour's own, so the rows, the globe and the panel cannot disagree.
+ */
+const selected = computed(() => {
+  const asked = typeof route.query.route === 'string' ? route.query.route.toUpperCase() : null
+
+  return activeRoutes.value.find((one) => one.code === asked) ?? activeRoute.value
+})
+
+/** A row or a chip was picked: the query moves, the screen does not. */
+function select(code) {
+  activeCode.value = code
+  router.replace({ query: { ...route.query, route: code } })
+}
+
+/* A link naming a route nobody is watching opens the tour's own; the address bar has to say so, or
+   it goes on offering a route that is not on screen. */
+watch([selected, () => route.query.route], ([chosen, asked]) => {
+  if (chosen && asked && asked !== chosen.code) {
+    router.replace({ query: { ...route.query, route: chosen.code } })
+  }
+})
 
 /**
  * "Good morning", by the phone's clock. Deliberately local time, not the owner's configured
@@ -65,7 +97,7 @@ async function load() {
 
 /** The tour has finished dwelling on a route: move to the next one. */
 function advance() {
-  const current = activeRoutes.value.findIndex((route) => route.code === activeCode.value)
+  const current = activeRoutes.value.findIndex((one) => one.code === activeCode.value)
 
   activeCode.value = activeRoutes.value[nextIndex(current, activeRoutes.value.length)]?.code ?? null
 }
@@ -80,7 +112,7 @@ onActivated(() => {
 </script>
 
 <template>
-  <div class="home">
+  <div v-if="isPhone" class="home">
     <header class="home__header">
       <div>
         <p class="home__eyebrow">
@@ -159,9 +191,109 @@ onActivated(() => {
       <div v-else class="home__flat">
         <p class="home__quiet">Your browser cannot draw the globe, so here is the whole watchlist instead.</p>
 
-        <SpotlightCard v-for="route in activeRoutes" :key="route.code" :route="route" />
+        <SpotlightCard v-for="one in activeRoutes" :key="one.code" :route="one" />
       </div>
     </template>
+  </div>
+  <!-- 768px and up: the frame's landing page. The phone branch above is untouched, which is what
+       keeps its baselines at zero (docs/DESKTOP-LAYOUT-PLAN.md). -->
+  <div v-else class="home home--wide">
+    <section class="home__master">
+      <header class="home__header">
+        <div>
+          <p class="home__eyebrow">
+            <span class="home__live"></span>
+            Tracking live
+          </p>
+          <h1 class="home__greeting">{{ greeting }}</h1>
+        </div>
+
+        <!-- No profile button: the rail carries the account link at these widths, and two links of
+             the same name to the same place is one too many. -->
+      </header>
+
+      <template v-if="!loading && !failed && activeRoutes.length > 0">
+        <!-- Full-width rows in the master pane; the chip strip is what fits a single pane. -->
+        <template v-if="isDesktop">
+          <div class="home__rows-head">
+            <h2 class="home__rows-title">Fly to a route</h2>
+            <p class="home__rows-count">{{ activeRoutes.length }} watched</p>
+          </div>
+
+          <div class="home__rows" role="tablist" aria-label="Watched routes">
+            <button
+              v-for="one in activeRoutes"
+              :key="one.code"
+              class="route-row"
+              :class="{ 'route-row--active': one.code === selected.code }"
+              :data-code="one.code"
+              type="button"
+              role="tab"
+              :aria-selected="one.code === selected.code"
+              @click="select(one.code)"
+            >
+              <span class="route-row__dot" :data-tone="one.verdict.tone"></span>
+
+              <span class="route-row__where">
+                <span>{{ one.origin.iata }}→{{ one.destination.iata }}</span>
+                <span class="route-row__city">{{ one.destination.city }}</span>
+              </span>
+
+              <span class="route-row__price tabular">{{ euro(one.price.current) ?? '—' }}</span>
+            </button>
+          </div>
+        </template>
+
+        <RouteRail v-else :routes="activeRoutes" :active-code="selected.code" @select="select" />
+      </template>
+    </section>
+
+    <section class="home__pane">
+      <div v-if="loading" class="home__skeleton" role="status">
+        <div class="home__skeleton-globe"></div>
+        <div class="home__skeleton-card"></div>
+        <p class="home__quiet">Finding your routes…</p>
+      </div>
+
+      <div v-else-if="failed" class="home__notice">
+        <h2 class="home__notice-title">Nothing to orbit right now</h2>
+        <p class="home__quiet">Your watchlist could not be reached. It is probably a moment's connection.</p>
+        <button class="home__retry" type="button" @click="load">Try again</button>
+      </div>
+
+      <template v-else-if="activeRoutes.length === 0">
+        <GlobeStage
+          v-if="globeAvailable"
+          class="home__stage home__day1-globe"
+          :routes="[]"
+          active-code=""
+          @unavailable="globeAvailable = false"
+        />
+
+        <div class="home__notice">
+          <h2 class="home__notice-title">Nothing orbiting yet</h2>
+          <p class="home__quiet">Add a route and the globe starts touring it — Orbit prices it every morning.</p>
+
+          <RouterLink class="home__cta" :to="{ name: 'watch' }">Add your first route</RouterLink>
+        </div>
+      </template>
+
+      <template v-else>
+        <!-- No @advance: the pane's route is the one that was chosen, and a globe that toured off
+             it every eleven seconds would argue with the panel below. -->
+        <GlobeStage
+          v-if="globeAvailable"
+          class="home__stage"
+          :routes="activeRoutes"
+          :active-code="selected.code"
+          @unavailable="globeAvailable = false"
+        />
+
+        <div class="home__panel">
+          <RouteDetailPanel :code="selected.code" embedded />
+        </div>
+      </template>
+    </section>
   </div>
 </template>
 
@@ -332,5 +464,180 @@ onActivated(() => {
   color: var(--ink);
   background: var(--card2);
   border: 1px solid var(--line);
+}
+
+/* --- 768px and up: the master-detail landing ----------------------------
+   Nothing below this line is reachable on a phone, on its side or otherwise; both
+   halves of the query are lib/layout.js's (docs/DESKTOP-LAYOUT-PLAN.md). */
+
+@media (min-width: 768px) and (min-height: 600px) {
+  .home--wide {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding-bottom: 0;
+  }
+
+  .home__master {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .home--wide .home__header {
+    padding: 20px 22px 8px;
+  }
+
+  .home__pane {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /*
+   * A share of the pane rather than 360px: bigger screen, bigger globe. The panel under it is the
+   * phone's single column and always wants more height than is left, so it scrolls instead.
+   */
+  .home__pane .home__stage {
+    flex: 0 0 auto;
+    height: 45%;
+    min-height: 280px;
+    border-top: 1px solid var(--line);
+  }
+
+  .home__panel {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px 28px 24px;
+    border-top: 1px solid var(--line);
+  }
+}
+
+@media (min-width: 1024px) and (min-height: 600px) {
+  .home--wide {
+    flex-direction: row;
+  }
+
+  .home__master {
+    flex: 0 0 var(--master-width);
+    gap: 14px;
+    padding: 22px 18px 18px;
+    overflow-y: auto;
+
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+  }
+
+  .home--wide .home__header {
+    padding: 0;
+  }
+
+  .home__rows-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 2px 0;
+  }
+
+  .home__rows-title {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .home__rows-count {
+    font-size: var(--text-md);
+    font-weight: 500;
+    color: var(--muted);
+  }
+
+  .home__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .route-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    width: 100%;
+    padding: 11px 13px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-chip);
+
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    text-align: left;
+    color: var(--ink);
+
+    background: var(--card);
+    box-shadow: var(--shadow);
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  }
+
+  .route-row--active {
+    border-color: var(--accent);
+    background: var(--accent);
+    /* White on accent in both themes, as the rail's active chip uses. */
+    color: var(--on-solid);
+    box-shadow: 0 6px 16px var(--accent-glow);
+  }
+
+  .route-row__dot {
+    width: 7px;
+    height: 7px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+
+  .route-row__dot[data-tone='good'] {
+    background: var(--good);
+  }
+
+  .route-row__dot[data-tone='info'] {
+    background: var(--info);
+  }
+
+  .route-row__dot[data-tone='warn'] {
+    background: var(--warn);
+  }
+
+  .route-row--active .route-row__dot {
+    background: var(--on-solid);
+  }
+
+  .route-row__where {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+
+  /* Opacity, not --muted: a fixed grey is a stray colour on the accent-filled active row. */
+  .route-row__city {
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    opacity: 0.66;
+  }
+
+  .route-row__price {
+    margin-left: auto;
+    opacity: 0.78;
+  }
+
+  /* The chip strip is gone at this width, and with it the line that separated it. */
+  .home__pane .home__stage {
+    border-top: 0;
+  }
 }
 </style>

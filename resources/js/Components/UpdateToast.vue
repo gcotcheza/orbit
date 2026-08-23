@@ -56,6 +56,14 @@ defineEmits(['refresh', 'dismiss'])
   animation: orbit-rise 0.4s ease backwards;
 }
 
+/* Inside the desktop frame --shell-max is `none`; this stays a phone-width card. The query is
+   lib/layout.js's, so the phone cannot reach the rule at all (docs/DESKTOP-LAYOUT-PLAN.md). */
+@media (min-width: 768px) and (min-height: 600px) {
+  .app-shell--rail .toast {
+    max-width: calc(var(--app-width) - 2 * var(--gutter));
+  }
+}
+
 .toast--above-tabs {
   bottom: calc(var(--tab-bar-height) + env(safe-area-inset-bottom) + 10px);
 }

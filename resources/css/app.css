@@ -124,6 +124,36 @@ body {
     padding-bottom: calc(var(--tab-bar-height) + env(safe-area-inset-bottom) + 18px);
 }
 
+/* --- The desktop frame --------------------------------------------------
+   Every rule here is inside one media query and the phone never reaches it, which
+   is what makes "the phone is untouched" true by construction rather than by care.
+   The height half is the phone-on-its-side guard, and it must stay identical to
+   lib/layout.js's (docs/DESKTOP-LAYOUT-PLAN.md, docs/BUSINESS-LOGIC.md §36). */
+
+@media (min-width: 768px) and (min-height: 600px) {
+    .app-shell--rail {
+        /* The frame is the window from here up. A screen with no rail — the route detail, the
+           login — keeps the phone column, so this is on the frame and not on :root. */
+        --shell-max: none;
+
+        flex-direction: row;
+        height: 100dvh;
+    }
+
+    .app-shell--rail .app-shell__main {
+        flex: 1;
+        min-width: 0;
+        overflow-y: auto;
+    }
+
+    /* Phases 2-3 give these screens panes of their own; until then each keeps its phone
+       layout, centred in what the rail leaves. */
+    .app-shell--rail .app-shell__main--column > * {
+        max-width: var(--app-width);
+        margin-inline: auto;
+    }
+}
+
 /* --- Focus --------------------------------------------------------------
    :focus-visible only, so a tapped button on a phone does not keep a ring
    afterwards while a keyboard-tabbed one still gets a loud one. */

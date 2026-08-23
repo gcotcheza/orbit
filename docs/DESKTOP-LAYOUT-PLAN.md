@@ -63,20 +63,53 @@ What was actually built, which differs from the first sketch in three places:
   recorded: `docs/E2E.md` "A frozen clock".
 - Docs: this file + a §36 note. *Effort S. Risk: globe resize jank — verify on a real iPad.*
 
-### Phase 1 — The frame and the landing page (≥ 768)
-- `AppShell` grows a desktop branch: `IconRail` (the tab bar's five destinations,
-  centre Search button kept) replaces `TabBar` at ≥ 768; `MasterPane` + `DetailPane`
-  at ≥ 1024; collapsed single pane + route chip strip at 768–1023.
-- Route detail is extracted into a `RouteDetailPanel` component used by the phone
-  screen `/route/:id` and by the desktop detail pane; selecting a route in the master
-  pane updates the URL (`/?route=AMS-LIS`-style query or a child route) without leaving
-  the screen; `KeepAlive` of Home stays intact.
-- Landing page = master routes list | globe banner (flexible) + `RouteDetailPanel`.
-- e2e desktop: landing layout assertions; the existing phone suite untouched.
-  *Effort L (the core). Risks: router state for the selected route, Home KeepAlive,
-  scoped-style specificity, globe resize.*
+### Phase 1 — The frame and the landing page (≥ 768) — **SHIPPED**
+- `App.vue` grows a desktop branch driven by `useLayout()` (`lib/layout.js`), a
+  composable reporting `phone | tablet | desktop` from `matchMedia`: `IconRail`
+  replaces `TabBar` at the frame's sizes (by `v-if`, so exactly one is ever in the
+  DOM), the shell becomes `rail | master 352 | detail` at ≥ 1024 and `rail | one pane`
+  at 768–1023, and `--shell-max` stops clamping it.
+- `Components/route/RouteDetailPanel.vue` is everything `/route/:id` showed below its
+  back bar; the screen is now the bar plus that panel, and the desktop detail pane is
+  the same panel. The selected route is `?route=AMS-LIS` on `/`, written with
+  `router.replace`, so `KeepAlive` of Home and the globe are untouched.
+- Landing page = master routes list | globe (flexible) + `RouteDetailPanel`.
+
+What was actually built differs from the sketch above in five places, each of which
+is a decision worth keeping:
+- **The breakpoints carry a height: `(min-width: 768px) and (min-height: 600px)`.** A
+  phone on its side is 844×390 — wider than 768 and still a phone — and the browser
+  gate proved it, collapsing a detail pane to zero height in `globe.spec.js`'s
+  landscape test. The number is written out in `lib/layout.js` and in every `@media`
+  rule, and those must be edited together. **The cost, stated plainly:** a desktop window
+  shorter than 600px — a laptop with the devtools open, a short split-screen — falls back
+  to the phone column rather than the frame. That is the safe direction to fail in, and it
+  is the same trade the `GlobeStage` landscape rule already makes.
+- **`--shell-max: none` is set on `.app-shell--rail`, not on `:root`.** A screen with
+  no rail — the route detail, the login — keeps the phone column at any width, which
+  is what "the other screens are unchanged this phase" has to mean. The update toast
+  follows the frame with `.app-shell--rail .toast`; the day sheet needs nothing, being
+  teleported to `<body>` and so outside the frame's token.
+- **The globe takes 45% of the pane (never under 280px)**, not "whatever the detail
+  does not need". The detail here is the phone's single column, which always wants
+  more height than the pane has, so there is no leftover to give — the panel scrolls
+  under a globe of a fixed share instead. The two-column detail pane the artboard
+  draws, which is what makes leftover height mean anything, is phases 2–3.
+- **The wide branch ignores the globe's `advance`.** The pane shows the route that was
+  chosen; a tour moving off it every eleven seconds would argue with the panel below,
+  rewrite the URL and refetch a route while nobody was touching anything.
+- **`MasterPane`/`DetailPane` were not built as components.** Only one screen has a
+  master pane this phase, so the split is `Home.vue`'s own layout plus a `meta.wide`
+  flag on the route; the other tabbed screens get `app-shell__main--column`, which
+  centres their existing phone layout in what the rail leaves. Phases 2–3 are what
+  would make a shared pane component earn itself.
+
+*Effort L (the core). Phone: 19 baselines at 0 diff, phone suite unchanged.*
 
 ### Phase 2 — Calendar and Watch in C
+- **Hoist the Home header shared by the phone and wide branches.** Phase 1 left ~20 lines of
+  eyebrow/greeting duplicated between the two, which was the cheap way to keep the phone's DOM
+  byte-identical; a second screen growing a wide branch is what makes one component worth it.
 - Calendar: master = routes list; detail = month grid scaled to the pane (square cells,
   gap absorbs height) + the day sheet's content docked as a side panel at ≥ 1024
   (bottom sheet below).
