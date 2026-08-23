@@ -53,6 +53,12 @@ const added = ref(null)
 /** The pair a look-up put in the pane, or ''. Only the frame ever has a pane to put one in. */
 const looked = ref('')
 
+/* What the pane is now of, for a reader whose focus did not move with it. Its first value is the
+   one the region mounts with, so nothing is announced until the pane really swaps. */
+const announcement = computed(() =>
+  looked.value ? `Showing ${looked.value.replace('-', ' → ')}` : 'Deals from your airports',
+)
+
 const fromField = useTemplateRef('fromField')
 
 /** Somebody has named somewhere else, so the pills are not the answer. */
@@ -309,7 +315,14 @@ function messageFor(failure) {
              action is shouting about what the user just did. -->
         <p v-if="added" class="search__added" role="status">
           {{ added.label }} is on your watch list.
-          <RouterLink class="search__added-link" :to="{ name: 'route-detail', params: { id: added.code } }">
+
+          <!-- The pane beside the form is where a route goes in the frame; on a phone it is a
+               screen of its own (docs/DESKTOP-LAYOUT-PLAN.md phase 4). -->
+          <button v-if="isDesktop" type="button" class="search__added-link" @click="looked = added.code">
+            Open it
+          </button>
+
+          <RouterLink v-else class="search__added-link" :to="{ name: 'route-detail', params: { id: added.code } }">
             Open it
           </RouterLink>
         </p>
@@ -325,6 +338,10 @@ function messageFor(failure) {
     </div>
 
     <div class="screen__pane">
+      <!-- Always in the DOM once the frame is, so a change to it is a change rather than an
+           arrival — an element added with its text already in it announces nothing. -->
+      <p v-if="isDesktop" class="pane-live" role="status">{{ announcement }}</p>
+
       <!-- The look-up's answer, in the pane rather than on a screen of its own. -->
       <div v-if="isDesktop && looked" class="looked">
         <!-- Named after the thing it goes back to, which is the heading below it and not new copy. -->
@@ -335,7 +352,8 @@ function messageFor(failure) {
           Deals from your airports
         </button>
 
-        <RouteDetailPanel :code="looked" embedded />
+        <!-- The pane swapped under the reader, so the panel's own heading takes the focus. -->
+        <RouteDetailPanel :code="looked" embedded autofocus />
       </div>
 
       <!-- THE STRIP RENDERS ONLY WHEN THERE IS SOMETHING ON IT: no skeleton, no empty state, three
@@ -350,7 +368,7 @@ function messageFor(failure) {
 
         <ul class="finds__list">
           <li v-for="find in finds" :key="`${find.code}-${find.departureDate}`">
-            <DiscoveryCard :discovery="find" />
+            <DiscoveryCard :discovery="find" :in-pane="isDesktop" @open="looked = $event" />
           </li>
         </ul>
       </section>
@@ -498,6 +516,16 @@ function messageFor(failure) {
 .search__watch:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Announced, never drawn — the same recipe the compose box's label uses. */
+.pane-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /*

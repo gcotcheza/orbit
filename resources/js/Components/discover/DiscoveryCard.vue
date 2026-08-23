@@ -10,7 +10,22 @@ import { departureLabel, euro, seenLabel } from '@/lib/format'
 const props = defineProps({
     /** One `GET /api/discoveries` row. */
     discovery: { type: Object, required: true },
+
+    /** In the frame the card answers in the pane beside it (docs/DESKTOP-LAYOUT-PLAN.md phase 4). */
+    inPane: { type: Boolean, default: false },
 })
+
+defineEmits(['open'])
+
+// A button where nothing navigates, a link where something does: an href the card never opens
+// would name a page that is not where pressing it goes.
+const control = computed(() => (props.inPane ? 'button' : RouterLink))
+
+const controlProps = computed(() =>
+    props.inPane
+        ? { type: 'button' }
+        : { to: { name: 'route-detail', params: { id: props.discovery.code } } },
+)
 
 const price = computed(() => euro(props.discovery.price))
 
@@ -48,9 +63,12 @@ const evidence = computed(() => {
 </script>
 
 <template>
-  <RouterLink
+  <component
+    :is="control"
+    v-bind="controlProps"
     class="find"
-    :to="{ name: 'route-detail', params: { id: discovery.code } }"
+    :class="{ 'find--button': inPane }"
+    @click="inPane && $emit('open', discovery.code)"
   >
     <div class="find__head">
       <div class="find__where">
@@ -95,7 +113,7 @@ const evidence = computed(() => {
 
       <span v-if="seen" class="find__seen">seen {{ seen }}</span>
     </div>
-  </RouterLink>
+  </component>
 </template>
 
 <style scoped>
@@ -107,6 +125,12 @@ const evidence = computed(() => {
 
   background: var(--card);
   text-decoration: none;
+}
+
+/* Only the frame renders the button form, so the prop is the guard and no media query is needed. */
+.find--button {
+  width: 100%;
+  text-align: left;
 }
 
 .find__head {

@@ -268,3 +268,47 @@ describe('the two-column wrappers', () => {
     })
 })
 
+
+// The pane swaps under the reader without a navigation, so nothing else would move the focus
+// (docs/DESKTOP-LAYOUT-PLAN.md phase 4).
+describe('the focus when a pane swaps', () => {
+    const panel = (props) => mount(RouteDetailPanel, {
+        props: { code: 'AMS-LIS', ...props },
+        global: { plugins: [createPinia()] },
+        attachTo: document.body,
+    })
+
+    it('sends it to the heading once the panel has one', async () => {
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75))
+
+        const wrapper = panel({ embedded: true, autofocus: true })
+        await flushPromises()
+
+        expect(document.activeElement).toBe(wrapper.get('.detail__code').element)
+
+        wrapper.unmount()
+    })
+
+    // Not-found has a heading of its own, and it is the one worth being sent to.
+    it('sends it to whichever heading rendered', async () => {
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75))
+
+        const wrapper = panel({ embedded: true, autofocus: true, code: 'nope' })
+        await flushPromises()
+
+        expect(document.activeElement).toBe(wrapper.get('.empty__title').element)
+
+        wrapper.unmount()
+    })
+
+    it('leaves the focus alone on a screen nobody swapped', async () => {
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75))
+
+        const wrapper = panel()
+        await flushPromises()
+
+        expect(document.activeElement).toBe(document.body)
+
+        wrapper.unmount()
+    })
+})

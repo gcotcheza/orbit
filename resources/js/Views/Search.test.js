@@ -40,7 +40,7 @@ import Search from './Search.vue'
 
 /** The route detail is RouteDetailPanel.test.js's subject; here only the pair it was handed is. */
 const PanelStub = {
-    props: { code: String, embedded: Boolean },
+    props: { code: String, embedded: Boolean, autofocus: Boolean },
     template: '<div class="panel-stub" :data-code="code" :data-embedded="embedded"></div>',
 }
 
@@ -478,5 +478,68 @@ describe('inside the frame', () => {
         expect(wrapper.get('.screen').classes()).not.toContain('screen--wide')
         expect(wrapper.find('.panel-stub').exists()).toBe(false)
         expect(push).toHaveBeenCalledWith({ name: 'route-detail', params: { id: 'AMS-LIS' } })
+    })
+})
+
+// Phase 3 left both of these navigating to the bare route screen, which drops out of the frame the
+// pane is in (docs/DESKTOP-LAYOUT-PLAN.md phase 4).
+describe('a find opens in the pane', () => {
+    beforeEach(() => {
+        desktop.value = true
+    })
+
+    it('answers a card in the pane it was drawn in', async () => {
+        const wrapper = await screen({ finds: FINDS })
+
+        await wrapper.findAll('.finds__list .find')[1].trigger('click')
+
+        expect(wrapper.get('.screen__pane .panel-stub').attributes('data-code')).toBe('AMS-BCN')
+        expect(wrapper.find('.finds').exists()).toBe(false)
+        expect(push).not.toHaveBeenCalled()
+    })
+
+    it('answers "Open it" there too, after a route is added', async () => {
+        post.mockResolvedValue(added('AMS-LIS'))
+
+        const wrapper = await screen({ finds: FINDS })
+
+        await pair(wrapper, 'AMS', 'LIS')
+        await watch(wrapper).trigger('click')
+        await flushPromises()
+
+        await wrapper.get('.search__added button.search__added-link').trigger('click')
+
+        expect(wrapper.get('.screen__pane .panel-stub').attributes('data-code')).toBe('AMS-LIS')
+        expect(push).not.toHaveBeenCalled()
+    })
+
+    // Focus moves to the panel's own heading; this is for a reader whose does not.
+    it('says what the pane is of, and starts on the finds so nothing is announced on arrival', async () => {
+        const wrapper = await screen({ finds: FINDS })
+        const live = wrapper.get('.pane-live')
+
+        expect(live.attributes('role')).toBe('status')
+        expect(live.text()).toBe('Deals from your airports')
+
+        await wrapper.findAll('.finds__list .find')[0].trigger('click')
+
+        expect(wrapper.get('.pane-live').text()).toBe('Showing AMS → AGP')
+    })
+
+    it('leaves the phone navigating, card and link alike', async () => {
+        post.mockResolvedValue(added('AMS-LIS'))
+        desktop.value = false
+
+        const wrapper = await screen({ finds: FINDS })
+
+        expect(wrapper.find('.pane-live').exists()).toBe(false)
+        expect(wrapper.findAll('.finds__list .find')[0].element.tagName).toBe('A')
+
+        await pair(wrapper, 'AMS', 'LIS')
+        await watch(wrapper).trigger('click')
+        await flushPromises()
+
+        expect(wrapper.get('.search__added').find('button.search__added-link').exists()).toBe(false)
+        expect(wrapper.get('.search__added').find('a.search__added-link').exists()).toBe(true)
     })
 })
