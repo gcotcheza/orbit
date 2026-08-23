@@ -48,3 +48,27 @@ describe('the master pane rows', () => {
         expect(paused.get('.route-row__price').text()).toBe('—')
     })
 })
+
+// The watch list's rows mark one of a list that is already on screen; they do not swap a pane, so
+// they are pressed rather than selected (docs/BUSINESS-LOGIC.md §36).
+describe('a group rather than a tab list', () => {
+    it('says pressed, not selected', () => {
+        const wrapper = rows({ active: 'AMS-LIS', kind: 'group' })
+        const all = wrapper.findAll('.route-row')
+
+        expect(wrapper.get('.route-rows').attributes('role')).toBe('group')
+        expect(all[0].attributes('role')).toBeUndefined()
+        expect(all[0].attributes('aria-pressed')).toBe('true')
+        expect(all[1].attributes('aria-pressed')).toBe('false')
+        expect(all[0].attributes('aria-selected')).toBeUndefined()
+    })
+
+    it('is a tab list by default, where a pane really does swap', () => {
+        const wrapper = rows({ active: 'AMS-LIS' })
+
+        expect(wrapper.get('.route-rows').attributes('role')).toBe('tablist')
+        expect(wrapper.findAll('.route-row')[0].attributes('role')).toBe('tab')
+        expect(wrapper.findAll('.route-row')[0].attributes('aria-pressed')).toBeUndefined()
+    })
+})
+

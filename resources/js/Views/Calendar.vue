@@ -151,6 +151,21 @@ async function loadMonth() {
   }
 }
 
+/* The cell that opened the day, so closing it does not drop a keyboard back at the top of the page.
+   A detached element's `focus()` is a no-op, which is what a month change leaves behind. */
+let picker = null
+
+function pickDay(fare) {
+  picker = document.activeElement
+  selected.value = fare
+}
+
+function closeDay() {
+  selected.value = null
+  picker?.focus()
+  picker = null
+}
+
 // Fires on the code the watchlist load sets, so the first month is fetched by the same path every
 // later one is.
 watch([code, month], loadMonth)
@@ -183,7 +198,7 @@ onMounted(loadRoutes)
         v-if="isDesktop && routes.length"
         :routes="routes"
         :active="code"
-        label="Route"
+        label="Watched routes"
         @select="select"
       />
 
@@ -219,7 +234,7 @@ onMounted(loadRoutes)
               :days="payload.days"
               :min="payload.min"
               :max="payload.max"
-              @pick="selected = $event"
+              @pick="pickDay"
             />
 
             <HeatLegend v-if="hasFares" :min="payload.min" :max="payload.max" />
@@ -245,7 +260,7 @@ onMounted(loadRoutes)
             :max="payload.max"
             :code="code"
             :booking="booking"
-            @close="selected = null"
+            @close="closeDay"
           />
         </aside>
       </div>
@@ -261,7 +276,7 @@ onMounted(loadRoutes)
         :max="payload.max"
         :code="code"
         :booking="booking"
-        @close="selected = null"
+        @close="closeDay"
       />
     </Teleport>
   </section>

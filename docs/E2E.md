@@ -443,10 +443,11 @@ two widths are two different layouts rather than one layout at two sizes:
 stops being a frame and starts being screens:
 
 - **the calendar (≥1024)** — the six seeded routes as master rows and no chip
-  strip; the month is a whole number of weeks and a cell is square to within a
-  pixel; clicking a day draws `.sheet--docked` **to the right of the grid card**
-  carrying that cell's own day number and price, with no backdrop, exactly one
-  `.sheet` on the page and `role="region"` rather than a modal dialog.
+  strip; the month is five or six week rows (counted by distinct cell tops, since
+  `buildMonthGrid` pads only the days *before* the 1st) and a cell is square to
+  within a pixel; clicking a day draws `.sheet--docked` **to the right of the grid
+  card** carrying that cell's own day number and price, with no backdrop, exactly
+  one `.sheet` on the page and `role="region"` rather than a modal dialog.
 - **the watch list (≥1024)** — exactly one `.pass.is-selected`, at least 1.8x the
   width of the others, which are two abreast on a shared row; the deal rules
   start to the right of it and the "Rules · N" jump chip is gone; clicking
@@ -465,6 +466,27 @@ stops being a frame and starts being screens:
 Each of those checks `documentElement.scrollWidth === innerWidth` again with the
 pane actually full, because a docked panel and a six-pass grid are the two things
 in this phase that could push a window sideways.
+
+**A fourth describe resizes the desktop project to 1024x600 and runs three tests
+there**, rather than adding a fifth project — the frame's own floor is one
+viewport, not a whole suite, and `page.setViewportSize` re-fires the same
+`matchMedia` listeners the composable is built on. What it is for:
+
+- **the sideways guard has a blind spot, and this is it.** `.pass` hides its own
+  overflow, so two flex columns shrinking together clip the IATA codes and city
+  names off a boarding pass while `scrollWidth === innerWidth` stays perfectly
+  true. The test reads `scrollWidth > clientWidth` on every `.end__code` and
+  `.end__city` and requires the list of offenders to be empty; the layout answer
+  is that `.screen__body` wraps, so the deal rules drop below the passes here.
+- **the landing detail scrolls; the globe does not.** At 600px of height a 280px
+  globe and the detail do not both fit. `.home__panel` must be the thing that
+  scrolls, so the test scrolls it to the bottom and asserts `.home__stage` has the
+  same `y` and height afterwards and the master rows are all still there — the
+  failure it exists to catch is the overflow escaping to `.app-shell__main` and
+  taking the rail's neighbour and the globe with it.
+- **the day panel wraps under the month below 1264px**, and the cells stay square
+  and larger than 48px while it does — that is the trade the plan's "docked as a
+  side panel at ≥1024" turned into, and it is asserted rather than assumed.
 
 **The landing page is why these two projects now take about 20 seconds.** They
 draw the globe, and `waitForGlobe()` polls a SwiftShader render.

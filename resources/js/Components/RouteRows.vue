@@ -14,13 +14,23 @@ defineProps({
 
   /** What the list is of, for a screen reader arriving at it cold. */
   label: { type: String, required: true },
+
+  /*
+   * 'tabs' where picking a row swaps the pane beside it (the landing, the calendar); 'group' where
+   * it only marks one of a list that is already on screen (the watch list).
+   */
+  kind: {
+    type: String,
+    default: 'tabs',
+    validator: (value) => ['tabs', 'group'].includes(value),
+  },
 })
 
 defineEmits(['select'])
 </script>
 
 <template>
-  <div class="route-rows" role="tablist" :aria-label="label">
+  <div class="route-rows" :role="kind === 'tabs' ? 'tablist' : 'group'" :aria-label="label">
     <button
       v-for="one in routes"
       :key="one.code"
@@ -28,8 +38,9 @@ defineEmits(['select'])
       :class="{ 'route-row--active': one.code === active, 'route-row--paused': one.active === false }"
       :data-code="one.code"
       type="button"
-      role="tab"
-      :aria-selected="one.code === active"
+      :role="kind === 'tabs' ? 'tab' : null"
+      :aria-selected="kind === 'tabs' ? one.code === active : null"
+      :aria-pressed="kind === 'tabs' ? null : one.code === active"
       @click="$emit('select', one.code)"
     >
       <span class="route-row__dot" :data-tone="one.verdict.tone"></span>

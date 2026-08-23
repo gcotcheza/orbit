@@ -470,9 +470,15 @@ onActivated(() => {
     border-top: 0;
   }
 
+  /*
+   * `0 1 auto`, not `0 0 auto`: with free space the detail is its natural height and the globe
+   * takes the rest; without it (a window under ~665px) the detail scrolls under a globe held at
+   * its 280px floor, rather than the pane spilling and taking the master list with it.
+   */
   .home__panel {
-    flex: 0 0 auto;
-    overflow: visible;
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
 
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

@@ -71,6 +71,8 @@ test.describe('the calendar in the frame', () => {
         const grid = await page.locator('.grid-card').boundingBox()
         const box = await panel.boundingBox()
 
+        // 1264px and up. Below it the pane cannot hold a 560px month and a readable panel side by
+        // side, and the panel wraps under the grid rather than the cells shrinking (docs/E2E.md).
         expect(box.x, 'the day panel sits to the right of the month').toBeGreaterThan(grid.x + grid.width - 1)
 
         await expectNoSidewaysScroll(page, '/calendar with a day open')
@@ -201,5 +203,90 @@ test.describe('the collapsed pane', () => {
         await page.goto('/calendar')
         await expect(page.locator('.chips .chip').first()).toBeVisible()
         await expect(page.locator('.sheet--docked')).toHaveCount(0)
+    })
+})
+
+/*
+ * The short, narrow end of the frame: 1024x600 is the smallest window `lib/layout.js` still calls a
+ * desktop, and it is where every "two columns" decision has to degrade rather than break.
+ */
+test.describe('at the frame\'s own floor', () => {
+    test.skip(({ viewport }) => viewport.width < 1024, 'this resizes the desktop project itself')
+
+    test.beforeEach(async ({ page }) => {
+        await page.setViewportSize({ width: 1024, height: 600 })
+    })
+
+    test('never clips a boarding pass', async ({ page }) => {
+        await page.goto('/watch')
+        await expect(page.locator('.rail-nav')).toBeVisible()
+        await expect(page.locator('.pass')).toHaveCount(WATCHED.length)
+
+        // `.pass` hides its own overflow, so a squeezed card loses its IATA codes silently — the
+        // sideways-scroll guard cannot see this one.
+        const clipped = await page
+            .locator('.pass .end__code, .pass .end__city')
+            .evaluateAll((all) =>
+                all.filter((one) => one.scrollWidth > one.clientWidth + 1).map((one) => one.textContent.trim()),
+            )
+
+        expect(clipped, 'no pass may cut its own codes or cities off').toEqual([])
+
+        // The rules drop under the passes rather than starving them of width.
+        const passes = await page.locator('.screen__passes').boundingBox()
+        const rules = await page.locator('.rules').boundingBox()
+
+        expect(rules.y, 'the rules wrap below the passes here').toBeGreaterThan(passes.y + passes.height - 1)
+
+        await expectNoSidewaysScroll(page, '/watch at 1024x600')
+        await shot(page, 'watch-desktop-short')
+    })
+
+    test('scrolls the landing detail under a globe that stays put', async ({ page }) => {
+        await page.goto('/')
+
+        const stage = page.locator('.home__stage')
+        const panel = page.locator('.home__panel')
+
+        await expect(panel.locator('.detail__code')).toBeVisible()
+
+        const before = await stage.boundingBox()
+
+        expect(before.height, 'the globe is held at its floor, not squeezed past it').toBeGreaterThanOrEqual(280)
+
+        const scrollable = await panel.evaluate((one) => one.scrollHeight - one.clientHeight)
+
+        expect(scrollable, 'the detail is taller than the room left for it here').toBeGreaterThan(0)
+
+        await panel.evaluate((one) => one.scrollTo(0, one.scrollHeight))
+
+        const after = await stage.boundingBox()
+
+        expect(after.y, 'the globe does not scroll away with the detail').toBe(before.y)
+        expect(after.height).toBe(before.height)
+        // The master pane is still there, which is what a pane-level overflow would have cost.
+        await expect(page.locator('.route-row')).toHaveCount(WATCHED.length)
+
+        await expectNoSidewaysScroll(page, '/ at 1024x600')
+        await shot(page, 'landing-desktop-short')
+    })
+
+    test('wraps the day panel under the month rather than shrinking the cells', async ({ page }) => {
+        await page.goto('/calendar')
+
+        const day = page.locator('.cell--fare').first()
+        await expect(day).toBeVisible()
+        await day.click()
+
+        const grid = await page.locator('.grid-card').boundingBox()
+        const panel = await page.locator('.calendar__day .sheet').boundingBox()
+        const cell = await day.boundingBox()
+
+        expect(panel.y, 'under the month, not beside it, below 1264px').toBeGreaterThan(grid.y + grid.height - 1)
+        expect(Math.abs(cell.width - cell.height), 'and the cells are still square').toBeLessThan(1)
+        expect(cell.width, 'at a size the phone would recognise').toBeGreaterThan(48)
+
+        await expectNoSidewaysScroll(page, '/calendar at 1024x600')
+        await shot(page, 'calendar-desktop-short')
     })
 })

@@ -132,14 +132,19 @@ What was actually built differs from the sketch above in four places, each worth
   groups — summary, chart, advice, booking — placed into columns 1, 2, 1, 2. The cost is stated
   plainly: the shorter of each row's two groups leaves a gap under itself, which is what the
   artboard's own `space-between` columns draw anyway.
-- **`meta.wide` grew a second value.** `true` still means "owns the frame from 768px" (the
-  landing); `'desktop'` means "owns it from 1024, phone column below" — which is what the
-  calendar and the watch list need, since their panes are a 352px master plus two more columns
-  and a 768px window has room for neither.
+- **`meta.wide` grew a second value, and it means an iPad in PORTRAIT sees no change.** `true`
+  still means "owns the frame from 768px" (the landing); `'desktop'` means "owns it from 1024,
+  phone column below" — which is what the calendar and the watch list need, since their panes are
+  a 352px master plus two more columns and a 768px window has room for neither. So phase 2's two
+  screens arrive on an iPad in **landscape** and on a desktop window; at 820px they keep the
+  centred phone layout phase 1 gave them, deliberately.
 - **The mock's `aspect-ratio: auto` cells were not built.** The plan says square and the plan
   wins: the grid card is capped at 560px (the artboard's own width) and the cells' existing
   `aspect-ratio: 1` does the rest. A pane too narrow for the card and the day panel side by side
-  wraps the panel under the grid rather than squashing either.
+  wraps the panel under the grid rather than squashing either — **so the panel docks beside the
+  month from 1264px, and sits under it between 1024 and 1263.** Docking at 1024 was tried and
+  costs a 37px cell, which is smaller than the phone's; a scroll is the cheaper price. The watch
+  list's rules column wraps the same way, from 1260px, and for the same reason.
 
 *Phone: 19 baselines at 0 diff, phone suite unchanged. Docked `DaySheet` is `role="region"` and
 not a modal dialog — nothing is covered, so there is nothing to trap focus in front of.*
@@ -169,7 +174,9 @@ Every phase: phone screenshots pixel-identical to the baselines, phone e2e green
 0. Nothing changed on the phone; the globe still fills its box after rotating the iPad.
 1. Landing page in landscape = list | globe + detail, no empty band; tapping a route
    swaps the detail without leaving; portrait shows rail + one pane with a chip strip.
-2. Calendar and Watch use the pane; calendar cells square; day panel docked. **Done.**
+2. Calendar and Watch use the pane (iPad in landscape, or a desktop window — 1024px and up);
+   calendar cells square; day panel docked beside the month from 1264px, under it below that.
+   **Done.**
 3. Search, Create, Alerts use the pane.
 4. Dark mode clean; nothing regressed on the phone (full e2e + screenshot baselines).
 

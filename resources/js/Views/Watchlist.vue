@@ -52,6 +52,14 @@ const selected = computed(
   () => routes.value.find((one) => one.code === selectedCode.value)?.code ?? routes.value[0]?.code ?? null,
 )
 
+/* The chosen pass leads the pane, and it leads in the DOM: a CSS `order` would hand a keyboard the
+   passes in one sequence and the eye another. The phone gets the list untouched. */
+const passes = computed(() => {
+  const lead = isDesktop.value ? routes.value.find((one) => one.code === selected.value) : undefined
+
+  return lead === undefined ? routes.value : [lead, ...routes.value.filter((one) => one !== lead)]
+})
+
 // The "Rules · N" chip jumps to the rules section below; a count, not a link, and it renders only
 // when there are rules.
 const jumpToRules = () => scrollIntoView(rulesSection.value, { block: 'start' })
@@ -226,10 +234,13 @@ function markRuleBusy(id, busy) {
         </button>
       </div>
 
+      <!-- `group`, not `tabs`: nothing swaps for the row you press — the pass it names moves to the
+           head of the list that is already on screen. -->
       <RouteRows
         v-if="isDesktop && routes.length"
         :routes="routes"
         :active="selected"
+        kind="group"
         label="Watched routes"
         @select="selectedCode = $event"
       />
@@ -264,7 +275,7 @@ function markRuleBusy(id, busy) {
 
           <div v-else class="screen__list">
             <WatchRow
-              v-for="route in routes"
+              v-for="route in passes"
               :key="route.code"
               class="rise-in"
               :class="{ 'is-paused': !route.active, 'is-selected': isDesktop && route.code === selected }"
@@ -569,8 +580,11 @@ function markRuleBusy(id, busy) {
     overflow-y: auto;
   }
 
+  /* WRAPS, and it has to: two shrinking columns squeeze a pass to ~170px, and a pass clips its
+     own IATA codes rather than scrolling — which no overflow guard would catch. */
   .screen--wide .screen__body {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     gap: 24px;
   }
@@ -581,22 +595,21 @@ function markRuleBusy(id, busy) {
     display: block;
   }
 
-  /* The chosen pass at the full width of the column, the rest two abreast under it. */
+  /* The chosen pass at the full width of the column, the rest as many abreast as fit. */
   .screen--wide .screen__list {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 14px;
     margin-top: 0;
   }
 
   .screen--wide .is-selected {
-    order: -1;
     grid-column: 1 / -1;
   }
 
   /* Its own column, so the hairline that set it apart from the routes above has nothing to do. */
   .screen--wide .rules {
-    flex: 1 1 260px;
+    flex: 1 1 220px;
     min-width: 0;
     margin-top: 0;
     padding-top: 0;

@@ -85,6 +85,14 @@ describe('the phone list', () => {
 
         expect(wrapper.get('.screen').classes()).not.toContain('screen--wide')
         expect(wrapper.findAll('.pass')).toHaveLength(3)
+        expect(wrapper.findAll('.pass .end__code').map((code) => code.text())).toEqual([
+            'AMS',
+            'LIS',
+            'AMS',
+            'OPO',
+            'AMS',
+            'FAO',
+        ])
         expect(wrapper.find('.route-rows').exists()).toBe(false)
         // Nothing leads on a screen you scroll: no pass is singled out.
         expect(wrapper.find('.is-selected').exists()).toBe(false)
@@ -122,6 +130,19 @@ describe('inside the frame', () => {
 
         expect(wrapper.findAll('.route-row')[1].classes()).toContain('route-row--active')
         expect(wrapper.get('.is-selected').text()).toContain('OPO')
+    })
+
+    // In the DOM and not by `order`, or a keyboard would meet the passes in one sequence and the
+    // eye in another.
+    it('puts the lead first in the markup, and leaves the rest in the owner order', async () => {
+        const wrapper = await mountWatchlist()
+
+        await wrapper.findAll('.route-row')[2].trigger('click')
+
+        const codes = wrapper.findAll('.pass .end__code').map((code) => code.text())
+
+        expect(codes).toEqual(['AMS', 'FAO', 'AMS', 'LIS', 'AMS', 'OPO'])
+        expect(wrapper.findAll('.pass')[0].classes()).toContain('is-selected')
     })
 
     // The rules are a column here, so the chip that scrolled to them has nothing to do.
