@@ -132,19 +132,62 @@ test('the price, the gauge, the chart and the booking link are all really there'
     await shot(page, 'route-detail')
 })
 
-// Skips rather than naming a route — which one is "waiting" is the fake
-// provider's arithmetic against today's date.
+/** A seeded route no other spec writes to; this one puts it above its usual price. */
+const WAITING = 'AMS-NAP'
+
+const WAIT = { label: 'Above usual — wait', short: 'Wait', tone: 'warn' }
+
+// No seeded route sits above its usual price, so the state is constructed — in
+// the scorer's own words (DealScorer::advice, docs/E2E.md).
+async function pretendOneRouteSaysWait(page) {
+    const rewrite = async (route, edit) => {
+        const response = await route.fetch()
+        const body = await response.json()
+
+        edit(body)
+
+        await route.fulfill({ response, json: body })
+    }
+
+    await page.route('**/api/watchlist', (route) =>
+        rewrite(route, (body) => {
+            const row = body.data.find((one) => one.code === WAITING)
+
+            expect(row, `${WAITING} must be on the seeded watch list`).toBeTruthy()
+            row.verdict = { ...row.verdict, ...WAIT }
+        }),
+    )
+
+    await page.route(`**/api/routes/${WAITING}`, (route) =>
+        rewrite(route, (body) => {
+            const { current, usual, pctBelow } = body.data.price
+
+            body.data.verdict = { ...body.data.verdict, ...WAIT }
+            body.data.advice = {
+                title: WAIT.label,
+                body: `€${current} is ${Math.abs(pctBelow ?? 0)}% above its usual €${usual}. Hold off — fares this far up tend to settle back.`,
+                tone: 'warn',
+            }
+        }),
+    )
+}
+
 test('a route the app says to wait on gets the quiet Book button', async ({ page }) => {
+    await pretendOneRouteSaysWait(page)
+
     await page.goto('/watch')
     await expect(page.locator('.pass')).toHaveCount(6)
 
-    const waiting = page.locator('.pass').filter({ has: page.locator('.pill', { hasText: 'Wait' }) }).first()
+    const waiting = page.locator('.pass').filter({ has: page.locator('.pill', { hasText: 'Wait' }) })
 
-    test.skip((await waiting.count()) === 0, 'no route is in the wait state in this sandbox today')
+    // The premise, asserted rather than skipped past: exactly one row waits.
+    await expect(waiting).toHaveCount(1)
 
     const code = `${await waiting.locator('.end__code').first().textContent()}-${await waiting
         .locator('.end--to .end__code')
         .textContent()}`
+
+    expect(code).toBe(WAITING)
 
     await waiting.getByRole('link', { name: `Open ${code}` }).click()
 
