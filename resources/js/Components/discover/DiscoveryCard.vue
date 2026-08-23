@@ -11,7 +11,7 @@ const props = defineProps({
     /** One `GET /api/discoveries` row. */
     discovery: { type: Object, required: true },
 
-    /** In the frame the card answers in the pane beside it (docs/DESKTOP-LAYOUT-PLAN.md phase 4). */
+    /** In the frame the card answers in the pane beside it (docs/DESKTOP-LAYOUT-PLAN.md). */
     inPane: { type: Boolean, default: false },
 })
 
