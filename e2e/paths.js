@@ -13,6 +13,9 @@ export const BASELINES = new URL('./baselines/', import.meta.url)
  */
 export const STORAGE_STATE = new URL('./state/auth.json', ARTIFACTS).pathname
 
+/** The stylesheet the phone baselines are photographed through (docs/E2E.md). */
+export const BASELINE_STYLE = new URL('./baseline.css', import.meta.url).pathname
+
 /** A full-page screenshot kept for a human to look at, not compared to anything. */
 export function screenPath(name) {
     return new URL(`./screens/${name}.png`, ARTIFACTS).pathname
