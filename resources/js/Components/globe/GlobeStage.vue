@@ -73,6 +73,22 @@ let path = []
 let paused = false
 let disposed = false
 let resizeObserver = null
+let resizeFrame = 0
+
+/*
+ * The renderer follows the element's box rather than a number in the stylesheet, coalesced to
+ * one frame so a drag-resize is one resize (docs/BUSINESS-LOGIC.md §36).
+ */
+function onViewportResize() {
+  if (resizeFrame) {
+    return
+  }
+
+  resizeFrame = requestAnimationFrame(() => {
+    resizeFrame = 0
+    scene?.resize()
+  })
+}
 
 /**
  * Abandon whatever the camera was doing. Bumping the token FIRST is what makes this safe: a
@@ -249,7 +265,7 @@ onMounted(async () => {
     return
   }
 
-  resizeObserver = new ResizeObserver(() => scene?.resize())
+  resizeObserver = new ResizeObserver(onViewportResize)
   resizeObserver.observe(viewport.value)
 
   if (paused) {
@@ -273,6 +289,12 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onVisibilityChange)
   stillness.removeEventListener('change', onStillnessChange)
   resizeObserver?.disconnect()
+
+  if (resizeFrame) {
+    cancelAnimationFrame(resizeFrame)
+    resizeFrame = 0
+  }
+
   scene?.destroy()
   scene = null
 })
