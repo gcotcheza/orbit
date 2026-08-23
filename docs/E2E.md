@@ -403,7 +403,7 @@ in.
 | `pwa.spec.js` | manifest / `sw.js` / `offline` content types and bodies |
 | `theme.spec.js` | the palette really swaps and survives a reload; both themes of Home photographed |
 | `phone-baselines.spec.js` | every screen, both themes, at `maxDiffPixels: 0` — the phone-regression guard |
-| `layout-smoke.spec.js` | tablet and desktop only: the shell renders, the nav is there, nothing scrolls sideways |
+| `layout-smoke.spec.js` | tablet and desktop only: the icon rail replaces the tab bar, nothing scrolls sideways, and the landing page's master pane, `?route=` selection and globe height |
 
 ### The projects
 
@@ -414,13 +414,31 @@ in.
 | `tablet` | 820x1180, DPR 2 | `layout-smoke.spec.js` only — an iPad in portrait |
 | `desktop` | 1280x832, DPR 1 | `layout-smoke.spec.js` only, no touch |
 
-`tablet` and `desktop` are deliberately one small spec each: they assert that
-the signed-in shell renders, that the primary navigation is on it, and that
-`documentElement.scrollWidth` equals `innerWidth` on the five tabbed screens.
-Their assertions grow with each phase of `docs/DESKTOP-LAYOUT-PLAN.md` — phase 1
-replaces the tab-bar assertion with the icon rail's, phase 4 gives them
+`tablet` and `desktop` are deliberately one small spec each, and its assertions
+grow with each phase of `docs/DESKTOP-LAYOUT-PLAN.md`; phase 4 gives them
 baselines of their own. Until then a wide window is checked, not photographed,
 and the suite grows by seconds rather than by minutes.
+
+Both projects assert the frame: the icon rail is on the screen, the tab bar is
+**gone** (two navigations offering the same five destinations is what a frame
+failing to take over looks like), the rail carries all five, and
+`documentElement.scrollWidth` equals `innerWidth` on the five tabbed screens.
+The rest is split by width with `test.skip(({ viewport }) => …)`, because the
+two widths are two different layouts rather than one layout at two sizes:
+
+- **desktop only (≥1024)** — the master pane lists the six seeded routes in the
+  seeder's own order and opens on the first; clicking `AMS-OPO` swaps the detail
+  pane, lights that row and puts `?route=AMS-OPO` in the URL *without* leaving
+  the screen (the master pane and the globe canvas are still there afterwards);
+  `/?route=AMS-NAP` opens on that route; and the globe's canvas is over 280px
+  tall and over 700px wide, which is the whole point of the phase — a bigger
+  screen is a bigger globe rather than a 360px box in a 430px column.
+- **tablet only (768–1023)** — no master rows at all, the chip strip carries the
+  six routes instead, the detail panel is stacked under a globe that still gets
+  its share of the pane, and a chip sets the same `?route=` query.
+
+**The landing page is why these two projects now take about 20 seconds.** They
+draw the globe, and `waitForGlobe()` polls a SwiftShader render.
 
 Run one of them on its own with the `--` pass-through:
 
