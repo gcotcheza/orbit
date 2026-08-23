@@ -25,8 +25,8 @@ test('the alerts screen switches the whole palette, and remembers', async ({ pag
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     expect(await paletteOf(page)).toEqual(DARK)
 
-    // One of the three committed baselines (docs/E2E.md "Baselines vs artifacts").
-    await expect(page).toHaveScreenshot('settings-dark.png', { fullPage: true })
+    // The pixels are phone-baselines.spec.js's (`alerts-dark`); this test owns
+    // the palette swap (docs/E2E.md "Baselines vs artifacts").
     await shot(page, 'settings-dark')
 
     const themeControl = page.getByRole('radiogroup', { name: 'Theme' })

@@ -62,7 +62,7 @@
   bottom: 0;
   z-index: 10;
 
-  max-width: var(--app-width);
+  max-width: var(--shell-max);
   margin-inline: auto;
 
   display: flex;

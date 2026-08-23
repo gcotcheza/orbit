@@ -1,7 +1,6 @@
 // Price calendar — a month grid whose whole meaning is COLOUR (docs/E2E.md
 // "Why this exists").
-import { expect, shot, test } from '../fixtures.js'
-
+import { expect, fixedNow, shot, test } from '../fixtures.js'
 const MONTHS = [
     'January',
     'February',
@@ -142,7 +141,7 @@ test('the month arrows walk eleven months forward and stop', async ({ page }) =>
 
     /* The label the screen should be showing `ahead` months from now. */
     const label = (ahead) => {
-        const now = new Date()
+        const now = new Date(fixedNow)
         const month = new Date(Date.UTC(now.getFullYear(), now.getMonth() + ahead, 1))
 
         return `${MONTHS[month.getUTCMonth()]} ${month.getUTCFullYear()}`

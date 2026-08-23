@@ -44,7 +44,7 @@ defineEmits(['refresh', 'dismiss'])
   gap: 10px;
 
   width: calc(100% - 2 * var(--gutter));
-  max-width: calc(var(--app-width) - 2 * var(--gutter));
+  max-width: calc(var(--shell-max) - 2 * var(--gutter));
   margin-inline: auto;
   padding: 10px 10px 10px 14px;
 

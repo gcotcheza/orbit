@@ -2,6 +2,10 @@
 // cannot be checked from jsdom (docs/E2E.md "Why this exists").
 import { expect, sampleCanvas, shot, tab, test, waitForGlobe } from '../fixtures.js'
 
+// The one spec that opts out of the sandbox clock: fake timers move the tour's
+// camera between frames, and this file samples what it drew (docs/E2E.md).
+test.use({ sandboxClock: false })
+
 test('the earth draws, and it is not a flat disc of one colour', async ({ page }) => {
     await page.goto('/')
 
@@ -262,11 +266,22 @@ test('a phone on its side still shows the card under the globe', async ({ page }
     // And the card's top edge is on screen, which is the whole point.
     expect(card.y).toBeLessThan(390)
 
-    await shot(page, 'home-landscape')
+    // The canvas came with it rather than keeping its portrait box. Polled, and
+    // both boxes re-read together: the renderer follows one frame behind the
+    // element, and a full-page shot resizes the viewport under both of them.
+    await expect
+        .poll(
+            async () => {
+                const box = await page.locator('.stage').boundingBox()
+                const drawn = await page.locator('.stage__globe canvas').boundingBox()
 
-    // The canvas came with it rather than keeping its portrait box.
-    const canvas = await page.locator('.stage__globe canvas').boundingBox()
-    expect(Math.abs(canvas.height - stage.height)).toBeLessThan(2)
+                return Math.round(Math.abs(drawn.height - box.height))
+            },
+            { message: 'the canvas never followed the stage to its landscape height' },
+        )
+        .toBeLessThan(2)
+
+    await shot(page, 'home-landscape')
 
     // Back to the suite's viewport for whatever runs next.
     await page.setViewportSize({ width: 390, height: 844 })

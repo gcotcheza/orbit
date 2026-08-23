@@ -40,14 +40,12 @@ test('the right password lands on the globe', async ({ page }) => {
     await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
 })
 
-test('the empty login screen matches its baseline', async ({ page }) => {
+test('the empty login screen renders for a guest', async ({ page }) => {
     await page.goto('/login')
     await expect(page.locator('.login__title')).toHaveText('Orbit')
 
-    // One of the three screens with a committed baseline — no seeded data,
-    // no canvas (docs/E2E.md "Baselines vs artifacts").
-    await expect(page).toHaveScreenshot('login.png', { fullPage: true })
-
+    // The pixels are phone-baselines.spec.js's, in both themes; this test owns
+    // the screen a guest can reach (docs/E2E.md "Baselines vs artifacts").
     await shot(page, 'login')
 })
 

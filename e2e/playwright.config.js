@@ -83,9 +83,34 @@ export default defineConfig({
         },
         {
             name: 'chromium',
-            testIgnore: /auth\.setup\.js/,
+            testIgnore: [/auth\.setup\.js/, /layout-smoke\.spec\.js/],
             dependencies: ['setup'],
             use: { storageState: STORAGE_STATE },
+        },
+
+        // Two small projects, one spec: the wide layouts are asserted, not
+        // photographed, until phase 4 (docs/DESKTOP-LAYOUT-PLAN.md).
+        {
+            name: 'tablet',
+            testMatch: /layout-smoke\.spec\.js/,
+            dependencies: ['setup'],
+            use: {
+                storageState: STORAGE_STATE,
+                // An iPad in portrait, at its own pixel ratio.
+                viewport: { width: 820, height: 1180 },
+                deviceScaleFactor: 2,
+            },
+        },
+        {
+            name: 'desktop',
+            testMatch: /layout-smoke\.spec\.js/,
+            dependencies: ['setup'],
+            use: {
+                storageState: STORAGE_STATE,
+                viewport: { width: 1280, height: 832 },
+                deviceScaleFactor: 1,
+                hasTouch: false,
+            },
         },
     ],
 })

@@ -1,6 +1,6 @@
 // The screen where a sentence becomes criteria — the eight chips arrive, in
 // order, and removing one re-reads the rest (docs/BUSINESS-LOGIC.md §11).
-import { expect, shot, test } from '../fixtures.js'
+import { expect, fixedNow, shot, test } from '../fixtures.js'
 
 // The design's own seeded sentence (design/README.md §4).
 const SENTENCE =
@@ -26,7 +26,7 @@ const MONTH_NAMES = [
  * (docs/E2E.md "Adding a spec").
  */
 async function monthWithNoFares(page, code) {
-    const today = new Date()
+    const today = new Date(fixedNow)
 
     // Two years is far past any window this app could grow; reaching the end of
     // it means the endpoint is answering something other than what is documented.

@@ -26,6 +26,12 @@ function envValue(name) {
     return line.slice(name.length + 1).trim()
 }
 
+/**
+ * The instant the whole sandbox runs at — written by scripts/e2e.sh, applied to the app by
+ * SandboxClockServiceProvider and to the browser by the baseline spec (docs/E2E.md).
+ */
+export const fixedNow = envValue('E2E_FIXED_NOW')
+
 export const account = {
     email: envValue('SEED_USER_EMAIL'),
     password: envValue('SEED_USER_PASSWORD'),
@@ -34,6 +40,21 @@ export const account = {
 // `auto: true` — applies to every test whether the spec thinks about it or
 // not (docs/E2E.md "The console guard").
 export const test = base.extend({
+    // Off only where fake timers would change what is being measured — one
+    // spec does that (docs/E2E.md "A frozen clock").
+    sandboxClock: [true, { option: true }],
+
+    // Every page starts at E2E_FIXED_NOW, so an age the BROWSER works out agrees
+    // with the fare the app stamped (docs/E2E.md "A frozen clock").
+    page: async ({ page, sandboxClock }, use) => {
+        if (sandboxClock) {
+            await page.clock.install({ time: new Date(fixedNow) })
+            await page.clock.resume()
+        }
+
+        await use(page)
+    },
+
     browserConsole: [
         async ({ page }, use) => {
             const problems = []

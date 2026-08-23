@@ -42,6 +42,7 @@ const AMS_OPO = {
 }
 
 let reduceMotion = false
+const resizeObservers = []
 
 function stubBrowserApis() {
     window.matchMedia = (media) => ({
@@ -51,9 +52,23 @@ function stubBrowserApis() {
         removeEventListener: () => {},
     })
 
+    resizeObservers.length = 0
+
     globalThis.ResizeObserver = class {
-        observe() {}
-        disconnect() {}
+        constructor(callback) {
+            this.callback = callback
+            this.targets = []
+            this.disconnected = false
+            resizeObservers.push(this)
+        }
+
+        observe(target) {
+            this.targets.push(target)
+        }
+
+        disconnect() {
+            this.disconnected = true
+        }
     }
 }
 
@@ -279,5 +294,43 @@ describe('the overlays', () => {
         const wrapper = await mountStage([AMS_LIS])
 
         expect(wrapper.text()).toContain('1 route orbiting')
+    })
+})
+
+describe('the stage size', () => {
+    it('follows the globe element, at most once a frame', async () => {
+        const wrapper = await mountStage()
+        const observer = resizeObservers.at(-1)
+
+        expect(observer.targets).toEqual([wrapper.find('.stage__globe').element])
+
+        scene.resize.mockClear()
+        observer.callback()
+        observer.callback()
+        observer.callback()
+
+        // Nothing until the frame runs, and then one resize for the three.
+        expect(scene.resize).not.toHaveBeenCalled()
+        vi.advanceTimersByTime(16)
+        expect(scene.resize).toHaveBeenCalledTimes(1)
+
+        observer.callback()
+        vi.advanceTimersByTime(16)
+        expect(scene.resize).toHaveBeenCalledTimes(2)
+    })
+
+    it('stops watching, and drops a pending frame, when the stage goes away', async () => {
+        const wrapper = await mountStage()
+        const observer = resizeObservers.at(-1)
+
+        observer.callback()
+        wrapper.unmount()
+        stage = null
+
+        expect(observer.disconnected).toBe(true)
+
+        scene.resize.mockClear()
+        vi.advanceTimersByTime(100)
+        expect(scene.resize).not.toHaveBeenCalled()
     })
 })

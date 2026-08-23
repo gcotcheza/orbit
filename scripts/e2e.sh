@@ -60,6 +60,10 @@ PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
 E2E_HOST='flights.ghiecode.io'
 E2E_PORT='3185'
 
+# THE INSTANT THE WHOLE SANDBOX RUNS AT, app and browser alike. Changing it invalidates
+# every committed baseline — see docs/E2E.md "A frozen clock".
+E2E_FIXED_NOW='2026-08-23T09:00:00+02:00'
+
 APP_UID='115'
 APP_GID='119'
 
@@ -131,6 +135,10 @@ APP_URL=http://${E2E_HOST}:${E2E_PORT}
 
 ORBIT_TIMEZONE=Europe/Amsterdam
 
+# THE FROZEN CLOCK — what makes the seeded world the same on every calendar day,
+# and a screenshot baseline committable. docs/E2E.md "A frozen clock".
+E2E_FIXED_NOW=${E2E_FIXED_NOW}
+
 # The deterministic fake adapters, which is what production runs too until the
 # provider keys exist (docs/PLAN.md). Same fares every run, so a screenshot
 # baseline is a baseline rather than a lottery ticket.
@@ -159,7 +167,9 @@ DB_USERNAME=orbit_e2e
 DB_PASSWORD=${db_password}
 
 SESSION_DRIVER=database
-SESSION_LIFETIME=120
+# TEN YEARS, because the frozen clock stamps every cookie's expiry: at 120 minutes
+# the suite would run as a guest on any later day. docs/E2E.md "A frozen clock".
+SESSION_LIFETIME=5256000
 SESSION_ENCRYPT=false
 SESSION_PATH=/
 SESSION_DOMAIN=null
@@ -261,9 +271,12 @@ else
     note "port ${E2E_PORT} is free"
 fi
 
-if [ ! -f .env.e2e ] || [ "$FRESH_ENV" -eq 1 ]; then
+# The third condition is for a file written before the frozen clock existed: it carries no
+# E2E_FIXED_NOW, and the fixtures would fail asking for one.
+if [ ! -f .env.e2e ] || [ "$FRESH_ENV" -eq 1 ] || ! grep -q '^E2E_FIXED_NOW=' .env.e2e; then
     write_env_file
     note '.env.e2e generated (fresh key, fresh database password, fresh seeded login)'
+    note "clock frozen at ${E2E_FIXED_NOW}"
 else
     note '.env.e2e already present (regenerate with --fresh-env)'
 fi
