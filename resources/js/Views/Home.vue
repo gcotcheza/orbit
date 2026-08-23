@@ -8,11 +8,12 @@ import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { nextIndex } from '@/lib/tour'
 import GlobeStage from '@/Components/globe/GlobeStage.vue'
+import HomeHeader from '@/Components/HomeHeader.vue'
 import RouteRail from '@/Components/globe/RouteRail.vue'
+import RouteRows from '@/Components/RouteRows.vue'
 import SpotlightCard from '@/Components/globe/SpotlightCard.vue'
 import RouteDetailPanel from '@/Components/route/RouteDetailPanel.vue'
 import { hasWebgl } from '@/Components/globe/globeScene'
-import { euro } from '@/lib/format'
 import { useLayout } from '@/lib/layout'
 import { useWatchlistStore } from '@/stores/watchlist'
 
@@ -113,28 +114,7 @@ onActivated(() => {
 
 <template>
   <div v-if="isPhone" class="home">
-    <header class="home__header">
-      <div>
-        <p class="home__eyebrow">
-          <span class="home__live"></span>
-          Tracking live
-        </p>
-        <h1 class="home__greeting">{{ greeting }}</h1>
-      </div>
-
-      <!-- Alerts is the nearest real destination for this icon; the hash lands
-           on #account, not the top of that screen (docs/BUSINESS-LOGIC.md §36). -->
-      <RouterLink
-        class="home__profile"
-        :to="{ name: 'alerts', hash: '#account' }"
-        aria-label="Your account and alert settings"
-      >
-        <svg width="19" height="19" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <circle cx="10" cy="6.5" r="3.2" stroke="var(--ink2)" stroke-width="1.5" />
-          <path d="M4 16.5c0-3 2.7-5 6-5s6 2 6 5" stroke="var(--ink2)" stroke-width="1.5" stroke-linecap="round" />
-        </svg>
-      </RouterLink>
-    </header>
+    <HomeHeader :greeting="greeting" profile />
 
     <!-- Loading: the screen's shape, held still — no spinner, since the globe
          itself is already the thing that moves once it arrives. -->
@@ -199,18 +179,9 @@ onActivated(() => {
        keeps its baselines at zero (docs/DESKTOP-LAYOUT-PLAN.md). -->
   <div v-else class="home home--wide">
     <section class="home__master">
-      <header class="home__header">
-        <div>
-          <p class="home__eyebrow">
-            <span class="home__live"></span>
-            Tracking live
-          </p>
-          <h1 class="home__greeting">{{ greeting }}</h1>
-        </div>
-
-        <!-- No profile button: the rail carries the account link at these widths, and two links of
-             the same name to the same place is one too many. -->
-      </header>
+      <!-- No profile button: the rail carries the account link at these widths, and two links of
+           the same name to the same place is one too many. -->
+      <HomeHeader :greeting="greeting" />
 
       <template v-if="!loading && !failed && activeRoutes.length > 0">
         <!-- Full-width rows in the master pane; the chip strip is what fits a single pane. -->
@@ -220,28 +191,12 @@ onActivated(() => {
             <p class="home__rows-count">{{ activeRoutes.length }} watched</p>
           </div>
 
-          <div class="home__rows" role="tablist" aria-label="Watched routes">
-            <button
-              v-for="one in activeRoutes"
-              :key="one.code"
-              class="route-row"
-              :class="{ 'route-row--active': one.code === selected.code }"
-              :data-code="one.code"
-              type="button"
-              role="tab"
-              :aria-selected="one.code === selected.code"
-              @click="select(one.code)"
-            >
-              <span class="route-row__dot" :data-tone="one.verdict.tone"></span>
-
-              <span class="route-row__where">
-                <span>{{ one.origin.iata }}→{{ one.destination.iata }}</span>
-                <span class="route-row__city">{{ one.destination.city }}</span>
-              </span>
-
-              <span class="route-row__price tabular">{{ euro(one.price.current) ?? '—' }}</span>
-            </button>
-          </div>
+          <RouteRows
+            :routes="activeRoutes"
+            :active="selected.code"
+            label="Watched routes"
+            @select="select"
+          />
         </template>
 
         <RouteRail v-else :routes="activeRoutes" :active-code="selected.code" @select="select" />
@@ -300,58 +255,6 @@ onActivated(() => {
 <style scoped>
 .home {
   padding-bottom: 8px;
-}
-
-.home__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 4px var(--gutter) 6px;
-}
-
-.home__eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-
-  font-size: var(--text-sm);
-  font-weight: 700;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.home__live {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--good);
-  animation: orbit-pulse 2.2s infinite;
-}
-
-.home__greeting {
-  margin-top: 3px;
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-
-.home__profile {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-
-  background: var(--card);
-  box-shadow: var(--shadow);
 }
 
 .home__spotlight {
@@ -556,88 +459,45 @@ onActivated(() => {
     color: var(--muted);
   }
 
-  .home__rows {
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-  }
-
-  .route-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-
-    width: 100%;
-    padding: 11px 13px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-chip);
-
-    font-family: var(--font-display);
-    font-size: var(--text-lg);
-    font-weight: 600;
-    text-align: left;
-    color: var(--ink);
-
-    background: var(--card);
-    box-shadow: var(--shadow);
-    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-  }
-
-  .route-row--active {
-    border-color: var(--accent);
-    background: var(--accent);
-    /* White on accent in both themes, as the rail's active chip uses. */
-    color: var(--on-solid);
-    box-shadow: 0 6px 16px var(--accent-glow);
-  }
-
-  .route-row__dot {
-    width: 7px;
-    height: 7px;
-    flex-shrink: 0;
-    border-radius: 50%;
-    background: var(--muted);
-  }
-
-  .route-row__dot[data-tone='good'] {
-    background: var(--good);
-  }
-
-  .route-row__dot[data-tone='info'] {
-    background: var(--info);
-  }
-
-  .route-row__dot[data-tone='warn'] {
-    background: var(--warn);
-  }
-
-  .route-row--active .route-row__dot {
-    background: var(--on-solid);
-  }
-
-  .route-row__where {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1px;
-  }
-
-  /* Opacity, not --muted: a fixed grey is a stray colour on the accent-filled active row. */
-  .route-row__city {
-    font-family: var(--font-body);
-    font-size: var(--text-sm);
-    font-weight: 500;
-    opacity: 0.66;
-  }
-
-  .route-row__price {
-    margin-left: auto;
-    opacity: 0.78;
-  }
-
-  /* The chip strip is gone at this width, and with it the line that separated it. */
+  /*
+   * The globe takes the pane's leftover height now that the detail below it is two columns wide
+   * enough to have any (docs/DESKTOP-LAYOUT-PLAN.md phase 2). The chip strip's line goes with it.
+   */
   .home__pane .home__stage {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 280px;
     border-top: 0;
+  }
+
+  .home__panel {
+    flex: 0 0 auto;
+    overflow: visible;
+
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 0 28px;
+  }
+
+  /* A skeleton or a "no such route" is one thing, not a pair of columns. */
+  .home__panel > :deep(:not(.detail__group)) {
+    grid-column: 1 / -1;
+  }
+
+  .home__panel :deep(.detail__group) {
+    display: block;
+    min-width: 0;
+  }
+
+  .home__panel :deep(.detail__group--chart),
+  .home__panel :deep(.detail__group--booking) {
+    grid-column: 2;
+  }
+
+  /* Both columns start on the same line; the phone's 18px is its gap from the price above it. */
+  .home__panel :deep(.chart-card) {
+    margin-top: 0;
   }
 }
 </style>
