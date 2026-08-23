@@ -1,6 +1,10 @@
 // A fare that may already be gone, and the button that goes and asks — three
 // of four tests intercept the app's own API (docs/BUSINESS-LOGIC.md §36).
-import { expect, shot, test } from '../fixtures.js'
+import { expect, fixedNow, shot, test, useSandboxClock } from '../fixtures.js'
+
+// The ages this spec asserts are counted from the app's frozen instant
+// (docs/E2E.md "A frozen clock").
+test.beforeEach(async ({ page }) => useSandboxClock(page))
 
 /** Seeded by database/seeders/WatchlistSeeder — six routes, this is the first. */
 const CODE = 'AMS-LIS'
@@ -10,7 +14,9 @@ const CODE = 'AMS-LIS'
  * "lock it in" callout, so the fixture can't either (docs/BUSINESS-LOGIC.md §17).
  */
 function ageTheCheapestFare(body) {
-    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 3_600_000).toISOString()
+    // The sandbox's clock, not node's: the page reads this against a frozen
+    // Date.now(), and node is an hour away from it (docs/E2E.md "A frozen clock").
+    const threeDaysAgo = new Date(new Date(fixedNow).getTime() - 3 * 24 * 3_600_000).toISOString()
 
     body.data.cheapest = { ...body.data.cheapest, foundAt: threeDaysAgo, mayBeGone: true }
 
@@ -86,7 +92,7 @@ test('the live price takes the headline and Orbit’s own becomes context', asyn
             typicalLow: 90,
             typicalHigh: 260,
             level: 'typical',
-            checkedAt: new Date().toISOString(),
+            checkedAt: new Date(fixedNow).toISOString(),
         }
 
         /* What the server sends once Google has contradicted the cached fare,

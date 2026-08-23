@@ -1,11 +1,11 @@
 // The phone's rendering, frozen — the guard every desktop phase is measured
 // against (docs/DESKTOP-LAYOUT-PLAN.md, docs/E2E.md "Baselines vs artifacts").
-import { expect, test, waitForGlobe } from '../fixtures.js'
+import { expect, fixedNow, test, useSandboxClock, waitForGlobe } from '../fixtures.js'
 import { BASELINE_STYLE } from '../paths.js'
 
 // Through `contextOptions`: `reducedMotion` is not a top-level test option in
 // Playwright 1.62, and one set there is silently ignored.
-test.use({ contextOptions: { reducedMotion: 'reduce' } })
+test.use({ contextOptions: { reducedMotion: 'reduce', timezoneId: 'Europe/Amsterdam' } })
 
 const THEMES = ['dark', 'light']
 
@@ -20,7 +20,6 @@ const DETAIL_ROUTE = 'AMS-OPO'
 const VOLATILE = {
     home: [
         '.home__live',
-        '.home__greeting',
         '.spotlight__money',
         '.spark',
         '.pill',
@@ -47,7 +46,7 @@ const VOLATILE = {
     ],
     watch: ['.pill', '.stub__price', '.stub__tracking'],
     search: ['.finds__note', '.find__lane', '.find__money', '.find__evidence', '.find__badge', '.find__seen'],
-    create: [],
+    create: ['.banner__text'],
     alerts: [],
     login: [],
 }
@@ -64,9 +63,14 @@ async function baseline(page, screen, theme) {
     })
 }
 
-/** The theme is read out of localStorage before the app mounts (stores/theme.js). */
+/**
+ * The theme is read out of localStorage before the app mounts (stores/theme.js);
+ * the clock is the app's, so the greeting and every relative label are the same
+ * on any day the suite runs (docs/E2E.md "A frozen clock").
+ */
 function remember(theme) {
     return async ({ page }) => {
+        await useSandboxClock(page)
         await page.addInitScript((value) => window.localStorage.setItem('orbit-theme', value), theme)
     }
 }
@@ -79,13 +83,16 @@ for (const theme of THEMES) {
             await page.goto('/')
             await waitForGlobe(page)
 
-            // The premise of the whole file: a still globe and a still tour, or
-            // the picture is a different one every eleven seconds.
+            // The two premises of the whole file: a still globe, and a browser
+            // that agrees with the server about what time it is.
             expect(
                 await page.evaluate(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches),
                 'the browser must be emulating reduced motion',
             ).toBe(true)
             await expect(page.locator('.stage__hint')).toHaveCount(0)
+            const skew = Math.abs((await page.evaluate(() => Date.now())) - new Date(fixedNow).getTime())
+            expect(skew, 'the browser clock must start at E2E_FIXED_NOW').toBeLessThan(600_000)
+            await expect(page.locator('.home__greeting')).toHaveText('Good morning')
 
             await expect(page.locator('.spotlight')).toBeVisible()
             await expect(page.locator('.rail__chip').first()).toBeVisible()
@@ -140,10 +147,14 @@ for (const theme of THEMES) {
             })
         })
 
+        // The box arrives with a sentence already in it and parses it, so the
+        // settled screen is its chips — not the half second before them.
         test('create', async ({ page }) => {
             await page.goto('/create')
             await expect(page.locator('.compose__input')).toBeVisible()
-            await expect(page.locator('.cta')).toBeDisabled()
+            await expect(page.locator('.chips .chip').first()).toBeVisible()
+            await expect(page.locator('.banner--loading')).toHaveCount(0)
+            await expect(page.locator('.cta')).toBeEnabled()
 
             await baseline(page, 'create', theme)
         })

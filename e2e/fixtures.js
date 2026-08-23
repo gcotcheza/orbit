@@ -26,6 +26,12 @@ function envValue(name) {
     return line.slice(name.length + 1).trim()
 }
 
+/**
+ * The instant the whole sandbox runs at — written by scripts/e2e.sh, applied to the app by
+ * SandboxClockServiceProvider and to the browser by the baseline spec (docs/E2E.md).
+ */
+export const fixedNow = envValue('E2E_FIXED_NOW')
+
 export const account = {
     email: envValue('SEED_USER_EMAIL'),
     password: envValue('SEED_USER_PASSWORD'),
@@ -84,6 +90,16 @@ export { expect }
  */
 export async function shot(page, name) {
     await page.screenshot({ path: screenPath(name), fullPage: true, animations: 'disabled' })
+}
+
+/**
+ * Start this page at E2E_FIXED_NOW, so a label the browser works out ("Seen just
+ * now") agrees with the fare the app stamped. Opt-in per spec, and `resume()`
+ * rather than `setFixedTime()` — both reasons are in docs/E2E.md "A frozen clock".
+ */
+export async function useSandboxClock(page) {
+    await page.clock.install({ time: new Date(fixedNow) })
+    await page.clock.resume()
 }
 
 /**
