@@ -142,6 +142,11 @@
        the middle of the window rather than a stretched one — every layout in
        design/README.md assumes a ~352 px content area. */
     --app-width: 430px;
+    /* What the four full-width clamps read, so a later breakpoint retargets one
+       value rather than four rules (docs/DESKTOP-LAYOUT-PLAN.md). */
+    --shell-max: var(--app-width);
+    --rail-width: 76px;
+    --master-width: 352px;
 }
 
 [data-theme='light'] {

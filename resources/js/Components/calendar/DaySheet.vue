@@ -140,7 +140,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
   /* Centred on the same column as the shell and the tab bar, so on a laptop
      the sheet belongs to the phone rather than to the window. */
-  max-width: var(--app-width);
+  max-width: var(--shell-max);
   margin-inline: auto;
 
   padding: 10px 22px calc(30px + env(safe-area-inset-bottom));
