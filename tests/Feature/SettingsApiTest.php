@@ -6,8 +6,10 @@ namespace Tests\Feature;
 
 use Tests\TestCase;
 use App\Models\User;
+use RuntimeException;
 use App\Models\UserSettings;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -335,6 +337,27 @@ final class SettingsApiTest extends TestCase
         $this->actingAs($this->owner)->getJson('/api/settings')->assertOk();
 
         Http::assertSentCount(1);
+    }
+
+    /**
+     * ⚠ A BOX WITH A KEY MUST NOT READ "Not configured". An unreachable cache is not the
+     * same fact as an unconfigured one, and `checkedAt` is the only thing that says so.
+     */
+    #[Test]
+    public function a_cache_that_cannot_be_reached_leaves_the_row_unknown_rather_than_unconfigured(): void
+    {
+        $this->withKey();
+
+        Cache::partialMock()->shouldReceive('remember')->andThrow(new RuntimeException('redis is gone'));
+
+        $this->actingAs($this->owner)
+            ->getJson('/api/settings')
+            ->assertOk()
+            ->assertJsonPath('data.emailAlerts', true)
+            ->assertJsonPath('meta.googleChecks.left', null)
+            ->assertJsonPath('meta.googleChecks.reserve', 50)
+            /* A stamp, not null: null is reserved for "no key", which is not what happened. */
+            ->assertJsonPath('meta.googleChecks.checkedAt', fn (mixed $at): bool => is_string($at));
     }
 
     #[Test]

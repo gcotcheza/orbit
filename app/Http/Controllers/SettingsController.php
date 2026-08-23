@@ -67,7 +67,7 @@ final class SettingsController extends Controller
 
     /**
      * The SerpAPI month's remaining searches, for the "This app" card (docs/BUSINESS-LOGIC.md §31).
-     * `checkedAt` is when Orbit last ASKED: null there means no key, not a failed probe.
+     * `checkedAt` is when Orbit last TRIED: null there means no key, and nothing else.
      *
      * @return array{left: int|null, reserve: int, checkedAt: string|null}
      */
@@ -80,24 +80,33 @@ final class SettingsController extends Controller
         }
 
         try {
-            /* ⚠ The unknown answer is cached too: `remember` re-runs on a cached null, so a dead
-               SerpAPI would stall EVERY settings load for the probe's timeout, not one in ten minutes. */
             /** @var array{left: int|null, checkedAt: string} $probe */
             $probe = Cache::remember(
                 self::CHECKS_KEY,
                 Date::now()->addMinutes(self::CHECKS_MINUTES),
+                /* ⚠ The unknown answer is cached too — `remember` re-runs on a cached null, which
+                   would put the probe back in front of EVERY settings load instead of one in ten minutes. */
                 fn (): array => [
                     'left'      => $this->google->searchesLeft(),
-                    'checkedAt' => Date::now()->setTimezone((string) config('orbit.timezone'))->toIso8601String(),
+                    'checkedAt' => self::stamp(),
                 ],
             );
         } catch (Throwable $e) {
-            $this->logger->info('Could not read the SerpAPI quota for the settings screen.', ['error' => $e->getMessage()]);
+            /* Class, not message: a cache DSN in an exception carries a password (§31). */
+            $this->logger->info('Could not read the SerpAPI quota for the settings screen.', ['error' => get_class($e)]);
 
-            return ['left' => null, 'reserve' => $reserve, 'checkedAt' => null];
+            /* A stamp, NOT null: null is "no key configured", and this box has one —
+               the row must read "Unknown right now" rather than "Not configured". */
+            return ['left' => null, 'reserve' => $reserve, 'checkedAt' => self::stamp()];
         }
 
         return ['left' => $probe['left'], 'reserve' => $reserve, 'checkedAt' => $probe['checkedAt']];
+    }
+
+    /** Now, in the owner's timezone — the shape every other timestamp in this API has. */
+    private static function stamp(): string
+    {
+        return Date::now()->setTimezone((string) config('orbit.timezone'))->toIso8601String();
     }
 
     /**

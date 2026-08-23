@@ -156,6 +156,10 @@ for (const theme of THEMES) {
             await expect(page.locator('.screen__title')).toHaveText('Alerts')
             await expect(page.locator('.account__email')).toBeVisible()
 
+            // The last thing on the screen to arrive: it rides on the settings response,
+            // and the sandbox has no SerpAPI key (docs/BUSINESS-LOGIC.md §31).
+            await expect(page.locator('.set--app .row__note')).toHaveText('Not configured')
+
             await baseline(page, 'alerts', theme)
         })
     })

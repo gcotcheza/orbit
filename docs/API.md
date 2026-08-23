@@ -738,12 +738,18 @@ against, so the level you pick and the badge you see cannot disagree. The
 (BUSINESS-LOGIC §31), for the alerts screen's "This app" card. `left` is
 `total_searches_left` from the free `account.json` probe; `reserve` is the
 config number held back. The probe is **cached for ten minutes, its failures
-included** — otherwise a SerpAPI having a bad day would stall every settings
-load rather than one in ten minutes. `left` is `null` both when no key is
-configured and when the probe could not be read, and **`checkedAt` is what
-tells those apart**: it is when Orbit last *asked*, so `null` there means
-nobody could ask, while a timestamp next to a `null` `left` means the ask
-failed. Nothing here is writable, and a failed probe never fails the request.
+included** — otherwise a SerpAPI having a bad day would sit in front of every
+settings load rather than one in ten. It also runs on its own
+`serpapi.settings_timeout` (3 s) rather than the 20 s the nightly run allows,
+so the worst this costs a page load is one three-second wait every ten minutes.
+
+`left` is `null` both when no key is configured and when the probe could not be
+read, and **`checkedAt` is what tells those apart**: it is when Orbit last
+*tried*, so `null` there means there was nothing to try with, while a timestamp
+next to a `null` `left` means the attempt failed. The screen reads that as
+"Not configured" and "Unknown right now" respectively. Nothing here is
+writable, and no probe failure — including a cache the box cannot reach — ever
+fails the request.
 
 **The row is created on first read**, with the defaults above. There is no
 "settings not set up yet" state to handle.

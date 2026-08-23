@@ -278,8 +278,9 @@ files whose pixels actually moved, so `git diff` lists the deliberate set and
 nothing else.
 
 **Re-record the narrowest set that covers the change.** The flag on its own
-covers all fifty-one, which is how a phone regression gets quietly blessed by
-somebody who was re-recording the desktop. Name the spec — and, for the wide
+runs against all fifty-one — it rewrites only the ones that fail, but a phone
+regression failing that morning is rewritten just the same, which is how one
+gets quietly blessed by somebody who was re-recording the desktop. Name the spec — and, for the wide
 set, the projects, since those two files only run there. Everything after `--`
 goes to `playwright test`, so `--project` can be repeated.
 

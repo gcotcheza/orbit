@@ -2270,7 +2270,9 @@ Every other number in the discovery funnel descends from Travelpayouts — the s
 
 `connect_timeout = 5`, `timeout = 20` (seconds) — shorter than the Travelpayouts read timeout because nothing depends on this answer: a check that times out is a check that was skipped, and the run carries on with one fewer badge.
 
-**What is left of the month is printed on the alerts screen**, in the "This app" card, from the same free `account.json` probe — `GET/PUT /api/settings` carries it as `meta.googleChecks`, cached for **ten minutes and failures included**, so a slow SerpAPI can delay one settings load in ten minutes rather than every one, and a probe that fails leaves the row honest ("Unknown right now") instead of failing the request.
+**What is left of the month is printed on the alerts screen**, in the "This app" card, from the same free `account.json` probe — `GET/PUT /api/settings` carries it as `meta.googleChecks`, cached for **ten minutes and failures included**, so a slow SerpAPI delays one settings load in ten minutes rather than every one, and a probe that fails leaves the row honest ("Unknown right now") instead of failing the request.
+
+`settings_timeout = 3` (seconds) is that probe's deadline **when a screen is waiting**, against the 20 that `available()` keeps for the nightly run. Same request, same free endpoint, different question: a background job may wait twenty seconds for a better answer, and a person opening a settings screen may not be made to. Three seconds is long enough for a healthy SerpAPI (the recorded probe answers well inside one) and short enough that a sick one is a barely-noticed pause rather than a screen that looks broken. `available()` is deliberately untouched by it — failing closed there is about *money*, and a quota read that gives up early would spend nothing at all.
 
 ## 32. Booking — deep links, not an API (`booking`)
 

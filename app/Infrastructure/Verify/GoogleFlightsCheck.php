@@ -29,6 +29,7 @@ final readonly class GoogleFlightsCheck
         private int $maxPerRun,
         private float $connectTimeout,
         private float $timeout,
+        private float $settingsTimeout,
     ) {}
 
     public function isConfigured(): bool
@@ -67,10 +68,11 @@ final readonly class GoogleFlightsCheck
         return min($this->maxPerRun, $spendable);
     }
 
-    /** What the settings screen prints: the month's remaining searches, or null when unknowable. */
+    /* What the settings screen prints. Its own short deadline: a page load may not
+       wait the 20s the nightly run happily does (docs/BUSINESS-LOGIC.md §31). */
     public function searchesLeft(): ?int
     {
-        return $this->isConfigured() ? $this->remaining() : null;
+        return $this->isConfigured() ? $this->remaining($this->settingsTimeout) : null;
     }
 
     /** Searches held back for alert verification (docs/BUSINESS-LOGIC.md §31). */
@@ -116,9 +118,11 @@ final readonly class GoogleFlightsCheck
                     'gl'            => 'nl',
                 ]);
         } catch (Throwable $e) {
+            /* ⚠ The class, never the message: a cURL error quotes the URL, and the
+               URL carries `api_key` (docs/BUSINESS-LOGIC.md §31). */
             $this->logger->info('Could not reach SerpAPI — no Google check was made.', [
                 'route' => $originIata.'-'.$destinationIata,
-                'error' => $e->getMessage(),
+                'error' => get_class($e),
             ]);
 
             return GoogleAnswer::couldNotAsk();
@@ -183,17 +187,23 @@ final readonly class GoogleFlightsCheck
      * The searches this key has left, or null if unreadable. ⚠ Always
      * `total_searches_left`, never `plan_searches_left` (ignores extra_credits).
      */
-    private function remaining(): ?int
+    private function remaining(?float $deadline = null): ?int
     {
+        $deadline ??= $this->timeout;
+
         try {
             $response = $this->http
                 ->baseUrl($this->baseUrl)
-                ->connectTimeout($this->connectTimeout)
-                ->timeout($this->timeout)
+                /* Connecting may not outlive the whole request: a 5s connect inside a
+                   3s deadline is the 3s quietly not being kept. */
+                ->connectTimeout(min($this->connectTimeout, $deadline))
+                ->timeout($deadline)
                 ->acceptJson()
                 ->get('/account.json', ['api_key' => $this->key]);
         } catch (Throwable $e) {
-            $this->logger->info('Could not reach SerpAPI to read the quota.', ['error' => $e->getMessage()]);
+            /* ⚠ NEVER $e->getMessage() HERE: a cURL connection error quotes the whole
+               URL, and the URL carries `api_key` — Guzzle redacts only user:pass. */
+            $this->logger->info('Could not reach SerpAPI to read the quota.', ['error' => get_class($e)]);
 
             return null;
         }

@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Stringable;
 use Tests\TestCase;
 use DateTimeImmutable;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
+use Illuminate\Http\Client\ConnectionException;
 use App\Infrastructure\Verify\GoogleFlightsCheck;
 use Illuminate\Http\Client\Factory as HttpFactory;
 
@@ -26,17 +30,22 @@ final class GoogleFlightsCheckTest extends TestCase
         return (string) file_get_contents(base_path("tests/Fixtures/serpapi/{$name}.json"));
     }
 
-    private function check(?string $key = 'test-key', int $reserve = 50, int $maxPerRun = 5): GoogleFlightsCheck
-    {
+    private function check(
+        ?string $key = 'test-key',
+        int $reserve = 50,
+        int $maxPerRun = 5,
+        ?LoggerInterface $logger = null,
+    ): GoogleFlightsCheck {
         return new GoogleFlightsCheck(
             http: $this->app->make(HttpFactory::class),
-            logger: $this->app->make('log'),
+            logger: $logger ?? $this->app->make('log'),
             baseUrl: 'https://serpapi.com',
             key: $key,
             reserve: $reserve,
             maxPerRun: $maxPerRun,
             connectTimeout: 5,
             timeout: 20,
+            settingsTimeout: 3,
         );
     }
 
@@ -308,4 +317,71 @@ final class GoogleFlightsCheckTest extends TestCase
         $this->assertSame(5, config('orbit.serpapi.max_per_run'));
         $this->assertSame('https://serpapi.com', config('orbit.serpapi.base_url'));
     }
-}
+\n
+    /**
+     * ⚠ THE KEY MUST NEVER REACH A LOG FILE. A cURL failure quotes the URL it gave up on,
+     * and that URL carries `api_key` — Guzzle redacts only `user:pass`.
+     */
+    #[Test]
+    public function a_connection_failure_never_writes_the_api_key_into_the_log(): void
+    {
+        $logger = new class extends AbstractLogger {
+            /** @var list<string> */
+            public array $wrote = [];
+
+            /** @param array<mixed> $context */
+            public function log($level, string|Stringable $message, array $context = []): void
+            {
+                $this->wrote[] = $message.' '.(string) json_encode($context);
+            }
+        };
+
+        /* The real shape of the leak, as Guzzle words it. */
+        Http::fake(fn () => throw new ConnectionException(
+            'cURL error 28: Operation timed out for https://serpapi.com/account.json?api_key=SUPER-SECRET-KEY',
+        ));
+
+        $check = $this->check(key: 'SUPER-SECRET-KEY', logger: $logger);
+
+        /* Both callers of the probe, plus the search itself: three logging paths, one rule. */
+        $this->assertNull($check->searchesLeft());
+        $this->assertSame(0, $check->available());
+        $this->assertNull($check->check('DUS', 'AGP', new DateTimeImmutable('2026-10-24')));
+
+        $this->assertNotEmpty($logger->wrote, 'the failures were supposed to be logged at all');
+
+        foreach ($logger->wrote as $line) {
+            $this->assertStringNotContainsString('SUPER-SECRET-KEY', $line);
+            $this->assertStringNotContainsString('api_key', $line);
+        }
+    }
+
+    /**
+     * A screen's deadline and a nightly run's are different questions about whose time is
+     * being spent, on the same free endpoint (docs/BUSINESS-LOGIC.md §31).
+     */
+    #[Test]
+    public function the_settings_probe_reads_the_free_endpoint_on_its_own_deadline(): void
+    {
+        $this->assertSame(3, config('orbit.serpapi.settings_timeout'));
+        $this->assertSame(20, config('orbit.serpapi.timeout'));
+
+        config(['orbit.serpapi.key' => 'test-key']);
+
+        Http::fake([self::ACCOUNT => Http::response($this->fixture('account'), 200)]);
+
+        $this->assertSame(249, $this->app->make(GoogleFlightsCheck::class)->searchesLeft());
+
+        /* The FREE probe, never a billed search. */
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => str_contains($request->url(), 'account.json'));
+    }
+
+    /** No key, no probe — the settings screen must not make an unauthenticated call. */
+    #[Test]
+    public function the_settings_probe_asks_nothing_without_a_key(): void
+    {
+        /* No Http::fake: preventStrayRequests turns a probe into a failed assertion. */
+        $this->assertNull($this->check(key: null)->searchesLeft());
+    }
+}\n

@@ -63,8 +63,8 @@ const quietNote = computed(() => {
     : 'Orbit may ping at any hour'
 })
 
-/** "212 left this month · keeps 50 in reserve" — or, honestly, why there is no number.
-    `checkedAt` is when Orbit last ASKED SerpAPI: null means it never could (no key). */
+/** "212 left this month · keeps 50 in reserve", or why there is no number. Empty until the
+    response lands, which is also what draws the row. `checkedAt` null = no key was configured. */
 const googleNote = computed(() => {
   if (googleChecks.value === null) {
     return ''
@@ -304,8 +304,8 @@ async function signOut() {
         <div class="set set--app">
           <h2 id="this-app" class="section">This app</h2>
           <section class="card">
-            <!-- Only once the settings response has landed: the count rides on its `meta`. -->
-            <SettingRow v-if="googleChecks" title="Google price checks" :note="googleNote" class="card__row" />
+            <!-- The note is the condition: it is empty until the response's `meta` lands. -->
+            <SettingRow v-if="googleNote" title="Google price checks" :note="googleNote" class="card__row" />
 
             <div class="controls">
               <SegmentedControl :model-value="theme" :options="THEMES" label="Theme" @update:model-value="themeStore.set" />
