@@ -243,11 +243,10 @@ test.describe('search in the frame', () => {
 test.describe('the new rule screen in the frame', () => {
     test.skip(({ viewport }) => viewport.width < 1024, 'the master pane needs 1024px')
 
-    test('lists the saved rules beside the sentence being written', async ({ page }) => {
+    test('puts the rules list beside the sentence being written', async ({ page }) => {
         await page.goto('/create')
 
         await expect(page.locator('.screen__master .rules__title')).toHaveText('Deal rules')
-        await expect(page.locator('.screen__master .rule').first()).toBeVisible()
 
         // The seeded sentence is read back as its eight chips, and the CTA opens once it has been.
         await expect(page.locator('.chips .chip')).toHaveCount(8)
@@ -261,6 +260,34 @@ test.describe('the new rule screen in the frame', () => {
 
         await expectNoSidewaysScroll(page, '/create')
         await shot(page, 'create-desktop')
+    })
+
+    /*
+     * The point of the master pane: the rule you are writing joins the list beside you. Nothing is
+     * seeded here, so the test makes its own row — and takes it away again, since every spec drives
+     * one database (docs/E2E.md "The specs").
+     */
+    test('adds the rule it just wrote to the list beside it', async ({ page }) => {
+        await page.goto('/create')
+
+        const rows = page.locator('.screen__master .rule')
+        const before = await rows.count()
+
+        await expect(page.locator('.cta')).toBeEnabled()
+        await page.locator('.cta').click()
+
+        await expect(page.locator('.screen__master .screen__title')).toHaveText('Rule created')
+        await expect(page.locator('.screen__pane .done')).toBeVisible()
+        await expect(rows, 'the new rule is on the list without a reload').toHaveCount(before + 1)
+
+        await expectNoSidewaysScroll(page, '/create with a rule created')
+        await shot(page, 'create-desktop-done')
+
+        await rows.first().locator('.rule__open').click()
+        await rows.first().getByRole('button', { name: 'Remove rule' }).click()
+        await rows.first().getByRole('button', { name: 'Remove', exact: true }).click()
+
+        await expect(rows).toHaveCount(before)
     })
 
     test('re-reads the sentence when a chip is dropped, without leaving the pane', async ({ page }) => {
