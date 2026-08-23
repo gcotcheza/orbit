@@ -1,7 +1,7 @@
-/* Applied only while a phone baseline is photographed. Hidden rather than
-   masked, so the chip, hint and caption drawn OVER the stage stay in the
-   picture — that a globe was drawn at all is globe.spec.js's assertion
-   (docs/E2E.md "The phone baselines"). */
+/* Applied while a baseline is photographed — the phone set and the wide set
+   alike. Hidden rather than masked, so the chip, hint and caption drawn OVER
+   the stage stay in the picture — that a globe was drawn at all is
+   globe.spec.js's assertion (docs/E2E.md "The phone baselines"). */
 .stage__globe canvas {
     visibility: hidden;
 }

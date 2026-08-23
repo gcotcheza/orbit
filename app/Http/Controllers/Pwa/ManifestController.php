@@ -31,10 +31,10 @@ final class ManifestController extends Controller
             'display' => 'standalone',
 
             /*
-             * Portrait — design/README.md's frame and camera choreography assume it.
+             * Any — an installed iPad turns into the master-detail frame. Ghie's call, 2026-08-24.
              * Why: docs/BUSINESS-LOGIC.md §35.
              */
-            'orientation' => 'portrait',
+            'orientation' => 'any',
 
             'theme_color'      => (string) config('orbit.pwa.theme_color'),
             'background_color' => (string) config('orbit.pwa.background_color'),

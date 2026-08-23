@@ -3,7 +3,7 @@
  * One route: what it costs, what it usually costs, what we think of that (design/README.md §2).
  * Everything the detail shows below the back bar, so a pane can show it too (§36).
  */
-import { computed, onActivated, ref, watch } from 'vue'
+import { computed, onActivated, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { http } from '@/lib/http'
 import { useWatchlistStore } from '@/stores/watchlist'
@@ -34,6 +34,19 @@ const props = defineProps({
   code: { type: String, required: true },
   /** In a pane rather than on a screen of its own: there is no page to go back from. */
   embedded: { type: Boolean, default: false },
+
+  /** The pane swapped under the reader, so this panel's heading should take the focus. */
+  autofocus: { type: Boolean, default: false },
+})
+
+const heading = useTemplateRef('heading')
+
+/* On the element appearing rather than on the fetch settling: the four states have four
+   headings, and the one that renders is the one worth being sent to. */
+watch(heading, (element) => {
+  if (element && props.autofocus) {
+    element.focus({ preventScroll: true })
+  }
 })
 
 const router = useRouter()
@@ -466,16 +479,17 @@ onActivated(() => {
 
   <!-- Distinct from the skeleton above: an active provider call (a few seconds),
        not generic loading — worth saying out loud (docs/BUSINESS-LOGIC.md §36). -->
-  <div v-else-if="checking && detail === null" class="checking" role="status">
+  <div v-else-if="checking && detail === null" class="checking" :role="autofocus ? null : 'status'">
     <span class="checking__spinner" aria-hidden="true"></span>
-    <p class="checking__title">Checking current fares…</p>
+    <!-- A heading, because the focus has to land somewhere; the live region then stands down. -->
+    <h1 ref="heading" class="checking__title" tabindex="-1">Checking current fares…</h1>
     <p class="checking__body">
       Orbit has not priced <span class="empty__code">{{ pair }}</span> before. This takes a moment.
     </p>
   </div>
 
   <div v-else-if="notFound" class="empty">
-    <h1 class="empty__title">No such route</h1>
+    <h1 ref="heading" class="empty__title" tabindex="-1">No such route</h1>
     <p class="empty__body">
       Orbit could not look up <span class="empty__code">{{ pair }}</span>. Check the code, or pick a route from the
       watchlist.
@@ -487,7 +501,7 @@ onActivated(() => {
   </div>
 
   <div v-else-if="failed" class="empty">
-    <h1 class="empty__title">Could not load this route</h1>
+    <h1 ref="heading" class="empty__title" tabindex="-1">Could not load this route</h1>
     <p class="empty__body">{{ failedBody || 'The connection dropped, or the server is having a moment.' }}</p>
     <button class="empty__action" @click="load()">Try again</button>
   </div>
@@ -495,7 +509,7 @@ onActivated(() => {
   <template v-else-if="detail">
     <div class="detail__group detail__group--summary">
       <div class="detail__head">
-        <h1 class="detail__code">{{ detail.origin.iata }} → {{ detail.destination.iata }}</h1>
+        <h1 ref="heading" class="detail__code" tabindex="-1">{{ detail.origin.iata }} → {{ detail.destination.iata }}</h1>
         <p class="detail__where">{{ detail.destination.city }}, {{ detail.destination.country }}</p>
       </div>
 

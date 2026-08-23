@@ -3,9 +3,21 @@
  * The master pane's route list, shared by the landing page, the calendar and the watch list. Only
  * the frame mounts it, so its rules need no media query (docs/DESKTOP-LAYOUT-PLAN.md phase 2).
  */
+import { computed, ref, useTemplateRef } from 'vue'
 import { euro } from '@/lib/format'
 
-defineProps({
+// Which row the arrows move to. Wrapping at both ends, and Home/End to the edges (WAI-ARIA
+// "Tabs with Manual Activation" — Enter and Space are the button's own).
+const STEPS = {
+  ArrowUp: (index, last) => (index === 0 ? last : index - 1),
+  ArrowLeft: (index, last) => (index === 0 ? last : index - 1),
+  ArrowDown: (index, last) => (index === last ? 0 : index + 1),
+  ArrowRight: (index, last) => (index === last ? 0 : index + 1),
+  Home: () => 0,
+  End: (index, last) => last,
+}
+
+const props = defineProps({
   /** Rows of `GET /api/watchlist`'s `data`, in the order they should be read. */
   routes: { type: Array, required: true },
 
@@ -27,21 +39,69 @@ defineProps({
 })
 
 defineEmits(['select'])
+
+const rows = useTemplateRef('rows')
+
+/** The row focus last left, so tabbing back into the list returns to it rather than to the top. */
+const roving = ref(null)
+
+const activeIndex = computed(() => {
+  const found = props.routes.findIndex((one) => one.code === props.active)
+
+  return found === -1 ? 0 : found
+})
+
+/* Clamped: a shorter list would otherwise leave a stale index owning a tab stop no row has. */
+const tabStop = computed(() =>
+  Math.min(roving.value ?? activeIndex.value, Math.max(props.routes.length - 1, 0)),
+)
+
+/** One tab stop for the whole list, which is what makes the arrows the way through it. */
+function tabindexFor(index) {
+  if (props.kind !== 'tabs') {
+    return null
+  }
+
+  return index === tabStop.value ? 0 : -1
+}
+
+function move(event, index) {
+  const next = props.kind === 'tabs' ? STEPS[event.key]?.(index, props.routes.length - 1) : undefined
+
+  if (next === undefined) {
+    return
+  }
+
+  event.preventDefault()
+  roving.value = next
+
+  // By code, not by position: Vue does not promise the ref array is in the source array's order.
+  rows.value?.find((row) => row.dataset.code === props.routes[next].code)?.focus()
+}
 </script>
 
 <template>
-  <div class="route-rows" :role="kind === 'tabs' ? 'tablist' : 'group'" :aria-label="label">
+  <div
+    class="route-rows"
+    :role="kind === 'tabs' ? 'tablist' : 'group'"
+    :aria-label="label"
+    :aria-orientation="kind === 'tabs' ? 'vertical' : null"
+  >
     <button
-      v-for="one in routes"
+      v-for="(one, index) in routes"
       :key="one.code"
+      ref="rows"
       class="route-row"
       :class="{ 'route-row--active': one.code === active, 'route-row--paused': one.active === false }"
       :data-code="one.code"
       type="button"
       :role="kind === 'tabs' ? 'tab' : null"
+      :tabindex="tabindexFor(index)"
       :aria-selected="kind === 'tabs' ? one.code === active : null"
       :aria-pressed="kind === 'tabs' ? null : one.code === active"
       @click="$emit('select', one.code)"
+      @focus="roving = index"
+      @keydown="move($event, index)"
     >
       <span class="route-row__dot" :data-tone="one.verdict.tone"></span>
 
@@ -138,5 +198,12 @@ defineEmits(['select'])
 .route-row__price {
   margin-left: auto;
   opacity: 0.78;
+}
+
+/* The dimming is a treatment for text on a card. White on --accent is already only 3.4:1, and
+   0.66 of it measured 2.3 in the dark theme (docs/DESKTOP-LAYOUT-PLAN.md phase 4). */
+.route-row--active .route-row__city,
+.route-row--active .route-row__price {
+  opacity: 1;
 }
 </style>

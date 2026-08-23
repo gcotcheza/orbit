@@ -1,5 +1,8 @@
 # Desktop / iPad layout — implementation plan
 
+**The plan is complete: phases 0–4 are shipped.** What is left over is the short "Still
+open" list at the bottom, and none of it is layout.
+
 Decision (2026-08-22): above 1024 px Orbit uses the **master–detail** layout from the
 design canvas "Orbit Desktop Directions" (direction C); the landing page is the
 globe + route detail pane. iPad in landscape, iPad Pro in portrait and every desktop
@@ -52,9 +55,9 @@ What was actually built, which differs from the first sketch in three places:
   globe.gl `width()/height()`, coalesced to one animation frame). **The `360px` stage height
   and the phone-landscape `40vh` rule are KEPT** — they are the phone guarantee, and the
   observer is what lets a later phase size the stage with flex without touching them.
-- **Manifest `orientation` stays `portrait`.** Changing it is a visible change to the
-  installed app, which Phase 0 promised not to make. It becomes a Phase 4 decision for
-  Ghie: *allow landscape on an installed iPad?*
+- **Manifest `orientation` stayed `portrait` here.** Changing it is a visible change to the
+  installed app, which Phase 0 promised not to make, so it became a Phase 4 decision for
+  Ghie. She took it — it is `any` from phase 4 onwards; see that phase below.
 - e2e: phone screenshot baselines FIRST (every screen, 390×844, light + dark, masked and
   compared at `maxDiffPixels: 0`), then `tablet` (820×1180) and `desktop` (1280×832)
   projects running a smoke spec (shell renders, nav present, no horizontal overflow) —
@@ -223,25 +226,125 @@ What was actually built differs from the sketch above in five places, each worth
 and `/alerts`; four new section ids (`#channels`, `#sensitivity`, `#timing`, `#this-app`)
 join the `#account` that already existed.*
 
-### Phase 4 — Quality and polish
-- **Open a find in the pane, like a look-up.** `DiscoveryCard` and search's "Open it" link
-  still navigate to the bare `/route/:id` from inside the detail pane, leaving the frame; they
-  should do what phase 3's look-up does instead. Carried from phase 3.
-- **Focus and announcement when the pane swaps.** Nothing moves focus or announces the change
-  when a look-up replaces the finds, or when the alerts list jumps a section. Carried from
-  phase 3.
-- **The empty states were left as the phone's.** A 352px master pane and an 800px detail pane
-  show the same sentence a 430px column does; some of them have room to say more.
-- Dark theme pass on every desktop screen; focus order and keyboard use of the rail;
-  reduced-motion; hover states on the rail/rows; desktop screenshot baselines
-  (light + dark) in e2e; perf check of the globe at 852×440+.
-- **Ghie's call, deferred from Phase 0: allow landscape on an installed iPad?** The
-  manifest is `orientation: portrait` today. Changing it to `any` is what lets the
-  home-screen app rotate into the master–detail layout at all; leaving it is what keeps
-  the installed phone app from ever turning sideways. One line, and it is a product
-  decision rather than a layout one.
-- Docs: `docs/BUSINESS-LOGIC.md` §36 frontend notes updated; `docs/E2E.md` gains the
-  desktop/tablet projects. *Effort S–M.*
+### Phase 4 — Quality and polish — **SHIPPED**
+- **A find opens in the pane.** `DiscoveryCard` and search's "Open it" link do what phase 3's
+  look-up does instead of navigating to the bare `/route/:id`.
+- **Focus and an announcement when the pane swaps**, plus a roving `tabindex` and arrow keys on
+  the master pane's tab lists, and a `:focus-visible` ring proved rather than assumed.
+- **A dark pass over every wide layout** at 1280x832 and 1024x600.
+- **Desktop and tablet screenshot baselines**, light and dark, at `maxDiffPixels: 0`.
+- **`orientation: any`** in the manifest — Ghie's call, 2026-08-24.
+
+What was actually built differs from the sketch above in seven places, each of which is a
+decision worth keeping:
+
+- **The dark pass was measured, not eyeballed, and it found exactly two wide-only faults.** A
+  sweep over every element with its own text — compositing the background stack, applying the
+  cumulative opacity, and comparing against WCAG AA — ran on all six wide screens at both
+  widths in both themes. The two it found are both in components only the frame mounts.
+  `RouteRows` dims the city to `opacity: .66` and the fare to `.78`, which is right on a card
+  and wrong on the **accent-filled selected row**: white on `--accent` is only 3.4:1 to start
+  with, and 0.66 of it measured **2.32:1**. The dimming is therefore released on the active row
+  only, taking both to the same 3.38:1 the row's own code prints at — the value every other
+  accent-filled control in this app already carries. `--accent` and `--on-solid` are not
+  touched: they are the palette, they are the phone's too, and a token change here would be a
+  redesign smuggled in as an accessibility fix. And `.seclist__item--active` (the alerts master
+  pane) marked the current section with `background: var(--card)` and `box-shadow: var(--shadow)`
+  — which is the design canvas's own recipe, and in the dark theme is `--card` on `--panel` at
+  **1.13:1** under a **black** shadow, so the current row had no shape at all. It gains the card's
+  own `--line` edge as an *inset* ring, so nothing moves and the light theme keeps its shadow.
+- **What the sweep found and this phase deliberately did not fix.** The calendar's day numbers
+  (`.cell__day`, `opacity: .7` over the heat scale) measure 2.86–4.20:1 and the cheapest prices
+  4.22–4.45:1; the discovery badge measures 4.19:1. Every one of those is drawn identically on
+  the phone, is inside the 19 baselines, and is a palette decision rather than a frame one — so
+  fixing them is a change to the phone, which this plan is gated against. They are written down
+  in "Still open" instead. The two disabled search buttons measure under 3:1 at `opacity: .45`
+  and are *correct*: WCAG 1.4.3 exempts an inactive control.
+- **The rows are a tab list with MANUAL activation.** Arrow keys move the focus and the tab stop;
+  Enter and Space — the button's own — choose. Automatic activation is the commoner reading of
+  the pattern and it is wrong here: every selection refetches a route and moves the globe, so
+  arrowing from the top of the list to the bottom would have fired six requests nobody asked
+  for. Left/Right do what Up/Down do, the ends wrap, Home/End go to the ends, and the list
+  reports `aria-orientation="vertical"` because a `tablist` is horizontal unless it says
+  otherwise. `kind="group"` — the watch list — is untouched: those are ordinary buttons and Tab
+  reaches every one of them, which is right for a group of toggles.
+- **The panel owns the focus move, and the landing page does not ask for it.** `RouteDetailPanel`
+  takes an `autofocus` prop and sends the focus to whichever of its four headings rendered,
+  watching the element rather than the fetch — the loaded, the **checking**, the not-found and
+  the failed states have four different headings and the one that exists is the one worth being
+  sent to. The checking heading is the one a **discovery** needs: a found route has no `routes`
+  row, so its read 404s into a look-up and the panel sits in that state for several seconds —
+  and with no heading there the focus fell all the way to `<body>`, the card that was pressed
+  having been unmounted behind it. It is also the one heading that goes quiet: that branch keeps
+  its own `role="status"` only when nothing is coming to focus it, so the same sentence is never
+  announced twice, once as a live region and once as a focus move. The focus call passes
+  `preventScroll`, because a pane that scrolls itself while handing the focus over has moved for
+  a reason the reader cannot see. Only **search** passes it. On the landing page the pane swaps
+  from a row inside a tab list, and moving the focus out of that list would break the arrow keys
+  that had just been used to reach it; the row stays focused, which is what a tab list promises.
+- **The live region says what the pane is of, and it is mounted before it has anything to say.**
+  A region added to the DOM with its text already in it announces nothing, so the `role="status"`
+  paragraph exists for as long as the frame does and only its text changes: `Deals from your
+  airports` (the heading it starts on, existing copy) and `Showing AMS → LIS`. That leading word
+  is the **only new string in this phase**; everything else on screen is copy the app already had.
+- **The boarding pass's flight line did not wrap, and the rule went in anyway.** Measured at the
+  grid's real card width (263 px, which is the only width it has — `repeat(auto-fill,
+  minmax(240px, 1fr))` in a 540 px column gives two columns at every window from 1024 up), the
+  eyebrow's natural width plus its icon plus the widest verdict pill (`Falling`) leaves **5.0 px**
+  of slack on four of the six passes. It fits, and it is 5 px from not fitting — a fallback
+  display font, a different rasteriser or one longer verdict label is the whole margin. So
+  `.pass__flight` is `nowrap` with an ellipsis behind a `min-width: 0` eyebrow, in a wide-only
+  media query inside `WatchRow.vue`, and the measurement is written here rather than a wrap
+  being claimed that this renderer does not produce.
+- **The create screen's empty master says one sentence, and the watch list still says two.**
+  `DealRules` takes a `compact` prop; on `/create` the list's empty state is the blurb's own
+  first sentence, because the long version explains what the box beside it is visibly for. The
+  watch list's paragraph is left **byte-identical** rather than refactored into a shared
+  constant — the phone's watch baseline is one of the nineteen this plan is gated on, and six
+  duplicated words are cheaper than a whitespace surprise. Same call phase 3 made when it copied
+  `.screen__notice` verbatim rather than renaming it.
+- **The wide baselines are 32 images and they compare in CSS pixels.** `wide-baselines.spec.js`
+  runs in both wide projects and photographs eight screens in both themes: the six tabbed ones
+  plus the route detail and the login, which have no wide layout at all and are in the set
+  precisely because "`--shell-max` is retargeted on the frame and not on `:root`" is a promise
+  worth a picture. The project name is in the file name or the two projects would overwrite each
+  other's images. `toHaveScreenshot` normalises to CSS pixels, so the tablet's DPR 2 costs
+  nothing in bytes or in diff surface. Masks are the phone spec's plus the master rows'
+  `.route-row__price` and `.route-row__dot` — a fare and the tone of the verdict beside it, both
+  seeded content the phone has no equivalent of — and the landing page's set gains the detail
+  panel's because the frame draws one there. 3.8 MB, recorded once on the final tree and proved
+  at zero on a second full run.
+- **A spec that must not write.** The find-in-the-pane assertion blocks `POST /api/routes/lookup`,
+  because a discovery is by definition a route this sandbox has never priced: letting the panel
+  settle would create a `routes` row, and no endpoint can remove one again. The test is about
+  where the answer is drawn, not about the answer, and the look-up test beside it already proves
+  a real route renders in the pane (it uses `AMS-LIS`, which is seeded, for the same reason).
+
+**Ghie's call, 2026-08-24: the installed app may rotate.** `orientation` in the manifest is `any`
+rather than `portrait`. An installed iPad turns into the master–detail frame, which is what the
+whole plan was for; an installed phone turned sideways is 844x390 and gets the phone layout,
+which the `min-height: 600px` half of the breakpoint guarantees rather than hopes for.
+
+*Phone: 19 baselines at 0 diff, phone suite unchanged.*
+
+## Still open (not layout, and not gated on)
+- **The phone's own contrast.** `.cell__day` and `.cell__price` on the calendar's heat scale, and
+  the discovery strip's `Unverified` badge, measure between 2.86 and 4.45:1 in both themes. They
+  are the phone's pixels, so moving them means re-recording the nineteen baselines deliberately
+  and reading the diff — a change to the palette, on its own PR, not a side effect of a frame.
+- **The accent family itself.** `--on-solid` on `--accent` measures **3.38:1**, and every control
+  in this app that fills with the accent draws 11–13.5px text on it — the selected master row that
+  phase 4's dark pass released the dimming on, and with it the primary buttons, the pills and the
+  chips, on the phone as much as in the frame. WCAG AA wants 4.5:1 at that size (3:1 only from
+  18.66px bold or 24px), so the family is short app-wide rather than in one place, and phase 4
+  deliberately did not touch it: `--accent` and `--on-solid` are the palette, and darkening either
+  is a redesign that moves the nineteen phone baselines. It belongs on a palette PR that re-records
+  them on purpose.
+- **The globe's cost at a pane's size.** Nobody has profiled the renderer at 852x440 and up on a
+  real iPad; the gate measures correctness, never frame rate, by design.
+- **A shared `MasterPane`/`DetailPane` component.** Five screens now write the same four
+  `display: contents` wrappers. It was right not to build it in phase 1 with one screen; with
+  five it is a tidy-up somebody could do in an afternoon, and it would move no pixels.
 
 ## Acceptance per phase (what Ghie checks on the iPad)
 Every phase: phone screenshots pixel-identical to the baselines, phone e2e green.
@@ -255,7 +358,9 @@ Every phase: phone screenshots pixel-identical to the baselines, phone e2e green
    and up); the search card lists finds two abreast, a look-up answers in the pane, the
    new-rule sentence sits beside the rules it joins, and the alert cards are two columns.
    **Done.**
-4. Dark mode clean; nothing regressed on the phone (full e2e + screenshot baselines).
+4. Dark mode clean; the rail and the master rows answer to a keyboard and show a focus ring;
+   a find opens in the pane rather than leaving the frame; the installed iPad app rotates;
+   nothing regressed on the phone (full e2e + screenshot baselines). **Done.**
 
 ## Working agreement
 One Opus builder per phase, extra-explicit brief pointing at the canvas artboard and

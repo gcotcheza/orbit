@@ -154,3 +154,26 @@ describe('which argument the card is making', () => {
         expect(card({ lane: undefined }).find('.find__lane').exists()).toBe(false)
     })
 })
+
+// In the frame the card fills the pane it is already in; nothing navigates, so nothing is a link
+// (docs/DESKTOP-LAYOUT-PLAN.md phase 4).
+describe('inside the frame', () => {
+    it('is a button that names the route it wants opened', async () => {
+        const wrapper = mount(DiscoveryCard, { props: { discovery: discovery(), inPane: true } })
+
+        expect(wrapper.find('a').exists()).toBe(false)
+        expect(wrapper.get('button.find').attributes('type')).toBe('button')
+
+        await wrapper.get('button.find').trigger('click')
+
+        expect(wrapper.emitted('open')).toEqual([['DUS-AGP']])
+    })
+
+    it('is the ordinary link everywhere else, and says nothing when it is pressed', async () => {
+        const wrapper = card()
+
+        await wrapper.get('a').trigger('click')
+
+        expect(wrapper.emitted('open')).toBeUndefined()
+    })
+})

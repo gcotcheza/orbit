@@ -194,6 +194,24 @@ function confirmRemove() {
   color: var(--muted);
 }
 
+/* --- 1024px and up: the passes are a grid of ~263px cards ---------------
+   Both halves of the query are lib/layout.js's, and they must be edited together
+   (docs/DESKTOP-LAYOUT-PLAN.md, docs/BUSINESS-LOGIC.md §36). */
+
+@media (min-width: 1024px) and (min-height: 600px) {
+  /* Set dressing, and it wrapped to two lines beside the verdict pill at the grid's card width.
+     One line and an ellipsis, since the flight number is not the pass's accessible name. */
+  .pass__eyebrow {
+    min-width: 0;
+  }
+
+  .pass__flight {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
 .pass__itinerary {
   display: flex;
   align-items: flex-end;

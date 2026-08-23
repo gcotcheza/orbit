@@ -258,10 +258,47 @@ test.describe('search in the frame', () => {
         await expectNoSidewaysScroll(page, '/search with a route in the pane')
         await shot(page, 'search-desktop-lookup')
 
+        // Nothing else moves the focus when a pane swaps without a navigation, so the panel's own
+        // heading takes it, and the region says what the pane is of for a reader whose does not.
+        expect(await page.evaluate(() => document.activeElement?.className ?? '')).toContain('detail__code')
+        await expect(page.locator('.pane-live')).toHaveText('Showing AMS → LIS')
+
         // The way back, named after the thing it goes back to.
         await page.getByRole('button', { name: 'Deals from your airports' }).click()
         await expect(page.locator('.finds__list')).toBeVisible()
         await expect(page.locator('.detail__code')).toHaveCount(0)
+        await expect(page.locator('.pane-live')).toHaveText('Deals from your airports')
+    })
+
+    /*
+     * Phase 3 left a find navigating to the bare route screen, which drops out of the frame the
+     * card was drawn in. The lookup POST is blocked because a discovery is a route this sandbox
+     * has never priced, and the row it would create is one no endpoint can remove again
+     * (docs/E2E.md "A spec that writes must clean up").
+     */
+    test('answers a find in the pane as well, and creates nothing to do it', async ({ browserConsole, page }) => {
+        browserConsole.allow(/Failed to load resource/, /Could not look this route up/)
+        await page.route('**/api/routes/lookup', (route) => route.abort())
+
+        await page.goto('/search')
+
+        const find = page.locator('.finds__list .find').first()
+        await expect(find).toBeVisible()
+        // A button, not a link: in the pane nothing navigates, so there is no href to name.
+        expect(await find.evaluate((card) => card.tagName)).toBe('BUTTON')
+
+        await find.click()
+
+        await expect(page).toHaveURL(/\/search$/)
+        await expect(page.locator('.rail-nav')).toBeVisible()
+        await expect(page.locator('.screen__master form.search')).toBeVisible()
+        await expect(page.locator('.finds')).toHaveCount(0)
+        await expect(page.getByRole('button', { name: 'Deals from your airports' })).toBeVisible()
+
+        // Whichever state the panel settled in, its heading is the thing the focus was sent to.
+        const heading = page.locator('.screen__pane h1')
+        await expect(heading).toBeVisible()
+        expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('H1')
     })
 })
 
@@ -285,6 +322,23 @@ test.describe('the new rule screen in the frame', () => {
 
         await expectNoSidewaysScroll(page, '/create')
         await shot(page, 'create-desktop')
+    })
+
+    // The long version explains what the box beside it is already for, and there is no + here
+    // either — this screen is where that link would have gone (docs/DESKTOP-LAYOUT-PLAN.md phase 4).
+    test('says what a rule is in one line, since the box that writes one is on screen', async ({ page }) => {
+        await page.goto('/create')
+
+        const master = page.locator('.screen__master')
+
+        await expect(master.locator('.rules__title')).toHaveText('Deal rules')
+        await expect(master.locator('.rules__empty')).toHaveText('Rules watch for trips in plain English.')
+        await expect(master.locator('.rules__new')).toHaveCount(0)
+
+        // The watch list is the screen that still explains itself in full.
+        await page.goto('/watch')
+        await expect(page.locator('.rules__empty')).toContainText('Orbit reads one, then tells you')
+        await expect(page.locator('.rules__new')).toHaveCount(1)
     })
 
     /*
@@ -339,6 +393,111 @@ test.describe('the new rule screen in the frame', () => {
         await expect(page.getByRole('button', { name: 'Reset' })).toBeVisible()
         await expect(page.locator('.cta')).toBeEnabled()
         await expect(page.locator('.screen__master .rules__title')).toBeVisible()
+    })
+})
+
+// Phase 4: the keyboard, which jsdom cannot compute a cascade or a focus ring for
+// (docs/DESKTOP-LAYOUT-PLAN.md phase 4).
+test.describe('the keyboard in the frame', () => {
+    test.skip(({ viewport }) => viewport.width < 1024, 'the master pane needs 1024px')
+
+    /** Tab from the top of the document until focus lands somewhere the test is about. */
+    async function tabTo(page, selector) {
+        for (let press = 0; press < 14; press++) {
+            await page.keyboard.press('Tab')
+
+            if (await page.locator(`${selector}:focus`).count()) {
+                return
+            }
+        }
+
+        throw new Error(`nothing matching ${selector} took the focus within 14 tabs`)
+    }
+
+    /** What :focus-visible actually drew, read out of the cascade rather than assumed. */
+    const ring = (page) => page.evaluate(() => {
+        const style = getComputedStyle(document.activeElement)
+
+        return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) }
+    })
+
+    test('draws a ring on the rail and on the master rows', async ({ page }) => {
+        await page.goto('/')
+        await waitForGlobe(page)
+
+        await tabTo(page, '.rail-nav__item')
+        expect(await ring(page), 'the rail item a keyboard reached has no focus ring').toMatchObject({
+            style: 'solid',
+        })
+        expect((await ring(page)).width).toBeGreaterThanOrEqual(2)
+
+        await tabTo(page, '.route-row')
+        expect((await ring(page)).width, 'the master row has no focus ring').toBeGreaterThanOrEqual(2)
+    })
+
+    test('offers the routes list one tab stop, and the arrows walk it', async ({ page }) => {
+        await page.goto('/')
+        await waitForGlobe(page)
+
+        const rows = page.locator('.route-row')
+        await expect(rows).toHaveCount(WATCHED.length)
+
+        // One stop for the whole list, and it is the row whose pane is on screen.
+        expect(await rows.evaluateAll((all) => all.map((row) => row.getAttribute('tabindex')))).toEqual(
+            ['0', '-1', '-1', '-1', '-1', '-1'],
+        )
+
+        await tabTo(page, '.route-row')
+        expect(await page.evaluate(() => document.activeElement.dataset.code)).toBe(WATCHED[0])
+
+        await page.keyboard.press('ArrowDown')
+        expect(await page.evaluate(() => document.activeElement.dataset.code)).toBe(WATCHED[1])
+        // The stop travels with the focus, so tabbing away and back returns here.
+        expect(await rows.evaluateAll((all) => all.map((row) => row.getAttribute('tabindex')))).toEqual(
+            ['-1', '0', '-1', '-1', '-1', '-1'],
+        )
+
+        await page.keyboard.press('End')
+        expect(await page.evaluate(() => document.activeElement.dataset.code)).toBe(WATCHED[5])
+
+        // Wrapping, both ways.
+        await page.keyboard.press('ArrowRight')
+        expect(await page.evaluate(() => document.activeElement.dataset.code)).toBe(WATCHED[0])
+        await page.keyboard.press('ArrowUp')
+        expect(await page.evaluate(() => document.activeElement.dataset.code)).toBe(WATCHED[5])
+
+        await page.keyboard.press('Home')
+        expect(await page.evaluate(() => document.activeElement.dataset.code)).toBe(WATCHED[0])
+
+        // Arrowing chooses nothing; the press does. The pane is still the row the page opened on.
+        await expect(page.locator('.home__panel .detail__code')).toHaveText('AMS → LIS')
+
+        await page.keyboard.press('ArrowDown')
+        await page.keyboard.press('Enter')
+
+        await expect(page).toHaveURL(new RegExp(`route=${WATCHED[1]}`))
+        await expect(page.locator('.home__panel .detail__code')).toHaveText('AMS → OPO')
+    })
+
+    // Phase 2's promise, asserted rather than assumed: the panel is not a modal, so closing it has
+    // to hand the keyboard back to the cell that opened it.
+    test('gives the day cell its focus back when Escape closes the docked panel', async ({ page }) => {
+        await page.goto('/calendar')
+
+        const cell = page.locator('.cell--fare').first()
+        await expect(cell).toBeVisible()
+
+        await cell.click()
+        await expect(page.locator('.sheet--docked')).toBeVisible()
+
+        await page.keyboard.press('Escape')
+
+        await expect(page.locator('.sheet')).toHaveCount(0)
+        // The element itself, not a class or a label: only identity answers "the cell that opened it".
+        expect(
+            await cell.evaluate((one) => one === document.activeElement),
+            'the day cell did not get the keyboard back',
+        ).toBe(true)
     })
 })
 
