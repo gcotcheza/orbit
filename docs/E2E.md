@@ -232,10 +232,12 @@ at a time, next to the assertion that makes it true:
 Two different things, and conflating them is how a screenshot suite becomes a
 suite everybody re-baselines without looking.
 
-**`e2e/baselines/` — committed, compared, nineteen files.** Eighteen are **the
-phone baselines** (below): every screen, both themes, at `maxDiffPixels: 0`. The
-nineteenth is `offline`, which is a static page the app serves with no bundle
-behind it and has no equivalent in the phone set.
+**`e2e/baselines/` — committed, compared, fifty-one files.** Eighteen are **the
+phone baselines** (below): every screen, both themes, at `maxDiffPixels: 0`.
+Thirty-two are **the wide baselines** (below that): eight screens, both themes,
+in each of the two wide projects, at the same tolerance. The fifty-first is
+`offline`, which is a static page the app serves with no bundle behind it and
+has no equivalent in either set.
 
 There used to be a second regime — `login` and `settings-dark`, photographed by
 `login.spec.js` and `theme.spec.js`. Both are gone: `login-dark`/`login-light`
@@ -262,8 +264,15 @@ Re-baseline deliberately, and look at the diff:
 ```bash
 scripts/e2e.sh -- --update-snapshots                          # all of them
 scripts/e2e.sh -- --update-snapshots specs/phone-baselines.spec.js
+scripts/e2e.sh -- --update-snapshots --project=desktop --project=tablet specs/wide-baselines.spec.js
 git diff --stat e2e/baselines
 ```
+
+**Re-record the narrowest set that covers the change.** `--update-snapshots` on
+its own rewrites all fifty-one, which is how a phone regression gets quietly
+blessed by somebody who was re-recording the desktop. Name the spec — and, for
+the wide set, the projects, since those two files only run there. Everything
+after `--` goes to `playwright test`, so `--project` can be repeated.
 
 ### The phone baselines
 
@@ -304,6 +313,38 @@ therefore deterministic. They are not a tolerance: this gate exists to catch a
 *layout* regression from the desktop work, and no amount of CSS above 768px can
 change a fare. Masking the fares means a deliberate change to the seeder does
 not send eighteen images red for a reason that has nothing to do with the phone.
+
+### The wide baselines
+
+`wide-baselines.spec.js` is the phone set's other half, and it runs in **both**
+wide projects: `desktop` (1280x832) and `tablet` (820x1180). It photographs eight
+screens in both themes — home, calendar, route detail, watch, search, create,
+alerts, login — with the same discipline the phone set uses: the frozen clock
+that is on by default, `reducedMotion: 'reduce'`, `animations: 'disabled'`, the
+globe hidden through `e2e/baseline.css`, masks over every fare, age and verdict,
+and `maxDiffPixels: 0`. Thirty-two images, about 3.8 MB.
+
+Three things about it are worth knowing before re-recording one:
+
+- **The project is in the file name** (`wide-desktop-home-dark-linux.png`).
+  `snapshotPathTemplate` is built from `{arg}` and the platform, with no project
+  in it, so two projects photographing "home" would otherwise write over each
+  other's image and the second one to run would always pass.
+- **The images are CSS pixels, not device pixels.** `toHaveScreenshot` defaults
+  to `scale: 'css'`, so the tablet project's `deviceScaleFactor: 2` costs nothing
+  here: the file is 820x1180 and the comparison surface is the same size as the
+  layout it is about. That is why an iPad-shaped baseline weighs what a desktop
+  one does.
+- **Two of the eight screens have no wide layout, and that is the point.** The
+  route detail and the login are `bare` screens: `--shell-max` is retargeted on
+  `.app-shell--rail`, not on `:root`, so they stay a 430px column at any width
+  (docs/BUSINESS-LOGIC.md §36). A picture of that column at 1280px is what would
+  go red the day somebody moved the token to `:root`.
+
+The masks are the phone spec's, plus two additions the frame creates:
+`.route-row__price` (the master pane's rows carry a fare, which the phone has no
+equivalent of) and, on the landing page, the whole route-detail mask list, since
+the frame draws the panel in the pane beside the globe.
 
 ### A frozen clock
 
@@ -404,7 +445,8 @@ in.
 | `theme.spec.js` | the palette really swaps and survives a reload; both themes of Home photographed |
 | `phone-baselines.spec.js` | every screen, both themes, at `maxDiffPixels: 0` — the phone-regression guard |
 | `layout-smoke.spec.js` | tablet and desktop only: the icon rail replaces the tab bar, nothing scrolls sideways, and the landing page's master pane, `?route=` selection and globe height |
-| `layout-screens.spec.js` | tablet and desktop only: the calendar, the watch list, search, the new-rule screen and alerts inside the frame, and the landing detail's two columns |
+| `layout-screens.spec.js` | tablet and desktop only: the calendar, the watch list, search, the new-rule screen and alerts inside the frame, the landing detail's two columns, and the keyboard — the roving tab stop on the master rows, the focus ring, and the focus a swapped pane hands over |
+| `wide-baselines.spec.js` | tablet and desktop only: every screen, both themes, at `maxDiffPixels: 0` — the frame's own regression guard |
 
 ### The projects
 
@@ -412,13 +454,13 @@ in.
 | --- | --- | --- |
 | `setup` | — | `auth.setup.js`, once, for the session everything else reuses |
 | `chromium` | 390x844, DPR 1 | every spec except the two `layout-*` ones — the phone, and the only project that photographs anything |
-| `tablet` | 820x1180, DPR 2 | `layout-smoke.spec.js` and `layout-screens.spec.js` — an iPad in portrait |
-| `desktop` | 1280x832, DPR 1 | the same two, no touch |
+| `tablet` | 820x1180, DPR 2 | the two `layout-*` specs and `wide-baselines.spec.js` — an iPad in portrait |
+| `desktop` | 1280x832, DPR 1 | the same three, no touch |
 
-`tablet` and `desktop` are deliberately a couple of small specs each, and their
-assertions grow with each phase of `docs/DESKTOP-LAYOUT-PLAN.md`; phase 4 gives
-them baselines of their own. Until then a wide window is checked, not
-photographed, and the suite grows by seconds rather than by minutes.
+`tablet` and `desktop` grew their assertions with each phase of
+`docs/DESKTOP-LAYOUT-PLAN.md`, and phase 4 gave them baselines of their own
+("The wide baselines", below). The phone project is still the only one that
+photographs `offline`.
 
 Both projects assert the frame: the icon rail is on the screen, the tab bar is
 **gone** (two navigations offering the same five destinations is what a frame
@@ -474,6 +516,19 @@ stops being a frame and starts being screens:
   `/alerts#account` lights ACCOUNT and lands on the card; and the weekly-digest
   switch flips, survives a reload and **is put back inside the same test**, since
   every spec drives one database.
+- **the keyboard (≥1024, phase 4)** — a Tab journey from the top of the document reaches a rail
+  item and then a master row, and each draws a real `:focus-visible` outline (read out of the
+  cascade, which is the thing jsdom cannot compute); the routes list offers **one** tab stop and
+  the arrows walk it, wrapping at both ends, with Home and End at the ends and the stop travelling
+  with the focus; arrowing selects **nothing** and Enter does, which is manual activation stated as
+  an assertion; and Escape on the docked day panel hands the focus back to the very element that
+  opened it, compared by identity rather than by class.
+- **a find opens in the pane (≥1024, phase 4)** — the discovery card is a `BUTTON`, pressing it
+  leaves the URL, the rail and the form where they were, drops the finds and puts the panel's
+  heading in the pane with the focus on it. `POST /api/routes/lookup` is **blocked** for that
+  test: a discovery is a route this sandbox has never priced, and the row the panel would create
+  is one no endpoint can remove again. The look-up test beside it uses the seeded `AMS-LIS` for
+  exactly the same reason, and is what proves a real route renders there.
 - **tablet (768–1023)** — `/calendar`, `/watch`, `/search`, `/create` and
   `/alerts` all still carry `app-shell__main--column` and no `.screen--wide`, with
   no master rows, no docked panel, no section list and no rules list: the phone

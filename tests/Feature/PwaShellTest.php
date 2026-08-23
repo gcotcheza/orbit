@@ -118,6 +118,7 @@ final class PwaShellTest extends TestCase
             'start_url'        => '/',
             'scope'            => '/',
             'display'          => 'standalone',
+            'orientation'      => 'any',
             'theme_color'      => '#0a0f1e',
             'background_color' => '#0a0f1e',
         ]);
