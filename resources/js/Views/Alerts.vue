@@ -582,9 +582,11 @@ async function signOut() {
   color: var(--muted);
 }
 
+/* The card's own edge, as an inset ring so nothing moves: --card on --panel is 1.1:1 and the
+   shadow is black, so in the dark theme the current row had no shape at all. */
 .seclist__item--active {
   color: var(--accent-ink);
   background: var(--card);
-  box-shadow: var(--shadow);
+  box-shadow: inset 0 0 0 1px var(--line), var(--shadow);
 }
 </style>

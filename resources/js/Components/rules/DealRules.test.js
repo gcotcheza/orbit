@@ -71,6 +71,16 @@ describe('the deal rules section', () => {
         expect(wrapper.get('.rules__new').text()).toContain('New rule')
     })
 
+    // Beside the box that writes rules, the long version explains what the box is already for
+    // (docs/DESKTOP-LAYOUT-PLAN.md phase 4).
+    it('says it in one line where the create screen mounts it', async () => {
+        const wrapper = await section([], { compact: true, newRule: false })
+
+        expect(wrapper.get('.rules__empty').text()).toBe('Rules watch for trips in plain English.')
+        expect(wrapper.findAll('.rules__empty')).toHaveLength(1)
+        expect(wrapper.find('.rules__new').exists()).toBe(false)
+    })
+
     it('offers a retry when the list could not be loaded', async () => {
         get.mockRejectedValue(new Error('nope'))
 

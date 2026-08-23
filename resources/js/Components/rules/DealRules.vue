@@ -13,6 +13,9 @@ import { useWatchlistStore } from '@/stores/watchlist'
 defineProps({
   /* Off on /create, where it would link to the screen it is already on. */
   newRule: { type: Boolean, default: true },
+
+  /* One line where the box that writes rules is already on screen (docs/DESKTOP-LAYOUT-PLAN.md). */
+  compact: { type: Boolean, default: false },
 })
 
 const rules = useRulesStore()
@@ -95,6 +98,10 @@ function markRuleBusy(id, busy) {
     <p v-if="status === 'failed' && dealRules.length === 0" class="screen__state">
       Could not load your rules.
       <button type="button" class="screen__retry" @click="rules.load()">Try again</button>
+    </p>
+
+    <p v-else-if="compact && dealRules.length === 0 && status !== 'loading'" class="rules__empty">
+      Rules watch for trips in plain English.
     </p>
 
     <p v-else-if="dealRules.length === 0 && status !== 'loading'" class="rules__empty">
