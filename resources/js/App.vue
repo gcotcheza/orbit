@@ -5,8 +5,10 @@
  */
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import IconRail from '@/Components/IconRail.vue'
 import TabBar from '@/Components/TabBar.vue'
 import UpdateToast from '@/Components/UpdateToast.vue'
+import { useLayout } from '@/lib/layout'
 import { applyUpdate, dismissUpdate, updateReady } from '@/lib/pwa'
 
 /*
@@ -16,13 +18,22 @@ import { applyUpdate, dismissUpdate, updateReady } from '@/lib/pwa'
 const KEPT_ALIVE = ['Home']
 
 const route = useRoute()
+const { isPhone } = useLayout()
 
-const hasTabBar = computed(() => route.meta.layout === 'tabs')
+const hasTabBar = computed(() => route.meta.layout === 'tabs' && isPhone.value)
+
+/* The same five destinations, upright, from 768px — one bar or one rail, never both. */
+const hasRail = computed(() => route.meta.layout === 'tabs' && !isPhone.value)
+
+/** A screen with no pane of its own keeps the phone column, centred in what the rail leaves. */
+const isColumn = computed(() => hasRail.value && route.meta.wide !== true)
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'app-shell--tabs': hasTabBar }">
-    <main class="app-shell__main">
+  <div class="app-shell" :class="{ 'app-shell--tabs': hasTabBar, 'app-shell--rail': hasRail }">
+    <IconRail v-if="hasRail" />
+
+    <main class="app-shell__main" :class="{ 'app-shell__main--column': isColumn }">
       <RouterView v-slot="{ Component }">
         <KeepAlive :include="KEPT_ALIVE">
           <component :is="Component" />

@@ -16,10 +16,12 @@ export const router = createRouter({
 
     routes: [
         {
+            // `wide`: this screen owns the whole frame above 768px rather than sitting in the
+            // phone column the other tabbed screens keep until phases 2-3.
             path: '/',
             name: 'home',
             component: () => import('@/Views/Home.vue'),
-            meta: { layout: 'tabs' },
+            meta: { layout: 'tabs', wide: true },
         },
         {
             path: '/calendar',
