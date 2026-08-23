@@ -29,10 +29,14 @@ test.describe('the calendar in the frame', () => {
         // The chip strip is what stands in for these rows on a narrower screen.
         await expect(page.locator('.chips')).toHaveCount(0)
 
-        // A whole number of weeks, and the plan's one hard rule about this screen.
-        const cells = await page.locator('.cell').count()
-        expect(cells % 7, 'the month grid must be a whole number of weeks').toBe(0)
-        expect(cells / 7).toBeGreaterThanOrEqual(5)
+        // Five or six week rows, whichever the month has — and every cell square, which is the
+        // plan's one hard rule about this screen.
+        const weeks = await page
+            .locator('.cell')
+            .evaluateAll((all) => new Set(all.map((cell) => Math.round(cell.getBoundingClientRect().top))).size)
+
+        expect(weeks, 'the month is drawn as whole weeks').toBeGreaterThanOrEqual(5)
+        expect(weeks).toBeLessThanOrEqual(6)
 
         const cell = await page.locator('.cell--fare').first().boundingBox()
 

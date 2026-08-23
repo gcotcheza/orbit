@@ -495,8 +495,10 @@ onActivated(() => {
     grid-column: 2;
   }
 
-  /* Both columns start on the same line; the phone's 18px is its gap from the price above it. */
-  .home__panel :deep(.chart-card) {
+  /* Both columns start on the same line: the pane's own padding is the breathing room here, and
+     the chart's 18px is its gap from the price it sits under on a phone. */
+  .home__panel :deep(.chart-card),
+  .home__panel :deep(.detail__head) {
     margin-top: 0;
   }
 }
