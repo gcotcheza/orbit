@@ -1,6 +1,6 @@
 // The phone's rendering, frozen — the guard every desktop phase is measured
 // against (docs/DESKTOP-LAYOUT-PLAN.md, docs/E2E.md "Baselines vs artifacts").
-import { expect, fixedNow, test, useSandboxClock, waitForGlobe } from '../fixtures.js'
+import { expect, fixedNow, test, waitForGlobe } from '../fixtures.js'
 import { BASELINE_STYLE } from '../paths.js'
 
 // Through `contextOptions`: `reducedMotion` is not a top-level test option in
@@ -13,10 +13,8 @@ const THEMES = ['dark', 'light']
 // answer on AMS-LIS, which would be in the picture (docs/E2E.md).
 const DETAIL_ROUTE = 'AMS-OPO'
 
-/**
- * What a fare, a clock or a rasteriser decided. Masked rather than dropped: the
- * box is still drawn at its own place and size, so the layout stays covered.
- */
+// Masked, not dropped: the box is still drawn at its own place and size, so the
+// layout stays covered (docs/E2E.md "The phone baselines").
 const VOLATILE = {
     home: [
         '.home__live',
@@ -56,21 +54,15 @@ async function baseline(page, screen, theme) {
         fullPage: true,
         animations: 'disabled',
         stylePath: BASELINE_STYLE,
-        // Zero, and it is meant literally: this suite exists to fail on one
-        // moved pixel (docs/E2E.md "The phone baselines").
+        // Zero, meant literally (docs/E2E.md "The phone baselines").
         maxDiffPixels: 0,
         mask: VOLATILE[screen].map((selector) => page.locator(selector)),
     })
 }
 
-/**
- * The theme is read out of localStorage before the app mounts (stores/theme.js);
- * the clock is the app's, so the greeting and every relative label are the same
- * on any day the suite runs (docs/E2E.md "A frozen clock").
- */
+/** The theme is read out of localStorage before the app mounts (stores/theme.js). */
 function remember(theme) {
     return async ({ page }) => {
-        await useSandboxClock(page)
         await page.addInitScript((value) => window.localStorage.setItem('orbit-theme', value), theme)
     }
 }

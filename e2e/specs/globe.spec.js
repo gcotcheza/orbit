@@ -2,6 +2,10 @@
 // cannot be checked from jsdom (docs/E2E.md "Why this exists").
 import { expect, sampleCanvas, shot, tab, test, waitForGlobe } from '../fixtures.js'
 
+// The one spec that opts out of the sandbox clock: fake timers move the tour's
+// camera between frames, and this file samples what it drew (docs/E2E.md).
+test.use({ sandboxClock: false })
+
 test('the earth draws, and it is not a flat disc of one colour', async ({ page }) => {
     await page.goto('/')
 

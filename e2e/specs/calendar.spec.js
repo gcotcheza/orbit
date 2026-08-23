@@ -1,11 +1,6 @@
 // Price calendar — a month grid whose whole meaning is COLOUR (docs/E2E.md
 // "Why this exists").
-import { expect, fixedNow, shot, test, useSandboxClock } from '../fixtures.js'
-
-// Two tests read "Seen just now" off a fare the app stamped at its frozen
-// instant (docs/E2E.md "A frozen clock").
-test.beforeEach(async ({ page }) => useSandboxClock(page))
-
+import { expect, fixedNow, shot, test } from '../fixtures.js'
 const MONTHS = [
     'January',
     'February',

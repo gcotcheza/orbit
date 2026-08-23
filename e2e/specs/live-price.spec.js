@@ -1,11 +1,6 @@
 // A fare that may already be gone, and the button that goes and asks — three
 // of four tests intercept the app's own API (docs/BUSINESS-LOGIC.md §36).
-import { expect, fixedNow, shot, test, useSandboxClock } from '../fixtures.js'
-
-// The ages this spec asserts are counted from the app's frozen instant
-// (docs/E2E.md "A frozen clock").
-test.beforeEach(async ({ page }) => useSandboxClock(page))
-
+import { expect, fixedNow, shot, test } from '../fixtures.js'
 /** Seeded by database/seeders/WatchlistSeeder — six routes, this is the first. */
 const CODE = 'AMS-LIS'
 

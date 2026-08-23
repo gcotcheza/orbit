@@ -40,6 +40,21 @@ export const account = {
 // `auto: true` — applies to every test whether the spec thinks about it or
 // not (docs/E2E.md "The console guard").
 export const test = base.extend({
+    // Off only where fake timers would change what is being measured — one
+    // spec does that (docs/E2E.md "A frozen clock").
+    sandboxClock: [true, { option: true }],
+
+    // Every page starts at E2E_FIXED_NOW, so an age the BROWSER works out agrees
+    // with the fare the app stamped (docs/E2E.md "A frozen clock").
+    page: async ({ page, sandboxClock }, use) => {
+        if (sandboxClock) {
+            await page.clock.install({ time: new Date(fixedNow) })
+            await page.clock.resume()
+        }
+
+        await use(page)
+    },
+
     browserConsole: [
         async ({ page }, use) => {
             const problems = []
@@ -90,16 +105,6 @@ export { expect }
  */
 export async function shot(page, name) {
     await page.screenshot({ path: screenPath(name), fullPage: true, animations: 'disabled' })
-}
-
-/**
- * Start this page at E2E_FIXED_NOW, so a label the browser works out ("Seen just
- * now") agrees with the fare the app stamped. Opt-in per spec, and `resume()`
- * rather than `setFixedTime()` — both reasons are in docs/E2E.md "A frozen clock".
- */
-export async function useSandboxClock(page) {
-    await page.clock.install({ time: new Date(fixedNow) })
-    await page.clock.resume()
 }
 
 /**
