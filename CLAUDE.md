@@ -35,20 +35,27 @@ overrides them and says why.
 
 ## Exceptions
 
-- **T1, the gate has no secrets step.** `scripts/check.sh` runs seven checks
-  and none of them scans for secrets, and there is no pre-commit hook either
-  (`git ls-files | grep hook` is empty) — so S1 rests on review alone. Drop
-  this line when `grep -n gitleaks scripts/check.sh` finds a step; follow-up
-  branch `chore/gate-secrets-scan`.
+- **T1, the gate has no secrets step.** `scripts/check.sh` runs seven checks and
+  none of them scans for secrets. Drop this line when
+  `grep -n gitleaks scripts/check.sh` finds a step; follow-up branch
+  `chore/gate-secrets-scan`.
+- **S1, there is no pre-commit hook.** `git ls-files | grep hook` is empty and
+  nothing sets `core.hooksPath`, so the only thing between a pasted key and a
+  push is review. Drop this line when `git ls-files` lists a tracked hook that
+  the repository installs; follow-up branch `chore/pre-commit-guard`.
 - **C7/T1, the layer rule is reviewed, not executed.** The three layers above
   are real (`docs/PLAN.md:7`) and nothing enforces them: `grep -n deptrac
   composer.json` finds nothing. Drop this line when `grep -n deptrac
   scripts/check.sh` finds a step; follow-up branch `chore/deptrac`.
-- **S4, no Content-Security-Policy.** `docker/web/nginx.conf` sets three
-  `Cache-Control` headers and no CSP, so nothing in the stack tells a browser
-  what it may load. Drop this line when `grep -n Content-Security-Policy
-  docker/web/nginx.conf` finds the policy and a browser test proves a
-  deliberate inline script is caught; follow-up branch `feat/csp`.
+- **S4, the policy is on the host vhost and is report-only.**
+  `deploy/nginx/flights-ghiecode.conf:164` ships a full
+  `Content-Security-Policy-Report-Only` that `resources/views/app.blade.php:11`
+  already writes against, and `docs/GO-LIVE.md:364` holds the promotion item
+  and its stop condition; but `docker/web/nginx.conf` — the app's own nginx,
+  which is what S4 asks for — sets three `Cache-Control` headers and no CSP.
+  Drop this line when `grep -n Content-Security-Policy docker/web/nginx.conf`
+  finds an enforcing policy and a browser test proves a deliberate inline
+  script is caught; follow-up branch `feat/csp`.
 - **C12, validation happens on the server and nowhere else.** The three forms
   (`resources/js/Views/Login.vue:74`, `resources/js/Views/Search.vue:257`,
   `resources/js/Components/settings/ChangePassword.vue:115`) render the
@@ -57,6 +64,15 @@ overrides them and says why.
   when `resources/js/lib/` carries that module and a test compares its
   sentences with `app/Http/Requests/`; follow-up branch
   `feat/inline-validation`.
+- **S5, one pin out of four.** `composer.lock` and `package-lock.json` are
+  committed, and nothing else is pinned: there is no `.nvmrc` and no `engines`
+  block in `package.json`, `composer.json` declares no `config.platform.php`,
+  and the Playwright driver version is typed out twice by hand
+  (`package.json:23` and `scripts/e2e.sh:54`, both `1.62.1`) with nothing
+  asserting the two agree — the one pairing where a silent drift stops the
+  browser gate dead. Drop this line when `.nvmrc` exists, `grep -n '"platform"'
+  composer.json` finds the pin, and a test asserts those two Playwright
+  versions are the same string; follow-up branch `chore/pin-the-toolchain`.
 - **C13, native validation UI.** `resources/js/Views/Create.vue:161` sets
   `maxlength="500"` on the rule textarea, so the browser silently truncates
   where every other limit in the app says the sentence itself. Drop this line

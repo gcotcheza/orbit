@@ -3,7 +3,7 @@
 # =============================================================================
 # Run it the way the gate does:
 #
-#   scripts/check.sh                   # pint + phpstan + eslint + phpunit
+#   scripts/check.sh                   # every check, in order — that file is the list
 #   docker compose exec -T app vendor/bin/phpstan analyse --memory-limit=512M
 #
 # WHY LARASTAN AND NOT PLAIN PHPSTAN
