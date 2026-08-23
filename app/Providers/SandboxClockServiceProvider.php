@@ -10,8 +10,7 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * The browser sandbox runs at one fixed instant, so a screenshot baseline is a promise about a
- * layout rather than about the day it was recorded (docs/E2E.md "A frozen clock").
+ * The browser sandbox runs at one fixed instant (docs/E2E.md "A frozen clock").
  */
 final class SandboxClockServiceProvider extends ServiceProvider
 {
@@ -20,10 +19,8 @@ final class SandboxClockServiceProvider extends ServiceProvider
         /** @var mixed $fixedNow */
         $fixedNow = config('orbit.e2e.fixed_now');
 
-        /*
-         * ⚠ ORBIT_E2E guards this, NOT APP_ENV: .env.e2e runs the sandbox as `production` on
-         * purpose, so the trusted-host list is exercised for real (docs/E2E.md).
-         */
+        // ⚠ ORBIT_E2E guards this, NOT APP_ENV — the sandbox runs as `production`
+        // on purpose (docs/E2E.md "A frozen clock").
         if (config('orbit.e2e.enabled') !== true || ! is_string($fixedNow) || trim($fixedNow) === '') {
             return;
         }

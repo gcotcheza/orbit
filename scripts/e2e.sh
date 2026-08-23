@@ -135,10 +135,8 @@ APP_URL=http://${E2E_HOST}:${E2E_PORT}
 
 ORBIT_TIMEZONE=Europe/Amsterdam
 
-# THE FROZEN CLOCK. Read only when ORBIT_E2E is set (config/orbit.php), applied by
-# SandboxClockServiceProvider, and matched by the browser in the baseline spec. The seeded
-# world is therefore the same on every calendar day, which is what lets a screenshot
-# baseline be committed at all. docs/E2E.md "A frozen clock".
+# THE FROZEN CLOCK — what makes the seeded world the same on every calendar day,
+# and a screenshot baseline committable. docs/E2E.md "A frozen clock".
 E2E_FIXED_NOW=${E2E_FIXED_NOW}
 
 # The deterministic fake adapters, which is what production runs too until the
@@ -169,10 +167,8 @@ DB_USERNAME=orbit_e2e
 DB_PASSWORD=${db_password}
 
 SESSION_DRIVER=database
-# TEN YEARS, and it is the frozen clock that asks for it: Laravel stamps the session and
-# XSRF-TOKEN cookies with \`now + lifetime\`, and \`now\` here is 2026-08-23. At 120 minutes
-# every cookie the sandbox issues would already have expired by the browser's real clock on any
-# later day, and the whole suite would run as a logged-out guest. docs/E2E.md "A frozen clock".
+# TEN YEARS, because the frozen clock stamps every cookie's expiry: at 120 minutes
+# the suite would run as a guest on any later day. docs/E2E.md "A frozen clock".
 SESSION_LIFETIME=5256000
 SESSION_ENCRYPT=false
 SESSION_PATH=/

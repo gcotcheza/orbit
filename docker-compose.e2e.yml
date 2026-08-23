@@ -73,7 +73,7 @@ services:
       # `:?` makes compose FAIL rather than default, so `docker compose -f
       # docker-compose.e2e.yml up` without `--env-file .env.e2e` stops here
       # instead of booting the sandbox against whatever `.env` happens to hold.
-      # The value itself is never read by the app.
+      # It is also read by the app: config/orbit.php gates the frozen clock on it.
       ORBIT_E2E: '${ORBIT_E2E:?docker-compose.e2e.yml needs --env-file .env.e2e — run scripts/e2e.sh instead}'
     volumes:
       - './:/var/www/html'
