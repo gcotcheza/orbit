@@ -17,7 +17,12 @@ export const useRulesStore = defineStore('rules', () => {
     /** idle | parsing | ready | failed */
     const parseStatus = ref('idle')
 
+    /** What went wrong READING a sentence — the create screen answers for it under the textarea. */
     const error = ref('')
+
+    /* The saved list's own failures — loading it, and the pause/remove/promote made from it. Two
+       refs because two screens: one sentence must not surface under the other's control (§36). */
+    const listError = ref('')
 
     let listSequence = 0
     let parseSequence = 0
@@ -74,7 +79,7 @@ export const useRulesStore = defineStore('rules', () => {
         }
 
         status.value = 'loading'
-        error.value = ''
+        listError.value = ''
 
         const token = ++listSequence
 
@@ -88,7 +93,7 @@ export const useRulesStore = defineStore('rules', () => {
         } catch (failure) {
             if (token === listSequence) {
                 status.value = 'failed'
-                error.value = messageFor(failure, 'Could not load your rules.')
+                listError.value = messageFor(failure, 'Could not load your rules.')
             }
 
             console.error('Could not load the deal rules.', failure)
@@ -126,7 +131,7 @@ export const useRulesStore = defineStore('rules', () => {
         const previous = rule.active
 
         rule.active = active
-        error.value = ''
+        listError.value = ''
 
         try {
             const { data } = await http.patch(`/api/rules/${rule.id}`, { active })
@@ -134,7 +139,7 @@ export const useRulesStore = defineStore('rules', () => {
             Object.assign(rule, data.data)
         } catch (failure) {
             rule.active = previous
-            error.value = `Could not ${active ? 'resume' : 'pause'} that rule. Nothing changed.`
+            listError.value = `Could not ${active ? 'resume' : 'pause'} that rule. Nothing changed.`
 
             console.error('Could not toggle a rule.', failure)
         }
@@ -145,13 +150,13 @@ export const useRulesStore = defineStore('rules', () => {
         const index = rules.value.indexOf(rule)
 
         rules.value.splice(index, 1)
-        error.value = ''
+        listError.value = ''
 
         try {
             await http.delete(`/api/rules/${rule.id}`)
         } catch (failure) {
             rules.value.splice(index, 0, rule)
-            error.value = 'Could not remove that rule. It is still on the list.'
+            listError.value = 'Could not remove that rule. It is still on the list.'
 
             console.error('Could not remove a rule.', failure)
         }
@@ -162,7 +167,7 @@ export const useRulesStore = defineStore('rules', () => {
      * its own) and returns the new row for the list to splice in (docs/BUSINESS-LOGIC.md §11).
      */
     async function watch(match) {
-        error.value = ''
+        listError.value = ''
 
         try {
             const { data } = await http.post('/api/watchlist', {
@@ -175,7 +180,7 @@ export const useRulesStore = defineStore('rules', () => {
 
             return data.data
         } catch (failure) {
-            error.value = messageFor(failure, `Could not start watching ${match.code}.`)
+            listError.value = messageFor(failure, `Could not start watching ${match.code}.`)
 
             console.error('Could not watch a rule match.', failure)
 
@@ -189,6 +194,7 @@ export const useRulesStore = defineStore('rules', () => {
         reading,
         parseStatus,
         error,
+        listError,
         isReady,
         chips,
         matches,

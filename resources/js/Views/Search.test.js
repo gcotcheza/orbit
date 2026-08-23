@@ -4,10 +4,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
+import { computed, ref } from 'vue'
 
 const get = vi.fn()
 const post = vi.fn()
 const push = vi.fn()
+
+/* jsdom has no matchMedia, so the real composable would answer 'phone' and nothing else; this is
+   the switch the wide branch is behind. Deferred inside the arrow, as vi.mock is hoisted. */
+const desktop = ref(false)
+
+vi.mock('@/lib/layout', () => ({
+    useLayout: () => ({
+        layout: computed(() => (desktop.value ? 'desktop' : 'phone')),
+        isPhone: computed(() => !desktop.value),
+        isDesktop: desktop,
+        stop: () => {},
+    }),
+}))
 
 vi.mock('@/lib/http', () => ({
     http: {
@@ -24,6 +38,29 @@ vi.mock('vue-router', () => ({
 
 import Search from './Search.vue'
 
+/** The route detail is RouteDetailPanel.test.js's subject; here only the pair it was handed is. */
+const PanelStub = {
+    props: { code: String, embedded: Boolean },
+    template: '<div class="panel-stub" :data-code="code" :data-embedded="embedded"></div>',
+}
+
+/** One `GET /api/discoveries` row, trimmed to what the card reads (docs/API.md). */
+const find = (code, city) => ({
+    code,
+    origin: { iata: code.slice(0, 3), city: 'Amsterdam', country: 'Netherlands' },
+    destination: { iata: code.slice(4), city, country: 'Spain' },
+    lane: 'absolute',
+    price: 29,
+    departureDate: '2026-10-24',
+    milliEurosPerKm: 15.6,
+    percentile: 0,
+    savings: 49,
+    foundAt: '2026-08-15T08:00:00+02:00',
+    verdict: { verified: false, label: 'Unverified', level: 'typical', googleLowest: 70, typicalLow: 55, typicalHigh: 175 },
+})
+
+const FINDS = [find('AMS-AGP', 'Málaga'), find('AMS-BCN', 'Barcelona')]
+
 const LIS = { iata: 'LIS', city: 'Lisbon', country: 'Portugal', countryCode: 'PT' }
 const AGP = { iata: 'AGP', city: 'Málaga', country: 'Spain', countryCode: 'ES' }
 const BCN = { iata: 'BCN', city: 'Barcelona', country: 'Spain', countryCode: 'ES' }
@@ -34,12 +71,14 @@ const CURATED = [LIS, AGP, BCN]
 const added = (code) => ({ data: { data: { code, active: true, score: 0, confident: false } } })
 
 // The world half never arrives unless a test advances the clock.
-async function screen() {
+async function screen({ finds = [] } = {}) {
     get.mockImplementation((url) => Promise.resolve(url === '/api/destinations'
         ? { data: { data: CURATED, meta: { count: CURATED.length } } }
-        : { data: { data: [], meta: { count: 0 } } }))
+        : { data: { data: url === '/api/discoveries' ? finds : [], meta: { count: 0 } } }))
 
-    const wrapper = mount(Search, { global: { plugins: [createPinia()] } })
+    const wrapper = mount(Search, {
+        global: { plugins: [createPinia()], stubs: { RouteDetailPanel: PanelStub } },
+    })
 
     await flushPromises()
 
@@ -66,6 +105,7 @@ const litChip = (wrapper) => chips(wrapper).find((chip) => chip.attributes('aria
 beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
+    desktop.value = false
     setActivePinia(createPinia())
 })
 
@@ -355,5 +395,88 @@ describe('the search screen', () => {
         expect(to(wrapper).attributes('aria-expanded')).toBe('false')
 
         wrapper.unmount()
+    })
+})
+
+// 1024px and up: the form is the master pane and the pane beside it holds the finds — or, after a
+// look-up, the route itself (docs/DESKTOP-LAYOUT-PLAN.md phase 3).
+describe('inside the frame', () => {
+    beforeEach(() => {
+        desktop.value = true
+    })
+
+    it('splits the form and the finds into the two panes', async () => {
+        const wrapper = await screen({ finds: FINDS })
+
+        expect(wrapper.get('.screen').classes()).toContain('screen--wide')
+        expect(wrapper.get('.screen__master').find('form.search').exists()).toBe(true)
+        expect(wrapper.get('.screen__pane').find('.finds__list').exists()).toBe(true)
+        expect(wrapper.findAll('.finds__list .find')).toHaveLength(2)
+    })
+
+    it('puts the looked-up route in the pane instead of navigating away', async () => {
+        const wrapper = await screen({ finds: FINDS })
+
+        await pair(wrapper, 'ams', 'lis')
+        await wrapper.get('form').trigger('submit')
+
+        const panel = wrapper.get('.screen__pane .panel-stub')
+
+        expect(panel.attributes('data-code')).toBe('AMS-LIS')
+        expect(panel.attributes('data-embedded')).toBe('true')
+
+        // Nothing navigated, and nothing was written to get there.
+        expect(push).not.toHaveBeenCalled()
+        expect(post).not.toHaveBeenCalled()
+        expect(wrapper.find('.finds').exists()).toBe(false)
+    })
+
+    // The way back is named after where it goes, which is the heading under it.
+    it('goes back to the finds from the pane, and from an edited destination', async () => {
+        const wrapper = await screen({ finds: FINDS })
+
+        await pair(wrapper, 'ams', 'lis')
+        await wrapper.get('form').trigger('submit')
+        expect(wrapper.find('.panel-stub').exists()).toBe(true)
+
+        expect(wrapper.get('.looked__back').text()).toBe('Deals from your airports')
+        await wrapper.get('.looked__back').trigger('click')
+
+        expect(wrapper.find('.panel-stub').exists()).toBe(false)
+        expect(wrapper.get('.screen__pane').find('.finds__list').exists()).toBe(true)
+
+        // And a pair the form has moved past cannot be left standing in the pane.
+        await wrapper.get('form').trigger('submit')
+        expect(wrapper.find('.panel-stub').exists()).toBe(true)
+
+        await to(wrapper).setValue('')
+
+        expect(wrapper.find('.panel-stub').exists()).toBe(false)
+    })
+
+    it('still adds to the watch list from the master, and says so there', async () => {
+        post.mockResolvedValue(added('AMS-LIS'))
+
+        const wrapper = await screen({ finds: FINDS })
+
+        await pair(wrapper, 'AMS', 'LIS')
+        await watch(wrapper).trigger('click')
+        await flushPromises()
+
+        expect(post).toHaveBeenCalledWith('/api/watchlist', { origin: 'AMS', destination: 'LIS' })
+        expect(wrapper.get('.screen__master .search__added').text()).toContain('AMS→LIS is on your watch list')
+    })
+
+    it('is one phone column again below the frame', async () => {
+        desktop.value = false
+
+        const wrapper = await screen({ finds: FINDS })
+
+        await pair(wrapper, 'ams', 'lis')
+        await wrapper.get('form').trigger('submit')
+
+        expect(wrapper.get('.screen').classes()).not.toContain('screen--wide')
+        expect(wrapper.find('.panel-stub').exists()).toBe(false)
+        expect(push).toHaveBeenCalledWith({ name: 'route-detail', params: { id: 'AMS-LIS' } })
     })
 })
