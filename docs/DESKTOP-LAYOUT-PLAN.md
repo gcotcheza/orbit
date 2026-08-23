@@ -173,12 +173,27 @@ What was actually built differs from the sketch above in five places, each worth
   keeps its hairline from *`Watchlist.vue`'s* stylesheet, because a child's root element
   carries its parent's scope id; the create screen mounts the same component with no such
   rule and gets no hairline, which is exactly right for a master pane.
-- **A parse failure and a rules-list failure are the same `error` in the same store.** On
-  `/create` that would have printed one sentence twice — under the box that was refused,
-  and again beside the rules. `DealRules` therefore takes a `notice` prop, and the create
-  screen passes `false`: the screen that owns the write owns the sentence about it. The
-  list's own "could not load your rules / try again" state is unaffected, since that is
-  about the list rather than about the write.
+- **A parse failure and a rules-list failure were the same `error` in the same store, and
+  are not any more.** `stores/rules.js` had one `error` ref for the reading of the sentence
+  being typed *and* for the saved list — so on `/create`, where `DealRules` now issues its
+  own `GET /api/rules`, a failed list load printed under the textarea, a failed pause printed
+  under the textarea, and the two cleared each other's messages. The store now has `error`
+  (parse and create — the compose screen's own) and `listError` (load, pause, remove,
+  promote — the list's own). Each control answers for itself where it is: `DealRules` always
+  draws `listError` in whichever pane it was mounted in, and the compose card draws only the
+  parse error. A `notice` prop briefly existed to suppress the duplicate; splitting the refs
+  removed the duplicate, so the prop went with it.
+- **`DealRules` takes a `newRule` prop, because "+ New rule" is a dead control on `/create`.**
+  On the watch list it is the only door to this screen; on this screen it would link to the
+  screen it is already on. `/create` passes `:new-rule="false"`; the watch list is unchanged.
+- **The quiet-hours time inputs wrap rather than shrink.** `input[type="time"]` has a UA
+  minimum width it will not go under, and `.card` hides its own overflow — so between 1024
+  and about 1084px, where the alert pane's column is under ~290px, the *Until* box was cut
+  off in silence, with no sideways scroll for the guard to catch. `.window` is now
+  `flex-wrap: wrap` with `flex: 1 1 120px` fields, so the pair stacks instead of clipping;
+  on the phone the two boxes are the same size they always were (the baselines prove it).
+  The 1024x600 test now sweeps `.card *` for `scrollWidth > clientWidth`, which is the same
+  blind-spot sweep the boarding passes got in phase 2.
 - **Alerts has no scroll-spy, and the two columns are the reason.** The plan asked for one.
   In a two-column pane CHANNELS and SENSITIVITY start on the same line, as do TIMING and
   ACCOUNT — so a scroll offset does not name a section, and a spy would have flickered
@@ -192,6 +207,12 @@ What was actually built differs from the sketch above in five places, each worth
   of those. Five `display: contents` wrappers are placed into columns 1, 2, 1, 2, 2. The
   gated three are inside the `isReady` branch, so a screen still loading its settings lists
   and draws only ACCOUNT and THIS APP.
+- **A card in the pane still leaves the frame, and that is not fixed here.** `DiscoveryCard`
+  and the "…is on your watch list · Open it" link both navigate to `/route/:id`, which is a
+  `bare` screen with no rail — so clicking a find inside the detail pane drops out of the
+  frame entirely. That is unchanged phase 0-2 behaviour rather than something phase 3 broke,
+  and fixing it means giving those two the same in-pane treatment the look-up now has. It is
+  on the phase 4 list below.
 - **The look-up's way back is a control, not the clear flow.** The brief expected the field's
   own ✕ to serve; the destination box has no ✕ (only the origin does, deliberately). So the
   pane carries one back button, labelled `Deals from your airports` — the heading it returns
@@ -203,6 +224,14 @@ and `/alerts`; four new section ids (`#channels`, `#sensitivity`, `#timing`, `#t
 join the `#account` that already existed.*
 
 ### Phase 4 — Quality and polish
+- **Open a find in the pane, like a look-up.** `DiscoveryCard` and search's "Open it" link
+  still navigate to the bare `/route/:id` from inside the detail pane, leaving the frame; they
+  should do what phase 3's look-up does instead. Carried from phase 3.
+- **Focus and announcement when the pane swaps.** Nothing moves focus or announces the change
+  when a look-up replaces the finds, or when the alerts list jumps a section. Carried from
+  phase 3.
+- **The empty states were left as the phone's.** A 352px master pane and an 800px detail pane
+  show the same sentence a 430px column does; some of them have room to say more.
 - Dark theme pass on every desktop screen; focus order and keyboard use of the rail;
   reduced-motion; hover states on the rail/rows; desktop screenshot baselines
   (light + dark) in e2e; perf check of the globe at 852×440+.

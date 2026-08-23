@@ -102,18 +102,37 @@ describe('the deal rules section', () => {
         await flushPromises()
     })
 
-    // The create screen answers for the store's `error` under the box that was refused, so the
-    // section beside it must not say the same sentence twice.
-    it('can be told to leave the notice to the screen that mounted it', async () => {
+    // The control that failed owns the sentence about it: this list's failures belong beside this
+    // list, whichever screen mounted it.
+    it('says so itself when the list could not be loaded', async () => {
         get.mockRejectedValue(new Error('nope'))
 
-        const quiet = draw({ notice: false })
+        const wrapper = draw({ newRule: false })
 
         await flushPromises()
 
-        expect(quiet.find('.screen__notice').exists()).toBe(false)
-        // The state is still drawn — it is about the list, not about the write that failed.
-        expect(quiet.get('.screen__state').text()).toContain('Could not load your rules.')
+        expect(wrapper.get('.screen__notice').text()).toContain('Could not reach Orbit.')
+    })
+
+    it('reports a failed pause beside the switch that failed, not somewhere else', async () => {
+        patch.mockRejectedValue(new Error('nope'))
+
+        const wrapper = await section()
+
+        await wrapper.get('.rule [role="switch"]').trigger('click')
+        await flushPromises()
+
+        expect(wrapper.get('.screen__notice').text()).toContain('Could not pause that rule.')
+        // …and the switch went back, because the write did not happen.
+        expect(wrapper.get('.rule').classes()).not.toContain('rule--paused')
+    })
+
+    // On /create it would link to the screen it is already on.
+    it('can drop the + New rule link for the screen that is already /create', async () => {
+        const wrapper = await section([rule()], { newRule: false })
+
+        expect(wrapper.find('.rules__new').exists()).toBe(false)
+        expect(wrapper.get('.rules__title').text()).toBe('Deal rules')
     })
 
     it('adds a promoted match to the watch list store the watch screen reads', async () => {

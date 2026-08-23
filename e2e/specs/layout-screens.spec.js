@@ -272,21 +272,32 @@ test.describe('the new rule screen in the frame', () => {
 
         const rows = page.locator('.screen__master .rule')
         const before = await rows.count()
+        const known = await page.request.get('/api/rules')
+        const ids = ((await known.json()).data ?? []).map((one) => one.id)
 
-        await expect(page.locator('.cta')).toBeEnabled()
-        await page.locator('.cta').click()
+        try {
+            await expect(page.locator('.cta')).toBeEnabled()
+            await page.locator('.cta').click()
 
-        await expect(page.locator('.screen__master .screen__title')).toHaveText('Rule created')
-        await expect(page.locator('.screen__pane .done')).toBeVisible()
-        await expect(rows, 'the new rule is on the list without a reload').toHaveCount(before + 1)
+            await expect(page.locator('.screen__master .screen__title')).toHaveText('Rule created')
+            await expect(page.locator('.screen__pane .done')).toBeVisible()
+            await expect(rows, 'the new rule is on the list without a reload').toHaveCount(before + 1)
 
-        await expectNoSidewaysScroll(page, '/create with a rule created')
-        await shot(page, 'create-desktop-done')
+            await expectNoSidewaysScroll(page, '/create with a rule created')
+            await shot(page, 'create-desktop-done')
+        } finally {
+            // Through the API, and in `finally`: a failed assertion above must not leave a row behind
+            // for the next spec (docs/E2E.md "The specs").
+            const now = await page.request.get('/api/rules')
 
-        await rows.first().locator('.rule__open').click()
-        await rows.first().getByRole('button', { name: 'Remove rule' }).click()
-        await rows.first().getByRole('button', { name: 'Remove', exact: true }).click()
+            for (const one of (await now.json()).data ?? []) {
+                if (!ids.includes(one.id)) {
+                    await page.request.delete(`/api/rules/${one.id}`)
+                }
+            }
+        }
 
+        await page.goto('/create')
         await expect(rows).toHaveCount(before)
     })
 
@@ -556,12 +567,35 @@ test.describe('at the frame\'s own floor', () => {
 
         expect(sensitivity.x, 'still two columns at the floor').toBeGreaterThan(channels.x + channels.width - 1)
 
+        /*
+         * The same blind spot the boarding passes have: `.card` hides its own overflow, so a control
+         * too wide for a 260px column — the quiet-hours time inputs, which have a UA minimum width —
+         * is cut off in silence, with `scrollWidth === innerWidth` still perfectly true.
+         */
+        const clipped = await page
+            .locator('.card *')
+            .evaluateAll((all) =>
+                all
+                    .filter((one) => one.scrollWidth > one.clientWidth + 1)
+                    .map((one) => `${one.tagName.toLowerCase()}.${one.className}`),
+            )
+
+        expect(clipped, 'no settings card may cut one of its own controls off').toEqual([])
+
         const rail = await page.locator('.rail-nav').boundingBox()
         const pane = page.locator('.screen__pane')
 
-        await pane.evaluate((one) => one.scrollTo(0, one.scrollHeight))
+        const scrolled = await pane.evaluate((one) => {
+            one.scrollTo(0, one.scrollHeight)
 
-        expect((await page.locator('.rail-nav').boundingBox()).y, 'the rail does not scroll away').toBe(rail.y)
+            return one.scrollTop
+        })
+
+        // Only meaningful when there was something to scroll; the cards may simply fit here.
+        if (scrolled > 0) {
+            expect((await page.locator('.rail-nav').boundingBox()).y, 'the rail does not scroll away').toBe(rail.y)
+        }
+
         await expect(page.locator('.seclist__item')).toHaveCount(5)
 
         await page.locator('.seclist__item[data-section="this-app"]').click()

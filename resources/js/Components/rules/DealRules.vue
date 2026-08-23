@@ -11,13 +11,13 @@ import { useRulesStore } from '@/stores/rules'
 import { useWatchlistStore } from '@/stores/watchlist'
 
 defineProps({
-  /* The store's `error` is the create screen's parse failure too, and that screen answers for it
-     under the box that was refused — so it is not repeated here. */
-  notice: { type: Boolean, default: true },
+  /* Off on /create, where it would link to the screen it is already on. */
+  newRule: { type: Boolean, default: true },
 })
 
 const rules = useRulesStore()
-const { rules: dealRules, status, error } = storeToRefs(rules)
+// `listError`, never the store's parse `error`: the control that failed owns the sentence about it.
+const { rules: dealRules, status, listError } = storeToRefs(rules)
 
 const watchlist = useWatchlistStore()
 
@@ -82,7 +82,7 @@ function markRuleBusy(id, busy) {
 
       <!-- The one + on the watch list names what it makes ("New rule"): there used to be two
            identical accent squares there doing different writes. -->
-      <RouterLink class="rules__new" :to="{ name: 'create' }">
+      <RouterLink v-if="newRule" class="rules__new" :to="{ name: 'create' }">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M8 3v10M3 8h10" stroke-width="1.8" stroke-linecap="round" />
         </svg>
@@ -90,7 +90,7 @@ function markRuleBusy(id, busy) {
       </RouterLink>
     </div>
 
-    <p v-if="notice && error" class="screen__notice" role="alert">{{ error }}</p>
+    <p v-if="listError" class="screen__notice" role="alert">{{ listError }}</p>
 
     <p v-if="status === 'failed' && dealRules.length === 0" class="screen__state">
       Could not load your rules.

@@ -68,18 +68,20 @@ onMounted(settingsStore.load)
 /** Only the sections that are actually on the page: three of them wait on the settings landing. */
 const sections = computed(() => SECTIONS.filter((one) => !one.gated || isReady.value))
 
-/*
- * Which section the list points at. Set by a click and by the `#account` link, and deliberately NOT
- * by a scroll-spy: the pane is two columns, so two sections share every vertical position and a
- * scroll offset cannot name one of them (docs/BUSINESS-LOGIC.md §36).
- */
-const current = ref(SECTIONS[0].id)
+/** The section last asked for, which is '' until something asks. */
+const chosen = ref('')
+
+// Falls back to the first section ON THE PAGE, so the list is never left with nothing lit while the
+// gated three are still coming. No scroll-spy — two columns share every y (docs/BUSINESS-LOGIC.md §36).
+const current = computed(() =>
+  sections.value.some((one) => one.id === chosen.value) ? chosen.value : sections.value[0]?.id,
+)
 
 const pane = useTemplateRef('pane')
 
 /** Jump the pane to a section, and light its row. */
 function jump(id) {
-  current.value = id
+  chosen.value = id
 
   scrollIntoView(pane.value?.querySelector(`#${id}`), { block: 'start' })
 }
@@ -100,7 +102,7 @@ watch(
 
     await nextTick()
 
-    current.value = 'account'
+    chosen.value = 'account'
     scrollIntoView(accountHeading.value, { block: 'start' })
   },
   { immediate: true },
@@ -412,12 +414,15 @@ async function signOut() {
 
 .window {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 0 16px 15px;
 }
 
+/* WRAPS RATHER THAN SHRINKS: a time input has a UA minimum width it will not go under, and the card
+   hides its overflow — so a narrow column clips the second one silently (docs/BUSINESS-LOGIC.md §36). */
 .window__field {
-  flex: 1;
+  flex: 1 1 120px;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -520,12 +525,8 @@ async function signOut() {
     margin: 0 0 14px;
   }
 
-  /*
-   * The artboard's two columns, as an explicit placement rather than two column elements: the phone
-   * reads channels → sensitivity → timing → account → this app, and the design's left column is the
-   * 1st and 3rd of those. One DOM order cannot make two column elements say that, and reordering the
-   * DOM is the phone regression the plan is gated on.
-   */
+  /* Placed, not two column elements: one DOM order cannot feed both, and the phone's order wins
+     (docs/BUSINESS-LOGIC.md §36). */
   .screen--wide .screen__cards {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -122,7 +122,7 @@ async function save() {
 
       <!-- The rules this screen adds to, beside the box that writes them. Not on a phone: the
            watch list is where they live there, and this screen is one column deep. -->
-      <DealRules v-if="isDesktop" :notice="false" />
+      <DealRules v-if="isDesktop" :new-rule="false" />
     </div>
 
     <div class="screen__pane">

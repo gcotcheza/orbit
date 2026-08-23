@@ -422,15 +422,32 @@ describe('Create inside the frame', () => {
         expect(wrapper.get('.screen__pane').find('.done').exists()).toBe(true)
     })
 
-    // The rules store's `error` is the parse's too, and the compose card under the box already
-    // answers for it — so the master does not say it a second time.
-    it('leaves the parse failure to the pane rather than repeating it beside the box', async () => {
+    // Two failures, two places: the box that was refused answers for the sentence, the list beside
+    // it answers for the list. They used to be one ref and printed in both.
+    it('keeps a parse failure under the box, and out of the master', async () => {
         post.mockRejectedValue(new Error('nope'))
 
         const wrapper = await screen()
 
         expect(wrapper.get('.screen__pane .error').text()).toContain('Could not reach Orbit.')
         expect(wrapper.find('.screen__master .screen__notice').exists()).toBe(false)
+    })
+
+    it('keeps a rules-list failure in the master, and out of the compose pane', async () => {
+        get.mockRejectedValue(new Error('nope'))
+
+        const wrapper = await screen()
+
+        expect(wrapper.get('.screen__master .screen__notice').text()).toContain('Could not reach Orbit.')
+        expect(wrapper.find('.screen__pane .error').exists()).toBe(false)
+    })
+
+    // It would link to the screen it is already on.
+    it('drops the + New rule link from its own master pane', async () => {
+        const wrapper = await screen()
+
+        expect(wrapper.get('.screen__master .rules__title').text()).toBe('Deal rules')
+        expect(wrapper.find('.rules__new').exists()).toBe(false)
     })
 
     it('draws no rules list at all on a phone', async () => {

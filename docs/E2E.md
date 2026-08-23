@@ -514,7 +514,14 @@ viewport, not a whole suite, and `page.setViewportSize` re-fires the same
 - **the alert cards stay two columns, and only the pane scrolls.** The test
   scrolls `.screen__pane` to the bottom and asserts the rail has not moved and the
   five section rows are still on the page — the same overflow-escaping-upwards
-  failure the landing detail's test exists to catch.
+  failure the landing detail's test exists to catch. The rail assertion is made
+  only when the scroll actually moved, since the cards may simply fit at this size.
+- **and no settings card clips one of its own controls.** The second instance of
+  the boarding-pass blind spot: `.card` hides its overflow, and an
+  `input[type="time"]` will not shrink past the UA's minimum width, so a narrow
+  column cut the quiet-hours *Until* box off in silence. The test sweeps `.card *`
+  for `scrollWidth > clientWidth` and requires the list of offenders to be empty;
+  the layout answer is that `.window` wraps.
 
 **The landing page is why these two projects now take about 20 seconds.** They
 draw the globe, and `waitForGlobe()` polls a SwiftShader render.
