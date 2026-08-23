@@ -580,12 +580,14 @@ function messageFor(failure) {
   color: var(--muted);
 }
 
-/* A real list, because it is one: a screen reader should hear "6 items" before
-   deciding whether to walk them. */
+/* A real list, because it is one: a screen reader should hear "6 items" first.
+   margin/padding: an unbulleted <ul> still keeps the UA's 40px indent. */
 .finds__list {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin: 0;
+  padding: 0;
   list-style: none;
 }
 
