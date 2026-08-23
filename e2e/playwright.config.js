@@ -83,16 +83,16 @@ export default defineConfig({
         },
         {
             name: 'chromium',
-            testIgnore: [/auth\.setup\.js/, /layout-smoke\.spec\.js/],
+            testIgnore: [/auth\.setup\.js/, /layout-(smoke|screens)\.spec\.js/],
             dependencies: ['setup'],
             use: { storageState: STORAGE_STATE },
         },
 
-        // Two small projects, one spec: the wide layouts are asserted, not
+        // Two small projects, two specs: the wide layouts are asserted, not
         // photographed, until phase 4 (docs/DESKTOP-LAYOUT-PLAN.md).
         {
             name: 'tablet',
-            testMatch: /layout-smoke\.spec\.js/,
+            testMatch: /layout-(smoke|screens)\.spec\.js/,
             dependencies: ['setup'],
             use: {
                 storageState: STORAGE_STATE,
@@ -103,7 +103,7 @@ export default defineConfig({
         },
         {
             name: 'desktop',
-            testMatch: /layout-smoke\.spec\.js/,
+            testMatch: /layout-(smoke|screens)\.spec\.js/,
             dependencies: ['setup'],
             use: {
                 storageState: STORAGE_STATE,

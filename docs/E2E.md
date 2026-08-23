@@ -404,20 +404,21 @@ in.
 | `theme.spec.js` | the palette really swaps and survives a reload; both themes of Home photographed |
 | `phone-baselines.spec.js` | every screen, both themes, at `maxDiffPixels: 0` — the phone-regression guard |
 | `layout-smoke.spec.js` | tablet and desktop only: the icon rail replaces the tab bar, nothing scrolls sideways, and the landing page's master pane, `?route=` selection and globe height |
+| `layout-screens.spec.js` | tablet and desktop only: the calendar and the watch list inside the frame, and the landing detail's two columns |
 
 ### The projects
 
 | project | viewport | runs |
 | --- | --- | --- |
 | `setup` | — | `auth.setup.js`, once, for the session everything else reuses |
-| `chromium` | 390x844, DPR 1 | every spec except `layout-smoke.spec.js` — the phone, and the only project that photographs anything |
-| `tablet` | 820x1180, DPR 2 | `layout-smoke.spec.js` only — an iPad in portrait |
-| `desktop` | 1280x832, DPR 1 | `layout-smoke.spec.js` only, no touch |
+| `chromium` | 390x844, DPR 1 | every spec except the two `layout-*` ones — the phone, and the only project that photographs anything |
+| `tablet` | 820x1180, DPR 2 | `layout-smoke.spec.js` and `layout-screens.spec.js` — an iPad in portrait |
+| `desktop` | 1280x832, DPR 1 | the same two, no touch |
 
-`tablet` and `desktop` are deliberately one small spec each, and its assertions
-grow with each phase of `docs/DESKTOP-LAYOUT-PLAN.md`; phase 4 gives them
-baselines of their own. Until then a wide window is checked, not photographed,
-and the suite grows by seconds rather than by minutes.
+`tablet` and `desktop` are deliberately a couple of small specs each, and their
+assertions grow with each phase of `docs/DESKTOP-LAYOUT-PLAN.md`; phase 4 gives
+them baselines of their own. Until then a wide window is checked, not
+photographed, and the suite grows by seconds rather than by minutes.
 
 Both projects assert the frame: the icon rail is on the screen, the tab bar is
 **gone** (two navigations offering the same five destinations is what a frame
@@ -437,6 +438,33 @@ two widths are two different layouts rather than one layout at two sizes:
 - **tablet only (768–1023)** — no master rows at all, the chip strip carries the
   six routes instead, the detail panel is stacked under a globe that still gets
   its share of the pane, and a chip sets the same `?route=` query.
+
+`layout-screens.spec.js` is phase 2's half of that, and it is where the frame
+stops being a frame and starts being screens:
+
+- **the calendar (≥1024)** — the six seeded routes as master rows and no chip
+  strip; the month is a whole number of weeks and a cell is square to within a
+  pixel; clicking a day draws `.sheet--docked` **to the right of the grid card**
+  carrying that cell's own day number and price, with no backdrop, exactly one
+  `.sheet` on the page and `role="region"` rather than a modal dialog.
+- **the watch list (≥1024)** — exactly one `.pass.is-selected`, at least 1.8x the
+  width of the others, which are two abreast on a shared row; the deal rules
+  start to the right of it and the "Rules · N" jump chip is gone; clicking
+  `AMS-NAP`'s row moves the lead; a route pauses from the pane's own switch,
+  dims its master row and **is put back inside the same test**, since every spec
+  drives one database.
+- **the landing detail (≥1024)** — the chart and the booking pair start to the
+  right of the price block and the chart's top is within 4px of the heading's, so
+  the two columns really are columns; the globe's canvas clears both its 280px
+  floor and 300px, and `stage + panel` heights sum exactly to the pane's, which
+  is the leftover-height rule stated as arithmetic.
+- **tablet (768–1023)** — `/calendar` and `/watch` still carry
+  `app-shell__main--column`, no master rows and no docked panel: the phone
+  layout, centred in what the rail leaves.
+
+Each of those checks `documentElement.scrollWidth === innerWidth` again with the
+pane actually full, because a docked panel and a six-pass grid are the two things
+in this phase that could push a window sideways.
 
 **The landing page is why these two projects now take about 20 seconds.** They
 draw the globe, and `waitForGlobe()` polls a SwiftShader render.

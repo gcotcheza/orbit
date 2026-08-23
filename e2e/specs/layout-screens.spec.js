@@ -1,0 +1,201 @@
+// The tablet and desktop projects' second file: the calendar, the watch list and the two-column
+// landing detail inside the frame (docs/DESKTOP-LAYOUT-PLAN.md phase 2).
+import { expect, shot, test, waitForGlobe } from '../fixtures.js'
+
+/** The seeded watchlist, in the seeder's own order (database/seeders/WatchlistSeeder.php). */
+const WATCHED = ['AMS-LIS', 'AMS-OPO', 'AMS-NAP', 'EIN-BCN', 'AMS-FAO', 'DUS-AGP']
+
+/** Nothing may push the window sideways, whatever a pane has been asked to hold. */
+async function expectNoSidewaysScroll(page, where) {
+    const width = await page.evaluate(() => ({
+        scroll: document.documentElement.scrollWidth,
+        inner: window.innerWidth,
+    }))
+
+    expect(width.scroll, `${where} is wider than the window`).toBe(width.inner)
+}
+
+test.describe('the calendar in the frame', () => {
+    test.skip(({ viewport }) => viewport.width < 1024, 'the master pane needs 1024px')
+
+    test('lists the routes beside the month, and keeps every cell square', async ({ page }) => {
+        await page.goto('/calendar')
+        await expect(page.locator('.cell--fare').first()).toBeVisible()
+
+        const rows = page.locator('.route-row')
+
+        await expect(rows).toHaveCount(WATCHED.length)
+        expect(await rows.evaluateAll((all) => all.map((row) => row.dataset.code))).toEqual(WATCHED)
+        // The chip strip is what stands in for these rows on a narrower screen.
+        await expect(page.locator('.chips')).toHaveCount(0)
+
+        // A whole number of weeks, and the plan's one hard rule about this screen.
+        const cells = await page.locator('.cell').count()
+        expect(cells % 7, 'the month grid must be a whole number of weeks').toBe(0)
+        expect(cells / 7).toBeGreaterThanOrEqual(5)
+
+        const cell = await page.locator('.cell--fare').first().boundingBox()
+
+        expect(Math.abs(cell.width - cell.height), 'calendar cells stay square').toBeLessThan(1)
+
+        await expectNoSidewaysScroll(page, '/calendar')
+    })
+
+    test('docks the tapped day beside the grid rather than over it', async ({ page }) => {
+        await page.goto('/calendar')
+
+        const day = page.locator('.cell--fare').first()
+        await expect(day).toBeVisible()
+
+        const number = await day.locator('.cell__day').innerText()
+        const price = await day.locator('.cell__price').innerText()
+
+        await day.click()
+
+        const panel = page.locator('.calendar__day .sheet')
+
+        await expect(panel).toBeVisible()
+        await expect(panel).toHaveClass(/sheet--docked/)
+        await expect(panel.locator('.sheet__price')).toHaveText(price)
+        await expect(panel.locator('.sheet__date')).toContainText(` ${number}, `)
+
+        // Not a bottom sheet: nothing is covered, so there is nothing to dismiss.
+        await expect(page.locator('.backdrop')).toHaveCount(0)
+        await expect(page.locator('.sheet')).toHaveCount(1)
+        expect(await panel.getAttribute('role')).toBe('region')
+
+        const grid = await page.locator('.grid-card').boundingBox()
+        const box = await panel.boundingBox()
+
+        expect(box.x, 'the day panel sits to the right of the month').toBeGreaterThan(grid.x + grid.width - 1)
+
+        await expectNoSidewaysScroll(page, '/calendar with a day open')
+        await shot(page, 'calendar-desktop')
+    })
+})
+
+test.describe('the watch list in the frame', () => {
+    test.skip(({ viewport }) => viewport.width < 1024, 'the master pane needs 1024px')
+
+    test('leads with one pass, grids the rest and gives the rules a column', async ({ page }) => {
+        await page.goto('/watch')
+        await expect(page.locator('.pass')).toHaveCount(WATCHED.length)
+
+        await expect(page.locator('.route-row')).toHaveCount(WATCHED.length)
+        await expect(page.locator('.route-row').first()).toHaveClass(/route-row--active/)
+
+        const lead = page.locator('.pass.is-selected')
+
+        await expect(lead).toHaveCount(1)
+        await expect(lead).toContainText('LIS')
+
+        const others = page.locator('.pass:not(.is-selected)')
+        const leadBox = await lead.boundingBox()
+        const first = await others.nth(0).boundingBox()
+        const second = await others.nth(1).boundingBox()
+
+        expect(Math.abs(first.y - second.y), 'the other passes are two abreast').toBeLessThan(2)
+        expect(second.x).toBeGreaterThan(first.x + first.width - 1)
+        expect(leadBox.width, 'the chosen pass spans the column').toBeGreaterThan(first.width * 1.8)
+
+        const rules = await page.locator('.rules').boundingBox()
+
+        await expect(page.locator('.rules__title')).toHaveText('Deal rules')
+        expect(rules.x, 'the rules are a column beside the passes').toBeGreaterThan(leadBox.x + leadBox.width - 1)
+        // The chip that scrolled down to them has nothing left to do.
+        await expect(page.getByRole('button', { name: /Go to your \d+ deal rule/ })).toHaveCount(0)
+
+        await expectNoSidewaysScroll(page, '/watch')
+        await shot(page, 'watch-desktop')
+    })
+
+    test('moves the lead to the row that was clicked', async ({ page }) => {
+        await page.goto('/watch')
+        await expect(page.locator('.pass.is-selected')).toContainText('LIS')
+
+        await page.locator('.route-row[data-code="AMS-NAP"]').click()
+
+        await expect(page.locator('.pass.is-selected')).toContainText('NAP')
+        await expect(page.locator('.route-row[data-code="AMS-NAP"]')).toHaveClass(/route-row--active/)
+        await expect(page.locator('.pass.is-selected')).toHaveCount(1)
+    })
+
+    // Put back inside the test: every spec shares one database (docs/E2E.md "The specs").
+    test('pauses a route from the pane, and dims its row', async ({ page }) => {
+        await page.goto('/watch')
+
+        const toggle = page.locator('.pass.is-selected').getByRole('switch')
+        const row = page.locator('.route-row[data-code="AMS-LIS"]')
+
+        await expect(toggle).toHaveAttribute('aria-checked', 'true')
+
+        await toggle.click()
+        await expect(toggle).toHaveAttribute('aria-checked', 'false')
+        await expect(row).toHaveClass(/route-row--paused/)
+
+        await toggle.click()
+        await expect(toggle).toHaveAttribute('aria-checked', 'true')
+        await expect(row).not.toHaveClass(/route-row--paused/)
+    })
+})
+
+test.describe('the landing detail', () => {
+    test.skip(({ viewport }) => viewport.width < 1024, 'the two-column detail needs 1024px')
+
+    test('puts the chart beside the price, not under it', async ({ page }) => {
+        await page.goto('/')
+
+        const panel = page.locator('.home__panel')
+
+        await expect(panel.locator('.detail__code')).toHaveText('AMS → LIS')
+
+        const head = await panel.locator('.detail__head').boundingBox()
+        const price = await panel.locator('.price').boundingBox()
+        const chart = await panel.locator('.chart-card').boundingBox()
+        const booking = await panel.locator('.booking').boundingBox()
+
+        expect(chart.x, 'the chart is the right-hand column').toBeGreaterThan(price.x + price.width - 1)
+        expect(booking.x, 'the booking pair is under the chart').toBeGreaterThan(price.x + price.width - 1)
+        expect(Math.abs(chart.y - head.y), 'both columns start on the same line').toBeLessThan(4)
+
+        await expectNoSidewaysScroll(page, '/')
+    })
+
+    // The whole point of the two columns: the detail is short enough to leave the globe something.
+    test('gives the globe every pixel the detail does not need', async ({ page }) => {
+        await page.goto('/')
+
+        const canvas = await (await waitForGlobe(page)).boundingBox()
+
+        expect(canvas.height, 'the globe keeps its floor').toBeGreaterThan(280)
+        expect(canvas.height, 'and takes more than the floor once the detail is two columns').toBeGreaterThan(300)
+
+        const stage = await page.locator('.home__stage').boundingBox()
+        const panel = await page.locator('.home__panel').boundingBox()
+        const pane = await page.locator('.home__pane').boundingBox()
+
+        expect(Math.round(stage.height + panel.height)).toBe(Math.round(pane.height))
+
+        await shot(page, 'landing-desktop-columns')
+    })
+})
+
+// 768-1023px: rail plus one pane, and these two screens keep the phone layout centred in it.
+test.describe('the collapsed pane', () => {
+    test.skip(({ viewport }) => viewport.width >= 1024, 'the single pane is 768-1023px')
+
+    test('leaves the calendar and the watch list in the phone column', async ({ page }) => {
+        for (const path of ['/calendar', '/watch']) {
+            await page.goto(path)
+
+            await expect(page.locator('.app-shell__main--column')).toHaveCount(1)
+            await expect(page.locator('.route-rows')).toHaveCount(0)
+
+            await expectNoSidewaysScroll(page, path)
+        }
+
+        await page.goto('/calendar')
+        await expect(page.locator('.chips .chip').first()).toBeVisible()
+        await expect(page.locator('.sheet--docked')).toHaveCount(0)
+    })
+})
