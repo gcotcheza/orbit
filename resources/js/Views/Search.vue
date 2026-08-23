@@ -3,10 +3,12 @@
  * Search — the centre tab. Any airport to any airport, the three home pills are presentation
  * only, and TEXT WINS WHILE THERE IS TEXT, PILLS WIN ON TAP (docs/BUSINESS-LOGIC.md §36).
  */
-import { computed, onMounted, ref, useTemplateRef } from 'vue'
+import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import DiscoveryCard from '@/Components/discover/DiscoveryCard.vue'
+import RouteDetailPanel from '@/Components/route/RouteDetailPanel.vue'
 import AirportField from '@/Components/search/AirportField.vue'
+import { useLayout } from '@/lib/layout'
 import { IATA, toCode } from '@/stores/airports'
 import { useDiscoveriesStore } from '@/stores/discoveries'
 import { useWatchlistStore } from '@/stores/watchlist'
@@ -16,6 +18,10 @@ import { useWatchlistStore } from '@/stores/watchlist'
  * and presentation only now: the server takes any airport at either end.
  */
 const HOME = ['AMS', 'EIN', 'DUS']
+
+// 1024px and up this screen is the search card beside a pane of finds; below it, the phone's
+// single column centred in what the rail leaves (docs/DESKTOP-LAYOUT-PLAN.md phase 3).
+const { isDesktop } = useLayout()
 
 const router = useRouter()
 const watchlist = useWatchlistStore()
@@ -43,6 +49,9 @@ const adding = ref(false)
 
 /** `{ code, label }` of the route just added, or null. */
 const added = ref(null)
+
+/** The pair a look-up put in the pane, or ''. Only the frame ever has a pane to put one in. */
+const looked = ref('')
 
 const fromField = useTemplateRef('fromField')
 
@@ -103,6 +112,12 @@ function startOfDay(date) {
 }
 
 const canSubmit = computed(() => IATA.test(origin.value) && IATA.test(destination.value) && !adding.value)
+
+/* The pane holds the pair the form last asked about, so editing either end makes it stale — and the
+   box's own ✕ is therefore the way back to the finds (docs/DESKTOP-LAYOUT-PLAN.md phase 3). */
+watch([origin, destination], () => {
+  looked.value = ''
+})
 
 /**
  * Light a home airport, and take the box out of the argument: a tap beats whatever is typed,
@@ -173,7 +188,17 @@ function attempt(intent) {
  * because `ORIGIN-DEST` is what a route code IS and this screen has both halves.
  */
 function lookUp() {
-  router.push({ name: 'route-detail', params: { id: `${origin.value}-${destination.value}` } })
+  const code = `${origin.value}-${destination.value}`
+
+  // In the frame the pane beside the form is where a route goes; on a phone it is a screen of its
+  // own, and the tab bar is the way back.
+  if (isDesktop.value) {
+    looked.value = code
+
+    return
+  }
+
+  router.push({ name: 'route-detail', params: { id: code } })
 }
 
 /**
@@ -220,105 +245,128 @@ function messageFor(failure) {
 </script>
 
 <template>
-  <div class="screen">
-    <header class="screen__head">
-      <h1 class="screen__title">Search</h1>
-      <p class="screen__note">Any airport to any airport. See what it costs before you commit to watching it.</p>
-    </header>
-
-    <!-- The form's own submit — Enter, and the primary button — is the LOOK-UP, which is "look
-         before you watch" at the keyboard too. -->
-    <form class="search rise-in" novalidate @submit.prevent="attempt('lookup')" @focusout="onFocusOut">
-      <!-- THE PLACEHOLDER IS THE WHOLE AFFORDANCE: the box used to arrive holding "AMS", which is a
-           read-out, not an invitation. -->
-      <AirportField
-        id="search-from"
-        ref="fromField"
-        v-model="from"
-        label="From"
-        aria-label="Origin — any airport"
-        list-label="Origin suggestions"
-        placeholder="Somewhere else? City or code…"
-        clear-label="Clear the origin"
-        :open="openField === 'from'"
-        :exclude="destination"
-        @open="openField = 'from'"
-        @close="openField = ''"
-      >
-        <!-- IN THE FIELD RATHER THAN ABOVE IT, so pills and box read as one control. Buttons, not
-             radios: these are three of three thousand. -->
-        <template #quick>
-          <div class="quick" role="group" aria-label="Home airports">
-            <button
-              v-for="code in HOME"
-              :key="code"
-              type="button"
-              class="quick__chip"
-              :class="{ 'quick__chip--on': lit(code) }"
-              :aria-pressed="lit(code)"
-              @click="takeHome(code)"
-            >
-              {{ code }}
-            </button>
-          </div>
-        </template>
-      </AirportField>
-
-      <AirportField
-        id="search-to"
-        v-model="to"
-        class="search__to"
-        label="To"
-        list-label="Destination suggestions"
-        placeholder="City or code — e.g. Lisbon"
-        :open="openField === 'to'"
-        :exclude="origin"
-        @open="openField = 'to'"
-        @close="openField = ''"
-      />
-
-      <p v-if="error" class="search__error" role="alert">{{ error }}</p>
-
-      <!-- `role="status"`: nothing went wrong, and an assertive announcement over a deliberate
-           action is shouting about what the user just did. -->
-      <p v-if="added" class="search__added" role="status">
-        {{ added.label }} is on your watch list.
-        <RouterLink class="search__added-link" :to="{ name: 'route-detail', params: { id: added.code } }">
-          Open it
-        </RouterLink>
-      </p>
-
-      <button class="search__submit" type="submit" :disabled="!canSubmit">Look up</button>
-
-      <!-- THE COMMITMENT, KEPT AND MADE QUIETER: the same write it always was, and still one
-           tap. -->
-      <button class="search__watch" type="button" :disabled="!canSubmit" @click="attempt('watch')">
-        {{ adding ? 'Adding…' : 'Add to watch' }}
-      </button>
-    </form>
-
-    <!-- THE STRIP RENDERS ONLY WHEN THERE IS SOMETHING ON IT: no skeleton, no empty state, three
-         deliberate omissions (docs/BUSINESS-LOGIC.md §36). -->
-    <section v-if="finds.length" class="finds" aria-labelledby="finds-heading">
-      <header class="finds__head">
-        <h2 id="finds-heading" class="finds__title">Deals from your airports</h2>
-        <p class="finds__note">
-          Routes you are not watching. Orbit found these on its own<span v-if="foundLabel">, {{ foundLabel }}</span>.
-        </p>
+  <div class="screen" :class="{ 'screen--wide': isDesktop }">
+    <div class="screen__master">
+      <header class="screen__head">
+        <h1 class="screen__title">Search</h1>
+        <p class="screen__note">Any airport to any airport. See what it costs before you commit to watching it.</p>
       </header>
 
-      <ul class="finds__list">
-        <li v-for="find in finds" :key="`${find.code}-${find.departureDate}`">
-          <DiscoveryCard :discovery="find" />
-        </li>
-      </ul>
-    </section>
+      <!-- The form's own submit — Enter, and the primary button — is the LOOK-UP, which is "look
+           before you watch" at the keyboard too. -->
+      <form class="search rise-in" novalidate @submit.prevent="attempt('lookup')" @focusout="onFocusOut">
+        <!-- THE PLACEHOLDER IS THE WHOLE AFFORDANCE: the box used to arrive holding "AMS", which is a
+             read-out, not an invitation. -->
+        <AirportField
+          id="search-from"
+          ref="fromField"
+          v-model="from"
+          label="From"
+          aria-label="Origin — any airport"
+          list-label="Origin suggestions"
+          placeholder="Somewhere else? City or code…"
+          clear-label="Clear the origin"
+          :open="openField === 'from'"
+          :exclude="destination"
+          @open="openField = 'from'"
+          @close="openField = ''"
+        >
+          <!-- IN THE FIELD RATHER THAN ABOVE IT, so pills and box read as one control. Buttons, not
+               radios: these are three of three thousand. -->
+          <template #quick>
+            <div class="quick" role="group" aria-label="Home airports">
+              <button
+                v-for="code in HOME"
+                :key="code"
+                type="button"
+                class="quick__chip"
+                :class="{ 'quick__chip--on': lit(code) }"
+                :aria-pressed="lit(code)"
+                @click="takeHome(code)"
+              >
+                {{ code }}
+              </button>
+            </div>
+          </template>
+        </AirportField>
+
+        <AirportField
+          id="search-to"
+          v-model="to"
+          class="search__to"
+          label="To"
+          list-label="Destination suggestions"
+          placeholder="City or code — e.g. Lisbon"
+          :open="openField === 'to'"
+          :exclude="origin"
+          @open="openField = 'to'"
+          @close="openField = ''"
+        />
+
+        <p v-if="error" class="search__error" role="alert">{{ error }}</p>
+
+        <!-- `role="status"`: nothing went wrong, and an assertive announcement over a deliberate
+             action is shouting about what the user just did. -->
+        <p v-if="added" class="search__added" role="status">
+          {{ added.label }} is on your watch list.
+          <RouterLink class="search__added-link" :to="{ name: 'route-detail', params: { id: added.code } }">
+            Open it
+          </RouterLink>
+        </p>
+
+        <button class="search__submit" type="submit" :disabled="!canSubmit">Look up</button>
+
+        <!-- THE COMMITMENT, KEPT AND MADE QUIETER: the same write it always was, and still one
+             tap. -->
+        <button class="search__watch" type="button" :disabled="!canSubmit" @click="attempt('watch')">
+          {{ adding ? 'Adding…' : 'Add to watch' }}
+        </button>
+      </form>
+    </div>
+
+    <div class="screen__pane">
+      <!-- The look-up's answer, in the pane rather than on a screen of its own. -->
+      <div v-if="isDesktop && looked" class="looked">
+        <!-- Named after the thing it goes back to, which is the heading below it and not new copy. -->
+        <button type="button" class="looked__back" @click="looked = ''">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M9.5 3.5 5 8l4.5 4.5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          Deals from your airports
+        </button>
+
+        <RouteDetailPanel :code="looked" embedded />
+      </div>
+
+      <!-- THE STRIP RENDERS ONLY WHEN THERE IS SOMETHING ON IT: no skeleton, no empty state, three
+           deliberate omissions (docs/BUSINESS-LOGIC.md §36). -->
+      <section v-else-if="finds.length" class="finds" aria-labelledby="finds-heading">
+        <header class="finds__head">
+          <h2 id="finds-heading" class="finds__title">Deals from your airports</h2>
+          <p class="finds__note">
+            Routes you are not watching. Orbit found these on its own<span v-if="foundLabel">, {{ foundLabel }}</span>.
+          </p>
+        </header>
+
+        <ul class="finds__list">
+          <li v-for="find in finds" :key="`${find.code}-${find.departureDate}`">
+            <DiscoveryCard :discovery="find" />
+          </li>
+        </ul>
+      </section>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .screen {
   padding: 4px var(--gutter) 0;
+}
+
+/* No box of their own below 1024px, so the phone's column is the column it always was. */
+.screen__master,
+.screen__pane {
+  display: contents;
 }
 
 .screen__head {
@@ -452,6 +500,28 @@ function messageFor(failure) {
   cursor: not-allowed;
 }
 
+/*
+ * The way back out of a look-up. Only the frame mounts it, so its rules need no media query —
+ * the `v-if` is the guard. Accent as text, and the negative margin keeps the 44px target.
+ */
+
+.looked__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  padding: 8px 6px;
+  margin: -8px -6px 10px;
+
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--accent-ink);
+}
+
+.looked__back path {
+  stroke: var(--accent-ink);
+}
+
 /* =============================================================================
    Deals from your airports
    ============================================================================= */
@@ -489,5 +559,70 @@ function messageFor(failure) {
   flex-direction: column;
   gap: 10px;
   list-style: none;
+}
+
+/* --- 1024px and up: the search card as the master, the finds as the pane -----
+   Both halves of the query are lib/layout.js's, and they must be edited together
+   (docs/DESKTOP-LAYOUT-PLAN.md, docs/BUSINESS-LOGIC.md §36). */
+
+@media (min-width: 1024px) and (min-height: 600px) {
+  .screen--wide {
+    display: flex;
+    height: 100%;
+    padding: 0;
+  }
+
+  .screen--wide .screen__master {
+    flex: 0 0 var(--master-width);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px 18px 18px;
+    overflow-y: auto;
+
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+  }
+
+  .screen--wide .screen__head {
+    margin: 0;
+  }
+
+  /* The pane's own gap does what the phone's margin did. */
+  .screen--wide .search {
+    margin-top: 0;
+  }
+
+  .screen--wide .screen__pane {
+    flex: 1;
+    min-width: 0;
+    display: block;
+    padding: 24px 28px;
+    overflow-y: auto;
+  }
+
+  .screen--wide .finds {
+    margin-top: 0;
+    padding-bottom: 0;
+  }
+
+  .screen--wide .finds__head {
+    margin: 0 2px 12px;
+  }
+
+  /*
+   * `auto-fill`, not a hard two: at the frame's own floor the pane is ~540px, which is one card
+   * and not two half-clipped ones, and 300px is the width a find card stops being readable at.
+   */
+  .screen--wide .finds__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px 20px;
+  }
+
+  /* One column of reading, not a route detail sprawled across the whole pane. */
+  .screen--wide .looked {
+    max-width: 680px;
+  }
 }
 </style>

@@ -6,8 +6,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterLink } from 'vue-router'
+import DealRules from '@/Components/rules/DealRules.vue'
 import MatchBanner from '@/Components/rules/MatchBanner.vue'
 import RuleChip from '@/Components/rules/RuleChip.vue'
+import { useLayout } from '@/lib/layout'
 import { useRulesStore } from '@/stores/rules'
 
 /* The design's own onboarding example — kept here, not in the store,
@@ -16,6 +18,17 @@ const SEED = 'cheap weekend somewhere sunny in spring, leaving Friday from any N
 
 /** design/README.md §4 — long enough to read while typing, short enough to feel live. */
 const DEBOUNCE_MS = 500
+
+/* The head is the master pane's, and both states share that pane — so the copy of both lives here
+   rather than inside two branches of the template (docs/DESKTOP-LAYOUT-PLAN.md phase 3). */
+const HEADS = {
+  writing: { title: 'New deal rule', note: "Describe the trip you're dreaming of." },
+  created: { title: 'Rule created', note: 'Orbit is watching for it from now on.' },
+}
+
+// 1024px and up the rules list is the master pane and the compose card is the detail; below it,
+// the phone's single column centred in what the rail leaves.
+const { isDesktop } = useLayout()
 
 const rules = useRulesStore()
 const { chips, matches, parseStatus, understood, error } = storeToRefs(rules)
@@ -30,6 +43,8 @@ let timer = null
 /* The text the reading on screen is of. Only the CTA waits on it; the chips'
    × never does. Why: docs/BUSINESS-LOGIC.md §11. */
 const asked = ref(SEED)
+
+const head = computed(() => (created.value ? HEADS.created : HEADS.writing))
 
 const parsing = computed(() => parseStatus.value === 'parsing')
 const failed = computed(() => parseStatus.value === 'failed')
@@ -98,100 +113,112 @@ async function save() {
 </script>
 
 <template>
-  <div class="screen">
-    <template v-if="created">
+  <div class="screen" :class="{ 'screen--wide': isDesktop }">
+    <div class="screen__master">
       <header class="screen__head">
-        <h1 class="screen__title">Rule created</h1>
-        <p class="screen__note">Orbit is watching for it from now on.</p>
+        <h1 class="screen__title">{{ head.title }}</h1>
+        <p class="screen__note">{{ head.note }}</p>
       </header>
 
-      <div class="done rise-in">
-        <p class="done__text">“{{ created.text }}”</p>
+      <!-- The rules this screen adds to, beside the box that writes them. Not on a phone: the
+           watch list is where they live there, and this screen is one column deep. -->
+      <DealRules v-if="isDesktop" :notice="false" />
+    </div>
 
-        <div class="done__chips">
-          <span v-for="chip in created.chips" :key="chip.id" class="done__chip">{{ chip.label }}</span>
-        </div>
+    <div class="screen__pane">
+      <div class="screen__col">
+        <template v-if="created">
+          <div class="done rise-in">
+            <p class="done__text">“{{ created.text }}”</p>
 
-        <p class="done__promise">
-          We'll tell you when a trip like this turns up
-          <template v-if="created.matches.count > 0">
-            — {{ created.matches.count }} already match, from €{{ created.matches.cheapest }}.
-          </template>
-          <template v-else>
-            . Orbit is off to price the routes it is about; the first matches land within the hour.
-          </template>
-        </p>
+            <div class="done__chips">
+              <span v-for="chip in created.chips" :key="chip.id" class="done__chip">{{ chip.label }}</span>
+            </div>
 
-        <RouterLink :to="{ name: 'watch' }" class="done__link">See it on your watch list</RouterLink>
-        <button type="button" class="done__again" @click="startOver">Write another rule</button>
+            <p class="done__promise">
+              We'll tell you when a trip like this turns up
+              <template v-if="created.matches.count > 0">
+                — {{ created.matches.count }} already match, from €{{ created.matches.cheapest }}.
+              </template>
+              <template v-else>
+                . Orbit is off to price the routes it is about; the first matches land within the hour.
+              </template>
+            </p>
+
+            <RouterLink :to="{ name: 'watch' }" class="done__link">See it on your watch list</RouterLink>
+            <button type="button" class="done__again" @click="startOver">Write another rule</button>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="compose">
+            <label class="compose__label" for="rule-text">Your rule</label>
+            <textarea
+              id="rule-text"
+              v-model="text"
+              class="compose__input"
+              rows="3"
+              maxlength="500"
+              placeholder="cheap weekend somewhere sunny, under €80"
+              autocomplete="off"
+              spellcheck="false"
+            ></textarea>
+          </div>
+
+          <div class="understood">
+            <h2 class="understood__title">Here's what we understood</h2>
+            <button
+              v-if="removed.length > 0"
+              type="button"
+              class="understood__reset"
+              @click="reset"
+            >
+              Reset
+            </button>
+          </div>
+
+          <div v-if="understood" class="chips">
+            <RuleChip
+              v-for="chip in chips"
+              :key="chip.id"
+              :chip="chip"
+              @remove="removeChip"
+            />
+          </div>
+
+          <p v-else-if="parsing && !understood" class="empty">Reading that…</p>
+
+          <p v-else-if="text.trim() === ''" class="empty">
+            Name a price, a season, a day of the week or what the trip is for — “a beach week in June under €150”.
+          </p>
+
+          <p v-else class="empty">
+            Orbit could not read a trip out of that yet. Try naming a price, a season, a day or what the trip is for.
+          </p>
+
+          <MatchBanner v-if="understood" class="banner" :matches="matches" :loading="parsing" />
+
+          <p v-if="error" class="error" role="alert">{{ error }}</p>
+
+          <button class="cta" type="button" :disabled="!canCreate" @click="save">
+            {{ saving ? 'Creating…' : 'Create rule' }}
+          </button>
+        </template>
       </div>
-    </template>
-
-    <template v-else>
-      <header class="screen__head">
-        <h1 class="screen__title">New deal rule</h1>
-        <p class="screen__note">Describe the trip you're dreaming of.</p>
-      </header>
-
-      <div class="compose">
-        <label class="compose__label" for="rule-text">Your rule</label>
-        <textarea
-          id="rule-text"
-          v-model="text"
-          class="compose__input"
-          rows="3"
-          maxlength="500"
-          placeholder="cheap weekend somewhere sunny, under €80"
-          autocomplete="off"
-          spellcheck="false"
-        ></textarea>
-      </div>
-
-      <div class="understood">
-        <h2 class="understood__title">Here's what we understood</h2>
-        <button
-          v-if="removed.length > 0"
-          type="button"
-          class="understood__reset"
-          @click="reset"
-        >
-          Reset
-        </button>
-      </div>
-
-      <div v-if="understood" class="chips">
-        <RuleChip
-          v-for="chip in chips"
-          :key="chip.id"
-          :chip="chip"
-          @remove="removeChip"
-        />
-      </div>
-
-      <p v-else-if="parsing && !understood" class="empty">Reading that…</p>
-
-      <p v-else-if="text.trim() === ''" class="empty">
-        Name a price, a season, a day of the week or what the trip is for — “a beach week in June under €150”.
-      </p>
-
-      <p v-else class="empty">
-        Orbit could not read a trip out of that yet. Try naming a price, a season, a day or what the trip is for.
-      </p>
-
-      <MatchBanner v-if="understood" class="banner" :matches="matches" :loading="parsing" />
-
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
-
-      <button class="cta" type="button" :disabled="!canCreate" @click="save">
-        {{ saving ? 'Creating…' : 'Create rule' }}
-      </button>
-    </template>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .screen {
   padding: 4px var(--gutter) 0;
+}
+
+/* No box of their own below 1024px, so the phone's column is the column it always was. */
+.screen__master,
+.screen__pane,
+.screen__col {
+  display: contents;
 }
 
 .screen__head {
@@ -389,5 +416,64 @@ async function save() {
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--ink2);
+}
+
+/* --- 1024px and up: the rules as the master, the compose card as the pane -----
+   Both halves of the query are lib/layout.js's, and they must be edited together
+   (docs/DESKTOP-LAYOUT-PLAN.md, docs/BUSINESS-LOGIC.md §36). */
+
+@media (min-width: 1024px) and (min-height: 600px) {
+  .screen--wide {
+    display: flex;
+    height: 100%;
+    padding: 0;
+  }
+
+  .screen--wide .screen__master {
+    flex: 0 0 var(--master-width);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px 18px 18px;
+    overflow-y: auto;
+
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+  }
+
+  .screen--wide .screen__head {
+    margin: 0;
+  }
+
+  .screen--wide .screen__pane {
+    flex: 1;
+    min-width: 0;
+    display: block;
+    padding: 24px 28px;
+    overflow-y: auto;
+  }
+
+  /*
+   * A sentence somebody is writing is prose, and prose does not want an 800px line. The column is
+   * capped and left-aligned rather than centred, so it stays anchored to the master beside it.
+   */
+  .screen--wide .screen__col {
+    display: block;
+    max-width: 680px;
+  }
+
+  .screen--wide .compose,
+  .screen--wide .done {
+    margin-top: 0;
+  }
+
+  /* Room to write in, which is what the pane bought: three rows is a phone's compromise. */
+  .screen--wide .compose__input {
+    min-height: 120px;
+  }
+
+  .screen--wide .cta {
+    margin-bottom: 0;
+  }
 }
 </style>

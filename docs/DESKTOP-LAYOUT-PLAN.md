@@ -149,13 +149,58 @@ What was actually built differs from the sketch above in four places, each worth
 *Phone: 19 baselines at 0 diff, phone suite unchanged. Docked `DaySheet` is `role="region"` and
 not a modal dialog — nothing is covered, so there is nothing to trap focus in front of.*
 
-### Phase 3 — Search, Create, Alerts in C
+### Phase 3 — Search, Create, Alerts in C — **SHIPPED**
 - Search: master = the search card (typeahead in flow); detail = "Deals from your
   airports" as a 2-column grid; a look-up result shows `RouteDetailPanel` in the pane.
 - Create: master = deal rules list; detail = compose + chips + banner + CTA at pane width.
-- Alerts: master = section list (CHANNELS … THIS APP, scroll-spy); detail = settings
-  cards in two columns.
-  *Effort M. Risk: none structural; mostly layout.*
+- Alerts: master = section list (CHANNELS … THIS APP); detail = settings cards in two
+  columns.
+
+All three are `meta.wide: 'desktop'`, so they arrive on an iPad in **landscape** and on a
+desktop window, and an iPad in portrait keeps the centred phone column — the same trade
+phase 2 made, and for the same reason: a 352px master plus a content column does not fit
+in 768px. All three are the phone's own template widened by `display: contents` wrappers.
+
+What was actually built differs from the sketch above in five places, each worth keeping:
+- **The deal rules list was not a component, and now is.** The plan said "reuse it"; there
+  was nothing to reuse — `Views/Watchlist.vue` carried the whole section inline. It is now
+  `Components/rules/DealRules.vue`, which owns the list, its two writes (pause, promote a
+  match) and its own `rules.load()`, so neither screen has to. The watch list's markup and
+  class names are unchanged, which is what keeps its baselines at zero; what moved with it
+  is the CSS for those class names, **including copies of `.screen__notice`, `.screen__state`
+  and `.screen__retry`** — scoped styles do not cross a component boundary, and renaming
+  them would have been the DOM change the extraction exists to avoid. The `.rules` root
+  keeps its hairline from *`Watchlist.vue`'s* stylesheet, because a child's root element
+  carries its parent's scope id; the create screen mounts the same component with no such
+  rule and gets no hairline, which is exactly right for a master pane.
+- **A parse failure and a rules-list failure are the same `error` in the same store.** On
+  `/create` that would have printed one sentence twice — under the box that was refused,
+  and again beside the rules. `DealRules` therefore takes a `notice` prop, and the create
+  screen passes `false`: the screen that owns the write owns the sentence about it. The
+  list's own "could not load your rules / try again" state is unaffected, since that is
+  about the list rather than about the write.
+- **Alerts has no scroll-spy, and the two columns are the reason.** The plan asked for one.
+  In a two-column pane CHANNELS and SENSITIVITY start on the same line, as do TIMING and
+  ACCOUNT — so a scroll offset does not name a section, and a spy would have flickered
+  between two answers at every position. The list is therefore click-driven (plus the
+  `#account` hash, which lights ACCOUNT as well as scrolling to it). At 1280x832 the cards
+  fit without scrolling at all, so the list is mostly a map rather than a lift; the artboard's
+  own note predicted exactly this.
+- **The alerts columns are an explicit `grid-column` per section, not two column elements.**
+  Same mechanism, and same reason, as phase 2's landing detail: the phone reads channels →
+  sensitivity → timing → account → this app, and the design's left column is the 1st and 3rd
+  of those. Five `display: contents` wrappers are placed into columns 1, 2, 1, 2, 2. The
+  gated three are inside the `isReady` branch, so a screen still loading its settings lists
+  and draws only ACCOUNT and THIS APP.
+- **The look-up's way back is a control, not the clear flow.** The brief expected the field's
+  own ✕ to serve; the destination box has no ✕ (only the origin does, deliberately). So the
+  pane carries one back button, labelled `Deals from your airports` — the heading it returns
+  to, so no new copy was invented. Editing either end of the pair also drops the panel, since
+  a pane holding a pair the form has moved past is stale.
+
+*Phone: 19 baselines at 0 diff, phone suite unchanged. `meta.wide` on `/search`, `/create`
+and `/alerts`; four new section ids (`#channels`, `#sensitivity`, `#timing`, `#this-app`)
+join the `#account` that already existed.*
 
 ### Phase 4 — Quality and polish
 - Dark theme pass on every desktop screen; focus order and keyboard use of the rail;
@@ -177,7 +222,10 @@ Every phase: phone screenshots pixel-identical to the baselines, phone e2e green
 2. Calendar and Watch use the pane (iPad in landscape, or a desktop window — 1024px and up);
    calendar cells square; day panel docked beside the month from 1264px, under it below that.
    **Done.**
-3. Search, Create, Alerts use the pane.
+3. Search, Create, Alerts use the pane (iPad in landscape, or a desktop window — 1024px
+   and up); the search card lists finds two abreast, a look-up answers in the pane, the
+   new-rule sentence sits beside the rules it joins, and the alert cards are two columns.
+   **Done.**
 4. Dark mode clean; nothing regressed on the phone (full e2e + screenshot baselines).
 
 ## Working agreement

@@ -404,7 +404,7 @@ in.
 | `theme.spec.js` | the palette really swaps and survives a reload; both themes of Home photographed |
 | `phone-baselines.spec.js` | every screen, both themes, at `maxDiffPixels: 0` — the phone-regression guard |
 | `layout-smoke.spec.js` | tablet and desktop only: the icon rail replaces the tab bar, nothing scrolls sideways, and the landing page's master pane, `?route=` selection and globe height |
-| `layout-screens.spec.js` | tablet and desktop only: the calendar and the watch list inside the frame, and the landing detail's two columns |
+| `layout-screens.spec.js` | tablet and desktop only: the calendar, the watch list, search, the new-rule screen and alerts inside the frame, and the landing detail's two columns |
 
 ### The projects
 
@@ -459,15 +459,31 @@ stops being a frame and starts being screens:
   the two columns really are columns; the globe's canvas clears both its 280px
   floor and 300px, and `stage + panel` heights sum exactly to the pane's, which
   is the leftover-height rule stated as arithmetic.
-- **tablet (768–1023)** — `/calendar` and `/watch` still carry
-  `app-shell__main--column`, no master rows and no docked panel: the phone
+- **search (≥1024)** — the search card is inside `.screen__master` and the finds
+  start to the right of it, two abreast on a shared row; a look-up fills the pane
+  with `.detail__code` **without** changing the URL, without losing the rail and
+  with `.finds` gone, and the `Deals from your airports` button puts them back.
+- **the new rule screen (≥1024)** — `Deal rules` and at least one `.rule` in the
+  master, the compose card starting to its right and no wider than 680px, the
+  seeded sentence's eight chips, and a CTA that is enabled; removing a chip
+  re-reads the sentence to seven without the master going anywhere.
+- **alerts (≥1024)** — five `.seclist__item`s; `.set--sensitivity` starts right of
+  `.set--channels`, `.set--timing` shares the left column's `x` and sits below
+  channels, `.set--account` shares the right one's; clicking TIMING lights that
+  row, sets `aria-current` and leaves its heading inside the pane's own box;
+  `/alerts#account` lights ACCOUNT and lands on the card; and the weekly-digest
+  switch flips, survives a reload and **is put back inside the same test**, since
+  every spec drives one database.
+- **tablet (768–1023)** — `/calendar`, `/watch`, `/search`, `/create` and
+  `/alerts` all still carry `app-shell__main--column` and no `.screen--wide`, with
+  no master rows, no docked panel, no section list and no rules list: the phone
   layout, centred in what the rail leaves.
 
 Each of those checks `documentElement.scrollWidth === innerWidth` again with the
-pane actually full, because a docked panel and a six-pass grid are the two things
-in this phase that could push a window sideways.
+pane actually full, because a docked panel, a six-pass grid and a two-column
+finds grid are the things in these phases that could push a window sideways.
 
-**A fourth describe resizes the desktop project to 1024x600 and runs three tests
+**A last describe resizes the desktop project to 1024x600 and runs six tests
 there**, rather than adding a fifth project — the frame's own floor is one
 viewport, not a whole suite, and `page.setViewportSize` re-fires the same
 `matchMedia` listeners the composable is built on. What it is for:
@@ -487,6 +503,18 @@ viewport, not a whole suite, and `page.setViewportSize` re-fires the same
 - **the day panel wraps under the month below 1264px**, and the cells stay square
   and larger than 48px while it does — that is the trade the plan's "docked as a
   side panel at ≥1024" turned into, and it is asserted rather than assumed.
+- **the finds drop to one column rather than two half ones.** The pane is about
+  540px here, and `repeat(auto-fill, minmax(300px, 1fr))` is what makes that one
+  card instead of two clipped ones; the test asserts the second card is *below*
+  the first, shares its `x`, and is still over 300px wide.
+- **the new rule screen is still a master and a pane** — the compose card starts
+  to the right of the rules, and the eight chips and an enabled CTA are still
+  there, because 600px of height is where a pane would otherwise start eating the
+  bottom of the form.
+- **the alert cards stay two columns, and only the pane scrolls.** The test
+  scrolls `.screen__pane` to the bottom and asserts the rail has not moved and the
+  five section rows are still on the page — the same overflow-escaping-upwards
+  failure the landing detail's test exists to catch.
 
 **The landing page is why these two projects now take about 20 seconds.** They
 draw the globe, and `waitForGlobe()` polls a SwiftShader render.

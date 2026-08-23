@@ -1,5 +1,6 @@
 // The tablet and desktop projects' second file: the calendar, the watch list and the two-column
-// landing detail inside the frame (docs/DESKTOP-LAYOUT-PLAN.md phase 2).
+// landing detail (phase 2), then search, the new-rule screen and alerts (phase 3), all inside the
+// frame (docs/DESKTOP-LAYOUT-PLAN.md).
 import { expect, shot, test, waitForGlobe } from '../fixtures.js'
 
 /** The seeded watchlist, in the seeder's own order (database/seeders/WatchlistSeeder.php). */
@@ -186,6 +187,180 @@ test.describe('the landing detail', () => {
     })
 })
 
+test.describe('search in the frame', () => {
+    test.skip(({ viewport }) => viewport.width < 1024, 'the master pane needs 1024px')
+
+    test('keeps the form in the master and grids the finds beside it', async ({ page }) => {
+        await page.goto('/search')
+
+        await expect(page.locator('.screen__master form.search')).toBeVisible()
+
+        const cards = page.locator('.screen__pane .finds__list .find')
+
+        await expect(cards.first()).toBeVisible()
+
+        const first = await cards.nth(0).boundingBox()
+        const second = await cards.nth(1).boundingBox()
+        const form = await page.locator('form.search').boundingBox()
+
+        expect(Math.abs(first.y - second.y), 'the finds are two abreast at 1280').toBeLessThan(2)
+        expect(second.x).toBeGreaterThan(first.x + first.width - 1)
+        expect(first.x, 'and they are the pane, right of the search card').toBeGreaterThan(form.x + form.width - 1)
+
+        await expectNoSidewaysScroll(page, '/search')
+        await shot(page, 'search-desktop')
+    })
+
+    test('answers a look-up in the pane instead of leaving the screen', async ({ page }) => {
+        await page.goto('/search')
+        await page.locator('#search-to').fill('lisbon')
+
+        const option = page.getByRole('listbox', { name: 'Destination suggestions' }).getByRole('option').first()
+
+        await expect(option).toContainText('LIS')
+        await option.click()
+        await expect(page.locator('#search-to')).toHaveValue('LIS')
+
+        await page.getByRole('button', { name: 'Look up' }).click()
+
+        await expect(page.locator('.screen__pane .detail__code')).toHaveText('AMS → LIS')
+        // Nothing navigated: the form, the rail and the URL are the ones that were there.
+        await expect(page).toHaveURL(/\/search$/)
+        await expect(page.locator('.screen__master form.search')).toBeVisible()
+        await expect(page.locator('.rail-nav')).toBeVisible()
+        await expect(page.locator('.finds')).toHaveCount(0)
+
+        await expectNoSidewaysScroll(page, '/search with a route in the pane')
+        await shot(page, 'search-desktop-lookup')
+
+        // The way back, named after the thing it goes back to.
+        await page.getByRole('button', { name: 'Deals from your airports' }).click()
+        await expect(page.locator('.finds__list')).toBeVisible()
+        await expect(page.locator('.detail__code')).toHaveCount(0)
+    })
+})
+
+test.describe('the new rule screen in the frame', () => {
+    test.skip(({ viewport }) => viewport.width < 1024, 'the master pane needs 1024px')
+
+    test('lists the saved rules beside the sentence being written', async ({ page }) => {
+        await page.goto('/create')
+
+        await expect(page.locator('.screen__master .rules__title')).toHaveText('Deal rules')
+        await expect(page.locator('.screen__master .rule').first()).toBeVisible()
+
+        // The seeded sentence is read back as its eight chips, and the CTA opens once it has been.
+        await expect(page.locator('.chips .chip')).toHaveCount(8)
+        await expect(page.locator('.cta')).toBeEnabled()
+
+        const rules = await page.locator('.rules').boundingBox()
+        const compose = await page.locator('.compose').boundingBox()
+
+        expect(compose.x, 'the compose card is the pane, right of the master').toBeGreaterThan(rules.x + rules.width - 1)
+        expect(compose.width, 'and a sentence somebody writes is not 800px wide').toBeLessThanOrEqual(680)
+
+        await expectNoSidewaysScroll(page, '/create')
+        await shot(page, 'create-desktop')
+    })
+
+    test('re-reads the sentence when a chip is dropped, without leaving the pane', async ({ page }) => {
+        await page.goto('/create')
+        await expect(page.locator('.chips .chip')).toHaveCount(8)
+
+        await page.locator('.chips .chip').first().locator('.chip__remove').click()
+
+        await expect(page.locator('.chips .chip')).toHaveCount(7)
+        await expect(page.getByRole('button', { name: 'Reset' })).toBeVisible()
+        await expect(page.locator('.cta')).toBeEnabled()
+        await expect(page.locator('.screen__master .rules__title')).toBeVisible()
+    })
+})
+
+test.describe('alerts in the frame', () => {
+    test.skip(({ viewport }) => viewport.width < 1024, 'the master pane needs 1024px')
+
+    /** A settings section's box, by the wrapper the two-column placement is done with. */
+    const set = (page, name) => page.locator(`.set--${name}`)
+
+    test('draws the cards in the artboard\'s two columns', async ({ page }) => {
+        await page.goto('/alerts')
+
+        await expect(page.locator('.seclist__item')).toHaveCount(5)
+
+        const channels = await set(page, 'channels').boundingBox()
+        const sensitivity = await set(page, 'sensitivity').boundingBox()
+        const timing = await set(page, 'timing').boundingBox()
+        const account = await set(page, 'account').boundingBox()
+
+        expect(sensitivity.x, 'sensitivity is the right-hand column').toBeGreaterThan(channels.x + channels.width - 1)
+        expect(Math.abs(timing.x - channels.x), 'timing is under channels, in the left one').toBeLessThan(2)
+        expect(timing.y).toBeGreaterThan(channels.y + channels.height - 1)
+        expect(Math.abs(account.x - sensitivity.x), 'account is under sensitivity, in the right one').toBeLessThan(2)
+
+        await expectNoSidewaysScroll(page, '/alerts')
+        await shot(page, 'alerts-desktop')
+    })
+
+    test('lights the section that was clicked and brings its heading into the pane', async ({ page }) => {
+        await page.goto('/alerts')
+
+        const timing = page.locator('.seclist__item[data-section="timing"]')
+
+        await expect(page.locator('.seclist__item[data-section="channels"]')).toHaveClass(/seclist__item--active/)
+
+        await timing.click()
+
+        await expect(timing).toHaveClass(/seclist__item--active/)
+        await expect(timing).toHaveAttribute('aria-current', 'true')
+        await expect(page.locator('.seclist__item[data-section="channels"]')).not.toHaveClass(/seclist__item--active/)
+
+        // Scrolled to, or already there: either way the heading it names is inside the pane's box.
+        const pane = await page.locator('.screen__pane').boundingBox()
+        const heading = await page.locator('#timing').boundingBox()
+
+        expect(heading.y, 'the section it named is in view').toBeGreaterThanOrEqual(pane.y - 1)
+        expect(heading.y + heading.height).toBeLessThanOrEqual(pane.y + pane.height + 1)
+    })
+
+    // The landing head's account link is a hash, and it has to keep landing on the card.
+    test('follows #account to the account card, and says so in the list', async ({ page }) => {
+        await page.goto('/alerts#account')
+
+        await expect(page.locator('.seclist__item[data-section="account"]')).toHaveClass(/seclist__item--active/)
+
+        const pane = await page.locator('.screen__pane').boundingBox()
+        const heading = await page.locator('#account').boundingBox()
+
+        await expect(page.locator('#account')).toHaveText('Account')
+        expect(heading.y, 'the account card is in the pane, not above it').toBeGreaterThanOrEqual(pane.y - 1)
+        expect(heading.y + heading.height).toBeLessThanOrEqual(pane.y + pane.height + 1)
+    })
+
+    // Put back inside the test: every spec shares one database (docs/E2E.md "The specs").
+    test('saves a switch from the pane and reads it back', async ({ page }) => {
+        await page.goto('/alerts')
+
+        const digest = set(page, 'timing').getByRole('switch', { name: 'Weekly digest' })
+        const before = await digest.getAttribute('aria-checked')
+        const flipped = before === 'true' ? 'false' : 'true'
+
+        await digest.click()
+        await expect(digest).toHaveAttribute('aria-checked', flipped)
+
+        await page.reload()
+        await expect(set(page, 'timing').getByRole('switch', { name: 'Weekly digest' })).toHaveAttribute(
+            'aria-checked',
+            flipped,
+        )
+
+        await set(page, 'timing').getByRole('switch', { name: 'Weekly digest' }).click()
+        await expect(set(page, 'timing').getByRole('switch', { name: 'Weekly digest' })).toHaveAttribute(
+            'aria-checked',
+            before,
+        )
+    })
+})
+
 // 768-1023px: rail plus one pane, and these two screens keep the phone layout centred in it.
 test.describe('the collapsed pane', () => {
     test.skip(({ viewport }) => viewport.width >= 1024, 'the single pane is 768-1023px')
@@ -203,6 +378,24 @@ test.describe('the collapsed pane', () => {
         await page.goto('/calendar')
         await expect(page.locator('.chips .chip').first()).toBeVisible()
         await expect(page.locator('.sheet--docked')).toHaveCount(0)
+    })
+
+    test('leaves search, the new rule screen and alerts in it too', async ({ page }) => {
+        for (const path of ['/search', '/create', '/alerts']) {
+            await page.goto(path)
+
+            await expect(page.locator('.app-shell__main--column')).toHaveCount(1)
+            await expect(page.locator('.screen--wide')).toHaveCount(0)
+
+            await expectNoSidewaysScroll(page, path)
+        }
+
+        // The three things the frame adds, and none of them is here.
+        await expect(page.locator('.seclist')).toHaveCount(0)
+        await page.goto('/create')
+        await expect(page.locator('.rules')).toHaveCount(0)
+        await page.goto('/search')
+        await expect(page.locator('.finds__list')).toBeVisible()
     })
 })
 
@@ -288,5 +481,66 @@ test.describe('at the frame\'s own floor', () => {
 
         await expectNoSidewaysScroll(page, '/calendar at 1024x600')
         await shot(page, 'calendar-desktop-short')
+    })
+
+    // A 540px pane is one find card, not two clipped ones — which is what `auto-fill` is for.
+    test('drops the finds to a single column rather than halving them', async ({ page }) => {
+        await page.goto('/search')
+
+        const cards = page.locator('.finds__list .find')
+
+        await expect(cards.first()).toBeVisible()
+
+        const first = await cards.nth(0).boundingBox()
+        const second = await cards.nth(1).boundingBox()
+
+        expect(second.y, 'one under the other here').toBeGreaterThan(first.y + first.height - 1)
+        expect(Math.abs(second.x - first.x), 'and both start at the same edge').toBeLessThan(2)
+        expect(first.width, 'at a width a find card is still readable at').toBeGreaterThan(300)
+
+        await expectNoSidewaysScroll(page, '/search at 1024x600')
+        await shot(page, 'search-desktop-short')
+    })
+
+    test('keeps the new rule screen a master and a pane', async ({ page }) => {
+        await page.goto('/create')
+
+        await expect(page.locator('.screen__master .rules__title')).toHaveText('Deal rules')
+        await expect(page.locator('.chips .chip')).toHaveCount(8)
+        await expect(page.locator('.cta')).toBeEnabled()
+
+        const rules = await page.locator('.rules').boundingBox()
+        const compose = await page.locator('.compose').boundingBox()
+
+        expect(compose.x, 'the pane is still beside the master, not under it').toBeGreaterThan(
+            rules.x + rules.width - 1,
+        )
+
+        await expectNoSidewaysScroll(page, '/create at 1024x600')
+        await shot(page, 'create-desktop-short')
+    })
+
+    // The pane is what scrolls; the rail beside it must not go with it.
+    test('keeps the alert cards in two columns and scrolls only the pane', async ({ page }) => {
+        await page.goto('/alerts')
+
+        const channels = await page.locator('.set--channels').boundingBox()
+        const sensitivity = await page.locator('.set--sensitivity').boundingBox()
+
+        expect(sensitivity.x, 'still two columns at the floor').toBeGreaterThan(channels.x + channels.width - 1)
+
+        const rail = await page.locator('.rail-nav').boundingBox()
+        const pane = page.locator('.screen__pane')
+
+        await pane.evaluate((one) => one.scrollTo(0, one.scrollHeight))
+
+        expect((await page.locator('.rail-nav').boundingBox()).y, 'the rail does not scroll away').toBe(rail.y)
+        await expect(page.locator('.seclist__item')).toHaveCount(5)
+
+        await page.locator('.seclist__item[data-section="this-app"]').click()
+        await expect(page.locator('.seclist__item[data-section="this-app"]')).toHaveClass(/seclist__item--active/)
+
+        await expectNoSidewaysScroll(page, '/alerts at 1024x600')
+        await shot(page, 'alerts-desktop-short')
     })
 })

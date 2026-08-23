@@ -4,8 +4,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterLink } from 'vue-router'
+import DealRules from '@/Components/rules/DealRules.vue'
 import RouteRows from '@/Components/RouteRows.vue'
-import RuleRow from '@/Components/rules/RuleRow.vue'
 import WatchRow from '@/Components/watch/WatchRow.vue'
 import { scrollIntoView } from '@/lib/motion'
 import { useLayout } from '@/lib/layout'
@@ -20,15 +20,8 @@ const watchlist = useWatchlistStore()
 const { routes, status, error: notice } = storeToRefs(watchlist)
 
 // Rules use a second store: rules and routes are separate concepts that happen to share this
-// screen.
-const rules = useRulesStore()
-const { rules: dealRules, status: rulesStatus, error: rulesError } = storeToRefs(rules)
-
-/** Rule ids with a write in flight, so their switch can go inert. */
-const busyRules = ref(new Set())
-
-/** The code of the match currently being promoted to the watchlist. */
-const watchingCode = ref('')
+// screen. `DealRules` owns the section itself — only its count is read here.
+const { rules: dealRules } = storeToRefs(useRulesStore())
 
 // Undo is a real add write: removing a route deletes only the watchlist ROW, never its history, so
 // a restored route comes back intact.
@@ -61,8 +54,8 @@ const passes = computed(() => {
 })
 
 // The "Rules · N" chip jumps to the rules section below; a count, not a link, and it renders only
-// when there are rules.
-const jumpToRules = () => scrollIntoView(rulesSection.value, { block: 'start' })
+// when there are rules. `$el` because the ref now names a component, not the <section> itself.
+const jumpToRules = () => scrollIntoView(rulesSection.value?.$el, { block: 'start' })
 
 const countLine = computed(() => {
   const total = routes.value.length
@@ -79,10 +72,7 @@ const countLine = computed(() => {
     : `${total} ${routeWord}, ${total - active} paused.`
 })
 
-onMounted(() => {
-  watchlist.refresh()
-  rules.load()
-})
+onMounted(watchlist.refresh)
 
 onBeforeUnmount(() => clearTimeout(undoTimer))
 
@@ -156,47 +146,6 @@ function markBusy(code, busy) {
   busyCodes.value = next
 }
 
-/*
- * Pause or resume a rule. The store is optimistic and puts the switch back if the write fails,
- * exactly like the route toggle above.
- */
-async function toggleRule(rule, active) {
-  markRuleBusy(rule.id, true)
-
-  try {
-    await rules.toggle(rule, active)
-  } finally {
-    markRuleBusy(rule.id, false)
-  }
-}
-
-// Promoting a match uses the same write the add form makes; the response already matches GET
-// /api/watchlist's shape.
-async function watchMatch(match) {
-  watchingCode.value = match.code
-
-  try {
-    const added = await rules.watch(match)
-
-    if (added) {
-      watchlist.adopt(added)
-    }
-  } finally {
-    watchingCode.value = ''
-  }
-}
-
-function markRuleBusy(id, busy) {
-  const next = new Set(busyRules.value)
-
-  if (busy) {
-    next.add(id)
-  } else {
-    next.delete(id)
-  }
-
-  busyRules.value = next
-}
 </script>
 
 <template>
@@ -287,47 +236,9 @@ function markRuleBusy(id, busy) {
           </div>
         </div>
 
-        <!-- The deal rules section is deliberately quieter than the routes above, and is always
-             drawn: it is the only door to /create, so hiding it when empty would hide the way in. -->
-        <section ref="rulesSection" class="rules">
-          <div class="rules__head">
-            <h2 class="rules__title">Deal rules</h2>
-
-            <!-- The one + left on this screen names what it makes ("New rule"): there used to be
-                 two identical accent squares here doing different writes. -->
-            <RouterLink class="rules__new" :to="{ name: 'create' }">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M8 3v10M3 8h10" stroke-width="1.8" stroke-linecap="round" />
-              </svg>
-              New rule
-            </RouterLink>
-          </div>
-
-          <p v-if="rulesError" class="screen__notice" role="alert">{{ rulesError }}</p>
-
-          <p v-if="rulesStatus === 'failed' && dealRules.length === 0" class="screen__state">
-            Could not load your rules.
-            <button type="button" class="screen__retry" @click="rules.load()">Try again</button>
-          </p>
-
-          <p v-else-if="dealRules.length === 0 && rulesStatus !== 'loading'" class="rules__empty">
-            Rules watch for trips in plain English — “cheap weekend somewhere sunny, under €80”. Orbit reads one, then
-            tells you when a trip like it turns up.
-          </p>
-
-          <div v-else class="rules__list">
-            <RuleRow
-              v-for="rule in dealRules"
-              :key="rule.id"
-              :rule="rule"
-              :busy="busyRules.has(rule.id)"
-              :watching="watchingCode"
-              @toggle="toggleRule(rule, $event)"
-              @remove="rules.remove(rule)"
-              @watch="watchMatch"
-            />
-          </div>
-        </section>
+        <!-- Deliberately quieter than the routes above, and set apart by the hairline `.rules`
+             carries here and nowhere else. -->
+        <DealRules ref="rulesSection" />
       </div>
     </div>
   </div>
@@ -481,67 +392,13 @@ function markRuleBusy(id, busy) {
 
 /*
  * Deal rules: set apart by space and a hairline, not another card — two competing card treatments
- * would leave the phone with no focal point.
+ * would leave the phone with no focal point. `DealRules` draws everything inside it; a child's
+ * root carries its parent's scope, which is what lets this rule reach it.
  */
 .rules {
   margin-top: 26px;
   padding-top: 18px;
   border-top: 1px solid var(--line2);
-}
-
-.rules__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-
-  margin: 0 2px 11px;
-}
-
-.rules__title {
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-/*
- * Accent as text, not a filled square: a solid button would make the rules section louder than the
- * routes. The negative margin keeps the 44px tap target.
- */
-.rules__new {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-
-  padding: 8px 6px;
-  margin: -8px -6px;
-
-  font-size: var(--text-md);
-  font-weight: 700;
-  color: var(--accent-ink);
-  text-decoration: none;
-}
-
-.rules__new path {
-  stroke: var(--accent-ink);
-}
-
-/* Body copy, not a card: there is nothing here yet, and drawing a box round an
-   absence is how an empty state becomes an advert. */
-.rules__empty {
-  padding: 0 2px;
-
-  font-size: var(--text-lg);
-  line-height: 1.5;
-  color: var(--muted);
-}
-
-.rules__list {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
 }
 
 /* --- 1024px and up: the master list, the passes and the rules column -----

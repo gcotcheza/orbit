@@ -4,10 +4,30 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
+import { computed, ref } from 'vue'
 
+const get = vi.fn()
 const post = vi.fn()
 
-vi.mock('@/lib/http', () => ({ http: { post: (...args) => post(...args) } }))
+vi.mock('@/lib/http', () => ({
+    http: {
+        get: (...args) => get(...args),
+        post: (...args) => post(...args),
+    },
+}))
+
+/* jsdom has no matchMedia, so the real composable would answer 'phone' and nothing else; this is
+   the switch the wide branch is behind. Deferred inside the arrow, as vi.mock is hoisted. */
+const desktop = ref(false)
+
+vi.mock('@/lib/layout', () => ({
+    useLayout: () => ({
+        layout: computed(() => (desktop.value ? 'desktop' : 'phone')),
+        isPhone: computed(() => !desktop.value),
+        isDesktop: desktop,
+        stop: () => {},
+    }),
+}))
 
 import Create from './Create.vue'
 
@@ -72,8 +92,11 @@ describe('Create', () => {
     beforeEach(() => {
         setActivePinia(createPinia())
         vi.useFakeTimers({ shouldAdvanceTime: true })
+        desktop.value = false
         post.mockReset()
         post.mockResolvedValue(reading())
+        get.mockReset()
+        get.mockResolvedValue({ data: { data: [] } })
     })
 
     afterEach(() => {
@@ -347,5 +370,75 @@ describe('Create', () => {
         expect(wrapper.find('.error').text()).toBe('Orbit could not read a trip out of that.')
         expect(wrapper.text()).not.toContain('Rule created')
         expect(wrapper.find('textarea').element.value).toContain('cheap weekend')
+    })
+})
+
+/** One `GET /api/rules` row, in the shape docs/API.md sends. */
+const RULE = {
+    id: 7,
+    text: 'cheap weekend somewhere sunny, under €80',
+    active: true,
+    summary: 'AMS · €80 · Fridays',
+    chips: [{ id: 'max_price', category: 'Max price', label: '€80' }],
+    matches: { count: 0, cheapest: null, sample: [] },
+}
+
+// 1024px and up: the rules this screen writes are the master pane, the compose card is the detail
+// (docs/DESKTOP-LAYOUT-PLAN.md phase 3).
+describe('Create inside the frame', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia())
+        vi.useFakeTimers({ shouldAdvanceTime: true })
+        desktop.value = true
+        post.mockReset()
+        post.mockResolvedValue(reading())
+        get.mockReset()
+        get.mockResolvedValue({ data: { data: [RULE] } })
+    })
+
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    it('lists the existing rules in the master and composes in the pane', async () => {
+        const wrapper = await screen()
+
+        expect(get).toHaveBeenCalledWith('/api/rules')
+        expect(wrapper.get('.screen__master .rules__title').text()).toBe('Deal rules')
+        expect(wrapper.findAll('.screen__master .rule')).toHaveLength(1)
+        expect(wrapper.get('.screen__pane').find('.compose__input').exists()).toBe(true)
+    })
+
+    it('keeps the head in the master through both states', async () => {
+        const wrapper = await screen()
+
+        expect(wrapper.get('.screen__master .screen__title').text()).toBe('New deal rule')
+
+        post.mockResolvedValueOnce({ data: { data: { ...RULE, chips: [], matches: { count: 0, cheapest: null } } } })
+        await wrapper.get('.cta').trigger('click')
+        await flushPromises()
+
+        expect(wrapper.get('.screen__master .screen__title').text()).toBe('Rule created')
+        expect(wrapper.get('.screen__pane').find('.done').exists()).toBe(true)
+    })
+
+    // The rules store's `error` is the parse's too, and the compose card under the box already
+    // answers for it — so the master does not say it a second time.
+    it('leaves the parse failure to the pane rather than repeating it beside the box', async () => {
+        post.mockRejectedValue(new Error('nope'))
+
+        const wrapper = await screen()
+
+        expect(wrapper.get('.screen__pane .error').text()).toContain('Could not reach Orbit.')
+        expect(wrapper.find('.screen__master .screen__notice').exists()).toBe(false)
+    })
+
+    it('draws no rules list at all on a phone', async () => {
+        desktop.value = false
+
+        const wrapper = await screen()
+
+        expect(wrapper.find('.rules').exists()).toBe(false)
+        expect(get).not.toHaveBeenCalled()
     })
 })

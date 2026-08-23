@@ -37,7 +37,7 @@ export const router = createRouter({
             path: '/search',
             name: 'search',
             component: () => import('@/Views/Search.vue'),
-            meta: { layout: 'tabs' },
+            meta: { layout: 'tabs', wide: 'desktop' },
         },
         {
             // Still a tabbed screen though no longer a tab: create lost the centre seat to search
@@ -45,7 +45,7 @@ export const router = createRouter({
             path: '/create',
             name: 'create',
             component: () => import('@/Views/Create.vue'),
-            meta: { layout: 'tabs' },
+            meta: { layout: 'tabs', wide: 'desktop' },
         },
         {
             path: '/watch',
@@ -57,7 +57,7 @@ export const router = createRouter({
             path: '/alerts',
             name: 'alerts',
             component: () => import('@/Views/Alerts.vue'),
-            meta: { layout: 'tabs' },
+            meta: { layout: 'tabs', wide: 'desktop' },
         },
         {
             // No tab bar (design/README.md §2): you arrive here from a card, and the screen's own
