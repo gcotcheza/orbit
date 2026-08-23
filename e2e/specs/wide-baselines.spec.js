@@ -31,8 +31,8 @@ const DETAIL = [
     '.callout__body',
 ]
 
-/** The master pane's rows carry a fare of their own, which the phone has nothing equivalent to. */
-const ROWS = ['.route-row__price']
+/** The rows carry a fare and a verdict tone, which the phone has nothing equivalent to. */
+const ROWS = ['.route-row__price', '.route-row__dot']
 
 // Masked, not dropped: Playwright paints a flat box at the element's own place and size, so the
 // layout is still compared and only the content is not (docs/E2E.md "The phone baselines").

@@ -41,7 +41,7 @@ import Search from './Search.vue'
 /** The route detail is RouteDetailPanel.test.js's subject; here only the pair it was handed is. */
 const PanelStub = {
     props: { code: String, embedded: Boolean, autofocus: Boolean },
-    template: '<div class="panel-stub" :data-code="code" :data-embedded="embedded"></div>',
+    template: '<div class="panel-stub" :data-code="code" :data-embedded="embedded" :data-autofocus="autofocus"></div>',
 }
 
 /** One `GET /api/discoveries` row, trimmed to what the card reads (docs/API.md). */
@@ -424,6 +424,9 @@ describe('inside the frame', () => {
 
         expect(panel.attributes('data-code')).toBe('AMS-LIS')
         expect(panel.attributes('data-embedded')).toBe('true')
+
+        // The pane swapped under the reader and no navigation will move the focus for it.
+        expect(panel.attributes('data-autofocus')).toBe('true')
 
         // Nothing navigated, and nothing was written to get there.
         expect(push).not.toHaveBeenCalled()

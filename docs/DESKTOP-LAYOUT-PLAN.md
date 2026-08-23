@@ -269,12 +269,19 @@ decision worth keeping:
   otherwise. `kind="group"` — the watch list — is untouched: those are ordinary buttons and Tab
   reaches every one of them, which is right for a group of toggles.
 - **The panel owns the focus move, and the landing page does not ask for it.** `RouteDetailPanel`
-  takes an `autofocus` prop and sends the focus to whichever of its three headings rendered,
-  watching the element rather than the fetch — the loaded, the not-found and the failed states
-  have three different headings and the one that exists is the one worth being sent to. Only
-  **search** passes it. On the landing page the pane swaps from a row inside a tab list, and
-  moving the focus out of that list would break the arrow keys that had just been used to reach
-  it; the row stays focused, which is what a tab list promises.
+  takes an `autofocus` prop and sends the focus to whichever of its four headings rendered,
+  watching the element rather than the fetch — the loaded, the **checking**, the not-found and
+  the failed states have four different headings and the one that exists is the one worth being
+  sent to. The checking heading is the one a **discovery** needs: a found route has no `routes`
+  row, so its read 404s into a look-up and the panel sits in that state for several seconds —
+  and with no heading there the focus fell all the way to `<body>`, the card that was pressed
+  having been unmounted behind it. It is also the one heading that goes quiet: that branch keeps
+  its own `role="status"` only when nothing is coming to focus it, so the same sentence is never
+  announced twice, once as a live region and once as a focus move. The focus call passes
+  `preventScroll`, because a pane that scrolls itself while handing the focus over has moved for
+  a reason the reader cannot see. Only **search** passes it. On the landing page the pane swaps
+  from a row inside a tab list, and moving the focus out of that list would break the arrow keys
+  that had just been used to reach it; the row stays focused, which is what a tab list promises.
 - **The live region says what the pane is of, and it is mounted before it has anything to say.**
   A region added to the DOM with its text already in it announces nothing, so the `role="status"`
   paragraph exists for as long as the frame does and only its text changes: `Deals from your
@@ -302,10 +309,11 @@ decision worth keeping:
   precisely because "`--shell-max` is retargeted on the frame and not on `:root`" is a promise
   worth a picture. The project name is in the file name or the two projects would overwrite each
   other's images. `toHaveScreenshot` normalises to CSS pixels, so the tablet's DPR 2 costs
-  nothing in bytes or in diff surface. Masks are the phone spec's plus `.route-row__price`,
-  which the phone has no equivalent of, and the landing page's set gains the detail panel's
-  because the frame draws one there. 3.8 MB, recorded once on the final tree and proved at zero
-  on a second full run.
+  nothing in bytes or in diff surface. Masks are the phone spec's plus the master rows'
+  `.route-row__price` and `.route-row__dot` — a fare and the tone of the verdict beside it, both
+  seeded content the phone has no equivalent of — and the landing page's set gains the detail
+  panel's because the frame draws one there. 3.8 MB, recorded once on the final tree and proved
+  at zero on a second full run.
 - **A spec that must not write.** The find-in-the-pane assertion blocks `POST /api/routes/lookup`,
   because a discovery is by definition a route this sandbox has never priced: letting the panel
   settle would create a `routes` row, and no endpoint can remove one again. The test is about
@@ -324,6 +332,14 @@ which the `min-height: 600px` half of the breakpoint guarantees rather than hope
   the discovery strip's `Unverified` badge, measure between 2.86 and 4.45:1 in both themes. They
   are the phone's pixels, so moving them means re-recording the nineteen baselines deliberately
   and reading the diff — a change to the palette, on its own PR, not a side effect of a frame.
+- **The accent family itself.** `--on-solid` on `--accent` measures **3.38:1**, and every control
+  in this app that fills with the accent draws 11–13.5px text on it — the selected master row that
+  phase 4's dark pass released the dimming on, and with it the primary buttons, the pills and the
+  chips, on the phone as much as in the frame. WCAG AA wants 4.5:1 at that size (3:1 only from
+  18.66px bold or 24px), so the family is short app-wide rather than in one place, and phase 4
+  deliberately did not touch it: `--accent` and `--on-solid` are the palette, and darkening either
+  is a redesign that moves the nineteen phone baselines. It belongs on a palette PR that re-records
+  them on purpose.
 - **The globe's cost at a pane's size.** Nobody has profiled the renderer at 852x440 and up on a
   real iPad; the gate measures correctness, never frame rate, by design.
 - **A shared `MasterPane`/`DetailPane` component.** Five screens now write the same four

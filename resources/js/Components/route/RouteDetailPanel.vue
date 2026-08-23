@@ -41,11 +41,11 @@ const props = defineProps({
 
 const heading = useTemplateRef('heading')
 
-/* On the element appearing rather than on the fetch settling: the three states have three
+/* On the element appearing rather than on the fetch settling: the four states have four
    headings, and the one that renders is the one worth being sent to. */
 watch(heading, (element) => {
   if (element && props.autofocus) {
-    element.focus()
+    element.focus({ preventScroll: true })
   }
 })
 
@@ -479,9 +479,10 @@ onActivated(() => {
 
   <!-- Distinct from the skeleton above: an active provider call (a few seconds),
        not generic loading — worth saying out loud (docs/BUSINESS-LOGIC.md §36). -->
-  <div v-else-if="checking && detail === null" class="checking" role="status">
+  <div v-else-if="checking && detail === null" class="checking" :role="autofocus ? null : 'status'">
     <span class="checking__spinner" aria-hidden="true"></span>
-    <p class="checking__title">Checking current fares…</p>
+    <!-- A heading, because the focus has to land somewhere; the live region then stands down. -->
+    <h1 ref="heading" class="checking__title" tabindex="-1">Checking current fares…</h1>
     <p class="checking__body">
       Orbit has not priced <span class="empty__code">{{ pair }}</span> before. This takes a moment.
     </p>

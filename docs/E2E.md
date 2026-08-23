@@ -341,10 +341,12 @@ Three things about it are worth knowing before re-recording one:
   (docs/BUSINESS-LOGIC.md §36). A picture of that column at 1280px is what would
   go red the day somebody moved the token to `:root`.
 
-The masks are the phone spec's, plus two additions the frame creates:
-`.route-row__price` (the master pane's rows carry a fare, which the phone has no
-equivalent of) and, on the landing page, the whole route-detail mask list, since
-the frame draws the panel in the pane beside the globe.
+The masks are the phone spec's, plus two additions the frame creates: the master
+pane's rows, which the phone has no equivalent of — both their fare
+(`.route-row__price`) and their verdict dot (`.route-row__dot`), whose colour is
+the seeded fare's opinion and moves with it — and, on the landing page, the whole
+route-detail mask list, since the frame draws the panel in the pane beside the
+globe.
 
 ### A frozen clock
 

@@ -7,8 +7,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { h, KeepAlive, ref } from 'vue'
 
 const get = vi.fn()
+const post = vi.fn()
 
-vi.mock('@/lib/http', () => ({ http: { get: (...args) => get(...args), post: vi.fn() } }))
+vi.mock('@/lib/http', () => ({ http: { get: (...args) => get(...args), post: (...args) => post(...args) } }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), back: vi.fn() }) }))
 
 import RouteDetailPanel from './RouteDetailPanel.vue'
@@ -268,7 +269,6 @@ describe('the two-column wrappers', () => {
     })
 })
 
-
 // The pane swaps under the reader without a navigation, so nothing else would move the focus
 // (docs/DESKTOP-LAYOUT-PLAN.md phase 4).
 describe('the focus when a pane swaps', () => {
@@ -297,6 +297,40 @@ describe('the focus when a pane swaps', () => {
         await flushPromises()
 
         expect(document.activeElement).toBe(wrapper.get('.empty__title').element)
+
+        wrapper.unmount()
+    })
+
+    /* A discovery has no `routes` row, so the read 404s into a look-up and the panel checks
+       for seconds — with the card that was pressed already unmounted. */
+    it('sends it to the checking heading while the look-up is still running', async () => {
+        get.mockRejectedValue({ response: { status: 404 } })
+        post.mockReturnValue(new Promise(() => {}))
+
+        const wrapper = panel({ embedded: true, autofocus: true, code: 'AMS-BCN' })
+        await flushPromises()
+
+        const title = wrapper.get('.checking__title')
+
+        expect(title.element.tagName).toBe('H1')
+        expect(document.activeElement).toBe(title.element)
+
+        // The focus move is the announcement, so the live region stands down instead.
+        expect(wrapper.get('.checking').attributes('role')).toBeUndefined()
+
+        wrapper.unmount()
+    })
+
+    // On a screen of its own no focus is coming, and the region is the only voice there is.
+    it('leaves the checking region live where nothing will focus it', async () => {
+        get.mockRejectedValue({ response: { status: 404 } })
+        post.mockReturnValue(new Promise(() => {}))
+
+        const wrapper = panel({ code: 'AMS-BCN' })
+        await flushPromises()
+
+        expect(wrapper.get('.checking').attributes('role')).toBe('status')
+        expect(document.activeElement).toBe(document.body)
 
         wrapper.unmount()
     })

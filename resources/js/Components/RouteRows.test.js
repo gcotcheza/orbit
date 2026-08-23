@@ -72,7 +72,6 @@ describe('a group rather than a tab list', () => {
     })
 })
 
-
 // One tab stop for the list and the arrows to walk it, which is what a tab list owes a keyboard
 // (WAI-ARIA "Tabs with Manual Activation" — see docs/BUSINESS-LOGIC.md §36).
 describe('the keyboard', () => {
@@ -133,6 +132,19 @@ describe('the keyboard', () => {
         await wrapper.findAll('.route-row')[0].trigger('keydown', { key: 'ArrowDown' })
 
         expect(wrapper.emitted('select')).toBeUndefined()
+    })
+
+    /* `roving` outlives the row that set it: a list that shrinks under it would otherwise leave the
+       list's one tab stop on a row nobody can reach. */
+    it('clamps the tab stop when the list shrinks under it', async () => {
+        wrapper = attached({ active: 'AMS-LIS' })
+
+        await wrapper.findAll('.route-row')[0].trigger('keydown', { key: 'End' })
+        expect(stops()).toEqual(['-1', '-1', '0'])
+
+        await wrapper.setProps({ routes: THREE.slice(0, 2) })
+
+        expect(stops()).toEqual(['-1', '0'])
     })
 
     // Nothing swaps for these, so they are three ordinary buttons and Tab reaches each of them.
