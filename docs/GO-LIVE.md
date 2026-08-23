@@ -95,7 +95,7 @@ cd /var/www/orbit && sudo -u orbit ./scripts/check.sh
 commit — and especially a hand-resolved one — is code that no run has ever seen.
 `config/orbit.php` and `routes/console.php` were resolved by hand; PHPStan and
 `ScheduleTest` are what confirm the resolution is not just syntactically valid but
-right. All five steps must pass.
+right. All seven steps must pass.
 
 **#11 moves `composer.lock`** (it adds `anthropic-ai/sdk ^0.42`), so the deploy in
 step (b) *does* need its conditional `composer install` — see the runbook's step 5.

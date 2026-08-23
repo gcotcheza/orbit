@@ -57,7 +57,7 @@
    ```bash
    git -C /var/www/orbit log --oneline -3
    ```
-4. **The five checks must be green on the merge commit being deployed.** From
+4. **The seven checks must be green on the merge commit being deployed.** From
    PR3 onwards this is the merge gate (`docs/PLAN.md`), so normally it was green
    on the branch before merge — but a merge commit is code no run has seen. Run
    it once here, on `main`, after the pull (deploy step 1).
@@ -91,19 +91,27 @@
        -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
        app vendor/bin/pint --test
 
-   # 2. PHPStan
+   # 2. Composer advisories — the lockfile, production packages only
+   docker compose run --rm --no-deps \
+       -v "$GATE/vendor:/var/www/html/vendor" \
+       -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
+       app composer audit --locked --no-dev
+
+   # 3. PHPStan
    docker compose run --rm --no-deps \
        -v "$GATE/vendor:/var/www/html/vendor" \
        -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
        app vendor/bin/phpstan analyse --no-progress --memory-limit=512M
 
-   # 3 + 4. ESLint and Vitest — unchanged, `assets` is a task and brings its own
-   #        node_modules; nothing about it is --no-dev.
+   # 4 + 5 + 6. npm advisories, ESLint and Vitest — `assets` is a task and
+   #            brings its own node_modules; nothing about it is --no-dev.
    docker compose --profile build run --rm --entrypoint sh assets -c \
-       '[ -d node_modules ] || npm ci --no-audit --fund=false; npm run lint'
+       '[ -d node_modules ] || npm ci --no-audit --fund=false && npm audit --omit=dev --audit-level=high'
+   docker compose --profile build run --rm --entrypoint sh assets -c \
+       '[ -d node_modules ] || npm ci --no-audit --fund=false && npm run lint'
    docker compose --profile build run --rm --entrypoint sh assets -c 'npm run test:js'
 
-   # 5. PHPUnit
+   # 7. PHPUnit
    docker compose run --rm --no-deps \
        -v "$GATE/vendor:/var/www/html/vendor" \
        -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
@@ -113,8 +121,9 @@
    rm -rf "$GATE"
    ```
 
-   **Good:** Pint `PASS`, PHPStan `[OK] No errors`, ESLint silent, Vitest all
-   green, and PHPUnit ending in `OK`. A failure is a stop, not a note.
+   **Good:** Pint `PASS`, `composer audit` and `npm audit` reporting no
+   advisories, PHPStan `[OK] No errors`, ESLint silent, Vitest all green, and
+   PHPUnit ending in `OK`. A failure is a stop, not a note.
 
    - **⚠ `bootstrap/cache` IS OVERLAID FOR A DIFFERENT AND WORSE REASON THAN
      `vendor`.** `composer install` fires `@php artisan package:discover` on
@@ -253,8 +262,8 @@ build is not step 3 any more.
      The whole point of a gate is that there is still something to stop.
 
    **What it adds over pre-flight step 4, and why it is worth the time.** Not one
-   of `check.sh`'s five checks has ever seen a screen — Vitest runs the front end
-   in jsdom, which has no layout engine and no rasteriser. All five are green on
+   of `check.sh`'s seven checks has ever seen a screen — Vitest runs the front end
+   in jsdom, which has no layout engine and no rasteriser. All seven are green on
    an app whose globe renders as a black circle and whose calendar renders 31
    identical grey squares. This drives a real Chromium (WebGL on SwiftShader)
    through the eight journeys and fails on any uncaught exception. `docs/E2E.md`
