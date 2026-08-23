@@ -141,10 +141,10 @@ checkout and must stay on `main`. The convention is
 git -C /var/www/orbit worktree add /var/www/orbit-worktrees/feat-thing -b feat/thing
 ```
 
-**The gate.** `scripts/check.sh` runs five checks in the containers, stopping at
-the first failure: Pint, PHPStan (level 8, no baseline), ESLint, Vitest,
-PHPUnit. It must pass before a PR is merged — this project has no baseline for
-new debt to hide in.
+**The gate.** `scripts/check.sh` runs seven checks in the containers, stopping
+at the first failure: Pint, `composer audit`, PHPStan (level 8, no baseline),
+`npm audit`, ESLint, Vitest, PHPUnit. It must pass before a PR is merged — this
+project has no baseline for new debt to hide in.
 
 ```bash
 docker compose up -d
@@ -177,7 +177,7 @@ scripts/e2e.sh -- specs/globe.spec.js         # one spec
 scripts/e2e.sh --keep -- --grep "heat map"    # one test, stack left up
 ```
 
-Five green checks have never seen a screen — [`docs/E2E.md`](docs/E2E.md)
+Seven green checks have never seen a screen — [`docs/E2E.md`](docs/E2E.md)
 explains what that costs and what this harness found.
 
 ## Deploy
@@ -223,6 +223,14 @@ to the fakes — and never the `.env` next to the checkout.
 
 ## Where else things are written down
 
+- **[`CLAUDE.md`](CLAUDE.md)** — the house rules for this repository, and the
+  written exceptions to the fleet standard.
+- **[`docs/STANDARDS.md`](docs/STANDARDS.md)** — the fleet engineering
+  standard, vendored byte-identically from the `engineering-standards`
+  repository. It applies here in full; `CLAUDE.md` says where Orbit does not
+  meet it yet.
+- **[`docs/DECISIONS.md`](docs/DECISIONS.md)** — the engineering *why* that is
+  too long for a comment and is not a domain rule.
 - **[`docs/BUSINESS-LOGIC.md`](docs/BUSINESS-LOGIC.md)** — every domain rule,
   with its number, its config key and where the code lives. Start here.
 - **[`docs/API.md`](docs/API.md)** — the contract between the back end and the
