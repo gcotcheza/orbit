@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\UserSettings;
+use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -19,6 +20,9 @@ final class SettingsApiTest extends TestCase
     use RefreshDatabase;
 
     private User $owner;
+
+    /** SerpAPI's free quota probe (docs/BUSINESS-LOGIC.md §31). */
+    private const ACCOUNT = 'https://serpapi.com/account.json*';
 
     /**
      * A complete, valid settings object — the shape every PUT has to send.
@@ -248,5 +252,101 @@ final class SettingsApiTest extends TestCase
 
         $settings->update(['sensitivity' => 2]);
         $this->assertSame(50, $settings->minimumScore());
+    }
+
+    /* --- meta.googleChecks: the SerpAPI month, on the "This app" card (§31) ------------- */
+
+    private function withKey(): void
+    {
+        config(['orbit.serpapi.key' => 'test-key']);
+    }
+
+    #[Test]
+    public function the_settings_carry_the_google_searches_the_month_has_left(): void
+    {
+        $this->withKey();
+
+        Http::fake([self::ACCOUNT => Http::response(['total_searches_left' => 249], 200)]);
+
+        $this->actingAs($this->owner)
+            ->getJson('/api/settings')
+            ->assertOk()
+            ->assertJsonPath('meta.googleChecks.left', 249)
+            ->assertJsonPath('meta.googleChecks.reserve', 50)
+            ->assertJsonPath('meta.googleChecks.checkedAt', fn (mixed $at): bool => is_string($at));
+    }
+
+    /**
+     * The default box. `checkedAt` is null BECAUSE NOBODY ASKED — that is what
+     * tells the screen to say "Not configured" rather than "Unknown right now".
+     */
+    #[Test]
+    public function without_a_key_there_is_no_count_and_no_probe(): void
+    {
+        /* No Http::fake: preventStrayRequests turns a probe into a failed assertion. */
+        $this->actingAs($this->owner)
+            ->getJson('/api/settings')
+            ->assertOk()
+            ->assertJsonPath('meta.googleChecks.left', null)
+            ->assertJsonPath('meta.googleChecks.checkedAt', null)
+            ->assertJsonPath('meta.googleChecks.reserve', 50);
+    }
+
+    /** A settings screen is not allowed to break because SerpAPI is having a day. */
+    #[Test]
+    public function a_failed_probe_leaves_the_count_unknown_and_the_settings_answering(): void
+    {
+        $this->withKey();
+
+        Http::fake([self::ACCOUNT => Http::response('gateway timeout', 504)]);
+
+        $this->actingAs($this->owner)
+            ->getJson('/api/settings')
+            ->assertOk()
+            ->assertJsonPath('data.emailAlerts', true)
+            ->assertJsonPath('meta.googleChecks.left', null)
+            ->assertJsonPath('meta.googleChecks.checkedAt', fn (mixed $at): bool => is_string($at));
+    }
+
+    #[Test]
+    public function the_count_is_cached_so_a_second_read_does_not_probe_again(): void
+    {
+        $this->withKey();
+
+        Http::fake([self::ACCOUNT => Http::response(['total_searches_left' => 249], 200)]);
+
+        $this->actingAs($this->owner)->getJson('/api/settings')->assertOk();
+        $this->actingAs($this->owner)->getJson('/api/settings')
+            ->assertOk()
+            ->assertJsonPath('meta.googleChecks.left', 249);
+
+        Http::assertSentCount(1);
+    }
+
+    /** The unknown answer is cached too, or a dead SerpAPI stalls every settings load. */
+    #[Test]
+    public function a_failed_probe_is_cached_as_well(): void
+    {
+        $this->withKey();
+
+        Http::fake([self::ACCOUNT => Http::response('gateway timeout', 504)]);
+
+        $this->actingAs($this->owner)->getJson('/api/settings')->assertOk();
+        $this->actingAs($this->owner)->getJson('/api/settings')->assertOk();
+
+        Http::assertSentCount(1);
+    }
+
+    #[Test]
+    public function a_put_answers_the_count_too_since_both_actions_send_the_same_body(): void
+    {
+        $this->withKey();
+
+        Http::fake([self::ACCOUNT => Http::response(['total_searches_left' => 100], 200)]);
+
+        $this->actingAs($this->owner)
+            ->putJson('/api/settings', self::VALID)
+            ->assertOk()
+            ->assertJsonPath('meta.googleChecks.left', 100);
     }
 }

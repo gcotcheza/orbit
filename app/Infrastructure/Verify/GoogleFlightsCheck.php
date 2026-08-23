@@ -67,6 +67,18 @@ final readonly class GoogleFlightsCheck
         return min($this->maxPerRun, $spendable);
     }
 
+    /** What the settings screen prints: the month's remaining searches, or null when unknowable. */
+    public function searchesLeft(): ?int
+    {
+        return $this->isConfigured() ? $this->remaining() : null;
+    }
+
+    /** Searches held back for alert verification (docs/BUSINESS-LOGIC.md §31). */
+    public function reserve(): int
+    {
+        return $this->reserve;
+    }
+
     /**
      * Google's verdict on one route/date, or null when there is none. `ask()`
      * is the same question with the billing outcome attached.

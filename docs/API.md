@@ -713,7 +713,8 @@ the screen can PUT and render the response without a follow-up GET.
       { "level": 0, "name": "Relaxed",  "minimumScore": 80, "blurb": "Only the truly insane deals — score 80 and up. Rare, and worth clearing a weekend for." },
       { "level": 1, "name": "Balanced", "minimumScore": 65, "blurb": "Anything Orbit rates a great deal — score 65 and up. A handful a month." },
       { "level": 2, "name": "Eager",    "minimumScore": 50, "blurb": "Every fare scoring 50 or better. More to look at, and more that turns out to be ordinary." }
-    ]
+    ],
+    "googleChecks": { "left": 199, "reserve": 50, "checkedAt": "2026-08-20T09:14:02+02:00" }
   }
 }
 ```
@@ -732,6 +733,17 @@ the intended flow. `meta.sensitivities` is built from `config/orbit.php` —
 `minimumScore` is the same tier number a route's `tier` field is computed
 against, so the level you pick and the badge you see cannot disagree. The
 `blurb` quotes it; do not re-write that sentence in the component.
+
+`meta.googleChecks` is the SerpAPI month behind "Check live price"
+(BUSINESS-LOGIC §31), for the alerts screen's "This app" card. `left` is
+`total_searches_left` from the free `account.json` probe; `reserve` is the
+config number held back. The probe is **cached for ten minutes, its failures
+included** — otherwise a SerpAPI having a bad day would stall every settings
+load rather than one in ten minutes. `left` is `null` both when no key is
+configured and when the probe could not be read, and **`checkedAt` is what
+tells those apart**: it is when Orbit last *asked*, so `null` there means
+nobody could ask, while a timestamp next to a `null` `left` means the ask
+failed. Nothing here is writable, and a failed probe never fails the request.
 
 **The row is created on first read**, with the defaults above. There is no
 "settings not set up yet" state to handle.

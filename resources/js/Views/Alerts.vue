@@ -41,7 +41,7 @@ const themeStore = useThemeStore()
 const { theme } = storeToRefs(themeStore)
 
 const settingsStore = useSettingsStore()
-const { settings, sensitivities, status, error, isReady, chosenSensitivity } = storeToRefs(settingsStore)
+const { settings, sensitivities, googleChecks, status, error, isReady, chosenSensitivity } = storeToRefs(settingsStore)
 
 const THEMES = [
   { value: 'dark', label: 'Dark' },
@@ -61,6 +61,22 @@ const quietNote = computed(() => {
   return settings.value.quietHours
     ? `No pings ${settings.value.quietStart} – ${settings.value.quietEnd}`
     : 'Orbit may ping at any hour'
+})
+
+/** "212 left this month · keeps 50 in reserve" — or, honestly, why there is no number.
+    `checkedAt` is when Orbit last ASKED SerpAPI: null means it never could (no key). */
+const googleNote = computed(() => {
+  if (googleChecks.value === null) {
+    return ''
+  }
+
+  const { left, reserve, checkedAt } = googleChecks.value
+
+  if (left === null) {
+    return checkedAt === null ? 'Not configured' : 'Unknown right now'
+  }
+
+  return `${left} left this month · keeps ${reserve} in reserve`
 })
 
 onMounted(settingsStore.load)
@@ -287,10 +303,15 @@ async function signOut() {
              the theme store and the session (docs/BUSINESS-LOGIC.md §10). -->
         <div class="set set--app">
           <h2 id="this-app" class="section">This app</h2>
-          <section class="card card--padded">
-            <SegmentedControl :model-value="theme" :options="THEMES" label="Theme" @update:model-value="themeStore.set" />
+          <section class="card">
+            <!-- Only once the settings response has landed: the count rides on its `meta`. -->
+            <SettingRow v-if="googleChecks" title="Google price checks" :note="googleNote" class="card__row" />
 
-            <button type="button" class="signout" @click="signOut">Sign out</button>
+            <div class="controls">
+              <SegmentedControl :model-value="theme" :options="THEMES" label="Theme" @update:model-value="themeStore.set" />
+
+              <button type="button" class="signout" @click="signOut">Sign out</button>
+            </div>
           </section>
         </div>
       </div>
@@ -469,6 +490,11 @@ async function signOut() {
 .account__email {
   font-size: var(--text-md);
   color: var(--muted);
+}
+
+/* What `card--padded` gave the section, now that a hairline row shares the card. */
+.controls {
+  padding: 16px;
 }
 
 .signout {

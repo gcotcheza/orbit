@@ -2270,6 +2270,8 @@ Every other number in the discovery funnel descends from Travelpayouts — the s
 
 `connect_timeout = 5`, `timeout = 20` (seconds) — shorter than the Travelpayouts read timeout because nothing depends on this answer: a check that times out is a check that was skipped, and the run carries on with one fewer badge.
 
+**What is left of the month is printed on the alerts screen**, in the "This app" card, from the same free `account.json` probe — `GET/PUT /api/settings` carries it as `meta.googleChecks`, cached for **ten minutes and failures included**, so a slow SerpAPI can delay one settings load in ten minutes rather than every one, and a probe that fails leaves the row honest ("Unknown right now") instead of failing the request.
+
 ## 32. Booking — deep links, not an API (`booking`)
 
 There is no booking API and there will not be one — `docs/PLAN.md` settles on deep links into somebody else's search.

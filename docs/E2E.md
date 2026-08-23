@@ -445,6 +445,7 @@ in.
 | `watchlist.spec.js` | pause → the server agrees on a second page load; a paused route leaves the tour; add/remove; refused input |
 | `rules.spec.js` | the design's sentence → its exact eight chips, in order; removing one re-matches |
 | `pwa.spec.js` | manifest / `sw.js` / `offline` content types and bodies |
+| `settings.spec.js` | the "This app" card's Google-checks row — the sandbox is given no SerpAPI key, so the honest note is "Not configured" |
 | `theme.spec.js` | the palette really swaps and survives a reload; both themes of Home photographed |
 | `phone-baselines.spec.js` | every screen, both themes, at `maxDiffPixels: 0` — the phone-regression guard |
 | `layout-smoke.spec.js` | tablet and desktop only: the icon rail replaces the tab bar, nothing scrolls sideways, and the landing page's master pane, `?route=` selection and globe height |
