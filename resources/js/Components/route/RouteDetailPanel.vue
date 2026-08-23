@@ -493,117 +493,131 @@ onActivated(() => {
   </div>
 
   <template v-else-if="detail">
-    <div class="detail__head">
-      <h1 class="detail__code">{{ detail.origin.iata }} → {{ detail.destination.iata }}</h1>
-      <p class="detail__where">{{ detail.destination.city }}, {{ detail.destination.country }}</p>
-    </div>
-
-    <!-- Watchlist strip: only when NOT watched, between header and price so
-         it never competes with the Book button below (docs/BUSINESS-LOGIC.md §36). -->
-    <div v-if="unwatched" class="watch">
-      <p class="watch__text">Not on your watch list — Orbit is not pricing this every morning.</p>
-      <button class="watch__action" type="button" :disabled="watching" @click="watchRoute">
-        {{ watching ? 'Adding…' : 'Watch this route' }}
-      </button>
-    </div>
-
-    <!-- The other half of the strip: answers the button just pressed. A route
-         already watched on open gets no strip at all. -->
-    <p v-else-if="justWatched" class="watch watch--on">
-      On your watch list — Orbit prices it every morning from now on.
-    </p>
-
-    <p v-if="watchError" class="detail__notice" role="alert">{{ watchError }}</p>
-
-    <!-- Refresh failed, not the data: fares shown are real, just not today's.
-         `role="status"`, not `alert` — the screen still works. -->
-    <p v-if="refreshNotice" class="detail__notice detail__notice--quiet" role="status">{{ refreshNotice }}</p>
-
-    <!-- Same fetch, already-populated screen: shown quietly, must not take
-         the page over — last week's fares stay readable while it runs. -->
-    <p v-if="checking" class="detail__notice detail__notice--quiet" role="status">Checking current fares…</p>
-
-    <div class="price">
-      <div>
-        <!-- `aria-live` because this number is swapped in place by the button
-             below: a screen reader has to be told the headline changed. -->
-        <p
-          class="price__value tabular"
-          :class="{ 'price__value--gone': demoted }"
-          aria-live="polite"
-        >
-          {{ headline === null ? '—' : euro(headline) }}
-        </p>
-
-        <!-- Whose number it is: "€150" and "€150, from Google" are different
-             claims, and only one of them cost a metered search. -->
-        <p v-if="livePrice !== null" class="price__live">Live on Google · checked {{ liveWhen }}</p>
-
-        <!-- Spelled out because this screen's other dates are when we LOOKED —
-             the two must never be read for each other. -->
-        <p v-if="departure" class="price__when">Cheapest departure · {{ departure }}</p>
-
-        <!-- Replaces the plain "Seen …" line rather than joining it. -->
-        <p v-if="demoted" class="price__gone">{{ goneLabel }}</p>
-        <!-- Qualifies the departure line; only past a day old (SEEN_AFTER_HOURS).
-             Absent, not reassuring, when age is unknown. -->
-        <p v-else-if="seen && livePrice === null" class="price__seen">Seen {{ seen }}</p>
-
-        <p v-if="liveTypical" class="price__typical">{{ liveTypical }}</p>
-
-        <p v-if="cachedLine" class="price__cached">{{ cachedLine }}</p>
-
-        <p v-if="caption" class="price__caption">{{ caption }}</p>
+    <div class="detail__group detail__group--summary">
+      <div class="detail__head">
+        <h1 class="detail__code">{{ detail.origin.iata }} → {{ detail.destination.iata }}</h1>
+        <p class="detail__where">{{ detail.destination.city }}, {{ detail.destination.country }}</p>
       </div>
 
-      <DealScoreGauge :score="detail.score" :confident="detail.confident" />
-    </div>
+      <!-- Watchlist strip: only when NOT watched, between header and price so
+           it never competes with the Book button below (docs/BUSINESS-LOGIC.md §36). -->
+      <div v-if="unwatched" class="watch">
+        <p class="watch__text">Not on your watch list — Orbit is not pricing this every morning.</p>
+        <button class="watch__action" type="button" :disabled="watching" @click="watchRoute">
+          {{ watching ? 'Adding…' : 'Watch this route' }}
+        </button>
+      </div>
 
-    <!-- Shown only when there's a fare to check; replaced by its answer,
-         which the server serves free for six hours — a second tap buys nothing. -->
-    <div v-if="detail.cheapest" class="live">
-      <button v-if="live === null" class="live__action" type="button" :disabled="checkingLive" @click="checkLivePrice">
-        {{ checkingLive ? 'Asking Google…' : 'Check live price' }}
-      </button>
-
-      <!-- ⚠ Asked and silent, which confirms NOTHING. -->
-      <p v-else-if="livePrice === null" class="live__note">
-        Google had no live price for this date. This is still Orbit’s cached fare.
+      <!-- The other half of the strip: answers the button just pressed. A route
+           already watched on open gets no strip at all. -->
+      <p v-else-if="justWatched" class="watch watch--on">
+        On your watch list — Orbit prices it every morning from now on.
       </p>
 
-      <p v-else class="live__note">Orbit keeps this live answer for a few hours.</p>
+      <p v-if="watchError" class="detail__notice" role="alert">{{ watchError }}</p>
 
-      <!-- `status` and not `alert`: nothing is broken. -->
-      <p v-if="liveError" class="live__error" role="status">{{ liveError }}</p>
+      <!-- Refresh failed, not the data: fares shown are real, just not today's.
+           `role="status"`, not `alert` — the screen still works. -->
+      <p v-if="refreshNotice" class="detail__notice detail__notice--quiet" role="status">{{ refreshNotice }}</p>
+
+      <!-- Same fetch, already-populated screen: shown quietly, must not take
+           the page over — last week's fares stay readable while it runs. -->
+      <p v-if="checking" class="detail__notice detail__notice--quiet" role="status">Checking current fares…</p>
+
+      <div class="price">
+        <div>
+          <!-- `aria-live` because this number is swapped in place by the button
+               below: a screen reader has to be told the headline changed. -->
+          <p
+            class="price__value tabular"
+            :class="{ 'price__value--gone': demoted }"
+            aria-live="polite"
+          >
+            {{ headline === null ? '—' : euro(headline) }}
+          </p>
+
+          <!-- Whose number it is: "€150" and "€150, from Google" are different
+               claims, and only one of them cost a metered search. -->
+          <p v-if="livePrice !== null" class="price__live">Live on Google · checked {{ liveWhen }}</p>
+
+          <!-- Spelled out because this screen's other dates are when we LOOKED —
+               the two must never be read for each other. -->
+          <p v-if="departure" class="price__when">Cheapest departure · {{ departure }}</p>
+
+          <!-- Replaces the plain "Seen …" line rather than joining it. -->
+          <p v-if="demoted" class="price__gone">{{ goneLabel }}</p>
+          <!-- Qualifies the departure line; only past a day old (SEEN_AFTER_HOURS).
+               Absent, not reassuring, when age is unknown. -->
+          <p v-else-if="seen && livePrice === null" class="price__seen">Seen {{ seen }}</p>
+
+          <p v-if="liveTypical" class="price__typical">{{ liveTypical }}</p>
+
+          <p v-if="cachedLine" class="price__cached">{{ cachedLine }}</p>
+
+          <p v-if="caption" class="price__caption">{{ caption }}</p>
+        </div>
+
+        <DealScoreGauge :score="detail.score" :confident="detail.confident" />
+      </div>
+
+      <!-- Shown only when there's a fare to check; replaced by its answer,
+           which the server serves free for six hours — a second tap buys nothing. -->
+      <div v-if="detail.cheapest" class="live">
+        <button v-if="live === null" class="live__action" type="button" :disabled="checkingLive" @click="checkLivePrice">
+          {{ checkingLive ? 'Asking Google…' : 'Check live price' }}
+        </button>
+
+        <!-- ⚠ Asked and silent, which confirms NOTHING. -->
+        <p v-else-if="livePrice === null" class="live__note">
+          Google had no live price for this date. This is still Orbit’s cached fare.
+        </p>
+
+        <p v-else class="live__note">Orbit keeps this live answer for a few hours.</p>
+
+        <!-- `status` and not `alert`: nothing is broken. -->
+        <p v-if="liveError" class="live__error" role="status">{{ liveError }}</p>
+      </div>
     </div>
 
-    <PriceHistoryChart
-      :history="detail.history"
-      :median="median"
-      :tone="detail.verdict.tone"
-      :tracking-days="detail.trackingDays"
-    />
+    <div class="detail__group detail__group--chart">
+      <PriceHistoryChart
+        :history="detail.history"
+        :median="median"
+        :tone="detail.verdict.tone"
+        :tracking-days="detail.trackingDays"
+      />
+    </div>
 
-    <!-- `confident` is for the GLYPH only, not the words. See AdviceCallout.vue.
-         Why: docs/BUSINESS-LOGIC.md §36. -->
-    <AdviceCallout
-      :title="detail.advice.title"
-      :body="detail.advice.body"
-      :tone="detail.advice.tone"
-      :confident="detail.confident"
-    />
+    <div class="detail__group detail__group--advice">
+      <!-- `confident` is for the GLYPH only, not the words. See AdviceCallout.vue.
+           Why: docs/BUSINESS-LOGIC.md §36. -->
+      <AdviceCallout
+        :title="detail.advice.title"
+        :body="detail.advice.body"
+        :tone="detail.advice.tone"
+        :confident="detail.confident"
+      />
+    </div>
 
-    <!-- ⚠ Tone is the SERVER's alone — already accounts for a maybe-gone fare
-         and a contradicting live price; add no conditions here (docs/BUSINESS-LOGIC.md §36). -->
-    <BookingCta
-      :aviasales-url="detail.booking.aviasales"
-      :skyscanner-url="detail.booking.skyscanner"
-      :variant="detail.advice.tone === 'warn' ? 'secondary' : 'primary'"
-    />
+    <div class="detail__group detail__group--booking">
+      <!-- ⚠ Tone is the SERVER's alone — already accounts for a maybe-gone fare
+           and a contradicting live price; add no conditions here (docs/BUSINESS-LOGIC.md §36). -->
+      <BookingCta
+        :aviasales-url="detail.booking.aviasales"
+        :skyscanner-url="detail.booking.skyscanner"
+        :variant="detail.advice.tone === 'warn' ? 'secondary' : 'primary'"
+      />
+    </div>
   </template>
 </template>
 
 <style scoped>
+/* No box of their own until a pane asks for two columns, so the phone renders the same flat
+   column it always did (Views/Home.vue, docs/DESKTOP-LAYOUT-PLAN.md). */
+.detail__group {
+  display: contents;
+}
+
 .detail__head {
   margin: 6px 2px 4px;
 }

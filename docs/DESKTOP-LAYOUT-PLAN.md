@@ -106,16 +106,48 @@ is a decision worth keeping:
 
 *Effort L (the core). Phone: 19 baselines at 0 diff, phone suite unchanged.*
 
-### Phase 2 — Calendar and Watch in C
-- **Hoist the Home header shared by the phone and wide branches.** Phase 1 left ~20 lines of
-  eyebrow/greeting duplicated between the two, which was the cheap way to keep the phone's DOM
-  byte-identical; a second screen growing a wide branch is what makes one component worth it.
-- Calendar: master = routes list; detail = month grid scaled to the pane (square cells,
-  gap absorbs height) + the day sheet's content docked as a side panel at ≥ 1024
-  (bottom sheet below).
-- Watch: master = routes list; detail = selected boarding pass (full recipe) + the
-  others as a 2-column grid, deal rules in a side column.
-  *Effort M. Risk: DaySheet teleport/focus handling when docked.*
+### Phase 2 — Calendar and Watch in C — **SHIPPED**
+- `Components/HomeHeader.vue` is the eyebrow/greeting both branches now draw, with the account
+  link behind a `profile` prop (on for the phone, off inside the frame, where the rail has one).
+- `Components/RouteRows.vue` is the master pane's list, shared by all three wide screens. It is
+  mounted only by the frame, so its rules need no media query — the component *is* the guard.
+- Calendar: master = head + rows; pane = month nav, the grid card capped at 560px, legend and
+  cheapest banner, and the day sheet's own body docked beside it.
+- Watch: master = head + the search chip + rows; pane = the chosen pass at column width, the
+  rest two abreast, deal rules as a right-hand column.
+- Landing: `RouteDetailPanel` becomes two columns and the globe takes the leftover height.
+
+What was actually built differs from the sketch above in four places, each worth keeping:
+- **The wide branches are the same template, not a second one.** Four wrappers per screen
+  (`__master`, `__pane`, and friends) are `display: contents` below 1024px and become the frame's
+  boxes above it. A wrapper that generates no box changes nothing about how its children lay out —
+  margins still collapse through it — so the phone renders the DOM it always did while one
+  template serves both. The alternative, Phase 1's `v-if`/`v-else` pair, would have duplicated the
+  calendar's four states and the whole rules section, which is what phase 2 was supposed to stop
+  doing rather than do twice more.
+- **The detail's two columns are a 2x2 grid, not two column elements.** The phone reads
+  head → price → chart → advice → booking; the artboard's left column is head/price/advice and its
+  right is chart/booking. Those two orders cannot both come out of one DOM order with two
+  wrappers, and reordering is a phone regression. So the panel has **four** `display: contents`
+  groups — summary, chart, advice, booking — placed into columns 1, 2, 1, 2. The cost is stated
+  plainly: the shorter of each row's two groups leaves a gap under itself, which is what the
+  artboard's own `space-between` columns draw anyway.
+- **`meta.wide` grew a second value, and it means an iPad in PORTRAIT sees no change.** `true`
+  still means "owns the frame from 768px" (the landing); `'desktop'` means "owns it from 1024,
+  phone column below" — which is what the calendar and the watch list need, since their panes are
+  a 352px master plus two more columns and a 768px window has room for neither. So phase 2's two
+  screens arrive on an iPad in **landscape** and on a desktop window; at 820px they keep the
+  centred phone layout phase 1 gave them, deliberately.
+- **The mock's `aspect-ratio: auto` cells were not built.** The plan says square and the plan
+  wins: the grid card is capped at 560px (the artboard's own width) and the cells' existing
+  `aspect-ratio: 1` does the rest. A pane too narrow for the card and the day panel side by side
+  wraps the panel under the grid rather than squashing either — **so the panel docks beside the
+  month from 1264px, and sits under it between 1024 and 1263.** Docking at 1024 was tried and
+  costs a 37px cell, which is smaller than the phone's; a scroll is the cheaper price. The watch
+  list's rules column wraps the same way, from 1260px, and for the same reason.
+
+*Phone: 19 baselines at 0 diff, phone suite unchanged. Docked `DaySheet` is `role="region"` and
+not a modal dialog — nothing is covered, so there is nothing to trap focus in front of.*
 
 ### Phase 3 — Search, Create, Alerts in C
 - Search: master = the search card (typeahead in flow); detail = "Deals from your
@@ -142,7 +174,9 @@ Every phase: phone screenshots pixel-identical to the baselines, phone e2e green
 0. Nothing changed on the phone; the globe still fills its box after rotating the iPad.
 1. Landing page in landscape = list | globe + detail, no empty band; tapping a route
    swaps the detail without leaving; portrait shows rail + one pane with a chip strip.
-2. Calendar and Watch use the pane; calendar cells square; day panel docked.
+2. Calendar and Watch use the pane (iPad in landscape, or a desktop window — 1024px and up);
+   calendar cells square; day panel docked beside the month from 1264px, under it below that.
+   **Done.**
 3. Search, Create, Alerts use the pane.
 4. Dark mode clean; nothing regressed on the phone (full e2e + screenshot baselines).
 

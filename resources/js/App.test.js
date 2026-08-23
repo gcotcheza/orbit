@@ -91,6 +91,21 @@ describe('the content area', () => {
         expect(shell().get('.app-shell__main').classes()).not.toContain('app-shell__main--column')
     })
 
+    // `wide: 'desktop'` — the calendar and the watch list, whose panes need the 1024px split.
+    it('hands the frame to a desktop-wide screen only past 1024px', () => {
+        windowOf(1280)
+        currentRoute.meta = { layout: 'tabs', wide: 'desktop' }
+
+        expect(shell().get('.app-shell__main').classes()).not.toContain('app-shell__main--column')
+    })
+
+    it('keeps that screen in the phone column on a tablet', () => {
+        windowOf(820)
+        currentRoute.meta = { layout: 'tabs', wide: 'desktop' }
+
+        expect(shell().get('.app-shell__main').classes()).toContain('app-shell__main--column')
+    })
+
     it('never clamps anything on a phone, where there is no rail to leave room for', () => {
         windowOf(390)
 

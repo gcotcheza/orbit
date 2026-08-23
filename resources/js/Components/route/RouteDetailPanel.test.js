@@ -223,3 +223,48 @@ describe('coming back to a pane that was cached', () => {
         expect(wrapper.get('.price__value').text()).toBe('€61')
     })
 })
+
+// The landing pane lays the panel out in two columns by making these four wrappers into grid
+// items; everywhere else they are `display: contents` (Views/Home.vue).
+describe('the two-column wrappers', () => {
+    it('groups the body without reordering a line of it', async () => {
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75))
+
+        const wrapper = mount(RouteDetailPanel, {
+            props: { code: 'AMS-LIS' },
+            global: { plugins: [createPinia()] },
+        })
+        await flushPromises()
+
+        const groups = wrapper.findAll('.detail__group')
+
+        expect(groups.map((group) => group.classes()[1])).toEqual([
+            'detail__group--summary',
+            'detail__group--chart',
+            'detail__group--advice',
+            'detail__group--booking',
+        ])
+
+        expect(groups[0].find('.detail__head').exists()).toBe(true)
+        expect(groups[0].find('.price').exists()).toBe(true)
+        expect(groups[1].find('.chart-card').exists()).toBe(true)
+        expect(groups[2].find('.callout').exists()).toBe(true)
+        expect(groups[3].find('.booking').exists()).toBe(true)
+    })
+
+    // A skeleton or a "no such route" is one thing, and wrapping it would give the grid a column
+    // of nothing to put beside it.
+    it('leaves every other state ungrouped', async () => {
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75))
+
+        const wrapper = mount(RouteDetailPanel, {
+            props: { code: 'nonsense' },
+            global: { plugins: [createPinia()] },
+        })
+        await flushPromises()
+
+        expect(wrapper.get('.empty__title').text()).toBe('No such route')
+        expect(wrapper.findAll('.detail__group')).toHaveLength(0)
+    })
+})
+

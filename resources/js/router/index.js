@@ -24,10 +24,12 @@ export const router = createRouter({
             meta: { layout: 'tabs', wide: true },
         },
         {
+            // `'desktop'`, not `true`: the month grid and its day panel need the 1024px split, and
+            // below it this screen keeps the phone column the rail leaves.
             path: '/calendar',
             name: 'calendar',
             component: () => import('@/Views/Calendar.vue'),
-            meta: { layout: 'tabs' },
+            meta: { layout: 'tabs', wide: 'desktop' },
         },
         {
             // The centre tab, with a bottom bar like the other four: you come back from a search
@@ -49,7 +51,7 @@ export const router = createRouter({
             path: '/watch',
             name: 'watch',
             component: () => import('@/Views/Watchlist.vue'),
-            meta: { layout: 'tabs' },
+            meta: { layout: 'tabs', wide: 'desktop' },
         },
         {
             path: '/alerts',

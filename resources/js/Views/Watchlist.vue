@@ -4,11 +4,17 @@
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterLink } from 'vue-router'
+import RouteRows from '@/Components/RouteRows.vue'
 import RuleRow from '@/Components/rules/RuleRow.vue'
 import WatchRow from '@/Components/watch/WatchRow.vue'
 import { scrollIntoView } from '@/lib/motion'
+import { useLayout } from '@/lib/layout'
 import { useRulesStore } from '@/stores/rules'
 import { useWatchlistStore } from '@/stores/watchlist'
+
+// 1024px and up the passes get a pane of their own beside the master list; below it this screen
+// keeps its phone layout (docs/DESKTOP-LAYOUT-PLAN.md phase 2).
+const { isDesktop } = useLayout()
 
 const watchlist = useWatchlistStore()
 const { routes, status, error: notice } = storeToRefs(watchlist)
@@ -38,6 +44,21 @@ let undoTimer = null
 const busyCodes = ref(new Set())
 
 const rulesSection = useTemplateRef('rulesSection')
+
+/** The row the master pane points at. Falls back to the first, so a removal cannot empty the pane. */
+const selectedCode = ref('')
+
+const selected = computed(
+  () => routes.value.find((one) => one.code === selectedCode.value)?.code ?? routes.value[0]?.code ?? null,
+)
+
+/* The chosen pass leads the pane, and it leads in the DOM: a CSS `order` would hand a keyboard the
+   passes in one sequence and the eye another. The phone gets the list untouched. */
+const passes = computed(() => {
+  const lead = isDesktop.value ? routes.value.find((one) => one.code === selected.value) : undefined
+
+  return lead === undefined ? routes.value : [lead, ...routes.value.filter((one) => one !== lead)]
+})
 
 // The "Rules · N" chip jumps to the rules section below; a count, not a link, and it renders only
 // when there are rules.
@@ -179,123 +200,150 @@ function markRuleBusy(id, busy) {
 </script>
 
 <template>
-  <div class="screen">
-    <header class="screen__head">
-      <h1 class="screen__title">Watch list</h1>
-      <p class="screen__note">{{ countLine }}</p>
-    </header>
+  <div class="screen" :class="{ 'screen--wide': isDesktop }">
+    <div class="screen__master">
+      <header class="screen__head">
+        <h1 class="screen__title">Watch list</h1>
+        <p class="screen__note">{{ countLine }}</p>
+      </header>
 
-    <div class="screen__chips">
-      <!-- A link, not a button, so browser navigation affordances survive: middle click,
-           long press, status bar. -->
-      <RouterLink class="screen__chip" :to="{ name: 'search' }">
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <circle cx="7" cy="7" r="4.2" stroke-width="1.6" />
-          <path d="m10 10 3 3" stroke-width="1.8" stroke-linecap="round" />
-        </svg>
-        Search for a route
-      </RouterLink>
+      <div class="screen__chips">
+        <!-- A link, not a button, so browser navigation affordances survive: middle click,
+             long press, status bar. -->
+        <RouterLink class="screen__chip" :to="{ name: 'search' }">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.2" stroke-width="1.6" />
+            <path d="m10 10 3 3" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+          Search for a route
+        </RouterLink>
 
-      <!-- The rules section is two and a half screens down; this is how anybody
-           finds out it is there. See `jumpToRules`. -->
-      <button
-        v-if="dealRules.length > 0"
-        type="button"
-        class="screen__chip"
-        :aria-label="`Go to your ${dealRules.length} deal ${dealRules.length === 1 ? 'rule' : 'rules'}`"
-        @click="jumpToRules"
-      >
-        Rules · {{ dealRules.length }}
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M8 3.5v9M4.5 9l3.5 3.5L11.5 9" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-      </button>
-    </div>
+        <!-- The rules section is two and a half screens down; this is how anybody
+             finds out it is there. See `jumpToRules`. In the frame it is a column, in view. -->
+        <button
+          v-if="!isDesktop && dealRules.length > 0"
+          type="button"
+          class="screen__chip"
+          :aria-label="`Go to your ${dealRules.length} deal ${dealRules.length === 1 ? 'rule' : 'rules'}`"
+          @click="jumpToRules"
+        >
+          Rules · {{ dealRules.length }}
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 3.5v9M4.5 9l3.5 3.5L11.5 9" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
 
-    <p v-if="notice" class="screen__notice" role="alert">{{ notice }}</p>
-    <p v-if="undoError" class="screen__notice" role="alert">{{ undoError }}</p>
-
-    <!-- `role="status"`, not `alert`: nothing went wrong, and an assertive announcement over a
-         deliberate action would be the reader shouting about what the user just did. -->
-    <p v-if="undo" class="screen__notice screen__notice--undo" role="status">
-      Stopped watching {{ undo.label }}
-      <button type="button" class="screen__undo" @click="undoRemove">Undo</button>
-    </p>
-
-    <p v-if="status === 'loading'" class="screen__state">Loading your routes…</p>
-
-    <div v-else-if="status === 'failed'" class="screen__state">
-      <p>Could not load your watch list.</p>
-      <button type="button" class="screen__retry" @click="watchlist.refresh()">Try again</button>
-    </div>
-
-    <!-- Empty-state copy names the Search tab and says "look one up", not "watch one" —
-         matching the search screen's price-without-commitment first step. -->
-    <p v-else-if="routes.length === 0" class="screen__state">
-      No routes yet. <RouterLink class="screen__link" :to="{ name: 'search' }">Search</RouterLink> for one to look up its
-      price — you can start watching it from there, and Orbit prices it every morning after that.
-    </p>
-
-    <div v-else class="screen__list">
-      <WatchRow
-        v-for="route in routes"
-        :key="route.code"
-        class="rise-in"
-        :class="{ 'is-paused': !route.active }"
-        :route="route"
-        :busy="busyCodes.has(route.code)"
-        @toggle="toggle(route, $event)"
-        @remove="remove(route)"
+      <!-- `group`, not `tabs`: nothing swaps for the row you press — the pass it names moves to the
+           head of the list that is already on screen. -->
+      <RouteRows
+        v-if="isDesktop && routes.length"
+        :routes="routes"
+        :active="selected"
+        kind="group"
+        label="Watched routes"
+        @select="selectedCode = $event"
       />
     </div>
 
-    <!-- The deal rules section is deliberately quieter than the routes above, and is always
-         drawn: it is the only door to /create, so hiding it when empty would hide the way in. -->
-    <section ref="rulesSection" class="rules">
-      <div class="rules__head">
-        <h2 class="rules__title">Deal rules</h2>
+    <div class="screen__pane">
+      <p v-if="notice" class="screen__notice" role="alert">{{ notice }}</p>
+      <p v-if="undoError" class="screen__notice" role="alert">{{ undoError }}</p>
 
-        <!-- The one + left on this screen names what it makes ("New rule"): there used to be
-             two identical accent squares here doing different writes. -->
-        <RouterLink class="rules__new" :to="{ name: 'create' }">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M8 3v10M3 8h10" stroke-width="1.8" stroke-linecap="round" />
-          </svg>
-          New rule
-        </RouterLink>
-      </div>
-
-      <p v-if="rulesError" class="screen__notice" role="alert">{{ rulesError }}</p>
-
-      <p v-if="rulesStatus === 'failed' && dealRules.length === 0" class="screen__state">
-        Could not load your rules.
-        <button type="button" class="screen__retry" @click="rules.load()">Try again</button>
+      <!-- `role="status"`, not `alert`: nothing went wrong, and an assertive announcement over a
+           deliberate action would be the reader shouting about what the user just did. -->
+      <p v-if="undo" class="screen__notice screen__notice--undo" role="status">
+        Stopped watching {{ undo.label }}
+        <button type="button" class="screen__undo" @click="undoRemove">Undo</button>
       </p>
 
-      <p v-else-if="dealRules.length === 0 && rulesStatus !== 'loading'" class="rules__empty">
-        Rules watch for trips in plain English — “cheap weekend somewhere sunny, under €80”. Orbit reads one, then tells
-        you when a trip like it turns up.
-      </p>
+      <div class="screen__body">
+        <div class="screen__passes">
+          <p v-if="status === 'loading'" class="screen__state">Loading your routes…</p>
 
-      <div v-else class="rules__list">
-        <RuleRow
-          v-for="rule in dealRules"
-          :key="rule.id"
-          :rule="rule"
-          :busy="busyRules.has(rule.id)"
-          :watching="watchingCode"
-          @toggle="toggleRule(rule, $event)"
-          @remove="rules.remove(rule)"
-          @watch="watchMatch"
-        />
+          <div v-else-if="status === 'failed'" class="screen__state">
+            <p>Could not load your watch list.</p>
+            <button type="button" class="screen__retry" @click="watchlist.refresh()">Try again</button>
+          </div>
+
+          <!-- Empty-state copy names the Search tab and says "look one up", not "watch one" —
+               matching the search screen's price-without-commitment first step. -->
+          <p v-else-if="routes.length === 0" class="screen__state">
+            No routes yet. <RouterLink class="screen__link" :to="{ name: 'search' }">Search</RouterLink> for one to look up
+            its price — you can start watching it from there, and Orbit prices it every morning after that.
+          </p>
+
+          <div v-else class="screen__list">
+            <WatchRow
+              v-for="route in passes"
+              :key="route.code"
+              class="rise-in"
+              :class="{ 'is-paused': !route.active, 'is-selected': isDesktop && route.code === selected }"
+              :route="route"
+              :busy="busyCodes.has(route.code)"
+              @toggle="toggle(route, $event)"
+              @remove="remove(route)"
+            />
+          </div>
+        </div>
+
+        <!-- The deal rules section is deliberately quieter than the routes above, and is always
+             drawn: it is the only door to /create, so hiding it when empty would hide the way in. -->
+        <section ref="rulesSection" class="rules">
+          <div class="rules__head">
+            <h2 class="rules__title">Deal rules</h2>
+
+            <!-- The one + left on this screen names what it makes ("New rule"): there used to be
+                 two identical accent squares here doing different writes. -->
+            <RouterLink class="rules__new" :to="{ name: 'create' }">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 3v10M3 8h10" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+              New rule
+            </RouterLink>
+          </div>
+
+          <p v-if="rulesError" class="screen__notice" role="alert">{{ rulesError }}</p>
+
+          <p v-if="rulesStatus === 'failed' && dealRules.length === 0" class="screen__state">
+            Could not load your rules.
+            <button type="button" class="screen__retry" @click="rules.load()">Try again</button>
+          </p>
+
+          <p v-else-if="dealRules.length === 0 && rulesStatus !== 'loading'" class="rules__empty">
+            Rules watch for trips in plain English — “cheap weekend somewhere sunny, under €80”. Orbit reads one, then
+            tells you when a trip like it turns up.
+          </p>
+
+          <div v-else class="rules__list">
+            <RuleRow
+              v-for="rule in dealRules"
+              :key="rule.id"
+              :rule="rule"
+              :busy="busyRules.has(rule.id)"
+              :watching="watchingCode"
+              @toggle="toggleRule(rule, $event)"
+              @remove="rules.remove(rule)"
+              @watch="watchMatch"
+            />
+          </div>
+        </section>
       </div>
-    </section>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .screen {
   padding: 4px var(--gutter) 0;
+}
+
+/* No box of their own below 1024px, so the phone's column is the column it always was. */
+.screen__master,
+.screen__pane,
+.screen__body,
+.screen__passes {
+  display: contents;
 }
 
 /* One column since the + left it: the header is a title and a count line, and
@@ -494,5 +542,78 @@ function markRuleBusy(id, busy) {
   display: flex;
   flex-direction: column;
   gap: 9px;
+}
+
+/* --- 1024px and up: the master list, the passes and the rules column -----
+   Both halves of the query are lib/layout.js's, and they must be edited together
+   (docs/DESKTOP-LAYOUT-PLAN.md, docs/BUSINESS-LOGIC.md §36). */
+
+@media (min-width: 1024px) and (min-height: 600px) {
+  .screen--wide {
+    display: flex;
+    height: 100%;
+    padding: 0;
+  }
+
+  .screen--wide .screen__master {
+    flex: 0 0 var(--master-width);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px 18px 18px;
+    overflow-y: auto;
+
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+  }
+
+  .screen--wide .screen__head,
+  .screen--wide .screen__chips {
+    margin: 0;
+  }
+
+  .screen--wide .screen__pane {
+    flex: 1;
+    min-width: 0;
+    display: block;
+    padding: 22px 24px 24px;
+    overflow-y: auto;
+  }
+
+  /* WRAPS, and it has to: two shrinking columns squeeze a pass to ~170px, and a pass clips its
+     own IATA codes rather than scrolling — which no overflow guard would catch. */
+  .screen--wide .screen__body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 24px;
+  }
+
+  .screen--wide .screen__passes {
+    flex: 0 1 540px;
+    min-width: 0;
+    display: block;
+  }
+
+  /* The chosen pass at the full width of the column, the rest as many abreast as fit. */
+  .screen--wide .screen__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 0;
+  }
+
+  .screen--wide .is-selected {
+    grid-column: 1 / -1;
+  }
+
+  /* Its own column, so the hairline that set it apart from the routes above has nothing to do. */
+  .screen--wide .rules {
+    flex: 1 1 220px;
+    min-width: 0;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
 }
 </style>

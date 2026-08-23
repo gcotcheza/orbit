@@ -11,8 +11,10 @@ import HeatLegend from '@/Components/calendar/HeatLegend.vue'
 import MonthGrid from '@/Components/calendar/MonthGrid.vue'
 import MonthNav from '@/Components/calendar/MonthNav.vue'
 import RouteChips from '@/Components/calendar/RouteChips.vue'
+import RouteRows from '@/Components/RouteRows.vue'
 import { euro } from '@/lib/format'
 import { addMonths, currentMonthKey, dayLabel, monthLabel } from '@/Components/calendar/month'
+import { useLayout } from '@/lib/layout'
 import { useWatchlistStore } from '@/stores/watchlist'
 
 /*
@@ -21,6 +23,10 @@ import { useWatchlistStore } from '@/stores/watchlist'
  */
 const FIRST_MONTH = currentMonthKey()
 const LAST_MONTH = addMonths(FIRST_MONTH, 11)
+
+// 1024px and up this screen is master pane + month pane; below it, the phone's single column
+// centred in what the rail leaves (docs/DESKTOP-LAYOUT-PLAN.md phase 2).
+const { isDesktop } = useLayout()
 
 const watchlist = useWatchlistStore()
 const { routes, status: routesStatus } = storeToRefs(watchlist)
@@ -145,6 +151,21 @@ async function loadMonth() {
   }
 }
 
+/* The cell that opened the day, so closing it does not drop a keyboard back at the top of the page.
+   A detached element's `focus()` is a no-op, which is what a month change leaves behind. */
+let picker = null
+
+function pickDay(fare) {
+  picker = document.activeElement
+  selected.value = fare
+}
+
+function closeDay() {
+  selected.value = null
+  picker?.focus()
+  picker = null
+}
+
 // Fires on the code the watchlist load sets, so the first month is fetched by the same path every
 // later one is.
 watch([code, month], loadMonth)
@@ -153,66 +174,109 @@ onMounted(loadRoutes)
 </script>
 
 <template>
-  <section class="calendar rise-in">
-    <header class="calendar__head">
-      <div>
-        <h1 class="calendar__title">When is it cheap?</h1>
-        <p class="calendar__subtitle">Cheapest fare per day · {{ monthLabel(month) }}</p>
+  <section class="calendar rise-in" :class="{ 'calendar--wide': isDesktop }">
+    <div class="calendar__master">
+      <header class="calendar__head">
+        <div>
+          <h1 class="calendar__title">When is it cheap?</h1>
+          <p class="calendar__subtitle">Cheapest fare per day · {{ monthLabel(month) }}</p>
+        </div>
+
+        <MonthNav
+          v-if="!isDesktop"
+          :month="month"
+          :can-prev="canPrev"
+          :can-next="canNext"
+          @prev="month = addMonths(month, -1)"
+          @next="month = addMonths(month, 1)"
+        />
+      </header>
+
+      <!-- The master pane has room for the rows the chip strip stands in for; the selection is the
+           same `code` either way. -->
+      <RouteRows
+        v-if="isDesktop && routes.length"
+        :routes="routes"
+        :active="code"
+        label="Watched routes"
+        @select="select"
+      />
+
+      <RouteChips v-else-if="routes.length" :routes="routes" :active="code" @pick="select" />
+    </div>
+
+    <div class="calendar__pane">
+      <div v-if="isDesktop" class="calendar__nav">
+        <MonthNav
+          :month="month"
+          :can-prev="canPrev"
+          :can-next="canNext"
+          @prev="month = addMonths(month, -1)"
+          @next="month = addMonths(month, 1)"
+        />
       </div>
 
-      <MonthNav
-        :month="month"
-        :can-prev="canPrev"
-        :can-next="canNext"
-        @prev="month = addMonths(month, -1)"
-        @next="month = addMonths(month, 1)"
-      />
-    </header>
+      <div class="calendar__cols">
+        <div class="calendar__month">
+          <p v-if="booted && !routes.length && !failed" class="calendar__note">
+            Nothing on your watchlist yet — add a route and its cheapest days show up here.
+          </p>
 
-    <RouteChips v-if="routes.length" :routes="routes" :active="code" @pick="select" />
+          <p v-else-if="failed" class="calendar__note">
+            Could not load this month. Check the connection and try again.
+          </p>
 
-    <p v-if="booted && !routes.length && !failed" class="calendar__note">
-      Nothing on your watchlist yet — add a route and its cheapest days show up here.
-    </p>
+          <div v-else-if="loading" class="skeleton" aria-hidden="true"></div>
 
-    <p v-else-if="failed" class="calendar__note">
-      Could not load this month. Check the connection and try again.
-    </p>
+          <template v-else-if="payload">
+            <MonthGrid
+              :month="month"
+              :days="payload.days"
+              :min="payload.min"
+              :max="payload.max"
+              @pick="pickDay"
+            />
 
-    <div v-else-if="loading" class="skeleton" aria-hidden="true"></div>
+            <HeatLegend v-if="hasFares" :min="payload.min" :max="payload.max" />
 
-    <template v-else-if="payload">
-      <MonthGrid
-        :month="month"
-        :days="payload.days"
-        :min="payload.min"
-        :max="payload.max"
-        @pick="selected = $event"
-      />
+            <p v-else class="calendar__note calendar__note--centred">No fares seen for this month yet.</p>
 
-      <HeatLegend v-if="hasFares" :min="payload.min" :max="payload.max" />
+            <p v-if="payload.cheapest" class="banner">
+              <svg class="banner__star" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M8 1.5l1.8 4 4.4.4-3.3 2.9 1 4.3L8 11l-3.9 2.1 1-4.3L1.8 5.9l4.4-.4z" />
+              </svg>
+              Cheapest this month: {{ dayLabel(payload.cheapest.date) }} · {{ euro(payload.cheapest.price) }}
+            </p>
+          </template>
+        </div>
 
-      <p v-else class="calendar__note calendar__note--centred">No fares seen for this month yet.</p>
-
-      <p v-if="payload.cheapest" class="banner">
-        <svg class="banner__star" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M8 1.5l1.8 4 4.4.4-3.3 2.9 1 4.3L8 11l-3.9 2.1 1-4.3L1.8 5.9l4.4-.4z" />
-        </svg>
-        Cheapest this month: {{ dayLabel(payload.cheapest.date) }} · {{ euro(payload.cheapest.price) }}
-      </p>
-    </template>
+        <!-- The same component body, docked beside the grid rather than teleported over it: there
+             is nothing to dismiss, so there is no backdrop and no dialog. -->
+        <aside v-if="isDesktop && selected && hasFares" class="calendar__day">
+          <DaySheet
+            docked
+            :fare="selected"
+            :min="payload.min"
+            :max="payload.max"
+            :code="code"
+            :booking="booking"
+            @close="closeDay"
+          />
+        </aside>
+      </div>
+    </div>
 
     <!-- TELEPORTED, and not for tidiness: this screen's root carries a transform, which would be
          the containing block for a fixed sheet (docs/BUSINESS-LOGIC.md §36). -->
     <Teleport to="body">
       <DaySheet
-        v-if="selected && hasFares"
+        v-if="!isDesktop && selected && hasFares"
         :fare="selected"
         :min="payload.min"
         :max="payload.max"
         :code="code"
         :booking="booking"
-        @close="selected = null"
+        @close="closeDay"
       />
     </Teleport>
   </section>
@@ -221,6 +285,14 @@ onMounted(loadRoutes)
 <style scoped>
 .calendar {
   padding: 4px var(--gutter) 24px;
+}
+
+/* No box of their own below 1024px, so the phone's column is the column it always was. */
+.calendar__master,
+.calendar__pane,
+.calendar__cols,
+.calendar__month {
+  display: contents;
 }
 
 .calendar__head {
@@ -293,5 +365,70 @@ onMounted(loadRoutes)
 .banner__star {
   flex-shrink: 0;
   fill: var(--good);
+}
+
+/* --- 1024px and up: the master pane, the month, and the day beside it -----
+   Both halves of the query are lib/layout.js's, and they must be edited together
+   (docs/DESKTOP-LAYOUT-PLAN.md, docs/BUSINESS-LOGIC.md §36). */
+
+@media (min-width: 1024px) and (min-height: 600px) {
+  .calendar--wide {
+    display: flex;
+    height: 100%;
+    padding: 0;
+  }
+
+  .calendar--wide .calendar__master {
+    flex: 0 0 var(--master-width);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px 18px 18px;
+    overflow-y: auto;
+
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+  }
+
+  .calendar--wide .calendar__head {
+    margin: 0;
+  }
+
+  .calendar--wide .calendar__pane {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 28px;
+    overflow-y: auto;
+  }
+
+  .calendar--wide .calendar__nav {
+    display: flex;
+    justify-content: flex-end;
+    margin: 0 2px 14px;
+  }
+
+  .calendar--wide .calendar__cols {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  /*
+   * CELLS STAY SQUARE: the card's width is the only thing that sets their size, and 560px is the
+   * design canvas's own. A pane too narrow for both wraps the day panel under the grid.
+   */
+  .calendar--wide .calendar__month {
+    flex: 0 1 560px;
+    min-width: 0;
+    display: block;
+  }
+
+  .calendar--wide .calendar__day {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
 }
 </style>
