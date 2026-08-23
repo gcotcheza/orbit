@@ -232,9 +232,11 @@ at a time, next to the assertion that makes it true:
 Two different things, and conflating them is how a screenshot suite becomes a
 suite everybody re-baselines without looking.
 
-**`e2e/baselines/` — committed, compared, three files.** `login`, `settings-dark`
-and `offline`. All three are static: no fares on them, no canvas, no clock. A
-pixel difference is a real change to a control or a token.
+**`e2e/baselines/` — committed, compared.** Two kinds. Three of them —
+`login`, `settings-dark`, `offline` — are static screens: no fares on them, no
+canvas, no clock, and a pixel difference is a real change to a control or a
+token. The rest are **the phone baselines** (below), which are the same idea
+applied to screens that are not static, by masking the parts that are not.
 
 **`e2e/artifacts/screens/` — gitignored, compared to nothing, seventeen files.**
 The globe, the calendar, the watchlist, the route detail, the create screen.
@@ -252,9 +254,53 @@ match.
 Re-baseline deliberately, and look at the diff:
 
 ```bash
-scripts/e2e.sh -- --update-snapshots
+scripts/e2e.sh -- --update-snapshots                          # all of them
+scripts/e2e.sh -- --update-snapshots specs/phone-baselines.spec.js
 git diff --stat e2e/baselines
 ```
+
+### The phone baselines
+
+`phone-baselines.spec.js` photographs **every screen in both themes** at the
+suite's own 390x844 — home, calendar, route detail, watch, search, the discovery
+strip, create, alerts, login — and compares each one at **`maxDiffPixels: 0`**.
+It exists for `docs/DESKTOP-LAYOUT-PLAN.md`: every phase of that plan adds CSS
+above 768px, and "the phone is untouched" has to be a measurement rather than a
+promise. `reducedMotion: 'reduce'` is set for the whole file, which also holds
+the globe's camera still.
+
+What makes a 0-pixel tolerance possible on screens full of fares is the **mask
+list** at the top of the spec. A masked element is not removed — Playwright
+paints a flat box at its own position and size — so the geometry of every price,
+gauge and day cell is still compared; only its content is not. Masked: the live
+dot, the greeting (it reads the hour), the spotlight's money column and
+sparkline, the verdict pills, the rail's prices and tone dots, the calendar's
+month subtitle, priced and empty day cells, legend and cheapest banner, the
+route detail's price lines, gauge dial, chart, "usual" figure and advice text,
+the watch stubs' figures and tracking notes, and the discovery cards' money,
+evidence, badge and "seen" lines. Blank calendar cells are deliberately *not*
+masked, so the month's own shape is still compared.
+
+**The globe is hidden rather than masked** (`e2e/baseline.css`, passed as
+`stylePath`). A mask over `.stage__globe` is a 390x360 box, and the chip, the
+hint, the caption and the top 30px of the spotlight card are drawn over that
+same area — masking would swallow all four. `visibility: hidden` on the canvas
+keeps its box and lets the overlays through; that a globe was drawn at all is
+`globe.spec.js`'s assertion, and `waitForGlobe()` runs in this spec too before
+the shutter.
+
+Two consequences worth knowing before re-recording:
+
+- **The route detail baseline is `AMS-OPO`**, not `AMS-LIS`, because
+  `live-price.spec.js` runs earlier and leaves a cached live answer on AMS-LIS
+  that would be in the picture.
+- **The images are a promise about a day as well as a renderer.** The fake
+  provider prices a departure date as at an observation date, so the seeded
+  world moves with the calendar: a card's height changes when a route stops
+  being below its usual price, and the calendar's grid changes shape at a month
+  boundary. Re-record when a run reports differences that are all inside the
+  masked regions' geometry, and read `git diff --stat e2e/baselines` before
+  committing.
 
 Screenshots are taken with `animations: 'disabled'`, which finishes every
 running animation and transition at its end state first. Without it the price
@@ -278,6 +324,31 @@ in.
 | `rules.spec.js` | the design's sentence → its exact eight chips, in order; removing one re-matches |
 | `pwa.spec.js` | manifest / `sw.js` / `offline` content types and bodies |
 | `theme.spec.js` | the palette really swaps and survives a reload; both themes of Home photographed |
+| `phone-baselines.spec.js` | every screen, both themes, at `maxDiffPixels: 0` — the phone-regression guard |
+| `layout-smoke.spec.js` | tablet and desktop only: the shell renders, the nav is there, nothing scrolls sideways |
+
+### The projects
+
+| project | viewport | runs |
+| --- | --- | --- |
+| `setup` | — | `auth.setup.js`, once, for the session everything else reuses |
+| `chromium` | 390x844, DPR 1 | every spec except `layout-smoke.spec.js` — the phone, and the only project that photographs anything |
+| `tablet` | 820x1180, DPR 2 | `layout-smoke.spec.js` only — an iPad in portrait |
+| `desktop` | 1280x832, DPR 1 | `layout-smoke.spec.js` only, no touch |
+
+`tablet` and `desktop` are deliberately one small spec each: they assert that
+the signed-in shell renders, that the primary navigation is on it, and that
+`documentElement.scrollWidth` equals `innerWidth` on the five tabbed screens.
+Their assertions grow with each phase of `docs/DESKTOP-LAYOUT-PLAN.md` — phase 1
+replaces the tab-bar assertion with the icon rail's, phase 4 gives them
+baselines of their own. Until then a wide window is checked, not photographed,
+and the suite grows by seconds rather than by minutes.
+
+Run one of them on its own with the `--` pass-through:
+
+```bash
+scripts/e2e.sh -- --project=desktop
+```
 
 **`auth.setup.js` is not an optimisation.** `POST /login` is throttled 5/min on
 `email|ip` and the throttle runs *before* validation. Eight specs each signing in
