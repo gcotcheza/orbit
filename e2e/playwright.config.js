@@ -83,16 +83,16 @@ export default defineConfig({
         },
         {
             name: 'chromium',
-            testIgnore: [/auth\.setup\.js/, /layout-(smoke|screens)\.spec\.js/],
+            testIgnore: [/auth\.setup\.js/, /layout-(smoke|screens)\.spec\.js/, /wide-baselines\.spec\.js/],
             dependencies: ['setup'],
             use: { storageState: STORAGE_STATE },
         },
 
-        // Two small projects, two specs: the wide layouts are asserted, not
-        // photographed, until phase 4 (docs/DESKTOP-LAYOUT-PLAN.md).
+        // Two projects, three specs each: the frame asserted twice and photographed once
+        // (docs/DESKTOP-LAYOUT-PLAN.md, docs/E2E.md "The wide baselines").
         {
             name: 'tablet',
-            testMatch: /layout-(smoke|screens)\.spec\.js/,
+            testMatch: /(layout-(smoke|screens)|wide-baselines)\.spec\.js/,
             dependencies: ['setup'],
             use: {
                 storageState: STORAGE_STATE,
@@ -103,7 +103,7 @@ export default defineConfig({
         },
         {
             name: 'desktop',
-            testMatch: /layout-(smoke|screens)\.spec\.js/,
+            testMatch: /(layout-(smoke|screens)|wide-baselines)\.spec\.js/,
             dependencies: ['setup'],
             use: {
                 storageState: STORAGE_STATE,
