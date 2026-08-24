@@ -2,7 +2,7 @@
 // fabricated ages, NaN), so the clock is pinned here (docs/BUSINESS-LOGIC.md §36).
 import { describe, expect, it } from 'vitest'
 
-import { dayLabel, departureLabel, hoursSince, seenLabel, withDateTokens } from './format'
+import { departureLabel, hoursSince, seenLabel, shortDayLabel, withDateTokens } from './format'
 
 /** A fixed "now", with an offset, exactly as the API sends its timestamps. */
 const NOW = new Date('2026-08-15T12:00:00+02:00').getTime()
@@ -88,26 +88,26 @@ describe('hoursSince', () => {
     })
 })
 
-describe('dayLabel', () => {
+describe('shortDayLabel', () => {
     it('prints a calendar day the way the design does', () => {
-        expect(dayLabel('2026-09-09')).toBe('Wed, Sep 9')
+        expect(shortDayLabel('2026-09-09')).toBe('Wed, Sep 9')
     })
 
     // A day WE LOOKED arrives as a full timestamp; the date is taken as written, in its own
     // offset, rather than re-read through a timezone that can land on the day before.
     it('cuts a timestamp down to the day it was written in', () => {
-        expect(dayLabel('2026-08-15T23:40:00+02:00')).toBe('Sat, Aug 15')
-        expect(dayLabel('2027-01-01T00:10:00Z')).toBe('Fri, Jan 1')
+        expect(shortDayLabel('2026-08-15T23:40:00+02:00')).toBe('Sat, Aug 15')
+        expect(shortDayLabel('2027-01-01T00:10:00Z')).toBe('Fri, Jan 1')
     })
 
     it.each([[null], [undefined]])('says nothing at all for %s', (value) => {
-        expect(dayLabel(value)).toBeNull()
+        expect(shortDayLabel(value)).toBeNull()
     })
 
     // `departureLabel` is the same printing under the name of its meaning: the two must not drift.
     it('is exactly what departureLabel prints', () => {
         for (const iso of ['2026-09-09', '2026-08-15', '2027-01-01']) {
-            expect(departureLabel(iso)).toBe(dayLabel(iso))
+            expect(departureLabel(iso)).toBe(shortDayLabel(iso))
         }
 
         expect(departureLabel('2026-09-09')).toBe('Wed, Sep 9')

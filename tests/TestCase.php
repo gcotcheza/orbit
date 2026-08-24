@@ -4,6 +4,7 @@ namespace Tests;
 
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Facade;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 /**
@@ -19,10 +20,13 @@ abstract class TestCase extends BaseTestCase
         Http::preventStrayRequests();
     }
 
-    // Unconditional: an unfrozen clock is already unfrozen, so resetting one is a no-op.
+    // Resetting an unfrozen clock is a no-op; the guard is for a setUp that died before the app
+    // booted, so its own error surfaces instead of "a facade root has not been set".
     protected function tearDown(): void
     {
-        Date::setTestNow();
+        if (Facade::getFacadeApplication() !== null) {
+            Date::setTestNow();
+        }
 
         parent::tearDown();
     }

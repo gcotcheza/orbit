@@ -5,11 +5,12 @@ import {
     DETAIL,
     DETAIL_ROUTE,
     THEMES,
-    expectPremises,
+    expectClockPinned,
+    expectReducedMotion,
     makeBaseline,
     remember,
     signedOutBeforeEach,
-} from '../baselines.js'
+} from '../baseline-support.js'
 
 // Through `contextOptions`, as the phone spec does: `reducedMotion` is not a top-level test option
 // in Playwright 1.62, and one set there is silently ignored.
@@ -44,7 +45,10 @@ for (const theme of THEMES) {
             await expect(page.locator('.rail-nav')).toBeVisible()
             await waitForGlobe(page)
 
-            await expectPremises(page)
+            // The two premises of the whole file: a still globe, and a browser that agrees with
+            // the server about what time it is.
+            await expectReducedMotion(page)
+            await expectClockPinned(page)
             await expect(page.locator('.home__greeting')).toHaveText('Good morning')
 
             await expect(page.locator('.home__panel .detail__code')).toHaveText(/→/)

@@ -17,13 +17,13 @@ export function euro(amount) {
 }
 
 /**
- * One calendar day, printed: `2026-09-09` → `Wed, Sep 9`. Parsed by parts, formatted in UTC,
- * locale pinned. A longer ISO string is cut to its date, in the offset it was written in.
+ * One calendar day, SHORT: `2026-09-09` → `Wed, Sep 9`. Not `calendar/month.js`'s `dayLabel`,
+ * which prints the long form (`June 11`). Parsed by parts, formatted in UTC, locale pinned.
  *
  * @param {string|null|undefined} iso `YYYY-MM-DD`, or a timestamp starting with one
  * @returns {string|null}
  */
-export function dayLabel(iso) {
+export function shortDayLabel(iso) {
     if (iso === null || iso === undefined) {
         return null
     }
@@ -39,13 +39,13 @@ export function dayLabel(iso) {
 }
 
 /**
- * A DEPARTURE date — a day you FLY. The printing is `dayLabel`'s; the name is the meaning.
+ * A DEPARTURE date — a day you FLY. The printing is `shortDayLabel`'s; the name is the meaning.
  *
  * @param {string|null|undefined} iso `YYYY-MM-DD`
  * @returns {string|null}
  */
 export function departureLabel(iso) {
-    return dayLabel(iso)
+    return shortDayLabel(iso)
 }
 
 /**

@@ -49,14 +49,15 @@ export function makeBaseline(volatile, prefix = () => '') {
     }
 }
 
-/** The two premises under every picture: a browser emulating reduced motion, and one that agrees
- *  with the server about what time it is. */
-export async function expectPremises(page) {
+/** Kept apart so a caller can assert its own premises in between (docs/E2E.md). */
+export async function expectReducedMotion(page) {
     expect(
         await page.evaluate(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches),
         'the browser must be emulating reduced motion',
     ).toBe(true)
+}
 
+export async function expectClockPinned(page) {
     const skew = Math.abs((await page.evaluate(() => Date.now())) - new Date(fixedNow).getTime())
     expect(skew, 'the browser clock must start at E2E_FIXED_NOW').toBeLessThan(600_000)
 }

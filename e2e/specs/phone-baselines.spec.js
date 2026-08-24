@@ -5,11 +5,12 @@ import {
     DETAIL,
     DETAIL_ROUTE,
     THEMES,
-    expectPremises,
+    expectClockPinned,
+    expectReducedMotion,
     makeBaseline,
     remember,
     signedOutBeforeEach,
-} from '../baselines.js'
+} from '../baseline-support.js'
 // The discovery strip is photographed as an element, not a page, so it calls for itself.
 import { BASELINE_STYLE } from '../paths.js'
 
@@ -45,9 +46,11 @@ for (const theme of THEMES) {
             await page.goto('/')
             await waitForGlobe(page)
 
-            await expectPremises(page)
-            // The third premise, this file's own: a globe that has stopped turning.
+            // The two premises of the whole file: a still globe, and a browser
+            // that agrees with the server about what time it is.
+            await expectReducedMotion(page)
             await expect(page.locator('.stage__hint')).toHaveCount(0)
+            await expectClockPinned(page)
             await expect(page.locator('.home__greeting')).toHaveText('Good morning')
 
             await expect(page.locator('.spotlight')).toBeVisible()
