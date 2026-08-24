@@ -65,7 +65,7 @@ Anything after `--` goes to `playwright test`:
 
 ```bash
 scripts/e2e.sh -- specs/globe.spec.js          # one spec
-scripts/e2e.sh -- --update-snapshots           # re-baseline
+scripts/e2e.sh -- --update-snapshots=changed   # re-baseline
 scripts/e2e.sh --keep -- --grep "heat map"     # one test, stack left up
 ```
 
@@ -263,17 +263,26 @@ match.
 Re-baseline deliberately, and look at the diff:
 
 ```bash
-scripts/e2e.sh -- --update-snapshots                          # all of them
-scripts/e2e.sh -- --update-snapshots specs/phone-baselines.spec.js
-scripts/e2e.sh -- --update-snapshots --project=desktop --project=tablet specs/wide-baselines.spec.js
+scripts/e2e.sh -- --update-snapshots=changed                          # all of them
+scripts/e2e.sh -- --update-snapshots=changed specs/phone-baselines.spec.js
+scripts/e2e.sh -- --update-snapshots=changed --project=desktop --project=tablet specs/wide-baselines.spec.js
 git diff --stat e2e/baselines
 ```
 
-**Re-record the narrowest set that covers the change.** `--update-snapshots` on
-its own rewrites all fifty-one, which is how a phone regression gets quietly
-blessed by somebody who was re-recording the desktop. Name the spec — and, for
-the wide set, the projects, since those two files only run there. Everything
-after `--` goes to `playwright test`, so `--project` can be repeated.
+**Spell the mode, or the spec becomes the mode.** `--update-snapshots` takes an
+*optional* argument, so the bare flag followed by a path is parsed as
+`--update-snapshots=specs/phone-baselines.spec.js` and Playwright exits with
+`argument … is invalid. Allowed choices are all, changed, missing, none.` before
+it starts a browser. `=changed` is also the mode you want: it rewrites only the
+files whose pixels actually moved, so `git diff` lists the deliberate set and
+nothing else.
+
+**Re-record the narrowest set that covers the change.** The flag on its own
+runs against all fifty-one — it rewrites only the ones that fail, but a phone
+regression failing that morning is rewritten just the same, which is how one
+gets quietly blessed by somebody who was re-recording the desktop. Name the spec — and, for the wide
+set, the projects, since those two files only run there. Everything after `--`
+goes to `playwright test`, so `--project` can be repeated.
 
 ### The phone baselines
 
@@ -445,6 +454,7 @@ in.
 | `watchlist.spec.js` | pause → the server agrees on a second page load; a paused route leaves the tour; add/remove; refused input |
 | `rules.spec.js` | the design's sentence → its exact eight chips, in order; removing one re-matches |
 | `pwa.spec.js` | manifest / `sw.js` / `offline` content types and bodies |
+| `settings.spec.js` | the "This app" card's Google-checks row — the sandbox is given no SerpAPI key, so the honest note is "Not configured" |
 | `theme.spec.js` | the palette really swaps and survives a reload; both themes of Home photographed |
 | `phone-baselines.spec.js` | every screen, both themes, at `maxDiffPixels: 0` — the phone-regression guard |
 | `layout-smoke.spec.js` | tablet and desktop only: the icon rail replaces the tab bar, nothing scrolls sideways, and the landing page's master pane, `?route=` selection and globe height |
@@ -714,7 +724,7 @@ one in what a wait actually proves:
 | `.env.e2e is missing` | run `scripts/e2e.sh`, which generates it. |
 | `.env.e2e has no E2E_FIXED_NOW` | a file written before the frozen clock; `scripts/e2e.sh` regenerates it by itself. |
 | the globe times out in `waitForGlobe` | the earth texture 404'd, or `--enable-unsafe-swiftshader` stopped being accepted by a newer Chromium. Check `e2e/artifacts/report/index.html`. |
-| a baseline fails after a legitimate change | `scripts/e2e.sh -- --update-snapshots`, then read `git diff --stat e2e/baselines` before committing. |
+| a baseline fails after a legitimate change | `scripts/e2e.sh -- --update-snapshots=changed`, then read `git diff --stat e2e/baselines` before committing. The `=changed` is not optional — see "Re-baseline deliberately". |
 | `429` on login | the 5/min throttle. Wait a minute; a full run only spends three attempts. |
 
 Failures leave a trace: `npx playwright show-trace e2e/artifacts/test-results/<test>/trace.zip`,

@@ -106,6 +106,7 @@ final class AppServiceProvider extends ServiceProvider
                 maxPerRun: (int) $serpapi['max_per_run'],
                 connectTimeout: (float) $serpapi['connect_timeout'],
                 timeout: (float) $serpapi['timeout'],
+                settingsTimeout: (float) $serpapi['settings_timeout'],
             );
         });
 

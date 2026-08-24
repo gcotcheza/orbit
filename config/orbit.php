@@ -321,6 +321,10 @@ return [
 
         'connect_timeout' => 5,
         'timeout'         => 20,
+
+        // The quota probe again, on the deadline a SCREEN may wait rather than
+        // the one a nightly run may. See §31.
+        'settings_timeout' => 3,
     ],
 
     /*

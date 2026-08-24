@@ -181,3 +181,44 @@ describe('on a phone', () => {
         expect(wrapper.get('#account').text()).toBe('Account')
     })
 })
+
+/* The "This app" row that prints the SerpAPI month (docs/BUSINESS-LOGIC.md §31). `checkedAt`
+   is when Orbit last ASKED: null there is "no key", not "the probe failed". */
+describe('the Google price checks row', () => {
+    async function withChecks(googleChecks) {
+        get.mockResolvedValue({ data: { ...SETTINGS, meta: { ...SETTINGS.meta, googleChecks } } })
+
+        return screen()
+    }
+
+    const row = (wrapper) => wrapper.find('.set--app .row')
+
+    it('prints the count and the reserve when Google answered', async () => {
+        const wrapper = await withChecks({ left: 249, reserve: 50, checkedAt: '2026-08-20T09:00:00+02:00' })
+
+        expect(row(wrapper).get('.row__title').text()).toBe('Google price checks')
+        expect(row(wrapper).get('.row__note').text()).toBe('249 left this month · keeps 50 in reserve')
+    })
+
+    it('says so plainly when the box has no key', async () => {
+        const wrapper = await withChecks({ left: null, reserve: 50, checkedAt: null })
+
+        expect(row(wrapper).get('.row__note').text()).toBe('Not configured')
+    })
+
+    it('admits it does not know when the probe failed', async () => {
+        const wrapper = await withChecks({ left: null, reserve: 50, checkedAt: '2026-08-20T09:00:00+02:00' })
+
+        expect(row(wrapper).get('.row__note').text()).toBe('Unknown right now')
+    })
+
+    it('draws no row at all until the settings response has landed', async () => {
+        get.mockImplementation(() => new Promise(() => {}))
+
+        const wrapper = mount(Alerts, { global: { plugins: [pinia] } })
+
+        await flushPromises()
+
+        expect(row(wrapper).exists()).toBe(false)
+    })
+})

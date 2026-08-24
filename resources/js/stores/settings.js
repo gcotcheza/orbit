@@ -11,6 +11,9 @@ export const useSettingsStore = defineStore('settings', () => {
     /** `meta.sensitivities` — level, name, minimumScore and the sentence. */
     const sensitivities = ref([])
 
+    /** `meta.googleChecks` — { left, reserve, checkedAt }, null until the first response lands. */
+    const googleChecks = ref(null)
+
     /** idle | loading | ready | failed */
     const status = ref('idle')
 
@@ -32,6 +35,7 @@ export const useSettingsStore = defineStore('settings', () => {
     function adopt(body) {
         settings.value = body.data
         sensitivities.value = body.meta?.sensitivities ?? []
+        googleChecks.value = body.meta?.googleChecks ?? null
     }
 
     /**
@@ -98,7 +102,7 @@ export const useSettingsStore = defineStore('settings', () => {
         }
     }
 
-    return { settings, sensitivities, status, error, isReady, chosenSensitivity, load, change }
+    return { settings, sensitivities, googleChecks, status, error, isReady, chosenSensitivity, load, change }
 })
 
 /**
