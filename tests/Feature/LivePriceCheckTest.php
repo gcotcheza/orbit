@@ -45,13 +45,6 @@ final class LivePriceCheckTest extends TestCase
         config(['orbit.serpapi.key' => 'test-key']);
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     private function fixture(string $name): string
     {
         return (string) file_get_contents(base_path("tests/Fixtures/serpapi/{$name}.json"));

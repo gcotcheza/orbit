@@ -30,13 +30,6 @@ final class RouteCalendarApiTest extends TestCase
         $this->owner = User::factory()->create();
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     private function seedMonth(): Route
     {
         $route = $this->makeRoute('AMS', 'FAO');

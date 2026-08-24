@@ -46,13 +46,6 @@ final class RulesApiTest extends TestCase
         $this->makeRouteWithFares('AMS', 'OSL', ['2026-09-04' => 4100]);
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     #[Test]
     public function a_guest_gets_401_from_every_rules_endpoint(): void
     {

@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
@@ -16,5 +17,13 @@ abstract class TestCase extends BaseTestCase
         parent::setUp();
 
         Http::preventStrayRequests();
+    }
+
+    // Unconditional: an unfrozen clock is already unfrozen, so resetting one is a no-op.
+    protected function tearDown(): void
+    {
+        Date::setTestNow();
+
+        parent::tearDown();
     }
 }

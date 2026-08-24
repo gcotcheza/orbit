@@ -38,13 +38,6 @@ final class ResetHistoryTest extends TestCase
         Date::setTestNow('2026-08-15 09:00:00');
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     #[Test]
     public function without_confirm_it_reports_and_deletes_nothing(): void
     {

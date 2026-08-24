@@ -33,13 +33,6 @@ final class AlertsApiTest extends TestCase
         $this->owner = User::factory()->create();
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     #[Test]
     public function a_guest_is_refused_with_json(): void
     {

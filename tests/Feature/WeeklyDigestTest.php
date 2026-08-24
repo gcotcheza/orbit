@@ -40,13 +40,6 @@ final class WeeklyDigestTest extends TestCase
         $this->owner = User::factory()->create();
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     private function send(): void
     {
         $this->app->call([new SendWeeklyDigest($this->owner->id), 'handle']);

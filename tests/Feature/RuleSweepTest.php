@@ -38,13 +38,6 @@ final class RuleSweepTest extends TestCase
         $this->makeOrigins();
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     /**
      * Not `dispatchSync()` — under `Queue::fake()` that's recorded, not run
      * (docs/BUSINESS-LOGIC.md §36).

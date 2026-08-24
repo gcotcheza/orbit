@@ -38,13 +38,6 @@ final class WatchlistWritesTest extends TestCase
         $this->owner = User::factory()->create();
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     #[Test]
     public function a_guest_cannot_write_to_the_watchlist(): void
     {
