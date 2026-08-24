@@ -11,7 +11,7 @@ import AdviceCallout from '@/Components/route/AdviceCallout.vue'
 import BookingCta from '@/Components/route/BookingCta.vue'
 import DealScoreGauge from '@/Components/route/DealScoreGauge.vue'
 import PriceHistoryChart from '@/Components/route/PriceHistoryChart.vue'
-import { departureLabel, euro, hoursSince, seenLabel } from '@/lib/format'
+import { dayLabel, departureLabel, euro, hoursSince, seenLabel } from '@/lib/format'
 import { goBack } from '@/lib/back'
 
 // Case-normalised here (a display concern) so a bad shape is rejected locally instead of by a round
@@ -93,22 +93,7 @@ const unwatched = computed(() => meta.value?.watched === false)
 
 /** The day Orbit last got fares, for the "refresh did not happen" line. NOT `departureLabel` — a
  *  day WE LOOKED, not one you FLY. */
-const lastChecked = computed(() => {
-  const at = meta.value?.fares?.fetchedAt
-
-  if (!at) {
-    return null
-  }
-
-  const [year, month, day] = at.slice(0, 10).split('-').map(Number)
-
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(Date.UTC(year, month - 1, day)))
-})
+const lastChecked = computed(() => dayLabel(meta.value?.fares?.fetchedAt || null))
 
 // Statistics are null until the provider has some; the chart draws no reference line rather than
 // one at zero.
