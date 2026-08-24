@@ -131,7 +131,7 @@ function toggleOpen() {
 /* Paused rules stay on the list, dimmed — the switch that brings one back is
    on the row it turned off. */
 .rule--paused {
-  opacity: 0.58;
+  opacity: var(--dim-paused);
 }
 
 .rule__head {

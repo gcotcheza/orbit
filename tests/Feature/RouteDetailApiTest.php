@@ -30,13 +30,6 @@ final class RouteDetailApiTest extends TestCase
         $this->owner = User::factory()->create();
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     private function seedRoute(): Route
     {
         $route = $this->makeRoute('AMS', 'OPO');

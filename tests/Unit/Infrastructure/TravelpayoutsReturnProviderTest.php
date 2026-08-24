@@ -34,13 +34,6 @@ final class TravelpayoutsReturnProviderTest extends TestCase
      */
     private const RECORDED_ON = '2026-08-16';
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        Http::preventStrayRequests();
-    }
-
     #[Test]
     public function it_turns_a_recorded_answer_into_return_trips_in_euro_cents(): void
     {

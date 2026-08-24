@@ -17,23 +17,18 @@ export function euro(amount) {
 }
 
 /**
- * `pctBelow` as the sentence under the price: `33` → "33% below usual", `0` → "at its usual".
+ * One calendar day, SHORT: `2026-09-09` → `Wed, Sep 9`. Not `calendar/month.js`'s `dayLabel`,
+ * which prints the long form (`June 11`). Parsed by parts, formatted in UTC, locale pinned.
  *
- * @param {number|null|undefined} pctBelow
+ * @param {string|null|undefined} iso `YYYY-MM-DD`, or a timestamp starting with one
  * @returns {string|null}
  */
-/**
- * A DEPARTURE date: `2026-09-09` → `Wed, Sep 9`. Parsed by parts, formatted in UTC, locale pinned.
- *
- * @param {string|null|undefined} iso `YYYY-MM-DD`
- * @returns {string|null}
- */
-export function departureLabel(iso) {
+export function shortDayLabel(iso) {
     if (iso === null || iso === undefined) {
         return null
     }
 
-    const [year, month, day] = iso.split('-').map(Number)
+    const [year, month, day] = iso.slice(0, 10).split('-').map(Number)
 
     return new Intl.DateTimeFormat('en-US', {
         weekday: 'short',
@@ -43,6 +38,22 @@ export function departureLabel(iso) {
     }).format(new Date(Date.UTC(year, month - 1, day)))
 }
 
+/**
+ * A DEPARTURE date — a day you FLY. The printing is `shortDayLabel`'s; the name is the meaning.
+ *
+ * @param {string|null|undefined} iso `YYYY-MM-DD`
+ * @returns {string|null}
+ */
+export function departureLabel(iso) {
+    return shortDayLabel(iso)
+}
+
+/**
+ * `pctBelow` as the sentence under the price: `33` → "33% below usual", `0` → "at its usual".
+ *
+ * @param {number|null|undefined} pctBelow
+ * @returns {string|null}
+ */
 export function usualPriceLabel(pctBelow) {
     if (pctBelow === null || pctBelow === undefined) {
         return null

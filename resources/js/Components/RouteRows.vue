@@ -151,9 +151,9 @@ function move(event, index) {
   box-shadow: 0 6px 16px var(--accent-glow);
 }
 
-/* The same 0.58 the watch rows and the calendar's chips use, and still selectable. */
+/* Dimmed, and still selectable. */
 .route-row--paused {
-  opacity: 0.58;
+  opacity: var(--dim-paused);
 }
 
 .route-row__dot {

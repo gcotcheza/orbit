@@ -44,15 +44,6 @@ final class WorldFaresTest extends TestCase
             'orbit.travelpayouts.token'          => 'test-token',
             'orbit.travelpayouts.retry_delay_ms' => 0,
         ]);
-
-        Http::preventStrayRequests();
-    }
-
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
     }
 
     #[Test]

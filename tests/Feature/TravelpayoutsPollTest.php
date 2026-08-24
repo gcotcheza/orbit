@@ -42,15 +42,6 @@ final class TravelpayoutsPollTest extends TestCase
         // Pinned to the window the fixtures were recorded for, not production's
         // six months — those months were never recorded (docs/BUSINESS-LOGIC.md §36).
         config(['orbit.poll.window_days' => 90]);
-
-        Http::preventStrayRequests();
-    }
-
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
     }
 
     #[Test]

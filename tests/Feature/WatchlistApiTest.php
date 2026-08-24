@@ -32,13 +32,6 @@ final class WatchlistApiTest extends TestCase
         $this->owner = User::factory()->create();
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     private function seedOneRoute(): Route
     {
         $route = $this->makeRoute('AMS', 'LIS');

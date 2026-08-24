@@ -40,13 +40,6 @@ final class SelfStatsProviderTest extends TestCase
         Date::setTestNow('2026-08-17 05:40:00');
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     #[Test]
     public function one_poll_is_enough_because_a_window_is_already_a_distribution(): void
     {

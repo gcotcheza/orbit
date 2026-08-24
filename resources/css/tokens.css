@@ -147,6 +147,10 @@
     --shell-max: var(--app-width);
     --rail-width: 76px;
     --master-width: 352px;
+
+    /* --- State ----------------------------------------------------------- */
+    /* One dim for every paused thing — watch rows, calendar chips, deal rules. */
+    --dim-paused: 0.58;
 }
 
 [data-theme='light'] {

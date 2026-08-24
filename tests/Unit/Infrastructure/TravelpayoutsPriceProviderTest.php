@@ -27,13 +27,6 @@ final class TravelpayoutsPriceProviderTest extends TestCase
 
     private const ENDPOINT = self::BASE.'/v2/prices/month-matrix*';
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        Http::preventStrayRequests();
-    }
-
     #[Test]
     public function it_turns_a_recorded_month_into_dated_fares_in_euro_cents(): void
     {

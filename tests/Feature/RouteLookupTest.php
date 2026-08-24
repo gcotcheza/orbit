@@ -49,13 +49,6 @@ final class RouteLookupTest extends TestCase
         $this->provider = $this->spyProvider();
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     #[Test]
     public function a_guest_is_refused_with_json_and_creates_nothing(): void
     {

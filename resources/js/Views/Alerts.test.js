@@ -4,7 +4,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
+import { layoutMock } from '@/test/layoutMock'
 
 const get = vi.fn()
 const put = vi.fn()
@@ -17,18 +18,10 @@ vi.mock('@/lib/http', () => ({
     },
 }))
 
-/* jsdom has no matchMedia, so the real composable would answer 'phone' and nothing else; this is
-   the switch the wide branch is behind. Deferred inside the arrow, as vi.mock is hoisted. */
+/* Flipped by the wide tests; deferred inside the arrow, as vi.mock is hoisted above the const. */
 const desktop = ref(false)
 
-vi.mock('@/lib/layout', () => ({
-    useLayout: () => ({
-        layout: computed(() => (desktop.value ? 'desktop' : 'phone')),
-        isPhone: computed(() => !desktop.value),
-        isDesktop: desktop,
-        stop: () => {},
-    }),
-}))
+vi.mock('@/lib/layout', () => layoutMock(() => desktop))
 
 const hash = ref('')
 

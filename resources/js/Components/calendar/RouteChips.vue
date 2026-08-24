@@ -79,11 +79,9 @@ defineEmits(['pick'])
   border-color: var(--ink);
 }
 
-/*
- * A PAUSED ROUTE IS DIMMED HERE TOO, at the same 0.58 the watch rows use, and stays
- * selectable. It composes with `.chip--active` rather than competing: both are true at once.
- */
+/* Composes with `.chip--active` rather than competing: both are true at once, and a
+   paused chip stays selectable. */
 .chip--paused {
-  opacity: 0.58;
+  opacity: var(--dim-paused);
 }
 </style>

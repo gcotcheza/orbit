@@ -38,13 +38,6 @@ final class PollersTest extends TestCase
         Date::setTestNow('2026-08-14 06:10:00');
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     private function route(string $origin = 'AMS', string $destination = 'LIS'): Route
     {
         return Route::factory()->between($origin, $destination)->create();
