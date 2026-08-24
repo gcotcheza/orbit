@@ -3,12 +3,13 @@
    ==========================================================================
    Order matters: fonts and tokens first, because everything below reads them.
 
-   WHAT BELONGS HERE: the reset, the document, the shell that every screen sits
-   inside, and the two animations design/README.md uses on more than one screen.
-   WHAT DOES NOT: anything that styles a screen. Those live in the component's
-   own <style scoped> block, which is the reason a Vue SFC has one — a global
-   `.card` that three screens quietly disagree about is how a design system
-   becomes a suggestion.
+   WHAT BELONGS HERE: the reset, the document, the shell every screen sits
+   inside — including `.screen` itself, whose master/pane frame four screens and
+   one child component share — and the two animations design/README.md uses on
+   more than one screen. WHAT DOES NOT: anything that styles a screen's own
+   content. That lives in the component's <style scoped> block, which is the
+   reason a Vue SFC has one — a global `.card` that three screens quietly
+   disagree about is how a design system becomes a suggestion.
 
    NO CSS FRAMEWORK. Tailwind came with the Laravel skeleton and was removed in
    this PR: design/README.md is a fully specified token system down to 10.5 px
@@ -151,6 +152,93 @@ body {
     .app-shell--rail .app-shell__main--column > * {
         max-width: var(--app-width);
         margin-inline: auto;
+    }
+}
+
+/* --- The screen shell ---------------------------------------------------- */
+
+/* Global, not scoped: `DealRules` renders inside a screen and a scoped style stops
+   at its own component (docs/DECISIONS.md: the-screen-shell-is-global). */
+
+.screen {
+    padding: 4px var(--gutter) 0;
+}
+
+/* No box of their own below 1024px, so the phone's column is the column it always was. */
+.screen__master,
+.screen__pane {
+    display: contents;
+}
+
+.screen__head {
+    margin: 8px 2px 4px;
+}
+
+.screen__notice {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: var(--radius-chip);
+
+    font-size: var(--text-lg);
+    color: var(--warn-ink);
+    background: var(--warn-bg);
+}
+
+.screen__state {
+    margin-top: 28px;
+    padding: 0 4px;
+    text-align: center;
+
+    font-size: var(--text-lg);
+    color: var(--muted);
+}
+
+.screen__retry {
+    margin-top: 12px;
+    padding: 9px 16px;
+    border-radius: var(--radius-chip);
+    border: 1px solid var(--line);
+
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--ink2);
+}
+
+/* --- 1024px and up: the master beside the pane --------------------------- */
+
+/* Both halves of the query are lib/layout.js's and must be edited together
+   (docs/DESKTOP-LAYOUT-PLAN.md, docs/BUSINESS-LOGIC.md §36). */
+
+@media (min-width: 1024px) and (min-height: 600px) {
+    /* Beats `.screen`'s padding on order alone — same specificity, later in this file. */
+    .screen--wide {
+        display: flex;
+        height: 100%;
+        padding: 0;
+    }
+
+    .screen--wide .screen__master {
+        flex: 0 0 var(--master-width);
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 22px 18px 18px;
+        overflow-y: auto;
+
+        background: var(--panel);
+        border-right: 1px solid var(--line);
+    }
+
+    .screen--wide .screen__head {
+        margin: 0;
+    }
+
+    .screen--wide .screen__pane {
+        flex: 1;
+        min-width: 0;
+        display: block;
+        padding: 24px 28px;
+        overflow-y: auto;
     }
 }
 

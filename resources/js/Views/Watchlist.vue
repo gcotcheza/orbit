@@ -245,22 +245,10 @@ function markBusy(code, busy) {
 </template>
 
 <style scoped>
-.screen {
-  padding: 4px var(--gutter) 0;
-}
-
-/* No box of their own below 1024px, so the phone's column is the column it always was. */
-.screen__master,
-.screen__pane,
+/* Same reason as the shell's own wrappers in app.css. */
 .screen__body,
 .screen__passes {
   display: contents;
-}
-
-/* One column since the + left it: the header is a title and a count line, and
-   the two chips under it are their own row. */
-.screen__head {
-  margin: 8px 2px 4px;
 }
 
 .screen__title {
@@ -312,16 +300,6 @@ function markBusy(code, busy) {
   stroke: var(--muted);
 }
 
-.screen__notice {
-  margin-top: 14px;
-  padding: 10px 12px;
-  border-radius: var(--radius-chip);
-
-  font-size: var(--text-lg);
-  color: var(--warn-ink);
-  background: var(--warn-bg);
-}
-
 /*
  * Same box as the failure notice but in the app's quiet colours: a deliberate removal is not a
  * warning, and the warn tint is reserved for something going wrong.
@@ -347,15 +325,6 @@ function markBusy(code, busy) {
   color: var(--accent-ink);
 }
 
-.screen__state {
-  margin-top: 28px;
-  padding: 0 4px;
-  text-align: center;
-
-  font-size: var(--text-lg);
-  color: var(--muted);
-}
-
 /* Underlined, because it is a link inside a sentence and the accent alone is
    not a strong enough signal on a line of muted body copy. */
 .screen__link {
@@ -363,17 +332,6 @@ function markBusy(code, busy) {
   color: var(--accent-ink);
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-
-.screen__retry {
-  margin-top: 12px;
-  padding: 9px 16px;
-  border-radius: var(--radius-chip);
-  border: 1px solid var(--line);
-
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--ink2);
 }
 
 .screen__list {
@@ -387,7 +345,7 @@ function markBusy(code, busy) {
 /* A paused route is still on the list and still readable — dimmed, not
    hidden, because the switch that brings it back is on the card. */
 .is-paused {
-  opacity: 0.58;
+  opacity: var(--dim-paused);
 }
 
 /*
@@ -401,40 +359,17 @@ function markBusy(code, busy) {
   border-top: 1px solid var(--line2);
 }
 
-/* --- 1024px and up: the master list, the passes and the rules column -----
-   Both halves of the query are lib/layout.js's, and they must be edited together
-   (docs/DESKTOP-LAYOUT-PLAN.md, docs/BUSINESS-LOGIC.md §36). */
+/* --- 1024px and up: what only this screen does with the frame -----
+   The frame is app.css's; the query matches lib/layout.js (docs/BUSINESS-LOGIC.md §36). */
 
 @media (min-width: 1024px) and (min-height: 600px) {
-  .screen--wide {
-    display: flex;
-    height: 100%;
-    padding: 0;
-  }
-
-  .screen--wide .screen__master {
-    flex: 0 0 var(--master-width);
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 22px 18px 18px;
-    overflow-y: auto;
-
-    background: var(--panel);
-    border-right: 1px solid var(--line);
-  }
-
-  .screen--wide .screen__head,
   .screen--wide .screen__chips {
     margin: 0;
   }
 
+  /* This pane's own padding — the one place a screen overrides the shared frame. */
   .screen--wide .screen__pane {
-    flex: 1;
-    min-width: 0;
-    display: block;
     padding: 22px 24px 24px;
-    overflow-y: auto;
   }
 
   /* WRAPS, and it has to: two shrinking columns squeeze a pass to ~170px, and a pass clips its

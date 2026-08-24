@@ -183,36 +183,6 @@ function markRuleBusy(id, busy) {
   gap: 9px;
 }
 
-/* The two screen-level treatments this section uses, copied rather than inherited: scoped styles
-   do not cross a component boundary, and the class names are what keep the watch list pixel-identical. */
-
-.screen__notice {
-  margin-top: 14px;
-  padding: 10px 12px;
-  border-radius: var(--radius-chip);
-
-  font-size: var(--text-lg);
-  color: var(--warn-ink);
-  background: var(--warn-bg);
-}
-
-.screen__state {
-  margin-top: 28px;
-  padding: 0 4px;
-  text-align: center;
-
-  font-size: var(--text-lg);
-  color: var(--muted);
-}
-
-.screen__retry {
-  margin-top: 12px;
-  padding: 9px 16px;
-  border-radius: var(--radius-chip);
-  border: 1px solid var(--line);
-
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--ink2);
-}
+/* The `.screen__*` treatments this section shows come from app.css, which is what lets a
+   child component wear them at all. */
 </style>
