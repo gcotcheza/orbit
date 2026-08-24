@@ -31,13 +31,6 @@ final class StaleCalendarFaresTest extends TestCase
         Date::setTestNow('2026-08-15 06:10:00');
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     #[Test]
     public function a_departure_that_stops_being_quoted_is_dropped_once_it_goes_stale(): void
     {

@@ -44,13 +44,6 @@ final class AlertPipelineTest extends TestCase
         $this->owner = User::factory()->create();
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     /**
      * Same reasoning as RuleSweepTest: `dispatchSync()` under `Queue::fake()`
      * records a job it never runs (docs/BUSINESS-LOGIC.md §36).

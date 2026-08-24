@@ -460,6 +460,7 @@ in.
 | `layout-smoke.spec.js` | tablet and desktop only: the icon rail replaces the tab bar, nothing scrolls sideways, and the landing page's master pane, `?route=` selection and globe height |
 | `layout-screens.spec.js` | tablet and desktop only: the calendar, the watch list, search, the new-rule screen and alerts inside the frame, the landing detail's two columns, and the keyboard — the roving tab stop on the master rows, the focus ring, and the focus a swapped pane hands over |
 | `wide-baselines.spec.js` | tablet and desktop only: every screen, both themes, at `maxDiffPixels: 0` — the frame's own regression guard |
+| `baseline-support.js` | not a spec: the themes, the theme seed, the detail mask list, the screenshot call and the premise assertions that both baseline specs share |
 
 ### The projects
 

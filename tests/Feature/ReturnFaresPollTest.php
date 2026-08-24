@@ -43,13 +43,6 @@ final class ReturnFaresPollTest extends TestCase
         Date::setTestNow('2026-08-16 04:40:00');
     }
 
-    protected function tearDown(): void
-    {
-        Date::setTestNow();
-
-        parent::tearDown();
-    }
-
     #[Test]
     public function the_default_is_the_fake_provider(): void
     {
