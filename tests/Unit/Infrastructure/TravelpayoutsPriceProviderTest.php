@@ -633,6 +633,120 @@ final class TravelpayoutsPriceProviderTest extends TestCase
         $this->assertSame(88, $entries, 'The recordings changed; re-check what they are of.');
     }
 
+    /**
+     * The seam builds one URL and this is it, query order included
+     * (docs/DECISIONS.md: the-travelpayouts-adapters-share-one-envelope).
+     */
+    #[Test]
+    public function the_shared_seam_sends_exactly_this_url(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->fixture('month-matrix-empty'))]);
+
+        $this->provider()->cheapestPerDay('EIN', 'BCN', new DateTimeImmutable('2026-09-01'), new DateTimeImmutable('2026-09-30'));
+
+        Http::assertSent(fn (Request $request): bool => $request->url() === self::BASE
+            .'/v2/prices/month-matrix?origin=EIN&destination=BCN&month=2026-09-01&currency=eur&show_to_affiliates=false');
+    }
+
+    #[Test]
+    public function the_shared_seam_asks_for_json_and_offers_to_take_it_compressed(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->fixture('month-matrix-empty'))]);
+
+        $this->provider()->cheapestPerDay('AMS', 'LIS', new DateTimeImmutable('2026-09-01'), new DateTimeImmutable('2026-09-30'));
+
+        Http::assertSent(function (Request $request): bool {
+            $this->assertSame(['gzip, deflate'], $request->header('Accept-Encoding'));
+            $this->assertSame(['application/json'], $request->header('Accept'));
+
+            return true;
+        });
+    }
+
+    /**
+     * Word for word what this adapter has always logged: the four guards moved
+     * into the shared seam and the sentences did not change.
+     */
+    #[Test]
+    #[DataProvider('guardSentences')]
+    public function each_envelope_guard_says_what_it_has_always_said(string $guard, string $sentence): void
+    {
+        match ($guard) {
+            'unreachable' => Http::fake(fn (): never => throw new ConnectionException('cURL error 28: Operation timed out')),
+            'refused'     => Http::fake([self::ENDPOINT => Http::response('', 500)]),
+            'notJson'     => Http::fake([self::ENDPOINT => Http::response('<html>gateway</html>', 200, ['Content-Type' => 'text/html'])]),
+            'currency'    => Http::fake([self::ENDPOINT => Http::response($this->fixture('month-matrix-usd'))]),
+            default       => $this->fail("No guard called {$guard}."),
+        };
+
+        $log = $this->spyLogger();
+
+        $fares = $this->provider($log)->cheapestPerDay('AMS', 'LIS', new DateTimeImmutable('2026-09-01'), new DateTimeImmutable('2026-09-30'));
+
+        $this->assertSame([], $fares);
+        $this->assertSame($sentence, $log->warnings()[0]['message'] ?? null);
+        $this->assertSame('AMS-LIS', $log->warnings()[0]['context']['route'] ?? null);
+        $this->assertSame('2026-09-01', $log->warnings()[0]['context']['month'] ?? null);
+        $this->assertSame(15, $log->warnings()[0]['context']['further_warnings_suppressed_for_minutes'] ?? null);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function guardSentences(): array
+    {
+        return [
+            'nothing answered'   => ['unreachable', 'Could not reach Travelpayouts.'],
+            'a refusal'          => ['refused', 'Travelpayouts refused a fare request.'],
+            'not a JSON object'  => ['notJson', 'Travelpayouts answered with something that is not a JSON object.'],
+            'the wrong currency' => ['currency', 'Travelpayouts answered in the wrong currency.'],
+        ];
+    }
+
+    /**
+     * The matrix endpoint stamps the trailing `Z`, `/v2/prices/latest` does not, and both mean
+     * the same UTC instant — a calendar fare must not lose its age to the notation (§22).
+     */
+    #[Test]
+    #[DataProvider('findTimeNotations')]
+    public function a_calendar_fare_keeps_its_find_time_in_either_utc_notation(string $value): void
+    {
+        Http::fake([self::ENDPOINT => Http::response([
+            'currency' => 'eur',
+            'data'     => [[
+                'actual'      => true,
+                'depart_date' => '2026-09-04',
+                'origin'      => 'AMS',
+                'destination' => 'LIS',
+                'return_date' => '',
+                'value'       => 88,
+                'found_at'    => $value,
+            ]],
+        ])]);
+
+        $fares = $this->provider()->cheapestPerDay(
+            'AMS',
+            'LIS',
+            new DateTimeImmutable('2026-09-01'),
+            new DateTimeImmutable('2026-09-30'),
+        );
+
+        $this->assertCount(1, $fares);
+        $this->assertSame('UTC', $fares[0]->foundAt?->getTimezone()->getName());
+        $this->assertSame('2026-08-14T13:51:45+00:00', $fares[0]->foundAt->format('c'));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function findTimeNotations(): array
+    {
+        return [
+            'the matrix endpoint\'s trailing Z' => ['2026-08-14T13:51:45Z'],
+            'the form its two siblings send'    => ['2026-08-14T13:51:45'],
+        ];
+    }
+
     private function provider(?RecordingLogger $logger = null, string $token = 'test-token'): TravelpayoutsPriceProvider
     {
         return new TravelpayoutsPriceProvider(

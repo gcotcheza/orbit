@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Pricing;
 
-use Throwable;
-use DateTimeZone;
 use DateTimeImmutable;
 use Psr\Log\LoggerInterface;
 use InvalidArgumentException;
@@ -14,6 +12,7 @@ use App\Domain\Pricing\ReturnTrip;
 use Illuminate\Http\Client\Factory as Http;
 use App\Application\Ports\ReturnTripProvider;
 use Illuminate\Contracts\Cache\Repository as Cache;
+use App\Infrastructure\Concerns\TravelpayoutsEnvelope;
 
 /**
  * Real round-trip fares from `/v2/prices/latest`: one request answers the whole year.
@@ -21,17 +20,17 @@ use Illuminate\Contracts\Cache\Repository as Cache;
  */
 final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
 {
+    use TravelpayoutsEnvelope;
+
     private const PATH = '/v2/prices/latest';
 
-    /**
-     * Lower case, because that is what the API echoes back in the envelope and
-     * the guard in `entries()` compares against it.
-     */
-    private const CURRENCY = 'eur';
-
-    // Own key, not the one-way adapter's — a shared key would let whichever
-    // endpoint fails first silence the warning for the other one too.
-    private const WARN_KEY = 'orbit:travelpayouts:returns:warned';
+    /** What this adapter's four envelope guards say; the guards themselves live in the seam. */
+    private const SAYS = [
+        'unreachable' => 'Could not reach Travelpayouts for return fares.',
+        'refused'     => 'Travelpayouts refused a return-fare request.',
+        'notJson'     => 'Travelpayouts answered return fares with something that is not a JSON object.',
+        'currency'    => 'Travelpayouts answered return fares in the wrong currency.',
+    ];
 
     public function __construct(
         private Http $http,
@@ -122,87 +121,19 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
      */
     private function entries(string $origin, string $destination): array
     {
-        $route = $origin.'-'.$destination;
-
-        try {
-            $response = $this->http
-                ->baseUrl($this->baseUrl)
-                ->connectTimeout($this->connectTimeout)
-                ->timeout($this->timeout)
-                // Laravel's arg is total attempts, not retries; +1 avoids an
-                // off-by-one silently disabling the retry.
-                ->retry($this->retries + 1, $this->retryDelayMs, throw: false)
-                ->withHeaders([
-                    // Header, not query string — URLs get written to access
-                    // logs, proxy traces and exception reports by default.
-                    'X-Access-Token'  => $this->token,
-                    'Accept-Encoding' => 'gzip, deflate',
-                ])
-                ->acceptJson()
-                ->get(self::PATH, [
-                    'origin'      => $origin,
-                    'destination' => $destination,
-                    'currency'    => self::CURRENCY,
-                    // 'false' is what makes this a round-trip request; one_way
-                    // true/false are disjoint caches, not a filter. See §36.
-                    'one_way' => 'false',
-                    // Whole horizon in one request; period_type=month would
-                    // need 12 calls for a subset of this.
-                    'period_type' => 'year',
-                    // Default is 30, which silently drops most real routes.
-                    'limit' => $this->limit,
-                    // All prices, not just partner-link ones -- Orbit isn't
-                    // monetising clicks, and the narrower set is thinner.
-                    'show_to_affiliates' => 'false',
-                ]);
-        } catch (Throwable $e) {
-            // Connection refused, DNS, TLS, the read timeout above.
-            $this->warn('Could not reach Travelpayouts for return fares.', [
-                'route' => $route,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [];
-        }
-
-        if (! $response->successful()) {
-            $this->warn('Travelpayouts refused a return-fare request.', [
-                'route'  => $route,
-                'status' => $response->status(),
-            ]);
-
-            return [];
-        }
-
-        /** @var mixed $body */
-        $body = $response->json();
-
-        if (! is_array($body)) {
-            $this->warn('Travelpayouts answered return fares with something that is not a JSON object.', [
-                'route' => $route,
-            ]);
-
-            return [];
-        }
-
-        /** @var mixed $currency */
-        $currency = $body['currency'] ?? null;
-
-        // The API's default is roubles; an unrecognised request is answered
-        // in them rather than refused, so this is checked explicitly.
-        if (! is_string($currency) || mb_strtolower($currency) !== self::CURRENCY) {
-            $this->warn('Travelpayouts answered return fares in the wrong currency.', [
-                'route'    => $route,
-                'currency' => is_string($currency) ? $currency : gettype($currency),
-            ]);
-
-            return [];
-        }
-
-        /** @var mixed $data */
-        $data = $body['data'] ?? null;
-
-        return is_array($data) ? array_values($data) : [];
+        return $this->fetch(self::PATH, [
+            'origin'      => $origin,
+            'destination' => $destination,
+            'currency'    => self::CURRENCY,
+            // ⚠ 'false' is what makes this a round-trip request; one_way
+            // true/false are disjoint caches, not a filter. See §36.
+            'one_way' => 'false',
+            // Whole horizon in one request; period_type=month would
+            // need 12 calls for a subset of this.
+            'period_type' => 'year',
+            // Default is 30, which silently drops most real routes.
+            'limit' => $this->limit,
+        ], ['route' => $origin.'-'.$destination], self::SAYS);
     }
 
     /**
@@ -277,47 +208,11 @@ final readonly class TravelpayoutsReturnProvider implements ReturnTripProvider
     }
 
     /**
-     * When this price was found, per the provider, or null. Two UTC formats, both pinned:
-     * the loose parser accepts "tomorrow" and would fabricate a confident answer.
-     *
-     * @param  array<mixed>  $entry
+     * Own key, not the one-way adapter's — a shared key would let whichever
+     * endpoint fails first silence the warning for the other one too.
      */
-    private function foundAt(array $entry): ?DateTimeImmutable
+    private function warnKey(): string
     {
-        /** @var mixed $value */
-        $value = $entry['found_at'] ?? null;
-
-        if (! is_string($value)) {
-            return null;
-        }
-
-        $utc = new DateTimeZone('UTC');
-
-        foreach (['Y-m-d\TH:i:s', 'Y-m-d\TH:i:s\Z'] as $format) {
-            $found = DateTimeImmutable::createFromFormat($format, $value, $utc);
-
-            if ($found !== false && $found->format($format) === $value) {
-                return $found;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Say the provider is failing, at most once every `warn_every_minutes`. One key for
-     * the whole adapter; `add()` is atomic across parallel Horizon workers.
-     *
-     * @param  array<string, scalar>  $context
-     */
-    private function warn(string $message, array $context): void
-    {
-        if (! $this->cache->add(self::WARN_KEY, true, $this->warnEveryMinutes * 60)) {
-            return;
-        }
-
-        $this->logger->warning($message, $context + [
-            'further_warnings_suppressed_for_minutes' => $this->warnEveryMinutes,
-        ]);
+        return 'orbit:travelpayouts:returns:warned';
     }
 }

@@ -8,13 +8,17 @@ use Tests\TestCase;
 use App\Models\Airport;
 use App\Domain\Geo\Haversine;
 use InvalidArgumentException;
+use Tests\Support\RecordingLogger;
 use App\Domain\Discovery\SweptFare;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
 use Database\Seeders\DestinationSeeder;
 use Database\Seeders\WorldAirportSeeder;
 use App\Application\Ports\OriginSweepProvider;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Infrastructure\Discovery\FakeSweepProvider;
 use App\Infrastructure\Discovery\TravelpayoutsSweepProvider;
@@ -32,11 +36,11 @@ final class OriginSweepTest extends TestCase
         return (string) file_get_contents(base_path("tests/Fixtures/travelpayouts/{$name}.json"));
     }
 
-    private function provider(): TravelpayoutsSweepProvider
+    private function provider(?RecordingLogger $logger = null): TravelpayoutsSweepProvider
     {
         return new TravelpayoutsSweepProvider(
             http: $this->app->make(Factory::class),
-            logger: $this->app->make('log'),
+            logger: $logger ?? $this->app->make('log'),
             cache: $this->app->make('cache.store'),
             baseUrl: 'https://api.travelpayouts.com',
             token: 'test-token',
@@ -239,6 +243,97 @@ final class OriginSweepTest extends TestCase
         Http::fake([self::ENDPOINT => Http::response($this->fixture('latest-sweep-empty'), 200)]);
 
         $this->assertSame([], $this->provider()->cheapestFromOrigin('EIN'));
+    }
+
+    /**
+     * The seam builds one URL and this is it, query order included
+     * (docs/DECISIONS.md: the-travelpayouts-adapters-share-one-envelope).
+     */
+    #[Test]
+    public function the_shared_seam_sends_exactly_this_url(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->fixture('latest-sweep-empty'), 200)]);
+
+        $this->provider()->cheapestFromOrigin('EIN');
+
+        Http::assertSent(fn (Request $request): bool => $request->url()
+            === 'https://api.travelpayouts.com/v2/prices/latest?origin=EIN&currency=eur&one_way=true&period_type=year&limit=1000&show_to_affiliates=false');
+    }
+
+    #[Test]
+    public function the_shared_seam_asks_for_json_and_offers_to_take_it_compressed(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->fixture('latest-sweep-empty'), 200)]);
+
+        $this->provider()->cheapestFromOrigin('AMS');
+
+        Http::assertSent(function (Request $request): bool {
+            $this->assertSame(['gzip, deflate'], $request->header('Accept-Encoding'));
+            $this->assertSame(['application/json'], $request->header('Accept'));
+
+            return true;
+        });
+    }
+
+    /**
+     * Word for word what this adapter has always logged: the four guards moved
+     * into the shared seam and the sentences did not change.
+     */
+    #[Test]
+    #[DataProvider('guardSentences')]
+    public function each_envelope_guard_says_what_it_has_always_said(string $guard, string $sentence): void
+    {
+        match ($guard) {
+            'unreachable' => Http::fake(fn (): never => throw new ConnectionException('cURL error 28: Operation timed out')),
+            'refused'     => Http::fake([self::ENDPOINT => Http::response('', 500)]),
+            'notJson'     => Http::fake([self::ENDPOINT => Http::response('<html>gateway</html>', 200, ['Content-Type' => 'text/html'])]),
+            'currency'    => Http::fake([self::ENDPOINT => Http::response((string) json_encode(['currency' => 'rub', 'data' => []]), 200)]),
+            default       => $this->fail("No guard called {$guard}."),
+        };
+
+        $logger = new RecordingLogger;
+
+        $this->assertSame([], $this->provider($logger)->cheapestFromOrigin('AMS'));
+        $this->assertSame($sentence, $logger->warnings()[0]['message'] ?? null);
+        $this->assertSame('AMS', $logger->warnings()[0]['context']['origin'] ?? null);
+        $this->assertSame(15, $logger->warnings()[0]['context']['further_warnings_suppressed_for_minutes'] ?? null);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function guardSentences(): array
+    {
+        return [
+            'nothing answered'   => ['unreachable', 'Could not reach Travelpayouts for an origin sweep.'],
+            'a refusal'          => ['refused', 'Travelpayouts refused an origin sweep.'],
+            'not a JSON object'  => ['notJson', 'Travelpayouts answered an origin sweep with something that is not a JSON object.'],
+            'the wrong currency' => ['currency', 'Travelpayouts answered an origin sweep in the wrong currency.'],
+        ];
+    }
+
+    /**
+     * The 05:20 sweep must not be able to silence the 06:10 and 06:40 polls, nor they it —
+     * one warning key per adapter, which is why the seam asks for it.
+     */
+    #[Test]
+    public function the_sweep_keeps_its_own_warning_key(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response('', 500)]);
+
+        $cache = $this->app->make('cache.store');
+        $cache->put('orbit:travelpayouts:warned', true, 900);
+        $cache->put('orbit:travelpayouts:returns:warned', true, 900);
+
+        $logger = new RecordingLogger;
+        $this->provider($logger)->cheapestFromOrigin('AMS');
+
+        $this->assertCount(1, $logger->warnings());
+
+        /* And a second sweep in the same window says nothing more. */
+        $this->provider($logger)->cheapestFromOrigin('DUS');
+
+        $this->assertCount(1, $logger->warnings());
     }
 
     /**

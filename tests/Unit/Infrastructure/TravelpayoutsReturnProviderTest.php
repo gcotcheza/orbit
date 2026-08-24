@@ -13,6 +13,7 @@ use Tests\Support\RecordingLogger;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use App\Infrastructure\Pricing\TravelpayoutsReturnProvider;
@@ -433,6 +434,75 @@ final class TravelpayoutsReturnProviderTest extends TestCase
         $this->expectExceptionMessage('ORBIT_RETURNS_PROVIDER=fake');
 
         $this->provider(token: '   ');
+    }
+
+    /**
+     * The seam builds one URL and this is it, query order included
+     * (docs/DECISIONS.md: the-travelpayouts-adapters-share-one-envelope).
+     */
+    #[Test]
+    public function the_shared_seam_sends_exactly_this_url(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->fixture('latest-returns-empty'))]);
+
+        $this->provider()->cheapestReturns('AMS', 'JFK', $this->windowStart(), $this->to(334));
+
+        Http::assertSent(fn (Request $request): bool => $request->url() === self::BASE
+            .'/v2/prices/latest?origin=AMS&destination=JFK&currency=eur&one_way=false&period_type=year&limit=1000&show_to_affiliates=false');
+    }
+
+    #[Test]
+    public function the_shared_seam_asks_for_json_and_offers_to_take_it_compressed(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->fixture('latest-returns-empty'))]);
+
+        $this->provider()->cheapestReturns('AMS', 'LIS', $this->windowStart(), $this->to(30));
+
+        Http::assertSent(function (Request $request): bool {
+            $this->assertSame(['gzip, deflate'], $request->header('Accept-Encoding'));
+            $this->assertSame(['application/json'], $request->header('Accept'));
+
+            return true;
+        });
+    }
+
+    /**
+     * Word for word what this adapter has always logged: the four guards moved
+     * into the shared seam and the sentences did not change.
+     */
+    #[Test]
+    #[DataProvider('guardSentences')]
+    public function each_envelope_guard_says_what_it_has_always_said(string $guard, string $sentence): void
+    {
+        match ($guard) {
+            'unreachable' => Http::fake(fn (): never => throw new ConnectionException('cURL error 28: Operation timed out')),
+            'refused'     => Http::fake([self::ENDPOINT => Http::response('', 500)]),
+            'notJson'     => Http::fake([self::ENDPOINT => Http::response('<html>gateway</html>', 200, ['Content-Type' => 'text/html'])]),
+            'currency'    => Http::fake([self::ENDPOINT => Http::response(['currency' => 'rub', 'data' => []])]),
+            default       => $this->fail("No guard called {$guard}."),
+        };
+
+        $logger = new RecordingLogger;
+
+        $trips = $this->provider($logger)->cheapestReturns('AMS', 'LIS', $this->windowStart(), $this->to(30));
+
+        $this->assertSame([], $trips);
+        $this->assertSame($sentence, $logger->warnings()[0]['message'] ?? null);
+        $this->assertSame('AMS-LIS', $logger->warnings()[0]['context']['route'] ?? null);
+        $this->assertArrayNotHasKey('month', $logger->warnings()[0]['context']);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function guardSentences(): array
+    {
+        return [
+            'nothing answered'   => ['unreachable', 'Could not reach Travelpayouts for return fares.'],
+            'a refusal'          => ['refused', 'Travelpayouts refused a return-fare request.'],
+            'not a JSON object'  => ['notJson', 'Travelpayouts answered return fares with something that is not a JSON object.'],
+            'the wrong currency' => ['currency', 'Travelpayouts answered return fares in the wrong currency.'],
+        ];
     }
 
     private function windowStart(): DateTimeImmutable
