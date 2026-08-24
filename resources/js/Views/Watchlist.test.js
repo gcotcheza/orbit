@@ -4,13 +4,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia } from 'pinia'
 import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
+import { layoutMock } from '@/test/layoutMock'
 
 const get = vi.fn()
 const del = vi.fn()
 
-/* jsdom has no matchMedia; this is the switch the wide branch is behind. Deferred inside the
-   arrow, as vi.mock is hoisted above the const. */
+/* Flipped by the wide tests; deferred inside the arrow, as vi.mock is hoisted above the const. */
 const desktop = ref(false)
 
 vi.mock('@/lib/http', () => ({
@@ -21,14 +21,7 @@ vi.mock('@/lib/http', () => ({
         delete: (...args) => del(...args),
     },
 }))
-vi.mock('@/lib/layout', () => ({
-    useLayout: () => ({
-        layout: computed(() => (desktop.value ? 'desktop' : 'phone')),
-        isPhone: computed(() => !desktop.value),
-        isDesktop: desktop,
-        stop: () => {},
-    }),
-}))
+vi.mock('@/lib/layout', () => layoutMock(() => desktop))
 
 import Watchlist from './Watchlist.vue'
 
