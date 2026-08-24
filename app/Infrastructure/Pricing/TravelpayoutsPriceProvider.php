@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Pricing;
 
-use Throwable;
-use DateTimeZone;
 use DateTimeImmutable;
 use Psr\Log\LoggerInterface;
 use InvalidArgumentException;
@@ -13,6 +11,7 @@ use App\Domain\Pricing\DatedFare;
 use App\Application\Ports\PriceProvider;
 use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Contracts\Cache\Repository as Cache;
+use App\Infrastructure\Concerns\TravelpayoutsEnvelope;
 
 /**
  * Real fares from Travelpayouts' month-matrix, one call per calendar month. One-way is what
@@ -20,18 +19,17 @@ use Illuminate\Contracts\Cache\Repository as Cache;
  */
 final readonly class TravelpayoutsPriceProvider implements PriceProvider
 {
+    use TravelpayoutsEnvelope;
+
     private const PATH = '/v2/prices/month-matrix';
 
-    /**
-     * Lower case, because that is what the API echoes back in the envelope and
-     * the guard in `entries()` compares against it.
-     */
-    private const CURRENCY = 'eur';
-
-    /**
-     * One key for the whole adapter — see `warn()` for why it is not per route.
-     */
-    private const WARN_KEY = 'orbit:travelpayouts:warned';
+    /** What this adapter's four envelope guards say; the guards themselves live in the seam. */
+    private const SAYS = [
+        'unreachable' => 'Could not reach Travelpayouts.',
+        'refused'     => 'Travelpayouts refused a fare request.',
+        'notJson'     => 'Travelpayouts answered with something that is not a JSON object.',
+        'currency'    => 'Travelpayouts answered in the wrong currency.',
+    ];
 
     public function __construct(
         private Http $http,
@@ -135,82 +133,12 @@ final readonly class TravelpayoutsPriceProvider implements PriceProvider
      */
     private function entries(string $origin, string $destination, string $month): array
     {
-        $route = $origin.'-'.$destination;
-
-        try {
-            $response = $this->http
-                ->baseUrl($this->baseUrl)
-                ->connectTimeout($this->connectTimeout)
-                ->timeout($this->timeout)
-                // Laravel's arg is total attempts, not retries; +1 avoids an
-                // off-by-one silently disabling the retry.
-                ->retry($this->retries + 1, $this->retryDelayMs, throw: false)
-                ->withHeaders([
-                    'X-Access-Token'  => $this->token,
-                    'Accept-Encoding' => 'gzip, deflate',
-                ])
-                ->acceptJson()
-                ->get(self::PATH, [
-                    'origin'      => $origin,
-                    'destination' => $destination,
-                    'month'       => $month,
-                    'currency'    => self::CURRENCY,
-                    // All prices, not just partner-link ones -- Orbit isn't
-                    // monetising clicks, and the narrower set is thinner.
-                    'show_to_affiliates' => 'false',
-                ]);
-        } catch (Throwable $e) {
-            // Connection refused, DNS, TLS, the read timeout above.
-            $this->warn('Could not reach Travelpayouts.', [
-                'route' => $route,
-                'month' => $month,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [];
-        }
-
-        if (! $response->successful()) {
-            $this->warn('Travelpayouts refused a fare request.', [
-                'route'  => $route,
-                'month'  => $month,
-                'status' => $response->status(),
-            ]);
-
-            return [];
-        }
-
-        /** @var mixed $body */
-        $body = $response->json();
-
-        if (! is_array($body)) {
-            $this->warn('Travelpayouts answered with something that is not a JSON object.', [
-                'route' => $route,
-                'month' => $month,
-            ]);
-
-            return [];
-        }
-
-        /** @var mixed $currency */
-        $currency = $body['currency'] ?? null;
-
-        // The API's default is roubles; an unrecognised request is answered
-        // in them rather than refused, so this is checked explicitly.
-        if (! is_string($currency) || mb_strtolower($currency) !== self::CURRENCY) {
-            $this->warn('Travelpayouts answered in the wrong currency.', [
-                'route'    => $route,
-                'month'    => $month,
-                'currency' => is_string($currency) ? $currency : gettype($currency),
-            ]);
-
-            return [];
-        }
-
-        /** @var mixed $data */
-        $data = $body['data'] ?? null;
-
-        return is_array($data) ? array_values($data) : [];
+        return $this->fetch(self::PATH, [
+            'origin'      => $origin,
+            'destination' => $destination,
+            'month'       => $month,
+            'currency'    => self::CURRENCY,
+        ], ['route' => $origin.'-'.$destination, 'month' => $month], self::SAYS);
     }
 
     /**
@@ -262,47 +190,11 @@ final readonly class TravelpayoutsPriceProvider implements PriceProvider
     }
 
     /**
-     * When this price was found, per the provider, or null. Always UTC, format pinned: the
-     * loose parser would fabricate a confident answer from "tomorrow" or a bare "13:51".
-     *
-     * @param  array<mixed>  $entry
+     * One key for the whole adapter — a fare poll is seven calls per route, and an outage
+     * must not be fifty-odd identical lines in the log.
      */
-    private function foundAt(array $entry): ?DateTimeImmutable
+    private function warnKey(): string
     {
-        /** @var mixed $value */
-        $value = $entry['found_at'] ?? null;
-
-        if (! is_string($value)) {
-            return null;
-        }
-
-        $found = DateTimeImmutable::createFromFormat(
-            'Y-m-d\TH:i:s\Z',
-            $value,
-            new DateTimeZone('UTC'),
-        );
-
-        if ($found === false || $found->format('Y-m-d\TH:i:s\Z') !== $value) {
-            return null;
-        }
-
-        return $found;
-    }
-
-    /**
-     * Say the provider is failing, at most once every `warn_every_minutes`. One key for
-     * the whole adapter; `add()` is atomic across parallel Horizon workers.
-     *
-     * @param  array<string, scalar>  $context
-     */
-    private function warn(string $message, array $context): void
-    {
-        if (! $this->cache->add(self::WARN_KEY, true, $this->warnEveryMinutes * 60)) {
-            return;
-        }
-
-        $this->logger->warning($message, $context + [
-            'further_warnings_suppressed_for_minutes' => $this->warnEveryMinutes,
-        ]);
+        return 'orbit:travelpayouts:warned';
     }
 }
