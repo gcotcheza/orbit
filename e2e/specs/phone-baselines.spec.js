@@ -1,20 +1,22 @@
 // The phone's rendering, frozen — the guard every desktop phase is measured
 // against (docs/DESKTOP-LAYOUT-PLAN.md, docs/E2E.md "Baselines vs artifacts").
-import { expect, fixedNow, test, waitForGlobe } from '../fixtures.js'
+import { expect, test, waitForGlobe } from '../fixtures.js'
+import {
+    DETAIL,
+    DETAIL_ROUTE,
+    THEMES,
+    expectPremises,
+    makeBaseline,
+    remember,
+    signedOutBeforeEach,
+} from '../baselines.js'
+// The discovery strip is photographed as an element, not a page, so it calls for itself.
 import { BASELINE_STYLE } from '../paths.js'
 
 // Through `contextOptions`: `reducedMotion` is not a top-level test option in
 // Playwright 1.62, and one set there is silently ignored.
 test.use({ contextOptions: { reducedMotion: 'reduce', timezoneId: 'Europe/Amsterdam' } })
 
-const THEMES = ['dark', 'light']
-
-// A route no earlier spec touches: live-price.spec.js leaves a cached live
-// answer on AMS-LIS, which would be in the picture (docs/E2E.md).
-const DETAIL_ROUTE = 'AMS-OPO'
-
-// Masked, not dropped: the box is still drawn at its own place and size, so the
-// layout stays covered (docs/E2E.md "The phone baselines").
 const VOLATILE = {
     home: [
         '.home__live',
@@ -25,23 +27,7 @@ const VOLATILE = {
         '.rail__price',
     ],
     calendar: ['.calendar__subtitle', '.cell--fare', '.cell--empty', '.legend', '.banner'],
-    detail: [
-        '.price__value',
-        '.price__live',
-        '.price__when',
-        '.price__gone',
-        '.price__seen',
-        '.price__typical',
-        '.price__cached',
-        '.price__caption',
-        '.gauge__dial',
-        '.chart',
-        '.chart-card__usual',
-        '.chart-card__note',
-        '.callout__icon',
-        '.callout__title',
-        '.callout__body',
-    ],
+    detail: DETAIL,
     watch: ['.pill', '.stub__price', '.stub__tracking'],
     search: ['.finds__note', '.find__lane', '.find__money', '.find__evidence', '.find__badge', '.find__seen'],
     create: ['.banner__text'],
@@ -49,23 +35,7 @@ const VOLATILE = {
     login: [],
 }
 
-async function baseline(page, screen, theme) {
-    await expect(page).toHaveScreenshot(`${screen}-${theme}.png`, {
-        fullPage: true,
-        animations: 'disabled',
-        stylePath: BASELINE_STYLE,
-        // Zero, meant literally (docs/E2E.md "The phone baselines").
-        maxDiffPixels: 0,
-        mask: VOLATILE[screen].map((selector) => page.locator(selector)),
-    })
-}
-
-/** The theme is read out of localStorage before the app mounts (stores/theme.js). */
-function remember(theme) {
-    return async ({ page }) => {
-        await page.addInitScript((value) => window.localStorage.setItem('orbit-theme', value), theme)
-    }
-}
+const baseline = makeBaseline(VOLATILE)
 
 for (const theme of THEMES) {
     test.describe(theme, () => {
@@ -75,15 +45,9 @@ for (const theme of THEMES) {
             await page.goto('/')
             await waitForGlobe(page)
 
-            // The two premises of the whole file: a still globe, and a browser
-            // that agrees with the server about what time it is.
-            expect(
-                await page.evaluate(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches),
-                'the browser must be emulating reduced motion',
-            ).toBe(true)
+            await expectPremises(page)
+            // The third premise, this file's own: a globe that has stopped turning.
             await expect(page.locator('.stage__hint')).toHaveCount(0)
-            const skew = Math.abs((await page.evaluate(() => Date.now())) - new Date(fixedNow).getTime())
-            expect(skew, 'the browser clock must start at E2E_FIXED_NOW').toBeLessThan(600_000)
             await expect(page.locator('.home__greeting')).toHaveText('Good morning')
 
             await expect(page.locator('.spotlight')).toBeVisible()
@@ -167,11 +131,7 @@ for (const theme of THEMES) {
     test.describe(`${theme}, signed out`, () => {
         test.use({ storageState: { cookies: [], origins: [] } })
 
-        test.beforeEach(async ({ browserConsole, page }) => {
-            // A guest's boot probe is supposed to be a 401 (docs/E2E.md).
-            browserConsole.allow(/Failed to load resource.*401/)
-            await remember(theme)({ page })
-        })
+        test.beforeEach(signedOutBeforeEach(theme))
 
         test('login', async ({ page }) => {
             await page.goto('/login')
