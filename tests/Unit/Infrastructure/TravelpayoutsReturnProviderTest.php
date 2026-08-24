@@ -486,6 +486,7 @@ final class TravelpayoutsReturnProviderTest extends TestCase
             'refused'     => Http::fake([self::ENDPOINT => Http::response('', 500)]),
             'notJson'     => Http::fake([self::ENDPOINT => Http::response('<html>gateway</html>', 200, ['Content-Type' => 'text/html'])]),
             'currency'    => Http::fake([self::ENDPOINT => Http::response(['currency' => 'rub', 'data' => []])]),
+            default       => $this->fail("No guard called {$guard}."),
         };
 
         $logger = new RecordingLogger;
@@ -495,7 +496,7 @@ final class TravelpayoutsReturnProviderTest extends TestCase
         $this->assertSame([], $trips);
         $this->assertSame($sentence, $logger->warnings()[0]['message'] ?? null);
         $this->assertSame('AMS-LIS', $logger->warnings()[0]['context']['route'] ?? null);
-        $this->assertArrayNotHasKey('month', $logger->warnings()[0]['context'] ?? []);
+        $this->assertArrayNotHasKey('month', $logger->warnings()[0]['context']);
     }
 
     /**

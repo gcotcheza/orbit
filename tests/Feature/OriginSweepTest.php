@@ -8,17 +8,17 @@ use Tests\TestCase;
 use App\Models\Airport;
 use App\Domain\Geo\Haversine;
 use InvalidArgumentException;
+use Tests\Support\RecordingLogger;
 use App\Domain\Discovery\SweptFare;
 use Illuminate\Http\Client\Factory;
-use Illuminate\Support\Facades\Http;
-use Tests\Support\RecordingLogger;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\Attributes\DataProvider;
-use Illuminate\Http\Client\ConnectionException;
 use Database\Seeders\DestinationSeeder;
 use Database\Seeders\WorldAirportSeeder;
 use App\Application\Ports\OriginSweepProvider;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Infrastructure\Discovery\FakeSweepProvider;
 use App\Infrastructure\Discovery\TravelpayoutsSweepProvider;
@@ -292,6 +292,7 @@ final class OriginSweepTest extends TestCase
             'refused'     => Http::fake([self::ENDPOINT => Http::response('', 500)]),
             'notJson'     => Http::fake([self::ENDPOINT => Http::response('<html>gateway</html>', 200, ['Content-Type' => 'text/html'])]),
             'currency'    => Http::fake([self::ENDPOINT => Http::response((string) json_encode(['currency' => 'rub', 'data' => []]), 200)]),
+            default       => $this->fail("No guard called {$guard}."),
         };
 
         $logger = new RecordingLogger;

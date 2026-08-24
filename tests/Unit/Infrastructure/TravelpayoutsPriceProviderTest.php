@@ -683,6 +683,7 @@ final class TravelpayoutsPriceProviderTest extends TestCase
             'refused'     => Http::fake([self::ENDPOINT => Http::response('', 500)]),
             'notJson'     => Http::fake([self::ENDPOINT => Http::response('<html>gateway</html>', 200, ['Content-Type' => 'text/html'])]),
             'currency'    => Http::fake([self::ENDPOINT => Http::response($this->fixture('month-matrix-usd'))]),
+            default       => $this->fail("No guard called {$guard}."),
         };
 
         $log = $this->spyLogger();
@@ -701,10 +702,10 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     public static function guardSentences(): array
     {
         return [
-            'nothing answered'    => ['unreachable', 'Could not reach Travelpayouts.'],
-            'a refusal'           => ['refused', 'Travelpayouts refused a fare request.'],
-            'not a JSON object'   => ['notJson', 'Travelpayouts answered with something that is not a JSON object.'],
-            'the wrong currency'  => ['currency', 'Travelpayouts answered in the wrong currency.'],
+            'nothing answered'   => ['unreachable', 'Could not reach Travelpayouts.'],
+            'a refusal'          => ['refused', 'Travelpayouts refused a fare request.'],
+            'not a JSON object'  => ['notJson', 'Travelpayouts answered with something that is not a JSON object.'],
+            'the wrong currency' => ['currency', 'Travelpayouts answered in the wrong currency.'],
         ];
     }
 
@@ -738,7 +739,7 @@ final class TravelpayoutsPriceProviderTest extends TestCase
 
         $this->assertCount(1, $fares);
         $this->assertSame('UTC', $fares[0]->foundAt?->getTimezone()->getName());
-        $this->assertSame('2026-08-14T13:51:45+00:00', $fares[0]->foundAt?->format('c'));
+        $this->assertSame('2026-08-14T13:51:45+00:00', $fares[0]->foundAt->format('c'));
     }
 
     /**
