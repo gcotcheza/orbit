@@ -320,20 +320,10 @@ async function signOut() {
 </template>
 
 <style scoped>
-.screen {
-  padding: 4px var(--gutter) 0;
-}
-
-/* No box of their own below 1024px, so the phone's column is the column it always was. */
-.screen__master,
-.screen__pane,
+/* Same reason as the shell's own wrappers in app.css. */
 .screen__cards,
 .set {
   display: contents;
-}
-
-.screen__head {
-  margin: 8px 2px 4px;
 }
 
 .screen__title {
@@ -348,34 +338,6 @@ async function signOut() {
   margin-top: 2px;
   font-size: var(--text-lg);
   color: var(--muted);
-}
-
-.screen__notice {
-  margin-top: 14px;
-  padding: 10px 12px;
-  border-radius: var(--radius-chip);
-
-  font-size: var(--text-lg);
-  color: var(--warn-ink);
-  background: var(--warn-bg);
-}
-
-.screen__state {
-  margin-top: 28px;
-  text-align: center;
-  font-size: var(--text-lg);
-  color: var(--muted);
-}
-
-.screen__retry {
-  margin-top: 12px;
-  padding: 9px 16px;
-  border-radius: var(--radius-chip);
-  border: 1px solid var(--line);
-
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--ink2);
 }
 
 .section {
@@ -512,41 +474,10 @@ async function signOut() {
 }
 
 
-/* --- 1024px and up: the section list as the master, the cards in two columns -----
-   Both halves of the query are lib/layout.js's, and they must be edited together
-   (docs/DESKTOP-LAYOUT-PLAN.md, docs/BUSINESS-LOGIC.md §36). */
+/* --- 1024px and up: what only this screen does with the frame -----
+   The frame is app.css's; the query matches lib/layout.js (docs/BUSINESS-LOGIC.md §36). */
 
 @media (min-width: 1024px) and (min-height: 600px) {
-  .screen--wide {
-    display: flex;
-    height: 100%;
-    padding: 0;
-  }
-
-  .screen--wide .screen__master {
-    flex: 0 0 var(--master-width);
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 22px 18px 18px;
-    overflow-y: auto;
-
-    background: var(--panel);
-    border-right: 1px solid var(--line);
-  }
-
-  .screen--wide .screen__head {
-    margin: 0;
-  }
-
-  .screen--wide .screen__pane {
-    flex: 1;
-    min-width: 0;
-    display: block;
-    padding: 24px 28px;
-    overflow-y: auto;
-  }
-
   .screen--wide .screen__notice {
     margin: 0 0 14px;
   }

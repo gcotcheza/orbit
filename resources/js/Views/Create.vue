@@ -210,19 +210,9 @@ async function save() {
 </template>
 
 <style scoped>
-.screen {
-  padding: 4px var(--gutter) 0;
-}
-
-/* No box of their own below 1024px, so the phone's column is the column it always was. */
-.screen__master,
-.screen__pane,
+/* Same reason as the shell's own wrappers in app.css. */
 .screen__col {
   display: contents;
-}
-
-.screen__head {
-  margin: 8px 2px 4px;
 }
 
 .screen__title {
@@ -418,41 +408,10 @@ async function save() {
   color: var(--ink2);
 }
 
-/* --- 1024px and up: the rules as the master, the compose card as the pane -----
-   Both halves of the query are lib/layout.js's, and they must be edited together
-   (docs/DESKTOP-LAYOUT-PLAN.md, docs/BUSINESS-LOGIC.md §36). */
+/* --- 1024px and up: what only this screen does with the frame -----
+   The frame is app.css's; the query matches lib/layout.js (docs/BUSINESS-LOGIC.md §36). */
 
 @media (min-width: 1024px) and (min-height: 600px) {
-  .screen--wide {
-    display: flex;
-    height: 100%;
-    padding: 0;
-  }
-
-  .screen--wide .screen__master {
-    flex: 0 0 var(--master-width);
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 22px 18px 18px;
-    overflow-y: auto;
-
-    background: var(--panel);
-    border-right: 1px solid var(--line);
-  }
-
-  .screen--wide .screen__head {
-    margin: 0;
-  }
-
-  .screen--wide .screen__pane {
-    flex: 1;
-    min-width: 0;
-    display: block;
-    padding: 24px 28px;
-    overflow-y: auto;
-  }
-
   /*
    * A sentence somebody is writing is prose, and prose does not want an 800px line. The column is
    * capped and left-aligned rather than centred, so it stays anchored to the master beside it.
