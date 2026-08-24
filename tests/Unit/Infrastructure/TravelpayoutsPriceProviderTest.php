@@ -694,6 +694,7 @@ final class TravelpayoutsPriceProviderTest extends TestCase
         $this->assertSame($sentence, $log->warnings()[0]['message'] ?? null);
         $this->assertSame('AMS-LIS', $log->warnings()[0]['context']['route'] ?? null);
         $this->assertSame('2026-09-01', $log->warnings()[0]['context']['month'] ?? null);
+        $this->assertSame(15, $log->warnings()[0]['context']['further_warnings_suppressed_for_minutes'] ?? null);
     }
 
     /**

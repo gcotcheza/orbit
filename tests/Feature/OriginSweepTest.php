@@ -246,10 +246,6 @@ final class OriginSweepTest extends TestCase
     }
 
     /**
-     * A box set to `travelpayouts` with no token is a deploy mistake somebody
-     * must find out about immediately — the rule both sibling adapters follow.
-     */
-    /**
      * The seam builds one URL and this is it, query order included
      * (docs/DECISIONS.md: the-travelpayouts-adapters-share-one-envelope).
      */
@@ -340,6 +336,10 @@ final class OriginSweepTest extends TestCase
         $this->assertCount(1, $logger->warnings());
     }
 
+    /**
+     * A box set to `travelpayouts` with no token is a deploy mistake somebody
+     * must find out about immediately — the rule both sibling adapters follow.
+     */
     #[Test]
     public function it_refuses_to_exist_without_a_token(): void
     {

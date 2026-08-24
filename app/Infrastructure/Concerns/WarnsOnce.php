@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Infrastructure\Concerns;
 
 /**
- * Say that a provider is failing, at most once every `warnEveryMinutes`. Composed into an
- * adapter holding `$cache`, `$logger` and `$warnEveryMinutes` (docs/BUSINESS-LOGIC.md §22).
+ * Say that a provider is failing, at most once every `warnEveryMinutes`. Expects the using class
+ * to hold `$cache`, `$logger` and `$warnEveryMinutes` — checked by PHPStan, not by the compiler;
+ * only `warnKey()` below is a hard contract (docs/BUSINESS-LOGIC.md §22).
  */
 trait WarnsOnce
 {

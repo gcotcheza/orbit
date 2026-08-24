@@ -10,9 +10,10 @@ use DateTimeImmutable;
 
 /**
  * The request every Travelpayouts adapter makes and the four guards every one of them puts on
- * the answer. Composed into an adapter holding `$http`, `$baseUrl`, `$token`, `$connectTimeout`,
- * `$timeout`, `$retries` and `$retryDelayMs`; path, query, log context and the four sentences
- * are the adapter's (docs/BUSINESS-LOGIC.md §22).
+ * the answer. Expects the using class to hold `$http`, `$baseUrl`, `$token`, `$connectTimeout`,
+ * `$timeout`, `$retries` and `$retryDelayMs` — checked by PHPStan, which reads a trait in the
+ * context of each class that uses it; only `warnKey()` is enforced by the compiler. Path, query,
+ * log context and the four sentences stay with the adapter (docs/BUSINESS-LOGIC.md §22).
  */
 trait TravelpayoutsEnvelope
 {
