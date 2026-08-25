@@ -24,7 +24,7 @@ return [
 
     'seed' => [
         'email'    => env('SEED_USER_EMAIL', 'owner@example.com'),
-        'name'     => env('SEED_USER_NAME', 'Ghie'),
+        'name'     => env('SEED_USER_NAME', 'Owner'),
         'password' => env('SEED_USER_PASSWORD') ?: null,
     ],
 

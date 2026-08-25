@@ -210,7 +210,7 @@ MAIL_MAILER=log
 MAIL_FROM_ADDRESS="flights@ghiecode.io"
 MAIL_FROM_NAME="Orbit"
 
-# THE SEEDED ACCOUNT. Not ghie.cotcheza@gmail.com and not production's password:
+# THE SEEDED ACCOUNT. Not the owner's real address and not production's password:
 # a suite that types the owner's real credentials into a form is a suite that
 # leaks them into a trace file. \`.test\` is the reserved TLD for exactly this.
 SEED_USER_EMAIL=e2e@orbit.test

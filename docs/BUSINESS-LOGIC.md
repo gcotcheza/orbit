@@ -86,7 +86,8 @@ distinction is between a pair somebody typed once and a standing question Orbit
 answers on its own every night — only the second has a budget, and none of
 those three ever went through a FormRequest, so widening the request widened no
 sweep. What a form *offers* is a third decision again: the search screen writes
-the configured origins out as quick chips (three in the reference data) and its boxes take any of the 3,270.
+the home airports out as quick chips — hardcoded to match config — and its boxes
+take any of the 3,270.
 
 ### The two tiers of "somewhere Orbit knows"
 
@@ -2130,7 +2131,7 @@ It is no longer a validation list: `App\Http\Requests\RoutePairRequest` accepts 
 
 It is still the rule engine's origins, and that is a budget: a deal rule is a standing question Orbit answers every night (`RuleMatches`, `SweepRuleFares` walk `origins × destinations`, each cell a metered provider call — §11, "The cap is the point"). Three origins is 3 × 184; a fourth is another 184 polls a night nobody asked for by name. `RuleVocabulary` reads this too, and none of the three go through a `FormRequest` — widening the lookup request widened nothing here.
 
-They are also the search screen's quick chips (presentation, not a rule): `Search.vue` writes the configured origins out (AMS, EIN and DUS in the reference data) so the ordinary case is one tap, and the box beside them takes any of the 3,270.
+They are also the search screen's quick chips (presentation, not a rule): `Search.vue` writes them out hardcoded (AMS, EIN and DUS, matching config — a third copy of the fact) so the ordinary case is one tap, and the box beside them takes any of the 3,270.
 
 The same three are flagged `is_origin` by `DestinationSeeder`, from `database/seeders/data/european_destinations.php`. Two lists of one fact is a drift waiting to happen, so `tests/Feature/SeedersTest` asserts they agree — the seeder's list is the one that carries the coordinates.
 
