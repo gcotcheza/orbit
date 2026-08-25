@@ -53,5 +53,5 @@ test('the seeded account is the sandbox one, never production', async () => {
     // A guard on the harness itself: if `.env.e2e` ever carried a real
     // address, every trace would have its password typed into a form.
     expect(account.email).toMatch(/\.test$/)
-    expect(account.email).not.toBe('ghie.cotcheza@gmail.com')
+    expect(account.email, 'the sandbox must never sign in as the real owner').toMatch(/@orbit\.test$/)
 })

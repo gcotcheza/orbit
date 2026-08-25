@@ -448,7 +448,7 @@ B='http://127.0.0.1:3085'
    OUT=$(mktemp)
    curl -s -D "$OUT" -H "$H" -H "Cookie: $COOKIE" -H "X-XSRF-TOKEN: $XSRF" \
         -H 'Accept: application/json' -H 'Content-Type: application/json' \
-        -d '{"email":"ghie.cotcheza@gmail.com","password":"…"}' \
+        -d '{"email":"<SEED_USER_EMAIL from the box .env>","password":"…"}' \
         -w '\n%{http_code}\n' "$B/login"
    AUTHED=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$OUT")
 

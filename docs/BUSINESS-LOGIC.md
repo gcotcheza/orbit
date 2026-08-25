@@ -86,7 +86,8 @@ distinction is between a pair somebody typed once and a standing question Orbit
 answers on its own every night — only the second has a budget, and none of
 those three ever went through a FormRequest, so widening the request widened no
 sweep. What a form *offers* is a third decision again: the search screen writes
-the three home airports out as quick chips and its boxes take any of the 3,270.
+the home airports out as quick chips — hardcoded to match config — and its boxes
+take any of the 3,270.
 
 ### The two tiers of "somewhere Orbit knows"
 
@@ -437,7 +438,7 @@ for each of `min`, `p25`, `median`, `p75`, `max`.
 `calendar_fares` runs eleven months deep (§4) and "usual" must not, for two
 reasons that are one reason. What survives out at nine and ten months is not a
 random sample: the provider's cache thins with distance, so what is left is
-disproportionately Christmas, Easter and the school holidays — pooled in, those
+disproportionately the seasonal peaks — Christmas, Easter, school-holiday weeks — pooled in, those
 peaks lift the upper knots and every route quietly scores as a better deal than
 it is, against the input the score weights at 60%. And the fare *being* scored is
 the minimum of the **near** window, so the distribution it is compared against
@@ -1634,7 +1635,7 @@ whole design.
 
 | stage | cost | what it does |
 | --- | --- | --- |
-| **1. sweep + score** | 3 requests | ~1,177 fares from the three home airports, ranked to a shortlist of 5 (absolute) plus 3 (relative). Arithmetic only. |
+| **1. sweep + score** | 3 requests | ~1,177 fares from the three configured origins, ranked to a shortlist of 5 (absolute) plus 3 (relative). Arithmetic only. |
 | **2a. own window** | 8 × ≤7 requests | Each finalist's own near window, through the existing `PriceProvider`. Is this remarkable *on its own route*? Every window fetched is also **remembered** as a baseline. |
 | **2b. Google** | ≤5 searches | Does a company that is not Travelpayouts agree? **Shared across both lanes, absolute first.** Skipped entirely without a key or quota. |
 
@@ -2124,13 +2125,13 @@ Neither horizon is ever invented: a route with no calendar fares and no history 
 
 ## 24. Where the owner flies from (`origins`)
 
-The three airports within a sensible drive. It used to be two things at once: the only origins a person could **type**, and the only origins a **rule** could fire from. On 2026-08-16 the first half went away and the second did not — the asymmetry is the decision.
+The owner's home airports — whatever is within a sensible drive of them; three in this deployment's reference data. It used to be two things at once: the only origins a person could **type**, and the only origins a **rule** could fire from. On 2026-08-16 the first half went away and the second did not — the asymmetry is the decision.
 
 It is no longer a validation list: `App\Http\Requests\RoutePairRequest` accepts any row in `airports` at both ends now, so `POST /api/watchlist` and `POST /api/routes/lookup` will price BCN-PMI for somebody already in Barcelona.
 
 It is still the rule engine's origins, and that is a budget: a deal rule is a standing question Orbit answers every night (`RuleMatches`, `SweepRuleFares` walk `origins × destinations`, each cell a metered provider call — §11, "The cap is the point"). Three origins is 3 × 184; a fourth is another 184 polls a night nobody asked for by name. `RuleVocabulary` reads this too, and none of the three go through a `FormRequest` — widening the lookup request widened nothing here.
 
-They are also the search screen's quick chips (presentation, not a rule): `Search.vue` writes AMS, EIN and DUS out so the ordinary case is one tap, and the box beside them takes any of the 3,270.
+They are also the search screen's quick chips (presentation, not a rule): `Search.vue` writes them out hardcoded (AMS, EIN and DUS, matching config — a third copy of the fact) so the ordinary case is one tap, and the box beside them takes any of the 3,270.
 
 The same three are flagged `is_origin` by `DestinationSeeder`, from `database/seeders/data/european_destinations.php`. Two lists of one fact is a drift waiting to happen, so `tests/Feature/SeedersTest` asserts they agree — the seeder's list is the one that carries the coordinates.
 
@@ -2229,7 +2230,7 @@ The near window, deliberately not the eleven-month horizon, for two reasons: (1)
 
 Read once by `AppServiceProvider` into `DiscoveryPolicy`. `orbit:discover` is the command, `DiscoverDeals` is the work, `discoveries` is the table, and §16 is the rulebook. The problem this solves is not "find cheap fares," it's "surprise me" — the watchlist answers what the owner already thought of, a rule answers a sentence they wrote down, this answers neither.
 
-**Every default here was read off one real measurement**: an origin sweep of all three home airports against the live API on 2026-08-16 — AMS 562 entries/destinations (€30-€7,230), DUS 419 (€16-€1,545), EIN 196 (€16-€1,495); 1,177 rows, of which 1,086 named a destination Orbit holds coordinates for (the other 45 are metropolitan codes, dropped — see `OriginSweepProvider`). Ranked by €/km with the cheap rules applied, the top of that day's answer was DUS-RAK Marrakesh €27 (10.8 m€/km), DUS-TNG Tangier €23 (11.5), EIN-VNO Vilnius €18 (13.1), EIN-TIA Tirana €21 (13.5), DUS-PSR Pescara €16 (14.1), DUS-AGP Málaga €29 (15.6) — the feature working. Ordered by price alone it would have been Brussels/Cologne/Maastricht every day; ordered by €/km with no price ceiling it would have been Singapore/Manila/Bangkok, genuinely remarkable fares that aren't what this screen promises. Both a ceiling and a ratio floor are needed.
+**Every default here was read off one real measurement**: an origin sweep of the three configured origins against the live API on 2026-08-16 — AMS 562 entries/destinations (€30-€7,230), DUS 419 (€16-€1,545), EIN 196 (€16-€1,495); 1,177 rows, of which 1,086 named a destination Orbit holds coordinates for (the other 45 are metropolitan codes, dropped — see `OriginSweepProvider`). Ranked by €/km with the cheap rules applied, the top of that day's answer was DUS-RAK Marrakesh €27 (10.8 m€/km), DUS-TNG Tangier €23 (11.5), EIN-VNO Vilnius €18 (13.1), EIN-TIA Tirana €21 (13.5), DUS-PSR Pescara €16 (14.1), DUS-AGP Málaga €29 (15.6) — the feature working. Ordered by price alone it would have been Brussels/Cologne/Maastricht every day; ordered by €/km with no price ceiling it would have been Singapore/Manila/Bangkok, genuinely remarkable fares that aren't what this screen promises. Both a ceiling and a ratio floor are needed.
 
 **The budget is why the funnel has two stages**: the sweep (3 origins × 1 request = 3) is absurdly cheap; verification is not (lane A 5 finalists × ≤7 months = 35, lane B 3 × ≤7 = 21 — 59 Travelpayouts total, ≤5 SerpAPI shared across both lanes). Scheduled at 05:20, a clock hour nothing else uses (full table in §27). Anything that moved work from verification into the sweep would be making claims on the sweep's word — see `DiscoverDeals` for the two occasions this app has already done that and why it must not happen again.
 
@@ -2424,7 +2425,7 @@ by anyone.
 - **`DestinationController` sends the whole 184-row list in one request**, not a `?q=` search — it's a few kilobytes from two checked-in files, so a suggestion appears on the keystroke instead of after a round trip. The 3,086 other airports are deliberately excluded (no vibes, no warmth); what counts as a destination is the `destinations` table, not `airports` — the three origins are airports with no destinations row, so Amsterdam never suggests itself as a destination.
 - **`SearchAirportsRequest`'s 2-character floor is a cost decision**: one letter matches roughly a third of 3,270 airports, and ten arbitrary rows back is worse than no suggestions, bought with a round trip. The 60-character ceiling just needs to outrun the longest city name. `AirportController`'s search is a `?q=` query (unlike the destinations endpoint's whole-list send) because 3,270 rows is ~200KB nobody should download before typing; ten rows returned, merged client-side with the curated list's eight, with a deterministic tie-break (`orderByRaw()`, proven injection-safe by its `literal-string` return type) since a ranked query with a LIMIT has to be total or the panel reshuffles on re-render.
 - **The route-lookup throttle's two limits (6/min, 20/hour) are the fare-provider budget divided up**, not a round number: one miss costs ~7 provider requests, and the ordinary 06:00 hour already claims ≤176 of the ~200/hour ceiling. `POST /routes/lookup` is a write (not a `?refresh` flag on the GET) and takes no `{code}` in the path — it can create a route row and spend six or seven metered provider calls, which a browser prefetch or link preview could trigger unprompted on a GET; the pair arrives in the body so this and `POST /watchlist` validate through the same `RoutePairRequest`.
-- **`RoutePairRequest`'s origin is no longer restricted to the three home airports** (removed 2026-08-16, after a day of real use produced 32 lookups and 0 rules) — both ends are now plain `exists:airports,iata`. `config('orbit.origins')` is deliberately untouched and MUST stay that way — it still bounds the nightly rule sweep's budget, and widening this request must never widen a sweep. Input is upper-cased before any rule runs (`prepareForValidation`) so the exists check and the stored row agree. `AddWatchedRouteRequest` refuses a duplicate watch; `LookupRouteRequest` refuses nothing.
+- **`RoutePairRequest`'s origin is no longer restricted to the configured origins** (removed 2026-08-16, after a day of real use produced 32 lookups and 0 rules) — both ends are now plain `exists:airports,iata`. `config('orbit.origins')` is deliberately untouched and MUST stay that way — it still bounds the nightly rule sweep's budget, and widening this request must never widen a sweep. Input is upper-cased before any rule runs (`prepareForValidation`) so the exists check and the stored row agree. `AddWatchedRouteRequest` refuses a duplicate watch; `LookupRouteRequest` refuses nothing.
 - **`UpdatePasswordRequest`: `current_password` is the actual security gate, not the session** — a stolen/borrowed phone is signed in too; a session cookie proves device possession, not secret knowledge. `current_password:web` names the guard explicitly rather than trusting whichever guard middleware last set. `different:current_password` is what makes this a CHANGE — without it, resubmitting the same password reports success while rotating nothing.
 - **`WatchlistItemController` is deliberately separate from the read-only `WatchlistController`** — the read is the app's tuned launch request; these are one-row taps, and keeping them apart means neither grows the other's concerns. `store()` finds-or-creates (a route is a fact about the world, not a possession) and queues its poll/stats jobs rather than running them synchronously; `destroy()` preserves the route and its history — only the watchlist row goes.
 - **`ManifestController` is a route, not a static file** — nginx's stock mime types have no `.webmanifest` entry (its fallback is a download); as a bonus, the name/colours come from `config/orbit.php`, the same source the meta tag reads. No `?source=pwa` tracking param, since vue-router would have to carry or strip it forever. `orientation: any` since 2026-08-24 (Ghie's call, phase 4 of docs/DESKTOP-LAYOUT-PLAN.md): it was `portrait` because the design's camera choreography assumed it, and the master-detail frame is the thing that made a sideways iPad worth having. A phone that rotates gets the phone layout, which the `min-height: 600px` half of the breakpoint guarantees.
