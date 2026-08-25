@@ -23,7 +23,7 @@ return [
     */
 
     'seed' => [
-        'email'    => env('SEED_USER_EMAIL', 'ghie.cotcheza@gmail.com'),
+        'email'    => env('SEED_USER_EMAIL', 'owner@example.com'),
         'name'     => env('SEED_USER_NAME', 'Ghie'),
         'password' => env('SEED_USER_PASSWORD') ?: null,
     ],
