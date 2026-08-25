@@ -166,9 +166,11 @@ to the fakes — and never the `.env` next to the checkout.
 ## More documentation
 
 - **[`docs/BUSINESS-LOGIC.md`](docs/BUSINESS-LOGIC.md)** — every domain rule,
-  with its number, its config key and where the code lives. Start here.- **[`docs/API.md`](docs/API.md)** — the contract between the back end and the
+  with its number, its config key and where the code lives. Start here.
+- **[`docs/API.md`](docs/API.md)** — the contract between the back end and the
   screens: exact response shapes, with an example each. A screen that needs a
-  field it does not list needs that file changed first.- **[`design/README.md`](design/README.md)** — the design handoff, and the
+  field it does not list needs that file changed first.
+- **[`design/README.md`](design/README.md)** — the design handoff, and the
   authority on every screen: tokens, copy, globe choreography. The prototype
   next to it (`Flight Deal Tracker - Globe.dc.html`) is a reference to
   recreate, not code to copy.

@@ -50,27 +50,32 @@ scripts/e2e.sh -- specs/globe.spec.js         # one spec
 scripts/e2e.sh --keep -- --grep "heat map"    # one test, stack left up
 ```
 
-Seven green checks have never seen a screen — [`docs/E2E.md`](docs/E2E.md)
+Seven green checks have never seen a screen — [`docs/E2E.md`](E2E.md)
 explains what that costs and what this harness found.
 
 ## Deploy
 
-The runbook is [`.claude/commands/deploy.md`](.claude/commands/deploy.md), and
+The runbook is [`.claude/commands/deploy.md`](../.claude/commands/deploy.md), and
 it is the authority: pull, gate, `composer install --no-dev`, build assets,
 migrate, seed, **restart the long-lived containers** (they boot the code once —
 a deploy that skips this looks entirely successful and serves the old app), then
 the post-deploy checks. Going live from scratch, including the host nginx vhost
-and the owner-key decisions, is [`docs/GO-LIVE.md`](docs/GO-LIVE.md).
+and the owner-key decisions, is [`docs/GO-LIVE.md`](GO-LIVE.md).
 
 ## Where the rest is written down
 
-- **[`CLAUDE.md`](CLAUDE.md)** — the house rules for this repository, and the
-  written exceptions to the fleet standard.- **[`docs/STANDARDS.md`](docs/STANDARDS.md)** — the fleet engineering
+- **[`CLAUDE.md`](../CLAUDE.md)** — the house rules for this repository, and the
+  written exceptions to the fleet standard.
+- **[`docs/STANDARDS.md`](STANDARDS.md)** — the fleet engineering
   standard, vendored byte-identically from the `engineering-standards`
   repository. It applies here in full; `CLAUDE.md` says where Orbit does not
-  meet it yet.- **[`docs/DECISIONS.md`](docs/DECISIONS.md)** — the engineering *why* that is
-  too long for a comment and is not a domain rule.- **[`docs/E2E.md`](docs/E2E.md)** — the browser gate: the sandbox, the
-  divergences from production, and how to add a spec.- **[`docs/GO-LIVE.md`](docs/GO-LIVE.md)** — first deploy, host nginx, owner
-  keys, and an honest list of what is not done.- **[`docs/PLAN.md`](docs/PLAN.md)** — the locked decisions and the PR roadmap.
+  meet it yet.
+- **[`docs/DECISIONS.md`](DECISIONS.md)** — the engineering *why* that is
+  too long for a comment and is not a domain rule.
+- **[`docs/E2E.md`](E2E.md)** — the browser gate: the sandbox, the
+  divergences from production, and how to add a spec.
+- **[`docs/GO-LIVE.md`](GO-LIVE.md)** — first deploy, host nginx, owner
+  keys, and an honest list of what is not done.
+- **[`docs/PLAN.md`](PLAN.md)** — the locked decisions and the PR roadmap.
   Historical: where a number there and a number in `config/orbit.php` disagree,
   the config is right.
