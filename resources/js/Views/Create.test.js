@@ -350,6 +350,70 @@ describe('Create', () => {
         expect(lastParse().text).toBe('a beach week in June')
     })
 
+    // The box used to stop dead at the limit with nothing said (C13).
+    it("says the server's own sentence when the rule runs past the limit", async () => {
+        const wrapper = await screen()
+
+        post.mockClear()
+
+        await wrapper.find('textarea').setValue('x'.repeat(501))
+        await vi.advanceTimersByTimeAsync(500)
+        await flushPromises()
+
+        expect(wrapper.find('.error').text()).toBe(
+            'That is longer than a rule needs to be — 500 characters is the limit.',
+        )
+
+        // The parse is throttled, and a request that is going to be refused spends that budget.
+        expect(post).not.toHaveBeenCalled()
+    })
+
+    it('reads a sentence that is exactly as long as the limit allows', async () => {
+        const wrapper = await screen()
+
+        post.mockClear()
+
+        await wrapper.find('textarea').setValue('x'.repeat(500))
+        await vi.advanceTimersByTimeAsync(500)
+        await flushPromises()
+
+        expect(wrapper.find('.error').exists()).toBe(false)
+        expect(lastParse().text).toHaveLength(500)
+    })
+
+    it('keeps every character typed past the limit, and names the sentence from the box', async () => {
+        const wrapper = await screen()
+
+        await wrapper.find('textarea').setValue('x'.repeat(600))
+        await vi.advanceTimersByTimeAsync(500)
+        await flushPromises()
+
+        expect(wrapper.find('textarea').element.value).toHaveLength(600)
+        expect(wrapper.find('textarea').attributes('aria-describedby')).toBe('rule-problem')
+        expect(wrapper.find('#rule-problem').exists()).toBe(true)
+
+        // A disabled button hides why.
+        expect(wrapper.find('.cta').attributes('disabled')).toBeUndefined()
+    })
+
+    it('takes the sentence back once the rule is short enough again', async () => {
+        const wrapper = await screen()
+
+        await wrapper.find('textarea').setValue('x'.repeat(501))
+        await vi.advanceTimersByTimeAsync(500)
+        await flushPromises()
+
+        expect(wrapper.find('.error').exists()).toBe(true)
+
+        await wrapper.find('textarea').setValue('a beach week in June under €150')
+        await vi.advanceTimersByTimeAsync(500)
+        await flushPromises()
+
+        expect(wrapper.find('.error').exists()).toBe(false)
+        expect(wrapper.find('textarea').attributes('aria-describedby')).toBeUndefined()
+        expect(lastParse().text).toBe('a beach week in June under €150')
+    })
+
     it('leaves the form alone and says why when the rule is refused', async () => {
         const wrapper = await screen()
 
