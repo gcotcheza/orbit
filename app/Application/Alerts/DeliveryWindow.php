@@ -32,7 +32,7 @@ final readonly class DeliveryWindow
 
     /**
      * The instant an alert decided at `$now` may be delivered — or NULL when that is right now,
-     * which is the ordinary answer at 06:55 in the morning.
+     * which is the ordinary answer at 07:35 in the morning.
      */
     public function opensAfter(DateTimeInterface $now): ?CarbonImmutable
     {

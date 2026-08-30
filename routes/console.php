@@ -66,11 +66,11 @@ Schedule::command('orbit:sweep-rules')
     ->withoutOverlapping();
 
 /*
- * 06:55 — last of the three: it reads only what 06:10/06:40 wrote. Running it first would
- * silently mail yesterday's prices; delivered after quiet hours (docs/BUSINESS-LOGIC.md §10).
+ * 07:35 — past the 06:10 fan-out's last route (07:22 at six minutes) and still inside quiet
+ * hours, so the mail lands at 08:00 as it always has (docs/BUSINESS-LOGIC.md §10, §13).
  */
 Schedule::command('orbit:alerts')
-    ->dailyAt('06:55')
+    ->dailyAt('07:35')
     ->timezone($timezone)
     ->withoutOverlapping();
 

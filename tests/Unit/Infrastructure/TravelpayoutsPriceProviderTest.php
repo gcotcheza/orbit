@@ -12,6 +12,7 @@ use Tests\Support\RecordingLogger;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
+use App\Application\Pricing\FareRequestBudget;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
@@ -545,10 +546,12 @@ final class TravelpayoutsPriceProviderTest extends TestCase
 
         $starts = ['2026-01-01', '2026-01-30', '2026-01-31', '2026-03-01', '2026-07-31', '2026-08-15', '2026-12-31', '2028-02-29'];
 
+        // The ceilings are the budget model's own per-route costs, so a window
+        // that starts costing more than the arithmetic assumes goes red here.
         $windows = [
-            ['orbit.poll.window_days', 7],
-            ['orbit.poll.horizon_days', 12],
-            ['orbit.rules.sweep_horizon_days', 4],
+            ['orbit.poll.window_days', FareRequestBudget::NEAR_MONTHS],
+            ['orbit.poll.horizon_days', FareRequestBudget::FAR_MONTHS],
+            ['orbit.rules.sweep_horizon_days', FareRequestBudget::SWEEP_MONTHS],
         ];
 
         foreach ($windows as [$key, $ceiling]) {
@@ -575,31 +578,50 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     }
 
     /**
-     * The arithmetic those ceilings feed — the number that actually has to
-     * hold (docs/BUSINESS-LOGIC.md §4 "The request budget").
+     * The arithmetic those ceilings feed, built from the config the schedule
+     * reads rather than retyped (docs/BUSINESS-LOGIC.md §27).
      */
     #[Test]
-    public function the_two_mornings_both_fit_inside_the_providers_hourly_limit(): void
+    public function the_scheduled_mornings_fit_inside_the_providers_hourly_limit(): void
     {
-        /* Travelpayouts' documented per-IP allowance, and the whole budget. */
-        $perHour = 200;
+        $limit = (int) config('orbit.travelpayouts.hourly_request_limit');
+        $budget = $this->budget()->onSaturday(watchedRoutes: 13, activeRules: 1);
 
-        /* The watchlist config/orbit.php's table is written for. */
-        $watched = 9;
+        $this->assertSame(6, $budget->busiestHour(), 'The ordinary morning is still the binding clock hour.');
+        $this->assertSame(183, $budget->peak());
+        $this->assertSame(190, $budget->rollingPeak(60), 'The worst sixty minutes are not the worst clock hour.');
+        $this->assertFalse($budget->exceeds($limit));
 
-        $near = 7;
-        $far = 12;
-        $sweep = (int) config('orbit.rules.sweep_cap') * 4;
+        // The headroom the stagger bought, asserted rather than remembered —
+        // and it runs out on the rolling window while the clock hour is quiet.
+        $this->assertFalse($budget->withWatchedRoutes(18)->exceeds($limit), 'Eighteen watched routes must still fit.');
+        $this->assertTrue($budget->withWatchedRoutes(19)->exceeds($limit), 'Nineteen is where the next plan is owed.');
+        $this->assertSame(189, $budget->withWatchedRoutes(19)->peak(), 'Clock hours alone would have stayed silent at nineteen.');
+        $this->assertSame(206, $budget->withWatchedRoutes(19)->rollingPeak(60));
+    }
 
-        $this->assertSame(183, $watched * $near + $sweep);
-        $this->assertLessThan($perHour, $watched * $near + $sweep, 'The ordinary morning is over the hourly limit.');
-        $this->assertLessThan($perHour, $watched * $far, 'The weekly far run is over the hourly limit.');
+    /**
+     * What the stagger is for: the same routes arriving together breach at
+     * twelve, which is where this app actually was (docs/BUSINESS-LOGIC.md §27).
+     */
+    #[Test]
+    public function the_same_routes_arriving_as_a_burst_are_what_breaks_the_limit(): void
+    {
+        $limit = (int) config('orbit.travelpayouts.hourly_request_limit');
 
-        // The scaling limit, asserted rather than remembered: the ordinary
-        // morning is the binding constraint and the far run is not.
-        $this->assertLessThan($perHour, 11 * $near + $sweep, 'Eleven watched routes must still fit.');
-        $this->assertGreaterThan($perHour, 12 * $near + $sweep, 'The documented breach is at twelve, not later.');
-        $this->assertLessThan($perHour, 16 * $far, 'The far run must have more headroom than the morning.');
+        config(['orbit.poll.stagger_minutes' => 0]);
+
+        $burst = $this->budget()->onSaturday(watchedRoutes: 11, activeRules: 1);
+
+        $this->assertFalse($burst->exceeds($limit), 'Eleven watched routes fit even in one burst.');
+        $this->assertTrue($burst->withWatchedRoutes(12)->exceeds($limit), 'The documented breach is at twelve, not later.');
+        $this->assertSame(204, $burst->withWatchedRoutes(12)->peak());
+        $this->assertSame(6, $burst->withWatchedRoutes(12)->busiestHour(), 'The morning binds, not the far run.');
+    }
+
+    private function budget(): FareRequestBudget
+    {
+        return new FareRequestBudget(new RecordingLogger);
     }
 
     #[Test]

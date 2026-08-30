@@ -83,6 +83,10 @@ return [
         'retry_delay_ms' => 500,
 
         'warn_every_minutes' => 15,
+
+        // The per-IP allowance the whole schedule is arranged around.
+        // App\Application\Pricing\FareRequestBudget checks the arrangement.
+        'hourly_request_limit' => 200,
     ],
 
     /*
@@ -198,7 +202,7 @@ return [
         'window_days'          => 181,
         'horizon_days'         => 334,
         'far_refresh_weekday'  => 6,
-        'stagger_minutes'      => 3,
+        'stagger_minutes'      => 6,
         'stale_after_days'     => 3,
         'far_stale_after_days' => 17,
     ],
