@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Usage: git runs this per commit, from the working tree root, once
-# scripts/install-hooks.sh has armed it. See docs/DECISIONS.md: the-pre-commit-guard-has-two-layers
+# Usage: git runs this per commit; scripts/install-hooks.sh arms it. Bypass:
+# git commit --no-verify. Why it must be a superset: docs/DECISIONS.md.
 set -uo pipefail
 
 if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
@@ -8,65 +8,104 @@ if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
     exit 1
 fi
 
-MIN_ENV_VALUE=8
+for tool in git awk grep sed cut; do
+    command -v "$tool" >/dev/null 2>&1 && continue
+    printf 'pre-commit: %s is not on PATH; refusing rather than half-checking.\n' "$tool" >&2
+    exit 1
+done
 
+# Additions to gitleaks 8.30.1, whose defaults miss the first two.
 PATTERNS=(
+    'ANTHROPIC_API_KEY|sk-ant-[A-Za-z0-9_-]{24,}'
+    'OPENAI_API_KEY|sk-proj-[A-Za-z0-9_-]{24,}'
     'PRIVATE_KEY_BLOCK|-----BEGIN [A-Z ]*PRIVATE KEY-----'
     'AWS_ACCESS_KEY_ID|(AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}'
     'GITHUB_TOKEN|gh[pousr]_[A-Za-z0-9]{36}'
     'SLACK_TOKEN|xox[abprs]-[A-Za-z0-9-]{12,}'
     'GOOGLE_API_KEY|AIza[0-9A-Za-z_-]{35}'
     'STRIPE_KEY|[sr]k_(live|test)_[A-Za-z0-9]{16,}'
-    'ANTHROPIC_API_KEY|sk-ant-[A-Za-z0-9_-]{24,}'
-    'OPENAI_API_KEY|sk-proj-[A-Za-z0-9_-]{24,}'
     'SECRET_ASSIGNMENT|^[[:space:]]*(export[[:space:]]+)?['\''"]?[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE_KEY|ACCESS_KEY)[A-Z0-9_]*['\''"]?[[:space:]]*[=:][[:space:]]*.?[A-Za-z0-9+/_=-]{20,}'
 )
 
+ENV_KEY='(_(KEY|SECRET|TOKEN|PASSWORD|PASS|PWD|CREDENTIALS|CREDENTIAL|SALT|SIGNATURE|DSN|CERT)$)|(PASSWORD|PASSWD|SECRET|TOKEN|PRIVATE|CREDENTIAL|SIGNATURE|SALT|DSN|CERT|API_?KEY)'
+
 root=$(git rev-parse --show-toplevel 2>/dev/null) || root=$PWD
 
-if ! staged=$(git diff --cached --no-color --diff-filter=ACMR --unified=0 2>/dev/null); then
+if ! staged=$(git diff --cached --no-color --diff-filter=ACMRT --unified=0 2>/dev/null); then
     printf 'pre-commit: cannot read the staged changes; refusing the commit.\n' >&2
     exit 1
 fi
 
-added=$(printf '%s\n' "$staged" | awk '
+if ! added=$(printf '%s\n' "$staged" | awk '
     /^\+\+\+ b\// { path = substr($0, 7); next }
     /^\+\+\+ /    { path = "(unknown file)"; next }
     /^\+/         { if (path != "") print path "\t" substr($0, 2) }
-')
+'); then
+    printf 'pre-commit: cannot parse the staged diff; refusing the commit.\n' >&2
+    exit 1
+fi
 
+fail=0
 declare -A hits=()
+
+if command -v gitleaks >/dev/null 2>&1; then
+    if ! report=$(gitleaks git --staged --redact -v 2>&1); then
+        found=$(printf '%s\n' "$report" | grep -E '(RuleID|File|Line):' | head -30) || found=
+        if [ -n "$found" ]; then
+            printf 'pre-commit: gitleaks found credential-shaped content in the staged diff:\n%s\n' "$found" >&2
+        else
+            printf 'pre-commit: gitleaks did not complete; refusing rather than half-checking.\n' >&2
+        fi
+        fail=1
+    fi
+fi
 
 for rule in "${PATTERNS[@]}"; do
     line=$(printf '%s\n' "$added" | cut -f2- | grep -E -n -m1 -e "${rule#*|}" | cut -d: -f1) || true
     [ -n "$line" ] && hits["${rule%%|*}"]=$(printf '%s\n' "$added" | sed -n "${line}p" | cut -f1)
 done
 
+env_file=$root/.env
+if [ ! -f "$env_file" ]; then
+    if common=$(git rev-parse --git-common-dir 2>/dev/null) && common=$(cd "$common" 2>/dev/null && pwd -P); then
+        env_file=${common%/*}/.env
+    fi
+fi
+
+if [ ! -r "$env_file" ]; then
+    printf 'pre-commit: cannot read this repository'\''s .env (looked for %s);\n' "$env_file" >&2
+    printf 'refusing rather than half-checking. See docs/DEVELOPMENT.md.\n' >&2
+    exit 1
+fi
+
 names=()
 values=()
-if [ -r "$root/.env" ]; then
-    while IFS= read -r line || [ -n "$line" ]; do
-        line=${line%$'\r'}
-        line=${line#export }
-        case "$line" in \#*|'') continue ;; esac
-        case "$line" in *=*) ;; *) continue ;; esac
-        name=${line%%=*}
-        case "$name" in
-            *KEY*|*SECRET*|*TOKEN*|*PASSWORD*|*PASSWD*|*CREDENTIAL*|*DSN*|*SALT*|*CERT*|*PRIVATE*) ;;
-            *) continue ;;
-        esac
-        value=${line#*=}
-        case "$value" in
-            '"'*'"') value=${value#\"}; value=${value%\"} ;;
-            "'"*"'") value=${value#\'}; value=${value%\'} ;;
-        esac
-        [ ${#value} -ge $MIN_ENV_VALUE ] || continue
-        names+=("$name")
-        values+=("$value")
-    done < "$root/.env"
-else
-    printf 'pre-commit: no readable .env — the pattern layer ran, the fixed-string layer did not.\n' >&2
-fi
+
+remember() {
+    [ ${#2} -ge 8 ] && names+=("$1") && values+=("$2")
+    return 0
+}
+
+while IFS= read -r line || [ -n "$line" ]; do
+    line=${line%$'\r'}
+    line=${line#export }
+    case "$line" in \#*|'') continue ;; esac
+    case "$line" in *=*) ;; *) continue ;; esac
+    name=${line%%=*}
+    value=${line#*=}
+    case "$value" in
+        '"'*'"') value=${value#\"}; value=${value%\"} ;;
+        "'"*"'") value=${value#\'}; value=${value%\'} ;;
+    esac
+    case "$value" in
+        *://*:*@*)
+            userinfo=${value#*://}
+            userinfo=${userinfo%%@*}
+            remember "$name (embedded password)" "${userinfo#*:}"
+            ;;
+    esac
+    printf '%s' "$name" | grep -qE "$ENV_KEY" && remember "$name" "$value"
+done < "$env_file"
 
 if [ ${#values[@]} -gt 0 ]; then
     while IFS=$'\t' read -r path content; do
@@ -77,15 +116,17 @@ if [ ${#values[@]} -gt 0 ]; then
     done <<< "$added"
 fi
 
-[ ${#hits[@]} -eq 0 ] && exit 0
-
 # Names the key and the file, never the value: an echoed secret is in a
 # scrollback and a log the moment the guard catches it (S2).
-{
-    printf 'pre-commit: refusing this commit — a secret is staged.\n'
-    for key in "${!hits[@]}"; do
-        printf '  %s found in %s\n' "$key" "${hits[$key]}"
-    done
-    printf 'Unstage it and put the value in .env.\n'
-} >&2
-exit 1
+if [ ${#hits[@]} -gt 0 ]; then
+    {
+        printf 'pre-commit: refusing this commit — a secret is staged.\n'
+        for key in "${!hits[@]}"; do
+            printf '  %s found in %s\n' "$key" "${hits[$key]}"
+        done
+    } >&2
+    fail=1
+fi
+
+[ $fail -eq 0 ] || printf 'Unstage it and put the value in .env. Deliberate override: git commit --no-verify.\n' >&2
+exit $fail
