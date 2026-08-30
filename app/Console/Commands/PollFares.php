@@ -8,6 +8,7 @@ use App\Models\Route;
 use App\Jobs\PollRoutePrices;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Date;
+use App\Application\Pricing\FareRequestBudget;
 
 /**
  * The daily fare poll — fan-out only. `--far` decides depth here rather than a day-of-week
@@ -21,7 +22,7 @@ final class PollFares extends Command
 
     protected $description = 'Fetch the next months of fares for every actively watched route';
 
-    public function handle(): int
+    public function handle(FareRequestBudget $budget): int
     {
         $routes = Route::onWatchlist()->get(['id', 'code']);
 
@@ -51,6 +52,14 @@ final class PollFares extends Command
                 $route->code,
                 ($inline ? 'polled' : 'queued +'.($index * $stagger).'m').' · '.$window.'d',
             );
+        }
+
+        $breach = $budget->warnIfBreached();
+
+        if ($breach !== null) {
+            // Not `components->error()`: it word-wraps, and this sentence is read
+            // out of a container log rather than off a terminal.
+            $this->error($breach);
         }
 
         return self::SUCCESS;

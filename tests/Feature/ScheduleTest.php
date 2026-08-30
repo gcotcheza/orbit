@@ -8,6 +8,7 @@ use Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
+use App\Application\Pricing\FareRequestBudget;
 
 /**
  * The clock, asserted rather than remembered — a wrong schedule is invisible
@@ -98,21 +99,43 @@ final class ScheduleTest extends TestCase
     }
 
     /**
-     * The gap is the per-minute limit, not the hourly one — returns must
-     * start after the far poll's fan-out ends (docs/BUSINESS-LOGIC.md §13).
+     * The gap is the per-minute limit: two fan-outs must not queue on the same
+     * minute. Their overlapping cost is counted, not avoided (§27).
      */
     #[Test]
-    public function the_returns_run_starts_after_the_far_polls_fan_out_is_away(): void
+    public function the_returns_run_starts_well_clear_of_the_far_polls_first_jobs(): void
     {
         $far = $this->minuteOfDay('orbit:poll-fares --far');
         $returns = $this->minuteOfDay('orbit:poll-returns');
 
-        $this->assertSame(intdiv($far, 60), intdiv($returns, 60), 'Both belong in the 04:00 hour.');
-        $this->assertGreaterThanOrEqual(
-            30,
-            $returns - $far,
-            'The far fan-out takes 24 minutes at nine routes; the returns run must not start inside it.',
-        );
+        $this->assertSame(intdiv($far, 60), intdiv($returns, 60), 'Both start in the 04:00 hour.');
+        $this->assertGreaterThanOrEqual(30, $returns - $far, 'The two fan-outs must not start together.');
+    }
+
+    /**
+     * The budget model is checked against this file rather than against a
+     * memory of it (docs/BUSINESS-LOGIC.md §27).
+     */
+    #[Test]
+    public function the_request_budget_reads_the_clock_that_is_actually_scheduled(): void
+    {
+        $scheduled = [
+            'orbit:poll-fares --far' => FareRequestBudget::FAR_POLL_AT,
+            'orbit:poll-returns'     => FareRequestBudget::RETURNS_POLL_AT,
+            'orbit:discover'         => FareRequestBudget::DISCOVERY_AT,
+            'orbit:poll-fares'       => FareRequestBudget::NEAR_POLL_AT,
+            'orbit:sweep-rules'      => FareRequestBudget::RULE_SWEEP_AT,
+        ];
+
+        foreach ($scheduled as $command => $clock) {
+            $minute = $this->minuteOfDay($command);
+
+            $this->assertSame(
+                $clock,
+                sprintf('%02d:%02d', intdiv($minute, 60), $minute % 60),
+                "FareRequestBudget puts {$command} at {$clock}; the scheduler does not.",
+            );
+        }
     }
 
     #[Test]

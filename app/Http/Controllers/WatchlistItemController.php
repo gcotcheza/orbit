@@ -15,6 +15,7 @@ use App\Application\Routes\WatchedRoute;
 use Illuminate\Database\Eloquent\Builder;
 use App\Application\Routes\RouteSnapshots;
 use App\Http\Requests\AddWatchedRouteRequest;
+use App\Application\Pricing\FareRequestBudget;
 use App\Http\Resources\WatchlistRouteResource;
 use App\Http\Requests\UpdateWatchedRouteRequest;
 
@@ -28,7 +29,7 @@ final class WatchlistItemController extends Controller
      * Start watching a pair. 201, with the route's summary as it stands — for a new one that's
      * `confident: false` and no prices until the jobs below run.
      */
-    public function store(AddWatchedRouteRequest $request, RouteSnapshots $snapshots): JsonResponse
+    public function store(AddWatchedRouteRequest $request, RouteSnapshots $snapshots, FareRequestBudget $budget): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -61,6 +62,10 @@ final class WatchlistItemController extends Controller
         // The row renders "no opinion yet" until the poll lands.
         PollRoutePrices::dispatch($route->id);
         RefreshRouteStats::dispatch($route->id);
+
+        // The route that crosses the provider's hourly allowance says so now, not
+        // in a document six weeks later (docs/BUSINESS-LOGIC.md §27).
+        $budget->warnIfBreached();
 
         return $this->present($route, $item->active, $snapshots, 201);
     }

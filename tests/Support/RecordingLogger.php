@@ -36,4 +36,12 @@ final class RecordingLogger extends AbstractLogger
     {
         return array_values(array_filter($this->lines, static fn (array $line): bool => $line['level'] === 'warning'));
     }
+
+    /**
+     * @return list<array{level: string, message: string, context: array<string, mixed>}>
+     */
+    public function errors(): array
+    {
+        return array_values(array_filter($this->lines, static fn (array $line): bool => $line['level'] === 'error'));
+    }
 }

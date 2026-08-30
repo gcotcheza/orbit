@@ -239,7 +239,8 @@ through `now()`.
 | near window | 181 days ahead (≈182 dates, today inclusive) | `orbit.poll.window_days` | `App\Jobs\PollRoutePrices` |
 | maintained horizon | 334 days ahead (≈335 dates) | `orbit.poll.horizon_days` | ditto |
 | far refresh | weekly, Saturday 04:10 | `orbit.poll.far_refresh_weekday` | `routes/console.php` |
-| stagger | 3 minutes between per-route jobs | `orbit.poll.stagger_minutes` | `App\Console\Commands\PollFares` |
+| stagger | 6 minutes between per-route jobs | `orbit.poll.stagger_minutes` | `App\Console\Commands\PollFares` |
+| hourly allowance | ~200 provider requests per IP | `orbit.travelpayouts.hourly_request_limit` | `App\Application\Pricing\FareRequestBudget` |
 | stale-cell prune | 3 days without a refetch (near), 17 (far) | `orbit.poll.stale_after_days`, `…far_stale_after_days` | `PollRoutePrices` |
 | scope | routes with an **active** watchlist row | — | `Route::onWatchlist()` |
 
@@ -259,28 +260,34 @@ touches more than 7 months (183 reaches an 8th) and 334 never more than 12 (335
 reaches a 13th). Each is the widest window that never pays for a month it does
 not need.
 
-**The request budget**, which is what put the far run in its own clock hour —
-Travelpayouts allows ~200 requests an hour per IP, thirteen routes are watched:
+**The request budget**, which is what the stagger is arranged around —
+Travelpayouts allows ~200 requests an hour per IP, thirteen routes are watched,
+and every job is charged to the clock hour its `index × 6` delay lands it in.
+Saturday, the only day all four provider runs share:
 
-| when | what | requests |
+| clock hour | what lands there | requests |
 | --- | --- | --- |
-| 06:10 daily | poll, 13 × ≤7 months | 91 |
-| 06:40 daily | rule sweep, 30 × ≤4 months | 120 |
-| | **the ordinary morning's clock hour** | **211** |
-| 04:10 Saturday | far poll, 13 × ≤12 months | 156 |
-| 04:40 daily | returns poll, 13 × 1 call | 13 |
-| | **the 04:00 hour on a Saturday** | **169** |
+| 04:00 | far poll routes 0-8 (9 × 12), returns poll routes 0-3 (4 × 1) | 112 |
+| 05:00 | far poll routes 9-12 (4 × 12), returns poll routes 4-12 (9 × 1), discovery (59) | 116 |
+| 06:00 | poll routes 0-8 (9 × 7), rule sweep (30 × ≤4 months) | **183** |
+| 07:00 | poll routes 9-12 (4 × 7) | 28 |
 
-So the eleven months cost **nothing in the worst hour**. What breaches first is
-the ordinary morning, at **twelve watched routes** (7 × 12 + 120 = 204) — and
-today's thirteen are already past it, at **211 of ~200**. The far run has room
-to sixteen. `tests/Unit/Infrastructure/TravelpayoutsPriceProviderTest` asserts both halves
-against a hardcoded nine, so it cannot notice the watchlist growing past them.
+So the eleven months cost **nothing in the worst hour**, and neither does the
+tail of the morning poll: at a six-minute stagger only nine routes can reach the
+06:00 hour, however long the watchlist gets. What breaches first is still the
+ordinary morning, now at **twenty watched routes** (201 of ~200), because the
+returns fan-out starts spilling into it as well.
+`App\Application\Pricing\FareRequestBudget` counts the live watchlist and the
+live rules against this table — every morning inside `orbit:poll-fares`, and
+again on every watchlist add — and says so at `ERROR`.
 
 `orbit:poll-fares` is a fan-out: it queues one `PollRoutePrices` per actively
 watched route, delayed by `index × stagger`, so thirteen routes trickle over
-thirty-six minutes rather than arriving as a burst against a per-minute rate
-limit. Nothing that talks to a rate-limited third party runs inside the scheduler
+seventy-two minutes rather than arriving as a burst against a per-minute rate
+limit. The tail of that trickle is now polled **after** `orbit:alerts` at 06:55
+— five of today's thirteen routes, from index 8 (06:58) on. They alert on the
+following morning's run, one day late, which is what buying the headroom cost.
+Nothing that talks to a rate-limited third party runs inside the scheduler
 process. `orbit:poll-fares --far` is the same fan-out asking for the whole
 horizon; the depth is always in the job's payload and never decided from the day
 of the week inside the job, so a retry fetches what it was queued for and a
@@ -1297,12 +1304,12 @@ looked at their phone. Every entry is `withoutOverlapping()`.
 
 | when | command | why that time |
 | --- | --- | --- |
-| **06:10 daily** | `orbit:poll-fares` | before the owner is awake, after the airlines' overnight fare loads have settled. Fans out per-route jobs at a 3-minute stagger, each asking for the **near** window |
-| **Sat 04:10** | `orbit:poll-fares --far` | the same fan-out asking for the whole **eleven-month** horizon — twelve provider calls a route where the daily poll costs seven. In its own clock hour because 9 × 12 beside the sweep's 120 would be 228 against a ~200/hour limit; Saturday because eleven months out is holiday planning. It does **not** replace that day's 06:10 poll, and cannot: both write the same near-window observation, idempotently |
-| **04:40 daily** | `orbit:poll-returns` | round trips, **one** request per watched route because one call covers the whole horizon — 13 today. In the 04:00 hour and not the 06:00 one, which is already at 183 of ~200 (§15). **04:40 and not 04:20** because Saturday's far poll is still queueing its staggered fan-out until 04:34, and two fan-outs interleaving is what the stagger exists to prevent |
-| **05:20 daily** | `orbit:discover` | in the 20-minute gap between the returns poll's fan-out tail (ends ~05:04) and Monday's stats refresh (05:40) — sequential rather than overlapping in the otherwise-empty 05:00 hour. Safe to schedule daily, unlike a fan-out that could send mail: nothing in Discovery interrupts anybody (§16) |
-| **06:40 daily** | `orbit:sweep-rules` | **after** the poll, so the sweep's capped budget is not spent re-fetching routes the watchlist just priced. Half an hour is comfortable room for six staggered polls |
-| **06:55 daily** | `orbit:alerts` | **last**. It talks to no provider — every fare it reads was written by the two runs above. Running it first would not fail; it would mail this morning's verdict on yesterday's prices, every day, invisibly |
+| **06:10 daily** | `orbit:poll-fares` | before the owner is awake, after the airlines' overnight fare loads have settled. Fans out per-route jobs at a 6-minute stagger, each asking for the **near** window; only the first nine reach this clock hour, the rest land in 07:00 (§27) |
+| **Sat 04:10** | `orbit:poll-fares --far` | the same fan-out asking for the whole **eleven-month** horizon — twelve provider calls a route where the daily poll costs seven. In its own clock hour because 13 × 12 beside the sweep's 120 would be 276 against a ~200/hour limit; Saturday because eleven months out is holiday planning. It does **not** replace that day's 06:10 poll, and cannot: both write the same near-window observation, idempotently |
+| **04:40 daily** | `orbit:poll-returns` | round trips, **one** request per watched route because one call covers the whole horizon — 13 today. In the 04:00 hour and not the 06:00 one, which is already at 183 of ~200 (§15). **04:40 and not 04:20** so the two fan-outs never start on the same minute; they do now overlap, and §27's table charges every job to the hour it actually lands in |
+| **05:20 daily** | `orbit:discover` | the emptiest hour left: at thirteen routes the 05:00 hour carries the far poll's tail and the returns poll's tail and still comes to 116 of ~200 (§27). Safe to schedule daily, unlike a fan-out that could send mail: nothing in Discovery interrupts anybody (§16) |
+| **06:40 daily** | `orbit:sweep-rules` | **after** the poll, so the sweep's capped budget is mostly not spent re-fetching routes the watchlist just priced. At a six-minute stagger the first five are done by 06:40; the rest are still queued, and the sweep may pay for them twice |
+| **06:55 daily** | `orbit:alerts` | **last of the three**. It talks to no provider — but since the stagger widened it no longer waits for the whole poll: the last five routes are still queued at 06:55 and alert on the next morning's run (§4, §27) |
 | **Mon 05:40** | `orbit:refresh-stats` | ahead of that morning's poll, so the week's scores are read against the week's statistics. Weekly because the answer is monthly: a route's usual price is built from months of fares, and the score is deliberately most sensitive to it — an argument for it being stable, not fresh |
 | **Sun 09:00** | `orbit:digest` | later than the weekday runs on purpose. Everything else is scheduled to be finished before the owner is awake; this one is meant to be read over coffee, and it is the only mail Orbit sends that nothing crossed a threshold to earn |
 | **03:10 daily** | `build:retain` | the quietest hour, nowhere near the morning's runs. Not a fan-out — a manifest read and a handful of unlinks. On the schedule because `emptyOutDir: false` turns a forgotten deploy step from "the pruning did not happen" into "the disk fills up" |
@@ -1536,13 +1543,12 @@ cover, so emptying the list leaves the fake with no fares at all.
 the whole horizon, against 7 or 12 for the one-way calendar. At W routes it is W
 requests, flat, so returns polling never becomes the binding constraint.
 
-`orbit:poll-returns` runs **daily at 04:40** (§13). The 06:00 hour is at 211 of
-~200 and 9 more would leave 8 requests of headroom, so the run goes in the
-**04:00** hour beside the far poll instead: 156 + 13 = 169 on a Saturday, 13 on
-every other morning. **04:40 rather than 04:20** is the per-minute limit rather
-than the hourly one — the far poll is still queueing its nine staggered jobs
-until 04:34, and starting inside that window would hand the provider two bursts
-in the same minutes.
+`orbit:poll-returns` runs **daily at 04:40** (§13), in the 04:00 hour beside the
+far poll rather than in the 06:00 one, which is at 183 of ~200 before it arrives.
+It is staggered on the same setting the one-way poll uses, so at thirteen routes
+only four of its calls land in the 04:00 hour and the other nine fall into 05:00
+(§27). **04:40 rather than 04:20** is the per-minute limit rather than the hourly
+one: the two fan-outs must not start on the same minute.
 
 **It was scheduled before the table had a reader, which was not the plan.** The
 foundation PR left `routes/console.php` untouched on the argument that morning
@@ -2177,23 +2183,22 @@ Widening the near window makes every route look cheaper; widening the horizon do
 
 **`far_refresh_weekday = 6` (Saturday)** — `Schedule::weeklyOn()` reads 0 as Sunday, 6 as Saturday. `routes/console.php` runs `orbit:poll-fares --far` on that morning, polling the whole 334 days for every watched route; the daily 06:10 poll still fetches the near window every morning including that one. Weekly is what the far months are worth: a fare eleven months out moves on the timescale an airline reprices a fare bucket, not this morning's cache churn, and nothing downstream reads those cells except a person paging the calendar — daily would be 45 more requests every day of the year for the same number. Saturday, because the far months are what somebody browses at a weekend (holiday planning, not a commute) — refreshed going into the weekend. And it's an extra fetch, not a deeper one: the far run re-fetches the seven near months it shares with the daily poll, deliberately, because the alternative (fetching only a slice) would mean a morning's observation means something different depending on which run wrote it.
 
-**The budget, which is the real constraint** — Travelpayouts allows ~200 requests an hour per IP; the whole table (thirteen watched routes, today's watchlist):
+**The budget, which is the real constraint** — Travelpayouts allows ~200 requests an hour per IP. A fan-out job is charged to the clock hour its `index × 6` delay lands it in, so the table is by hour rather than by run (thirteen watched routes and one active rule, today's; Saturday, the only day all four runs share):
 
-| when | what | cost |
+| clock hour | what lands there | cost |
 | --- | --- | --- |
-| 06:10 ordinary morning | the poll, 13 watched × ≤7 months | 91 |
-| 06:40 ordinary morning | the sweep, 30 capped × ≤4 months (§34) | 120 |
-| **total, 06:00 hour** | | **211 of ~200** |
-| 04:10 far morning (weekly) | far poll, 13 watched × ≤12 months | 156 |
-| 05:20 daily (discovery) | origin sweep 3×1 + lane A 5×≤7 + lane B 3×≤7 | 3 + 35 + 21 = **59 of ~200** |
+| 04:00 | far poll routes 0-8 (9 × 12 = 108), returns routes 0-3 (4 × 1) | **112 of ~200** |
+| 05:00 | far poll routes 9-12 (48), returns routes 4-12 (9), discovery (3 + 35 + 21 = 59) | **116 of ~200** |
+| 06:00 | poll routes 0-8 (9 × 7 = 63), sweep 30 capped × ≤4 months (§34) | **183 of ~200** |
+| 07:00 | poll routes 9-12 (4 × 7) | **28 of ~200** |
 
-Lane B's 21 requests buy two things: the fares it surfaces, and the baselines it remembers — a lane-B fetch that produces no card still writes a `discovery_baselines` row (§30). Discovery spends no SerpAPI beyond the ≤5 searches shared across both lanes, absolute taking priority. Monday's 05:40 `orbit:refresh-stats` shares the 05:00 hour and costs nothing here — `self` reads Orbit's own tables. The far morning's three runs (04:10, 05:20, 06:10+06:40) sit in three separate clock hours, none above 183 — the eleven months cost nothing in the worst hour of the week, which is why the far run is a separate schedule entry rather than a deeper Wednesday poll (13×12+120 = 276 would have been over the limit).
+Lane B's 21 requests buy two things: the fares it surfaces, and the baselines it remembers — a lane-B fetch that produces no card still writes a `discovery_baselines` row (§30). Discovery spends no SerpAPI beyond the ≤5 searches shared across both lanes, absolute taking priority. Monday's 05:40 `orbit:refresh-stats` shares the 05:00 hour and costs nothing here — `self` reads Orbit's own tables. Every other morning the same table reads 4 / 68 / 183 / 28, the far poll being weekly.
 
-Where it breaks, so nobody has to rediscover it: at W watched routes the 06:00 hour costs 7W + 120 and the far hour costs 12W. The ordinary morning is the binding constraint and breaches ~200 at W = 12 (204), while the far run has room to W = 16 (192). At today's thirteen the ordinary morning costs 211, so the plan the twelfth route was said to need — a wider stagger or moving the sweep — is now owed rather than anticipated; the far horizon is still not the problem.
+Where it breaks, so nobody has to rediscover it. The stagger is what bounds each hour: a run starting at :10 can put at most nine of its jobs in its own clock hour at six minutes, so the daily poll contributes 63 to the 06:00 hour beside the sweep's 120 however long the watchlist gets. What grows instead is the 05:00 hour, which collects both earlier fan-outs' tails, and then the 06:00 hour again from W = 15, when the returns fan-out reaches it too. The first breach is at **W = 20** (201 in the 06:00 hour). Nothing here is remembered: `App\Application\Pricing\FareRequestBudget` builds this table from `orbit.poll.stagger_minutes`, `orbit.rules.sweep_cap`, `orbit.discovery.shortlist` and the live counts, and logs at `ERROR` when the peak crosses `orbit.travelpayouts.hourly_request_limit`.
 
-Round trips are not in either sum: `orbit:poll-returns` is one request per watched route (§28) because `/v2/prices/latest` answers the whole horizon at once. It runs daily at 04:40, the 04:00 hour, before the far poll fills it too on Saturdays (156 → 169, still under 200); every other morning it's 13 of ~200.
+A second active deal rule is the other way to breach it: the sweep cap is per rule (§34), so two rules put 240 in the 06:00 hour on their own. The guard counts active rules for that reason.
 
-`stagger_minutes = 3` spaces the per-route jobs so thirteen routes' worth of provider calls don't arrive as a burst — the real APIs are rate-limited per minute too. Thirteen routes at three minutes is a 36-minute fan-out, which is what keeps each morning inside one clock hour. The thirty-six minutes still land inside the clock hour; what they no longer clear is the 06:40 sweep, which now starts while the last two routes are still queued.
+`stagger_minutes = 6` spaces the per-route jobs so thirteen routes' worth of provider calls don't arrive as a burst — the real APIs are rate-limited per minute too — and, since 2026-08-30, so that a fan-out's tail falls into the *next* clock hour, where the headroom is. Three minutes kept all thirteen routes inside one hour, which is exactly what put that hour at 211 of ~200. What six minutes costs: the 06:40 sweep starts with seven routes still queued rather than two, and `orbit:alerts` at 06:55 no longer sees the last five (§4).
 
 `stale_after_days = 3` / `far_stale_after_days = 17` — how long a calendar cell may go unrepriced before a successful poll deletes it. A future date that stops being quoted (the provider's cache is patchy) is otherwise upserted once and kept forever, because an upsert only writes the dates the provider named — nothing in the API marks a cell stale. The row would go on claiming to be today's price on the heat map, in the booking link, and in the fares a deal rule matches against, which is how this app would mail somebody about a flight that can't be booked. Three days: the poll is daily and the deletion one-way, so two consecutive failed mornings (or one missing date) don't lose a cell that would have come back. Seventeen days is the same sentence on the far tranche's own (weekly) clock — two missed far refreshes (7+7) plus the same three-day cushion — which is why `PollRoutePrices` runs the staleness delete as two passes.
 
@@ -2205,7 +2210,7 @@ Every price in this app is a one-way fare — right for the EU budget carriers O
 
 **Nothing reads this table yet, but it is polled daily at 04:40.** The foundation PR of the return-trip milestone shipped a port, two adapters, a table, and `orbit:poll-returns` to fill it by hand, with `routes/console.php` deliberately untouched until a screen reads the table. The schedule entry arrived first anyway: the poll was already being run every morning by a cron outside this repository, and a fortnight of accumulated real fares is worth more to the PR that draws them than an empty table.
 
-**The budget is the cheapest thing in this file.** `/v2/prices/latest` with `period_type=year` answers the whole horizon in one request (recorded AMS-LIS ran from the call date to 2027-06-18), where the one-way calendar is billed per calendar month. So: one request per watched route per run — 13 today, W in general, flat. Returns polling never becomes the binding constraint (see §27). Worked out before the schedule entry existed: the 06:00 hour would go to 224 of ~200 (over the limit); the 04:00 far-poll hour has room, going to 169 on a Saturday and 13 on every other morning — hence 04:40 daily. There's still no key for it here, because a schedule belongs in `routes/console.php`, where "the returns poll runs at 04:40" is one readable line — and 04:40 not 04:20, because Saturday's far poll was still queueing its staggered fan-out until 04:34. At thirteen routes that fan-out runs to 04:46, so 04:40 no longer clears it either.
+**The budget is the cheapest thing in this file.** `/v2/prices/latest` with `period_type=year` answers the whole horizon in one request (recorded AMS-LIS ran from the call date to 2027-06-18), where the one-way calendar is billed per calendar month. So: one request per watched route per run — 13 today, W in general, flat. Returns polling never becomes the binding constraint (see §27). Worked out before the schedule entry existed: the 06:00 hour would go over the limit; the 04:00 far-poll hour has room — hence 04:40 daily. There's still no key for it here, because a schedule belongs in `routes/console.php`, where "the returns poll runs at 04:40" is one readable line. The two fan-outs overlap at today's stagger and that is no longer something the clock avoids: §27's table charges every job to the hour it lands in, and `FareRequestBudget` checks the total.
 
 `window_days = 334` is `poll.horizon_days`'s number, written out rather than referenced — the same arrangement `selfstats.cross_section_days` has, for the same reason (different decisions that happen to agree), and `tests/Feature/ReturnFaresPollTest` is the drift guard. It's a retention bound, not a request parameter (unique in this file): the provider answers for a year whatever it's asked, so this decides what's **kept** — the adapter drops the spill past it and `PollReturnFares` deletes anything that gets past that.
 
@@ -2312,7 +2317,7 @@ Only the hosts live in config. The path shapes are `BookingLink`'s, because they
 
 `sweep_cap = 30` is how many origin×destination pairs one rule may queue. A rule with no vibe at all is 3 origins × every curated destination (184 today, and only ever growing as `database/seeders/data/` is edited) — a rate limit spent on a sentence somebody typed and may delete a minute later. The cap keeps the best-fitting thirty and logs the rest — see `SweepRuleFares` for what "best" means.
 
-`sweep_horizon_days = 89` is how far ahead those speculative polls look, deliberately shorter than `poll.window_days`. The budget: the daily poll is ≤91 requests, one rule sweep is 30 capped routes × ≤4 months = ≤120, and 06:10/06:40 land in the same clock hour (≤183 total; full table in §27). The weekly far run is not in that sum on purpose — scheduled into the 04:00 hour precisely so it never shares an hour with the sweep. Sweeping six months deep would be 30×7 = 210 requests for one rule, over the hourly limit on its own. 89, not 90, for the reason `poll.window_days` is 181 not 183 — a 90-day window reaches a fifth calendar month on three mornings a year, 89 never does. It is otherwise exactly the horizon every poll in this app had before the window widened: the sweep still costs what it always cost. A rule whose date window names a month beyond 89 days still **matches** on any route Orbit already holds fares for (`RuleMatches` reads the calendar, not the provider, and a watched route's calendar runs eleven months deep) — what it doesn't get is speculative fares for that month on routes nobody watches, which fill in as the calendar rolls toward it. The sweep did not move when the horizon did — 30×12 = 360 requests for one rule is not close to affordable, and a rule is still a guess where the watchlist is what somebody asked to be told about.
+`sweep_horizon_days = 89` is how far ahead those speculative polls look, deliberately shorter than `poll.window_days`. The budget: one rule sweep is 30 capped routes × ≤4 months = ≤120, and it shares the 06:00 hour with the first nine of the daily poll's staggered jobs (≤63; ≤183 total, full table in §27). The weekly far run is not in that sum on purpose — scheduled into the 04:00 hour precisely so it never shares an hour with the sweep. Sweeping six months deep would be 30×7 = 210 requests for one rule, over the hourly limit on its own. 89, not 90, for the reason `poll.window_days` is 181 not 183 — a 90-day window reaches a fifth calendar month on three mornings a year, 89 never does. It is otherwise exactly the horizon every poll in this app had before the window widened: the sweep still costs what it always cost. A rule whose date window names a month beyond 89 days still **matches** on any route Orbit already holds fares for (`RuleMatches` reads the calendar, not the provider, and a watched route's calendar runs eleven months deep) — what it doesn't get is speculative fares for that month on routes nobody watches, which fill in as the calendar rolls toward it. The sweep did not move when the horizon did — 30×12 = 360 requests for one rule is not close to affordable, and a rule is still a guess where the watchlist is what somebody asked to be told about.
 
 `sample = 6` — the design's match banner shows a handful, not a list (§4).
 
@@ -2425,7 +2430,7 @@ by anyone.
 - **`UpdateSettingsRequest` is `PUT` with every field `required`**, not `PATCH` — a boolean's absence and its `false` value are indistinguishable once optional, and the failure mode is a quiet-hours toggle that can be switched on but never off. `quietStart`/`quietEnd` are required even when quiet hours are off, so turning the feature back on restores what was chosen rather than resetting to defaults. API keys are camelCase (the API's vocabulary), never the database's snake_case. `sensitivity` validates against the configured levels, not `between:0,2`, so a fourth sensitivity level is one config entry away.
 - **`DestinationController` sends the whole 184-row list in one request**, not a `?q=` search — it's a few kilobytes from two checked-in files, so a suggestion appears on the keystroke instead of after a round trip. The 3,086 other airports are deliberately excluded (no vibes, no warmth); what counts as a destination is the `destinations` table, not `airports` — the three origins are airports with no destinations row, so Amsterdam never suggests itself as a destination.
 - **`SearchAirportsRequest`'s 2-character floor is a cost decision**: one letter matches roughly a third of 3,270 airports, and ten arbitrary rows back is worse than no suggestions, bought with a round trip. The 60-character ceiling just needs to outrun the longest city name. `AirportController`'s search is a `?q=` query (unlike the destinations endpoint's whole-list send) because 3,270 rows is ~200KB nobody should download before typing; ten rows returned, merged client-side with the curated list's eight, with a deterministic tie-break (`orderByRaw()`, proven injection-safe by its `literal-string` return type) since a ranked query with a LIMIT has to be total or the panel reshuffles on re-render.
-- **The route-lookup throttle's two limits (6/min, 20/hour) are the fare-provider budget divided up**, not a round number: one miss costs ~7 provider requests, and the ordinary 06:00 hour already claims ≤176 of the ~200/hour ceiling. `POST /routes/lookup` is a write (not a `?refresh` flag on the GET) and takes no `{code}` in the path — it can create a route row and spend six or seven metered provider calls, which a browser prefetch or link preview could trigger unprompted on a GET; the pair arrives in the body so this and `POST /watchlist` validate through the same `RoutePairRequest`.
+- **The route-lookup throttle's two limits (6/min, 20/hour) are the fare-provider budget divided up**, not a round number: one miss costs ~7 provider requests, and the ordinary 06:00 hour already claims ≤183 of the ~200/hour ceiling (§27). `POST /routes/lookup` is a write (not a `?refresh` flag on the GET) and takes no `{code}` in the path — it can create a route row and spend six or seven metered provider calls, which a browser prefetch or link preview could trigger unprompted on a GET; the pair arrives in the body so this and `POST /watchlist` validate through the same `RoutePairRequest`.
 - **`RoutePairRequest`'s origin is no longer restricted to the configured origins** (removed 2026-08-16, after a day of real use produced 32 lookups and 0 rules) — both ends are now plain `exists:airports,iata`. `config('orbit.origins')` is deliberately untouched and MUST stay that way — it still bounds the nightly rule sweep's budget, and widening this request must never widen a sweep. Input is upper-cased before any rule runs (`prepareForValidation`) so the exists check and the stored row agree. `AddWatchedRouteRequest` refuses a duplicate watch; `LookupRouteRequest` refuses nothing.
 - **`UpdatePasswordRequest`: `current_password` is the actual security gate, not the session** — a stolen/borrowed phone is signed in too; a session cookie proves device possession, not secret knowledge. `current_password:web` names the guard explicitly rather than trusting whichever guard middleware last set. `different:current_password` is what makes this a CHANGE — without it, resubmitting the same password reports success while rotating nothing.
 - **`WatchlistItemController` is deliberately separate from the read-only `WatchlistController`** — the read is the app's tuned launch request; these are one-row taps, and keeping them apart means neither grows the other's concerns. `store()` finds-or-creates (a route is a fact about the world, not a possession) and queues its poll/stats jobs rather than running them synchronously; `destroy()` preserves the route and its history — only the watchlist row goes.
