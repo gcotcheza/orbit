@@ -161,8 +161,34 @@ final class ScheduleTest extends TestCase
     {
         $event = $this->find('orbit:alerts');
 
-        $this->assertSame('55 6 * * *', $event->expression);
+        $this->assertSame('35 7 * * *', $event->expression);
         $this->assertSame('Europe/Amsterdam', $event->timezone);
+    }
+
+    /**
+     * The alert run has to clear the fan-out it reads, and stay inside the
+     * default quiet window that holds the mail (docs/BUSINESS-LOGIC.md §13).
+     */
+    #[Test]
+    public function the_alert_run_clears_the_polls_fan_out_and_still_sits_inside_quiet_hours(): void
+    {
+        $poll = $this->minuteOfDay('orbit:poll-fares');
+        $alerts = $this->minuteOfDay('orbit:alerts');
+        $stagger = (int) config('orbit.poll.stagger_minutes');
+
+        // Twelve staggers is a thirteen-route fan-out; 13 minutes is twice the
+        // worst case of the poll job it has to wait for.
+        $this->assertGreaterThanOrEqual(
+            $poll + $stagger * 12 + 13,
+            $alerts,
+            'Widening the stagger without moving the alert run silently drops the tail of the watchlist.',
+        );
+
+        $this->assertLessThan(
+            8 * 60,
+            $alerts,
+            'Past 08:00 the default quiet window stops holding the mail, and delivery time changes.',
+        );
     }
 
     #[Test]

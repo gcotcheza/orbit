@@ -23,7 +23,7 @@ use App\Application\Routes\RouteSnapshots;
 
 /**
  * The morning's question, once per account: anything worth interrupting somebody about?
- * Runs 06:55 on data already stored; AlertPolicy decides (docs/BUSINESS-LOGIC.md §10).
+ * Runs 07:35 on data already stored; AlertPolicy decides (docs/BUSINESS-LOGIC.md §10).
  */
 final readonly class AlertEvaluation
 {

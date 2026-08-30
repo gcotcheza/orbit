@@ -284,9 +284,9 @@ again on every watchlist add — and says so at `ERROR`.
 `orbit:poll-fares` is a fan-out: it queues one `PollRoutePrices` per actively
 watched route, delayed by `index × stagger`, so thirteen routes trickle over
 seventy-two minutes rather than arriving as a burst against a per-minute rate
-limit. The tail of that trickle is now polled **after** `orbit:alerts` at 06:55
-— five of today's thirteen routes, from index 8 (06:58) on. They alert on the
-following morning's run, one day late, which is what buying the headroom cost.
+limit. That trickle now runs to 07:22, past where the alert run used to be, so
+`orbit:alerts` moved with it — to **07:35**, after the last route is polled and
+still inside quiet hours, so the mail lands at 08:00 exactly as it did (§10).
 Nothing that talks to a rate-limited third party runs inside the scheduler
 process. `orbit:poll-fares --far` is the same fan-out asking for the whole
 horizon; the depth is always in the job's payload and never decided from the day
@@ -580,7 +580,7 @@ good; this one is about when Orbit may have an opinion at all.
 **One number, read twice.** `AppServiceProvider` hands the same
 `orbit.alerts.min_tracking_days` to `ScoringPolicy` and to `AlertPolicy`. It
 lives under `alerts` because that is where the consequence people feel is — an
-unwanted mail at 06:55 — and it is shared because a screen showing "Good price —
+unwanted mail at 07:35 — and it is shared because a screen showing "Good price —
 book" about a route the alert engine considers too young to mention would be
 Orbit disagreeing with itself in public.
 
@@ -789,7 +789,7 @@ somebody actually books. The comparison is **integer arithmetic** —
 threshold is what every test in the world is written against, and a float
 comparison would go the right way on some prices and the wrong way on others.
 
-The cooldown is checked in whole seconds, **inclusive**: a run at 06:55 every
+The cooldown is checked in whole seconds, **inclusive**: a run at 07:35 every
 morning is 86,400 seconds after the last one to the second, and an exclusive
 comparison would suppress every second day depending on how long the queue took.
 
@@ -807,7 +807,7 @@ yesterday reads exactly like the new rule not working.
 | conversion to an instant | once | `App\Application\Alerts\DeliveryWindow` |
 
 **Alerts are decided during quiet hours and delivered after them.** The ledger
-records `triggered_at` at 06:55 and the notification is delayed to the end of
+records `triggered_at` at 07:35 and the notification is delayed to the end of
 the window, so a cooldown measures from when the deal was found rather than from
 when somebody woke up. `triggered_at` and `delivered_at` are therefore two
 different facts, and `GET /api/alerts` publishes both.
@@ -818,7 +818,7 @@ in the direction of sending mail at three in the morning. The **end is
 exclusive** (08:00 is not quiet; it is when the held mail goes out). A
 zero-length window (`start === end`) covers nothing, because "22:00 to 22:00" is
 somebody who has not finished setting it up. `DeliveryWindow` answers with the
-*instant* the window opens, not a duration — a duration computed at 06:55 and
+*instant* the window opens, not a duration — a duration computed at 07:35 and
 used by a worker that picked the job up at 07:10 would deliver at 08:15 — and it
 computes that instant as a wall clock, because on the two nights a year the
 clocks move, ten hours after 22:00 is not what "until eight" means.
@@ -1309,7 +1309,7 @@ looked at their phone. Every entry is `withoutOverlapping()`.
 | **04:40 daily** | `orbit:poll-returns` | round trips, **one** request per watched route because one call covers the whole horizon — 13 today. In the 04:00 hour and not the 06:00 one, which is already at 183 of ~200 (§15). **04:40 and not 04:20** so the two fan-outs never start on the same minute; they do now overlap, and §27's table charges every job to the hour it actually lands in |
 | **05:20 daily** | `orbit:discover` | the emptiest hour left: at thirteen routes the 05:00 hour carries the far poll's tail and the returns poll's tail and still comes to 116 of ~200 (§27). Safe to schedule daily, unlike a fan-out that could send mail: nothing in Discovery interrupts anybody (§16) |
 | **06:40 daily** | `orbit:sweep-rules` | **after** the poll, so the sweep's capped budget is mostly not spent re-fetching routes the watchlist just priced. At a six-minute stagger the first five are done by 06:40; the rest are still queued, and the sweep may pay for them twice |
-| **06:55 daily** | `orbit:alerts` | **last of the three**. It talks to no provider — but since the stagger widened it no longer waits for the whole poll: the last five routes are still queued at 06:55 and alert on the next morning's run (§4, §27) |
+| **07:35 daily** | `orbit:alerts` | **last of the three**, and it moved from 06:55 when the stagger widened: the fan-out's last route is dispatched at 07:22, and a poll job's worst case is ~3m34s (7 calls, each a 15s timeout plus one retry). 07:35 clears twice that. It talks to no provider, and it stays **before 08:00** on purpose — past the default quiet window's end the mail would stop being held and start going out at evaluation time (§10, §27) |
 | **Mon 05:40** | `orbit:refresh-stats` | ahead of that morning's poll, so the week's scores are read against the week's statistics. Weekly because the answer is monthly: a route's usual price is built from months of fares, and the score is deliberately most sensitive to it — an argument for it being stable, not fresh |
 | **Sun 09:00** | `orbit:digest` | later than the weekday runs on purpose. Everything else is scheduled to be finished before the owner is awake; this one is meant to be read over coffee, and it is the only mail Orbit sends that nothing crossed a threshold to earn |
 | **03:10 daily** | `build:retain` | the quietest hour, nowhere near the morning's runs. Not a fan-out — a manifest read and a handful of unlinks. On the schedule because `emptyOutDir: false` turns a forgotten deploy step from "the pruning did not happen" into "the disk fills up" |
@@ -2156,7 +2156,7 @@ Read once by `AppServiceProvider` into `App\Domain\Pricing\ScoringPolicy`, becau
 
 The numbers below are `App\Domain\Alerts\AlertPolicy`'s whole rule book, read once by `AppServiceProvider` — the same arrangement `ScoringPolicy` has. `sensitivities` is the three positions of the segmented control on the alerts screen (`design/README.md` §6), stored as `user_settings.sensitivity`. Each level names a **tier** rather than a number — the number lives once, in `score.tiers`, and is the same one the API publishes as a route's `tier`, so "Relaxed" and the "insane" badge can never mean different scores. `blurb` is the sentence under the control, filled in by `SettingsController`, and lives here rather than in the Vue component for the same reason: the copy quotes a number this file owns.
 
-**`min_tracking_days = 7`** — how many real daily observations a route needs before its deal score is allowed to interrupt somebody, and before the score is published as anything but "no opinion yet." This is the day-1 honesty rule with teeth: `ORBIT_STATS_PROVIDER=self` computes statistics from fares Orbit itself fetched, so on the first morning the "usual price" *is* today's price — the current fare is the minimum, median, and maximum of a distribution one observation wide. Every score component then agrees the fare is as cheap as it's ever been, and every route on the watchlist scores 100/insane/confident at `trackingDays: 1`. Left alone, 06:55 the next morning is eight "insane deal" mails about nothing — on the day the owner is most likely to decide this app cries wolf. Seven days is a week of mornings: enough for a spread to exist and for the trend to have a direction, short enough that a Monday-added route can still be alerted about before the next one. It is not a claim that seven observations make a good estimate (`selfstats.maturity_observations` is where that claim lives) — it's the smaller question: below it, Orbit says nothing rather than something it cannot support. Read by two pure values through `AppServiceProvider`: `AlertPolicy`, which answers `immature-data` instead of firing, and `ScoringPolicy`, which is what makes `confident: false` mean what `docs/API.md` says it means — one number, so a screen and a mail can't hold two different opinions about the same morning.
+**`min_tracking_days = 7`** — how many real daily observations a route needs before its deal score is allowed to interrupt somebody, and before the score is published as anything but "no opinion yet." This is the day-1 honesty rule with teeth: `ORBIT_STATS_PROVIDER=self` computes statistics from fares Orbit itself fetched, so on the first morning the "usual price" *is* today's price — the current fare is the minimum, median, and maximum of a distribution one observation wide. Every score component then agrees the fare is as cheap as it's ever been, and every route on the watchlist scores 100/insane/confident at `trackingDays: 1`. Left alone, 07:35 the next morning is eight "insane deal" mails about nothing — on the day the owner is most likely to decide this app cries wolf. Seven days is a week of mornings: enough for a spread to exist and for the trend to have a direction, short enough that a Monday-added route can still be alerted about before the next one. It is not a claim that seven observations make a good estimate (`selfstats.maturity_observations` is where that claim lives) — it's the smaller question: below it, Orbit says nothing rather than something it cannot support. Read by two pure values through `AppServiceProvider`: `AlertPolicy`, which answers `immature-data` instead of firing, and `ScoringPolicy`, which is what makes `confident: false` mean what `docs/API.md` says it means — one number, so a screen and a mail can't hold two different opinions about the same morning.
 
 **`max_fare_age_days = 2` and `near_departure_weeks = 3`** — one rule, and neither does anything alone: an alert is held only when its fare was found more than 2 days ago **and** the flight leaves within 3 weeks. Fares come from Travelpayouts, a cache of other people's searches (§2), so `found_at` can be days behind `fetched_at`. The owner caught the consequence twice: €36 on a date whose live cheapest was €56, and €29 against a real €68 — in a mail that is Orbit waking somebody up about a flight not for sale, the single worst thing this app can do. Fares near departure move fast and in one direction (seats sell, cheap classes go), so a four-day-old quote for a flight three weeks out is often gone; far-out fares barely move for weeks, so the same four-day-old price for next April is still worth saying — holding it would silence the alerts most likely to be true, on exactly the routes somebody has time to act on. Two days, because the poll is daily: one missed morning must not make every fare unalertable, and by the third day a near-departure price is old enough that Orbit is guessing. Three weeks is where "book it this week" turns into "keep an eye on it" for a European short-haul. A **null `found_at` is treated as fresh** (see `AlertPolicy`) — it means "we do not know how old this is," the state of every row written before the column existed, and silencing alerts on not-knowing would have turned the whole alert system off the morning this shipped.
 
@@ -2198,7 +2198,7 @@ Where it breaks, so nobody has to rediscover it. The stagger is what bounds each
 
 A second active deal rule is the other way to breach it: the sweep cap is per rule (§34), so two rules put 240 in the 06:00 hour on their own. The guard counts active rules for that reason.
 
-`stagger_minutes = 6` spaces the per-route jobs so thirteen routes' worth of provider calls don't arrive as a burst — the real APIs are rate-limited per minute too — and, since 2026-08-30, so that a fan-out's tail falls into the *next* clock hour, where the headroom is. Three minutes kept all thirteen routes inside one hour, which is exactly what put that hour at 211 of ~200. What six minutes costs: the 06:40 sweep starts with seven routes still queued rather than two, and `orbit:alerts` at 06:55 no longer sees the last five (§4).
+`stagger_minutes = 6` spaces the per-route jobs so thirteen routes' worth of provider calls don't arrive as a burst — the real APIs are rate-limited per minute too — and, since 2026-08-30, so that a fan-out's tail falls into the *next* clock hour, where the headroom is. Three minutes kept all thirteen routes inside one hour, which is exactly what put that hour at 211 of ~200. What six minutes costs: the 06:40 sweep starts with seven routes still queued rather than two, and `orbit:alerts` moved from 06:55 to 07:35 to keep seeing the whole morning (§13). 07:35 clears the fan-out to fifteen watched routes; at sixteen the tail crosses it again, and the 08:00 quiet-hours ceiling means the alert run cannot simply keep moving — that limit binds before the budget's twenty does.
 
 `stale_after_days = 3` / `far_stale_after_days = 17` — how long a calendar cell may go unrepriced before a successful poll deletes it. A future date that stops being quoted (the provider's cache is patchy) is otherwise upserted once and kept forever, because an upsert only writes the dates the provider named — nothing in the API marks a cell stale. The row would go on claiming to be today's price on the heat map, in the booking link, and in the fares a deal rule matches against, which is how this app would mail somebody about a flight that can't be booked. Three days: the poll is daily and the deletion one-way, so two consecutive failed mornings (or one missing date) don't lose a cell that would have come back. Seventeen days is the same sentence on the far tranche's own (weekly) clock — two missed far refreshes (7+7) plus the same three-day cushion — which is why `PollRoutePrices` runs the staleness delete as two passes.
 
@@ -2273,7 +2273,7 @@ Every other number in the discovery funnel descends from Travelpayouts — the s
 
 `key` is `null` by default and the feature is *built* for its absence — unlike `TRAVELPAYOUTS_TOKEN`, whose adapter refuses to resolve without it (a box configured for real fares and given none is a deploy mistake), a missing SerpAPI key is an ordinary, supported state: the discovery screen works, it just can't say "verified."
 
-`reserve = 50`, out of 250 a month, reserved for something that doesn't exist yet: discovery is a screen the owner chooses to open, and the obvious next use for a second opinion is verifying an alert **before** it's sent — a feature that can wake somebody at 06:55 — so a nightly job that ate the month's last search would silently take that option away. The less important feature yields.
+`reserve = 50`, out of 250 a month, reserved for something that doesn't exist yet: discovery is a screen the owner chooses to open, and the obvious next use for a second opinion is verifying an alert **before** it's sent — a feature that can wake somebody at 07:35 — so a nightly job that ate the month's last search would silently take that option away. The less important feature yields.
 
 `max_per_run = 5` is the per-run cap, deliberately the same number as `discovery.shortlist` but a separate decision — that one is how many candidates are worth verifying, this one is how much of a monthly allowance one night may spend. A bug that turned verification into a sweep would clear the month in one night; this stands in front of it. At five a night against 250 a month: a 30-day month is 150 searches, leaving 100 above the 50 reserve.
 

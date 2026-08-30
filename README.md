@@ -98,7 +98,7 @@ Every morning, in an order that is load-bearing: **06:10** `orbit:poll-fares`
 fans out one job per watched route and writes both the ~91-day calendar window
 and one price observation (today's cheapest); **06:40** `orbit:sweep-rules`
 fetches fares for the routes each rule is about, skipping anything the poll
-already priced; **06:55** `orbit:alerts` decides what is worth interrupting
+already priced; **07:35** `orbit:alerts` decides what is worth interrupting
 somebody about and talks to no provider at all, because everything it reads was
 written by the two runs before it. **Monday 05:40** refreshes the route
 statistics, **Sunday 09:00** sends the digest, **03:10** prunes old asset

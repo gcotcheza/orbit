@@ -1360,7 +1360,7 @@ order that is load-bearing:
 | --- | --- | --- |
 | 06:10 daily | `orbit:poll-fares` | fares for every actively watched route |
 | 06:40 daily | `orbit:sweep-rules` | fares for the routes each active rule is about |
-| **06:55 daily** | `orbit:alerts` | decides what is worth sending, and sends it |
+| **07:35 daily** | `orbit:alerts` | decides what is worth sending, and sends it |
 | **Sunday 09:00** | `orbit:digest` | the weekly summary |
 
 `orbit:alerts` talks to no provider — everything it reads was written by the two
@@ -1381,7 +1381,7 @@ information rather than a repeat. Two different rules matching the same route
 are two cooldowns: each rule is a separate question the owner asked.
 
 **Quiet hours defer delivery, not the decision.** A deal found inside the window
-is written to the ledger at 06:55 with `deliveredAt: null` and the mail is
+is written to the ledger at 07:35 with `deliveredAt: null` and the mail is
 queued for the end of the window (08:00 by default) in the owner's timezone. The
 cooldown therefore measures from when the deal was found, not from when somebody
 woke up.
