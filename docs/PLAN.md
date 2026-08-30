@@ -58,9 +58,9 @@ has to draw them.
   finally *matching* rather than only being parsed and shown; and alerts, which
   have to reckon with a cache that is seven days deep.
 
-## Pending owner actions
-- **Travelpayouts: adapter built, switch not thrown.** `ORBIT_PRICE_PROVIDER=travelpayouts` + `TRAVELPAYOUTS_TOKEN` in `.env` turns on real one-way fares (`/v2/prices/month-matrix`). Run `php artisan orbit:reset-history --confirm` in the same breath — the recorded history is all simulated, and mixing the two makes every trend and deal score a comparison between two different universes. Expect 41–87% day coverage and honest "tracking N days" charts afterwards.
-- **Statistics: nothing to sign up for any more.** Amadeus Self-Service was decommissioned 2026-07-17; `ORBIT_STATS_PROVIDER=self` computes a route's usual price from Orbit's own fares and needs no key. Flip it in the same breath as `ORBIT_PRICE_PROVIDER`, restart, then `php artisan orbit:refresh-stats --now` — a summary of fake fares is a real statistic about a simulation.
-- **Round trips: adapter built, switch not thrown, poll scheduled.** `ORBIT_RETURNS_PROVIDER=travelpayouts` (same `TRAVELPAYOUTS_TOKEN`) turns on real round-trip fares; `orbit:poll-returns` runs **daily at 04:40**, one request per watched route, and `php artisan orbit:poll-returns --now` fills `return_fares` by hand. The entry went in ahead of any reader — `docs/BUSINESS-LOGIC.md` §15 has the budget and why. Nothing to reset: the table is new, so no simulated rows are mixed in.
-- Dedicated Anthropic API key for the rule parser.
-- Verify `ghiecode.io` as a sending domain in Resend; then switch `MAIL_MAILER` from `log`.
+## What is switched on
+- **Travelpayouts: real one-way fares.** `ORBIT_PRICE_PROVIDER=travelpayouts` with `TRAVELPAYOUTS_TOKEN` in `.env` (`/v2/prices/month-matrix`). `php artisan orbit:reset-history --confirm` was run in the same breath, because the recorded history was all simulated and mixing the two would make every trend and deal score a comparison between two different universes. Day coverage runs 41-87%, and the "tracking N days" charts are honest about it.
+- **Statistics: self-computed, nothing to sign up for.** Amadeus Self-Service was decommissioned 2026-07-17; `ORBIT_STATS_PROVIDER=self` computes a route's usual price from Orbit's own fares and needs no key. It was flipped in the same breath as `ORBIT_PRICE_PROVIDER` - a summary of fake fares is a real statistic about a simulation - and `php artisan orbit:refresh-stats --now` is how it is refilled by hand.
+- **Round trips: real fares, polled daily.** `ORBIT_RETURNS_PROVIDER=travelpayouts` (same `TRAVELPAYOUTS_TOKEN`); `orbit:poll-returns` runs **daily at 04:40**, one request per watched route, and `php artisan orbit:poll-returns --now` fills `return_fares` by hand. The entry went in ahead of any reader - `docs/BUSINESS-LOGIC.md` §15 has the budget and why. Nothing was reset: the table was new, so no simulated rows were mixed in.
+- **The rule parser has its own Anthropic key.**
+- **Mail is real.** `ghiecode.io` is verified as a sending domain in Resend, and `MAIL_MAILER=resend`.
