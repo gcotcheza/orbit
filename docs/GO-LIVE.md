@@ -88,11 +88,13 @@ Worth knowing so nobody "fixes" them:
 
 ```bash
 git -C /var/www/orbit pull origin main
-cd /var/www/orbit && sudo -u orbit ./scripts/check.sh
+bash /var/www/orbit/scripts/check.sh overlay
 ```
 
-**Run `scripts/check.sh` on `main` even though every PR was green.** A merge
-commit — and especially a hand-resolved one — is code that no run has ever seen.
+**Run the gate on `main` even though every PR was green.** `overlay` is the
+runner for this checkout and root is who runs it — `.claude/commands/deploy.md`
+pre-flight step 4 says why both. A merge commit — and especially a hand-resolved
+one — is code that no run has ever seen.
 `config/orbit.php` and `routes/console.php` were resolved by hand; PHPStan and
 `ScheduleTest` are what confirm the resolution is not just syntactically valid but
 right. All steps must pass.
