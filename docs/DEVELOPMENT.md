@@ -16,8 +16,8 @@ git -C /var/www/orbit worktree add /var/www/orbit-worktrees/feat-thing -b feat/t
 
 **The gate.** `scripts/check.sh` runs eight checks in the containers, stopping
 at the first failure: Gitleaks, Pint, `composer audit`, PHPStan (level 8, no
-baseline), `npm audit`, ESLint, Vitest, PHPUnit. It must pass before a PR is merged — this
-project has no baseline for new debt to hide in.
+baseline), `npm audit`, ESLint, Vitest, PHPUnit. It must pass before a PR is
+merged — this project has no baseline for new debt to hide in.
 
 ```bash
 docker compose up -d

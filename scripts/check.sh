@@ -61,12 +61,30 @@ step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 step 'Gitleaks (secrets)'
 # git's view of the tree, copied out: a gitignored .env is never in $scan.
 # docs/DECISIONS.md: the-gate-scans-for-secrets-over-gits-view-of-the-tree
-scan=$(mktemp -d)
-trap 'rm -rf "$scan"' EXIT
-git ls-files -z --cached --others --exclude-standard \
-    | tar --null -T - -cf - | tar -xf - -C "$scan"
-docker run --rm -v "$scan:/scan:ro" zricethezav/gitleaks:v8.30.1 \
-    dir /scan --no-banner --redact --verbose
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+mkdir "$work/scan"
+
+git -C "$here" ls-files -z --cached --others --exclude-standard >"$work/list"
+if [ ! -s "$work/list" ]; then
+    printf 'check.sh: git listed no file to scan in %s. The secrets step would\n' "$here" >&2
+    printf '  have scanned nothing and reported no leaks. That is a failure.\n' >&2
+    exit 1
+fi
+if grep -qzE '(^|/)\.gitleaks(\.toml|ignore)$' "$work/list"; then
+    printf 'check.sh: the tree carries a gitleaks allowlist file, which would let the\n' >&2
+    printf '  scanned code decide what the scanner is allowed to find. Delete it.\n' >&2
+    exit 1
+fi
+
+tar -C "$here" --null -T "$work/list" -cf - | tar -xf - -C "$work/scan"
+if [ -z "$(ls -A "$work/scan")" ]; then
+    printf 'check.sh: the scan directory came out empty. Refusing to call that clean.\n' >&2
+    exit 1
+fi
+
+docker run --rm --network none -v "$work/scan:/scan:ro" zricethezav/gitleaks:v8.30.1 \
+    dir /scan --no-banner --redact --verbose --ignore-gitleaks-allow
 
 step 'Pint (code style)'
 docker compose exec -T app vendor/bin/pint --test

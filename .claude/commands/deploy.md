@@ -76,6 +76,8 @@
    visible to the running containers:
 
    ```bash
+   set -euo pipefail
+
    GATE=/var/tmp/orbit-gate
    mkdir -p "$GATE/vendor" "$GATE/bootstrap-cache" && chown -R 115:119 "$GATE"
 
@@ -86,13 +88,36 @@
        app composer install --no-interaction --no-progress
 
    # 1. Gitleaks — git's view of the tree, copied out. A gitignored .env is
-   #    never in $scan, so the scanner cannot read one, here of all places.
-   scan=$(mktemp -d)
-   git ls-files -z --cached --others --exclude-standard \
-       | tar --null -T - -cf - | tar -xf - -C "$scan"
-   docker run --rm -v "$scan:/scan:ro" zricethezav/gitleaks:v8.30.1 \
-       dir /scan --no-banner --redact --verbose
-   rm -rf "$scan"
+   #    never in $work/scan, so the scanner cannot read one, here of all places.
+   #    The subshell is the cleanup guarantee: its trap fires however it ends.
+   (
+       set -euo pipefail
+       work=$(mktemp -d)
+       trap 'rm -rf "$work"' EXIT
+       mkdir "$work/scan"
+
+       git -C /var/www/orbit ls-files -z --cached --others --exclude-standard >"$work/list"
+       if [ ! -s "$work/list" ]; then
+           echo 'gate: git listed no file to scan. The step would have scanned' >&2
+           echo '  nothing and reported no leaks. That is a failure.' >&2
+           exit 1
+       fi
+       if grep -qzE '(^|/)\.gitleaks(\.toml|ignore)$' "$work/list"; then
+           echo 'gate: the tree carries a gitleaks allowlist file, which would let' >&2
+           echo '  the scanned code decide what the scanner may find. Delete it.' >&2
+           exit 1
+       fi
+
+       tar -C /var/www/orbit --null -T "$work/list" -cf - | tar -xf - -C "$work/scan"
+       if [ -z "$(ls -A "$work/scan")" ]; then
+           echo 'gate: the scan directory came out empty. Not calling that clean.' >&2
+           exit 1
+       fi
+
+       docker run --rm --network none -v "$work/scan:/scan:ro" \
+           zricethezav/gitleaks:v8.30.1 \
+           dir /scan --no-banner --redact --verbose --ignore-gitleaks-allow
+   )
 
    # 2. Pint
    docker compose run --rm --no-deps \
