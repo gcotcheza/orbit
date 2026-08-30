@@ -3,6 +3,11 @@
 # scripts/install-hooks.sh has armed it. See docs/DECISIONS.md: the-pre-commit-guard-has-two-layers
 set -uo pipefail
 
+if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+    printf 'pre-commit: needs bash 4 or newer; refusing rather than half-checking.\n' >&2
+    exit 1
+fi
+
 MIN_ENV_VALUE=8
 
 PATTERNS=(
