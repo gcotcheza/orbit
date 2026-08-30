@@ -184,9 +184,12 @@ final class ScheduleTest extends TestCase
             'Past 08:00 the default quiet window stops holding the mail, and delivery time changes.',
         );
 
-        // How many routes that clears is FareRequestBudgetTest's question; that
-        // it clears TODAY's is this one's.
-        $this->assertTrue($this->app->make(FareRequestBudget::class)->alertRunClears(13));
+        // The boundary, not today's watchlist: a hardcoded count stays green
+        // however far the schedule or the adapter's timeouts move.
+        $budget = $this->app->make(FareRequestBudget::class);
+
+        $this->assertTrue($budget->alertRunClears(14), 'docs/DECISIONS.md puts the last clearing watchlist at fourteen.');
+        $this->assertFalse($budget->alertRunClears(15), 'Fifteen routes finish after the alert run, and the fifteenth is silently missed.');
     }
 
     #[Test]
