@@ -19,6 +19,11 @@ const SEED = 'cheap weekend somewhere sunny in spring, leaving Friday from any N
 /** design/README.md §4 — long enough to read while typing, short enough to feel live. */
 const DEBOUNCE_MS = 500
 
+/* The server's rule and its sentence (ParseRuleRequest), said here so the box never truncates in
+   silence. tests/Unit/Standards/NativeValidationUiTest holds the two copies together. */
+const LIMIT = 500
+const OVER_LIMIT = 'That is longer than a rule needs to be — 500 characters is the limit.'
+
 /* The head is the master pane's, and both states share that pane — so the copy of both lives here
    rather than inside two branches of the template (docs/DESKTOP-LAYOUT-PLAN.md phase 3). */
 const HEADS = {
@@ -51,10 +56,21 @@ const failed = computed(() => parseStatus.value === 'failed')
 const readingStale = computed(() => parsing.value || text.value !== asked.value)
 const canCreate = computed(() => understood.value && !saving.value && !readingStale.value)
 
+const tooLong = computed(() => text.value.length > LIMIT)
+
+/* The limit answers before a stale failure does: it is why nothing was read. */
+const problem = computed(() => (tooLong.value ? OVER_LIMIT : error.value))
+
 /** Ask now, cancelling any wait — every chip change comes through here. */
 function ask() {
   clearTimeout(timer)
   asked.value = text.value
+
+  // The parse is throttled (docs/API.md); over the limit it would answer 429 instead of why.
+  if (tooLong.value) {
+    return
+  }
+
   rules.parse(text.value, removed.value)
 }
 
@@ -158,7 +174,7 @@ async function save() {
               v-model="text"
               class="compose__input"
               rows="3"
-              maxlength="500"
+              :aria-describedby="problem ? 'rule-problem' : undefined"
               placeholder="cheap weekend somewhere sunny, under €80"
               autocomplete="off"
               spellcheck="false"
@@ -198,7 +214,7 @@ async function save() {
 
           <MatchBanner v-if="understood" class="banner" :matches="matches" :loading="parsing" />
 
-          <p v-if="error" class="error" role="alert">{{ error }}</p>
+          <p v-if="problem" id="rule-problem" class="error" role="alert">{{ problem }}</p>
 
           <button class="cta" type="button" :disabled="!canCreate" @click="save">
             {{ saving ? 'Creating…' : 'Create rule' }}

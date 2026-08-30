@@ -13,7 +13,8 @@ overrides them and says why.
   `.claude/commands/deploy.md` is run, literally: the long-lived containers
   boot the code once, so an unrestarted deploy looks entirely successful and
   serves the old app.
-- **The gate.** `scripts/check.sh`. Browser gate: `scripts/e2e.sh`.
+- **The gate.** `scripts/check.sh dev` against a stack you brought up; the
+  deploy runs `scripts/check.sh overlay`. Browser gate: `scripts/e2e.sh`.
 - **Layers.** `app/Domain` is pure PHP and imports no framework;
   `app/Application` holds the use cases and their `Ports/`;
   `app/Infrastructure` implements a port and imports inward, never the
@@ -56,8 +57,3 @@ overrides them and says why.
   when `resources/js/lib/` carries that module and a test compares its
   sentences with `app/Http/Requests/`; follow-up branch
   `feat/inline-validation`.
-- **C13, native validation UI.** `resources/js/Views/Create.vue:161` sets
-  `maxlength="500"` on the rule textarea, so the browser silently truncates
-  where every other limit in the app says the sentence itself. Drop this line
-  when `grep -rn maxlength resources/js/` finds nothing; follow-up branch
-  `fix/create-maxlength-becomes-a-sentence`.

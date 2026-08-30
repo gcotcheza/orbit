@@ -62,103 +62,26 @@
    on the branch before merge — but a merge commit is code no run has seen. Run
    it once here, on `main`, after the pull (deploy step 1).
 
-   **⚠ `./scripts/check.sh` DOES NOT RUN ON THIS BOX AND MUST NOT BE MADE TO.**
-   Every step in it is `docker compose exec -T app …`, i.e. the *live* php-fpm
-   container, whose `vendor/` was installed `--no-dev` (deploy step 3) —
-   there is no `vendor/bin/pint`, no `vendor/bin/phpstan` and no phpunit in it.
-   The script is the *pre-merge* gate, run against a checkout that has dev
-   dependencies. Installing them here to make it work is the trap: `./` is
-   bind-mounted into `app`, `horizon` and `scheduler`, so a dev `composer
-   install` in this checkout is a dev `composer install` **in production**.
+   **⚠ THE GATE RUNS HERE IN ITS `overlay` MODE, NEVER ITS `dev` MODE.**
+   `scripts/check.sh dev` drives the *live* php-fpm container with
+   `docker compose exec`, and that container's `vendor/` was installed
+   `--no-dev` (deploy step 3) — there is no `vendor/bin/pint`, no
+   `vendor/bin/phpstan` and no phpunit in it. Installing them here to make the
+   dev runner work is the trap: `./` is bind-mounted into `app`, `horizon` and
+   `scheduler`, so a dev `composer install` in this checkout is a dev
+   `composer install` **in production**.
 
-   **The gate runs in a throwaway container with its own vendor tree instead.**
-   Same image, same uid, same PHP as the site — and nothing it writes is
-   visible to the running containers:
+   **`overlay` mode runs every step in a throwaway container with its own
+   vendor tree.** Same image, same uid, same PHP as the site — and nothing it
+   writes is visible to the running containers:
 
    ```bash
-   # The subshell confines `set -euo pipefail` and guarantees the overlay is
-   # removed however this ends — pasted into a shell, neither would be true.
-   (
-   set -euo pipefail
-
-   GATE=/var/tmp/orbit-gate
-   trap 'rm -rf "$GATE"' EXIT
-   mkdir -p "$GATE/vendor" "$GATE/bootstrap-cache" && chown -R 115:119 "$GATE"
-
-   # 0. dev dependencies, into the overlay and nowhere near the live vendor/
-   docker compose run --rm --no-deps \
-       -v "$GATE/vendor:/var/www/html/vendor" \
-       -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
-       app composer install --no-interaction --no-progress
-
-   # 1. Gitleaks — git's view of the tree, copied out. A gitignored .env is
-   #    never in $work/scan, so the scanner cannot read one, here of all places.
-   #    The subshell is the cleanup guarantee: its trap fires however it ends.
-   (
-       set -euo pipefail
-       work=$(mktemp -d)
-       trap 'rm -rf "$work"' EXIT
-       mkdir "$work/scan"
-
-       git -C /var/www/orbit ls-files -z --cached --others --exclude-standard >"$work/list"
-       if [ ! -s "$work/list" ]; then
-           echo 'gate: git listed no file to scan in /var/www/orbit. The secrets' >&2
-           echo '  step would have scanned nothing and reported no leaks. That is' >&2
-           echo '  a failure.' >&2
-           exit 1
-       fi
-       if grep -qzE '(^|/)\.gitleaks(\.toml|ignore)$' "$work/list"; then
-           echo 'gate: the tree carries a gitleaks allowlist file, which would let' >&2
-           echo '  the scanned code decide what the scanner may find. Delete it.' >&2
-           exit 1
-       fi
-
-       tar -C /var/www/orbit --null -T "$work/list" -cf - | tar -xf - -C "$work/scan"
-       # Belt-and-braces: reachable only if the list assertion above is removed.
-       if [ -z "$(ls -A "$work/scan")" ]; then
-           echo 'gate: the scan directory came out empty. Refusing to call that' >&2
-           echo '  clean.' >&2
-           exit 1
-       fi
-
-       docker run --rm --network none -v "$work/scan:/scan:ro" \
-           zricethezav/gitleaks:v8.30.1 \
-           dir /scan --no-banner --redact --verbose --ignore-gitleaks-allow
-   )
-
-   # 2. Pint
-   docker compose run --rm --no-deps \
-       -v "$GATE/vendor:/var/www/html/vendor" \
-       -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
-       app vendor/bin/pint --test
-
-   # 3. Composer advisories — the lockfile, production packages only
-   docker compose run --rm --no-deps \
-       -v "$GATE/vendor:/var/www/html/vendor" \
-       -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
-       app composer audit --locked --no-dev --abandoned=report
-
-   # 4. PHPStan
-   docker compose run --rm --no-deps \
-       -v "$GATE/vendor:/var/www/html/vendor" \
-       -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
-       app vendor/bin/phpstan analyse --no-progress --memory-limit=512M
-
-   # 5 + 6 + 7. npm advisories, ESLint and Vitest — `assets` is a task and
-   #            brings its own node_modules; nothing about it is --no-dev.
-   docker compose --profile build run --rm --entrypoint sh assets -c \
-       '[ -d node_modules ] || npm ci --no-audit --fund=false && npm audit --omit=dev --audit-level=high'
-   docker compose --profile build run --rm --entrypoint sh assets -c \
-       '[ -d node_modules ] || npm ci --no-audit --fund=false && npm run lint'
-   docker compose --profile build run --rm --entrypoint sh assets -c 'npm run test:js'
-
-   # 8. PHPUnit
-   docker compose run --rm --no-deps \
-       -v "$GATE/vendor:/var/www/html/vendor" \
-       -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
-       app php artisan test
-   )
+   bash /var/www/orbit/scripts/check.sh overlay
    ```
+
+   It is a script, not a block to paste: `set -euo pipefail` lives inside it and
+   cannot reach your shell, and its `trap` removes the overlay however the run
+   ends — including the failure this runbook calls a stop.
 
    **Good:** Gitleaks `no leaks found`, Pint `PASS`, `composer audit` and
    `npm audit` reporting no advisories, PHPStan `[OK] No errors`, ESLint
@@ -188,7 +111,7 @@
      root-owned files in the checkout: the containers it drives are already
      `user: '115:119'`, which *is* the `orbit` user (see "How this is wired"),
      so file ownership is handled inside them rather than by the invoking shell.
-     `$GATE` is chowned to the same uid for the same reason.
+     The overlay directory is chowned to the same uid for the same reason.
    - **⚠ The PHPUnit step writes into `storage/logs/laravel.log`.** It is the
      real checkout, bind-mounted, so a test that exercises a logging path leaves
      `testing.INFO` / `testing.ERROR` lines in production's application log.
