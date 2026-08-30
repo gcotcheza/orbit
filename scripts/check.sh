@@ -4,15 +4,16 @@
 # =============================================================================
 #   scripts/check.sh
 #
-# Seven checks, in this order, stopping at the first failure:
+# Eight checks, in this order, stopping at the first failure:
 #
-#   1. pint --test      code style (report only; `pint` alone rewrites)
-#   2. composer audit   advisories against the production PHP packages
-#   3. phpstan          static analysis at level 8, no baseline
-#   4. npm audit        advisories against the production node packages
-#   5. eslint           the browser half, which no PHP test can see
-#   6. vitest           the browser half's own unit tests (PR6 onwards)
-#   7. artisan test     the suite
+#   1. gitleaks         secrets, over git's view of the tree and nothing else
+#   2. pint --test      code style (report only; `pint` alone rewrites)
+#   3. composer audit   advisories against the production PHP packages
+#   4. phpstan          static analysis at level 8, no baseline
+#   5. npm audit        advisories against the production node packages
+#   6. eslint           the browser half, which no PHP test can see
+#   7. vitest           the browser half's own unit tests (PR6 onwards)
+#   8. artisan test     the suite
 #
 # ORDER IS DELIBERATE: cheapest and most mechanical first. A style failure that
 # takes four seconds to find should not be discovered after a ninety-second
@@ -56,6 +57,37 @@ for id in $(docker compose ps -aq 2>/dev/null || true); do
 done
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
+
+step 'Gitleaks (secrets)'
+# git's view of the tree, copied out: a gitignored .env is never in $scan.
+# docs/DECISIONS.md: the-gate-scans-for-secrets-over-gits-view-of-the-tree
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+mkdir "$work/scan"
+
+git -C "$here" ls-files -z --cached --others --exclude-standard >"$work/list"
+if [ ! -s "$work/list" ]; then
+    printf 'check.sh: git listed no file to scan in %s. The secrets\n' "$here" >&2
+    printf '  step would have scanned nothing and reported no leaks. That is\n' >&2
+    printf '  a failure.\n' >&2
+    exit 1
+fi
+if grep -qzE '(^|/)\.gitleaks(\.toml|ignore)$' "$work/list"; then
+    printf 'check.sh: the tree carries a gitleaks allowlist file, which would let\n' >&2
+    printf '  the scanned code decide what the scanner may find. Delete it.\n' >&2
+    exit 1
+fi
+
+tar -C "$here" --null -T "$work/list" -cf - | tar -xf - -C "$work/scan"
+# Belt-and-braces: reachable only if the list assertion above is removed.
+if [ -z "$(ls -A "$work/scan")" ]; then
+    printf 'check.sh: the scan directory came out empty. Refusing to call that\n' >&2
+    printf '  clean.\n' >&2
+    exit 1
+fi
+
+docker run --rm --network none -v "$work/scan:/scan:ro" zricethezav/gitleaks:v8.30.1 \
+    dir /scan --no-banner --redact --verbose --ignore-gitleaks-allow
 
 step 'Pint (code style)'
 docker compose exec -T app vendor/bin/pint --test

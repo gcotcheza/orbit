@@ -35,10 +35,6 @@ overrides them and says why.
 
 ## Exceptions
 
-- **T1, the gate has no secrets step.** `scripts/check.sh` runs seven checks and
-  none of them scans for secrets. Drop this line when
-  `grep -n gitleaks scripts/check.sh` finds a step; follow-up branch
-  `chore/gate-secrets-scan`.
 - **C7/T1, the layer rule is reviewed, not executed.** The three layers above
   are real (`docs/PLAN.md:7`) and nothing enforces them: `grep -n deptrac
   composer.json` finds nothing. Drop this line when `grep -n deptrac

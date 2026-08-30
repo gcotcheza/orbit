@@ -41,10 +41,10 @@ commit until it has one, because the layer that catches *your* live keys cannot
 run without it; and `git commit --no-verify` bypasses the guard, exactly as it
 bypasses the global one — say so in the pull request if you use it.
 
-**The gate.** `scripts/check.sh` runs seven checks in the containers, stopping
-at the first failure: Pint, `composer audit`, PHPStan (level 8, no baseline),
-`npm audit`, ESLint, Vitest, PHPUnit. It must pass before a PR is merged — this
-project has no baseline for new debt to hide in.
+**The gate.** `scripts/check.sh` runs eight checks in the containers, stopping
+at the first failure: Gitleaks, Pint, `composer audit`, PHPStan (level 8, no
+baseline), `npm audit`, ESLint, Vitest, PHPUnit. It must pass before a PR is
+merged — this project has no baseline for new debt to hide in.
 
 ```bash
 docker compose up -d
@@ -77,7 +77,7 @@ scripts/e2e.sh -- specs/globe.spec.js         # one spec
 scripts/e2e.sh --keep -- --grep "heat map"    # one test, stack left up
 ```
 
-Seven green checks have never seen a screen — [`docs/E2E.md`](E2E.md)
+Eight green checks have never seen a screen — [`docs/E2E.md`](E2E.md)
 explains what that costs and what this harness found.
 
 ## Deploy

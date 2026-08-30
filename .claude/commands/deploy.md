@@ -57,7 +57,7 @@
    ```bash
    git -C /var/www/orbit log --oneline -3
    ```
-4. **The seven checks must be green on the merge commit being deployed.** From
+4. **The eight checks must be green on the merge commit being deployed.** From
    PR3 onwards this is the merge gate (`docs/PLAN.md`), so normally it was green
    on the branch before merge — but a merge commit is code no run has seen. Run
    it once here, on `main`, after the pull (deploy step 1).
@@ -76,7 +76,13 @@
    visible to the running containers:
 
    ```bash
+   # The subshell confines `set -euo pipefail` and guarantees the overlay is
+   # removed however this ends — pasted into a shell, neither would be true.
+   (
+   set -euo pipefail
+
    GATE=/var/tmp/orbit-gate
+   trap 'rm -rf "$GATE"' EXIT
    mkdir -p "$GATE/vendor" "$GATE/bootstrap-cache" && chown -R 115:119 "$GATE"
 
    # 0. dev dependencies, into the overlay and nowhere near the live vendor/
@@ -85,25 +91,60 @@
        -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
        app composer install --no-interaction --no-progress
 
-   # 1. Pint
+   # 1. Gitleaks — git's view of the tree, copied out. A gitignored .env is
+   #    never in $work/scan, so the scanner cannot read one, here of all places.
+   #    The subshell is the cleanup guarantee: its trap fires however it ends.
+   (
+       set -euo pipefail
+       work=$(mktemp -d)
+       trap 'rm -rf "$work"' EXIT
+       mkdir "$work/scan"
+
+       git -C /var/www/orbit ls-files -z --cached --others --exclude-standard >"$work/list"
+       if [ ! -s "$work/list" ]; then
+           echo 'gate: git listed no file to scan in /var/www/orbit. The secrets' >&2
+           echo '  step would have scanned nothing and reported no leaks. That is' >&2
+           echo '  a failure.' >&2
+           exit 1
+       fi
+       if grep -qzE '(^|/)\.gitleaks(\.toml|ignore)$' "$work/list"; then
+           echo 'gate: the tree carries a gitleaks allowlist file, which would let' >&2
+           echo '  the scanned code decide what the scanner may find. Delete it.' >&2
+           exit 1
+       fi
+
+       tar -C /var/www/orbit --null -T "$work/list" -cf - | tar -xf - -C "$work/scan"
+       # Belt-and-braces: reachable only if the list assertion above is removed.
+       if [ -z "$(ls -A "$work/scan")" ]; then
+           echo 'gate: the scan directory came out empty. Refusing to call that' >&2
+           echo '  clean.' >&2
+           exit 1
+       fi
+
+       docker run --rm --network none -v "$work/scan:/scan:ro" \
+           zricethezav/gitleaks:v8.30.1 \
+           dir /scan --no-banner --redact --verbose --ignore-gitleaks-allow
+   )
+
+   # 2. Pint
    docker compose run --rm --no-deps \
        -v "$GATE/vendor:/var/www/html/vendor" \
        -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
        app vendor/bin/pint --test
 
-   # 2. Composer advisories — the lockfile, production packages only
+   # 3. Composer advisories — the lockfile, production packages only
    docker compose run --rm --no-deps \
        -v "$GATE/vendor:/var/www/html/vendor" \
        -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
        app composer audit --locked --no-dev --abandoned=report
 
-   # 3. PHPStan
+   # 4. PHPStan
    docker compose run --rm --no-deps \
        -v "$GATE/vendor:/var/www/html/vendor" \
        -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
        app vendor/bin/phpstan analyse --no-progress --memory-limit=512M
 
-   # 4 + 5 + 6. npm advisories, ESLint and Vitest — `assets` is a task and
+   # 5 + 6 + 7. npm advisories, ESLint and Vitest — `assets` is a task and
    #            brings its own node_modules; nothing about it is --no-dev.
    docker compose --profile build run --rm --entrypoint sh assets -c \
        '[ -d node_modules ] || npm ci --no-audit --fund=false && npm audit --omit=dev --audit-level=high'
@@ -111,19 +152,18 @@
        '[ -d node_modules ] || npm ci --no-audit --fund=false && npm run lint'
    docker compose --profile build run --rm --entrypoint sh assets -c 'npm run test:js'
 
-   # 7. PHPUnit
+   # 8. PHPUnit
    docker compose run --rm --no-deps \
        -v "$GATE/vendor:/var/www/html/vendor" \
        -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
        app php artisan test
-
-   # and take the overlay away again
-   rm -rf "$GATE"
+   )
    ```
 
-   **Good:** Pint `PASS`, `composer audit` and `npm audit` reporting no
-   advisories, PHPStan `[OK] No errors`, ESLint silent, Vitest all green, and
-   PHPUnit ending in `OK`. A failure is a stop, not a note.
+   **Good:** Gitleaks `no leaks found`, Pint `PASS`, `composer audit` and
+   `npm audit` reporting no advisories, PHPStan `[OK] No errors`, ESLint
+   silent, Vitest all green, and PHPUnit ending in `OK`. A failure is a stop,
+   not a note.
 
    - **⚠ `bootstrap/cache` IS OVERLAID FOR A DIFFERENT AND WORSE REASON THAN
      `vendor`.** `composer install` fires `@php artisan package:discover` on
@@ -262,8 +302,8 @@ build is not step 3 any more.
      The whole point of a gate is that there is still something to stop.
 
    **What it adds over pre-flight step 4, and why it is worth the time.** Not one
-   of `check.sh`'s seven checks has ever seen a screen — Vitest runs the front end
-   in jsdom, which has no layout engine and no rasteriser. All seven are green on
+   of `check.sh`'s eight checks has ever seen a screen — Vitest runs the front end
+   in jsdom, which has no layout engine and no rasteriser. All eight are green on
    an app whose globe renders as a black circle and whose calendar renders 31
    identical grey squares. This drives a real Chromium (WebGL on SwiftShader)
    through the eight journeys and fails on any uncaught exception. `docs/E2E.md`
