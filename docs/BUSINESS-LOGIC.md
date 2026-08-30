@@ -274,7 +274,8 @@ Travelpayouts allows ~200 requests an hour per IP, thirteen routes are watched:
 So the eleven months cost **nothing in the worst hour**. What breaches first is
 the ordinary morning, at **twelve watched routes** (7 × 12 + 120 = 204) — and
 today's thirteen are already past it, at **211 of ~200**. The far run has room
-to sixteen. `tests/Unit/Infrastructure/TravelpayoutsPriceProviderTest` asserts both halves.
+to sixteen. `tests/Unit/Infrastructure/TravelpayoutsPriceProviderTest` asserts both halves
+against a hardcoded nine, so it cannot notice the watchlist growing past them.
 
 `orbit:poll-fares` is a fan-out: it queues one `PollRoutePrices` per actively
 watched route, delayed by `index × stagger`, so thirteen routes trickle over
