@@ -14,10 +14,11 @@ First run pulls a ~2 GB image. Every run after that is about **90 seconds**.
 
 ## Why this exists
 
-`scripts/check.sh` is seven checks and not one of them has ever seen a screen.
-Pint reads style, `composer audit` and `npm audit` read the lockfiles, PHPStan
-reads types, ESLint reads the source, Vitest runs the front end's pure functions
-in jsdom, PHPUnit exercises the back end through HTTP. All seven are green on an
+`scripts/check.sh` is eight checks and not one of them has ever seen a screen.
+Gitleaks reads the tree for secrets, Pint reads style, `composer audit` and
+`npm audit` read the lockfiles, PHPStan reads types, ESLint reads the source,
+Vitest runs the front end's pure functions in jsdom, PHPUnit exercises the back
+end through HTTP. All eight are green on an
 app whose globe renders as a black circle, whose calendar renders 31 identical
 grey squares, and whose login screen answers every password with a spinner that
 never stops.
