@@ -117,7 +117,7 @@ step 'Composer advisories'
 php_step composer audit --locked --no-dev --abandoned=report
 
 step 'Deptrac (architecture layers)'
-php_step vendor/bin/deptrac analyse --no-progress --no-cache
+php_step vendor/bin/deptrac analyse --no-progress --no-cache --fail-on-uncovered
 
 step 'PHPStan (static analysis, level 8)'
 # Larastan boots the framework to read the models; the default 128M is not enough.

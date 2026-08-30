@@ -1,5 +1,5 @@
-# The layers of docs/PLAN.md, executed. Why these six and how an exception is
-# recorded: docs/DECISIONS.md, the-layer-rule-is-executed-not-reviewed.
+# The layers of docs/PLAN.md, executed. Why they are cut this way and how an
+# exception is recorded: docs/DECISIONS.md, the-layer-rule-is-executed-not-reviewed.
 deptrac:
   paths:
     - ./app
@@ -27,10 +27,22 @@ deptrac:
         - type: directory
           value: app/Models/.*
 
+    # The only two jobs a use case runs inline. Named, so that reaching an adapter
+    # through a job is not a legal second hop: this layer may not touch Infrastructure.
+    - name: SyncDispatch
+      collectors:
+        - type: classNameRegex
+          value: '#^App\\Jobs\\(PollRoutePrices|RefreshRouteStats)$#'
+
     - name: Queue
       collectors:
-        - type: directory
-          value: app/Jobs/.*
+        - type: bool
+          must:
+            - type: directory
+              value: app/Jobs/.*
+          must_not:
+            - type: layer
+              value: SyncDispatch
 
     - name: Edge
       collectors:
@@ -53,11 +65,10 @@ deptrac:
     # Nothing. This is "pure PHP, imports no framework" as a rule a machine can read.
     Domain: ~
 
-    # Queue: a use case may dispatch a job; docs/DECISIONS.md carries the open question.
     Application:
       - Domain
       - Eloquent
-      - Queue
+      - SyncDispatch
       - Vendor
 
     Infrastructure:
@@ -70,11 +81,18 @@ deptrac:
       - Domain
       - Vendor
 
+    SyncDispatch:
+      - Domain
+      - Application
+      - Eloquent
+      - Vendor
+
     Queue:
       - Domain
       - Application
       - Infrastructure
       - Eloquent
+      - SyncDispatch
       - Vendor
 
     Edge:
@@ -83,6 +101,7 @@ deptrac:
       - Infrastructure
       - Eloquent
       - Queue
+      - SyncDispatch
       - Vendor
 
     Vendor: ~

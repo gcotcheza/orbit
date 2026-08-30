@@ -19,7 +19,7 @@
 
 ## PR roadmap
 
-**From PR3 onwards, `scripts/check.sh` must pass before a PR is merged.** It runs Gitleaks, Pint, `composer audit`, PHPStan (level 8, no baseline), `npm audit`, ESLint, Vitest and PHPUnit inside the containers, in that order, and stops at the first failure. A finding is fixed or ignored with a reason next to it — this project has no baseline for new debt to hide in.
+**From PR3 onwards, `scripts/check.sh` must pass before a PR is merged.** It runs Gitleaks, Pint, `composer audit`, deptrac (the layer rule), PHPStan (level 8, no baseline), `npm audit`, ESLint, Vitest and PHPUnit inside the containers, in that order, and stops at the first failure. A finding is fixed or ignored with a reason next to it — this project has no baseline for new debt to hide in.
 
 1. Skeleton + plan + design bundle
 2. Hardened Docker stack (port 127.0.0.1:3085)
