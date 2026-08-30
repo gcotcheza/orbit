@@ -36,10 +36,6 @@ overrides them and says why.
 
 ## Exceptions
 
-- **C7/T1, the layer rule is reviewed, not executed.** The three layers above
-  are real (`docs/PLAN.md:7`) and nothing enforces them: `grep -n deptrac
-  composer.json` finds nothing. Drop this line when `grep -n deptrac
-  scripts/check.sh` finds a step; follow-up branch `chore/deptrac`.
 - **S4, the policy is on the host vhost and is report-only.**
   `deploy/nginx/flights-ghiecode.conf:164` ships a full
   `Content-Security-Policy-Report-Only` that `resources/views/app.blade.php:11`

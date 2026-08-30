@@ -18,6 +18,7 @@ final class GateRunnersTest extends TestCase
         'gitleaks',
         'pint',
         'composer advisories',
+        'deptrac',
         'phpstan',
         'npm advisories',
         'eslint',

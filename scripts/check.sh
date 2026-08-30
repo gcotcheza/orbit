@@ -116,6 +116,9 @@ step 'Composer advisories'
 # --locked --no-dev: an advisory against phpunit or pint is not on the site.
 php_step composer audit --locked --no-dev --abandoned=report
 
+step 'Deptrac (architecture layers)'
+php_step vendor/bin/deptrac analyse --no-progress --no-cache
+
 step 'PHPStan (static analysis, level 8)'
 # Larastan boots the framework to read the models; the default 128M is not enough.
 php_step vendor/bin/phpstan analyse --no-progress --memory-limit=512M

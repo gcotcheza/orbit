@@ -9,13 +9,14 @@ use DateTimeImmutable;
 use Psr\Log\LoggerInterface;
 use App\Domain\Discovery\GoogleAnswer;
 use App\Domain\Discovery\GoogleVerdict;
+use App\Application\Ports\LiveFareCheck;
 use Illuminate\Http\Client\Factory as Http;
 
 /**
  * A second opinion on one fare, from Google Flights via SerpAPI. ⚠ NOT a PriceProvider and
  * must never become one: the budget is 250 searches a MONTH (docs/BUSINESS-LOGIC.md §17).
  */
-final readonly class GoogleFlightsCheck
+final readonly class GoogleFlightsCheck implements LiveFareCheck
 {
     /** SerpAPI's one-way `type`. 1 is round trip, 3 is multi-city. */
     private const TYPE_ONE_WAY = '2';
