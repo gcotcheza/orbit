@@ -67,19 +67,22 @@ mkdir "$work/scan"
 
 git -C "$here" ls-files -z --cached --others --exclude-standard >"$work/list"
 if [ ! -s "$work/list" ]; then
-    printf 'check.sh: git listed no file to scan in %s. The secrets step would\n' "$here" >&2
-    printf '  have scanned nothing and reported no leaks. That is a failure.\n' >&2
+    printf 'check.sh: git listed no file to scan in %s. The secrets\n' "$here" >&2
+    printf '  step would have scanned nothing and reported no leaks. That is\n' >&2
+    printf '  a failure.\n' >&2
     exit 1
 fi
 if grep -qzE '(^|/)\.gitleaks(\.toml|ignore)$' "$work/list"; then
-    printf 'check.sh: the tree carries a gitleaks allowlist file, which would let the\n' >&2
-    printf '  scanned code decide what the scanner is allowed to find. Delete it.\n' >&2
+    printf 'check.sh: the tree carries a gitleaks allowlist file, which would let\n' >&2
+    printf '  the scanned code decide what the scanner may find. Delete it.\n' >&2
     exit 1
 fi
 
 tar -C "$here" --null -T "$work/list" -cf - | tar -xf - -C "$work/scan"
+# Belt-and-braces: reachable only if the list assertion above is removed.
 if [ -z "$(ls -A "$work/scan")" ]; then
-    printf 'check.sh: the scan directory came out empty. Refusing to call that clean.\n' >&2
+    printf 'check.sh: the scan directory came out empty. Refusing to call that\n' >&2
+    printf '  clean.\n' >&2
     exit 1
 fi
 

@@ -76,9 +76,13 @@
    visible to the running containers:
 
    ```bash
+   # The subshell confines `set -euo pipefail` and guarantees the overlay is
+   # removed however this ends — pasted into a shell, neither would be true.
+   (
    set -euo pipefail
 
    GATE=/var/tmp/orbit-gate
+   trap 'rm -rf "$GATE"' EXIT
    mkdir -p "$GATE/vendor" "$GATE/bootstrap-cache" && chown -R 115:119 "$GATE"
 
    # 0. dev dependencies, into the overlay and nowhere near the live vendor/
@@ -98,8 +102,9 @@
 
        git -C /var/www/orbit ls-files -z --cached --others --exclude-standard >"$work/list"
        if [ ! -s "$work/list" ]; then
-           echo 'gate: git listed no file to scan. The step would have scanned' >&2
-           echo '  nothing and reported no leaks. That is a failure.' >&2
+           echo 'gate: git listed no file to scan in /var/www/orbit. The secrets' >&2
+           echo '  step would have scanned nothing and reported no leaks. That is' >&2
+           echo '  a failure.' >&2
            exit 1
        fi
        if grep -qzE '(^|/)\.gitleaks(\.toml|ignore)$' "$work/list"; then
@@ -109,8 +114,10 @@
        fi
 
        tar -C /var/www/orbit --null -T "$work/list" -cf - | tar -xf - -C "$work/scan"
+       # Belt-and-braces: reachable only if the list assertion above is removed.
        if [ -z "$(ls -A "$work/scan")" ]; then
-           echo 'gate: the scan directory came out empty. Not calling that clean.' >&2
+           echo 'gate: the scan directory came out empty. Refusing to call that' >&2
+           echo '  clean.' >&2
            exit 1
        fi
 
@@ -150,9 +157,7 @@
        -v "$GATE/vendor:/var/www/html/vendor" \
        -v "$GATE/bootstrap-cache:/var/www/html/bootstrap/cache" \
        app php artisan test
-
-   # and take the overlay away again
-   rm -rf "$GATE"
+   )
    ```
 
    **Good:** Gitleaks `no leaks found`, Pint `PASS`, `composer audit` and
