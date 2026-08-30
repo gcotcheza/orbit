@@ -1531,7 +1531,7 @@ cover, so emptying the list leaves the fake with no fares at all.
 
 ### The budget, and the hour it bought
 
-**One request per watched route per run** — 9 today — because one call covers
+**One request per watched route per run** — 13 today — because one call covers
 the whole horizon, against 7 or 12 for the one-way calendar. At W routes it is W
 requests, flat, so returns polling never becomes the binding constraint.
 
@@ -2204,7 +2204,7 @@ Every price in this app is a one-way fare — right for the EU budget carriers O
 
 **Nothing reads this table yet, but it is polled daily at 04:40.** The foundation PR of the return-trip milestone shipped a port, two adapters, a table, and `orbit:poll-returns` to fill it by hand, with `routes/console.php` deliberately untouched until a screen reads the table. The schedule entry arrived first anyway: the poll was already being run every morning by a cron outside this repository, and a fortnight of accumulated real fares is worth more to the PR that draws them than an empty table.
 
-**The budget is the cheapest thing in this file.** `/v2/prices/latest` with `period_type=year` answers the whole horizon in one request (recorded AMS-LIS ran from the call date to 2027-06-18), where the one-way calendar is billed per calendar month. So: one request per watched route per run — 9 today, W in general, flat. Returns polling never becomes the binding constraint (see §27). Worked out before the schedule entry existed: the 06:00 hour would go to 192 of ~200 (too tight); the 04:00 far-poll hour has room, going to 117 on a Saturday and 9 on every other morning — hence 04:40 daily. There's still no key for it here, because a schedule belongs in `routes/console.php`, where "the returns poll runs at 04:40" is one readable line — and 04:40 not 04:20, because Saturday's far poll is still queueing its staggered fan-out until 04:34.
+**The budget is the cheapest thing in this file.** `/v2/prices/latest` with `period_type=year` answers the whole horizon in one request (recorded AMS-LIS ran from the call date to 2027-06-18), where the one-way calendar is billed per calendar month. So: one request per watched route per run — 13 today, W in general, flat. Returns polling never becomes the binding constraint (see §27). Worked out before the schedule entry existed: the 06:00 hour would go to 224 of ~200 (over the limit); the 04:00 far-poll hour has room, going to 169 on a Saturday and 13 on every other morning — hence 04:40 daily. There's still no key for it here, because a schedule belongs in `routes/console.php`, where "the returns poll runs at 04:40" is one readable line — and 04:40 not 04:20, because Saturday's far poll was still queueing its staggered fan-out until 04:34. At thirteen routes that fan-out runs to 04:46, so 04:40 no longer clears it either.
 
 `window_days = 334` is `poll.horizon_days`'s number, written out rather than referenced — the same arrangement `selfstats.cross_section_days` has, for the same reason (different decisions that happen to agree), and `tests/Feature/ReturnFaresPollTest` is the drift guard. It's a retention bound, not a request parameter (unique in this file): the provider answers for a year whatever it's asked, so this decides what's **kept** — the adapter drops the spill past it and `PollReturnFares` deletes anything that gets past that.
 
