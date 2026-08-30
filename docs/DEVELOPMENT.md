@@ -14,6 +14,33 @@ checkout and must stay on `main`. The convention is
 git -C /var/www/orbit worktree add /var/www/orbit-worktrees/feat-thing -b feat/thing
 ```
 
+**The commit guard.** Run it once, in the main checkout — it refuses to run
+from a linked worktree, because `core.hooksPath` is shared configuration and
+setting it from a worktree would arm the main checkout too:
+
+```bash
+scripts/install-hooks.sh
+```
+
+It points `core.hooksPath` at `scripts/hooks`, whose `pre-commit` scans the
+staged diff with gitleaks, with nine patterns of its own, and against every
+secret-shaped value in this checkout's `.env` — resolved through the shared git
+dir, so it still works from a worktree. It names the key and the file, never the
+value.
+
+**It replaces a guard rather than adding one.** This box sets a *global*
+`core.hooksPath` (`/root/.githooks`) that already runs gitleaks and the same
+`.env` check on every commit in every repository. Git's precedence means a local
+`core.hooksPath` switches that off completely, so `scripts/hooks/pre-commit` is
+built to be a superset of it and is worth installing only for as long as it
+stays one. A clone where nobody runs the installer is not unguarded: it keeps
+the global hook.
+
+Two costs, stated rather than discovered: a checkout with no `.env` cannot
+commit until it has one, because the layer that catches *your* live keys cannot
+run without it; and `git commit --no-verify` bypasses the guard, exactly as it
+bypasses the global one — say so in the pull request if you use it.
+
 **The gate.** `scripts/check.sh` runs eight checks in the containers, stopping
 at the first failure: Gitleaks, Pint, `composer audit`, PHPStan (level 8, no
 baseline), `npm audit`, ESLint, Vitest, PHPUnit. It must pass before a PR is

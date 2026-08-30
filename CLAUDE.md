@@ -35,10 +35,6 @@ overrides them and says why.
 
 ## Exceptions
 
-- **S1, there is no pre-commit hook.** `git ls-files | grep hook` is empty and
-  nothing sets `core.hooksPath`, so the only thing between a pasted key and a
-  push is review. Drop this line when `git ls-files` lists a tracked hook that
-  the repository installs; follow-up branch `chore/pre-commit-guard`.
 - **C7/T1, the layer rule is reviewed, not executed.** The three layers above
   are real (`docs/PLAN.md:7`) and nothing enforces them: `grep -n deptrac
   composer.json` finds nothing. Drop this line when `grep -n deptrac
