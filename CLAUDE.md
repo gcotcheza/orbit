@@ -64,15 +64,6 @@ overrides them and says why.
   when `resources/js/lib/` carries that module and a test compares its
   sentences with `app/Http/Requests/`; follow-up branch
   `feat/inline-validation`.
-- **S5, one pin out of four.** `composer.lock` and `package-lock.json` are
-  committed, and nothing else is pinned: there is no `.nvmrc` and no `engines`
-  block in `package.json`, `composer.json` declares no `config.platform.php`,
-  and the Playwright driver version is typed out twice by hand
-  (`package.json:23` and `scripts/e2e.sh:54`, both `1.62.1`) with nothing
-  asserting the two agree — the one pairing where a silent drift stops the
-  browser gate dead. Drop this line when `.nvmrc` exists, `grep -n '"platform"'
-  composer.json` finds the pin, and a test asserts those two Playwright
-  versions are the same string; follow-up branch `chore/pin-the-toolchain`.
 - **C13, native validation UI.** `resources/js/Views/Create.vue:161` sets
   `maxlength="500"` on the rule textarea, so the browser silently truncates
   where every other limit in the app says the sentence itself. Drop this line
