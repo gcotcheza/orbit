@@ -17,6 +17,18 @@ use PHPUnit\Framework\Attributes\Test;
  */
 final class NativeValidationUiTest extends TestCase
 {
+    /**
+     * The attributes C13 names. `required` is deliberately absent —
+     * docs/DECISIONS.md: the-create-screens-limit-is-a-sentence-not-a-truncation.
+     *
+     * @var array<string, string>
+     */
+    private const NATIVE = [
+        'a length the browser enforces by truncating' => '/\b(?:max|min)length\s*=/i',
+        'a pattern the browser enforces'              => '/(?<!\w)pattern\s*=\s*["\']/i',
+        "the browser's own date picker"               => '/\btype\s*=\s*["\']date["\']/i',
+    ];
+
     private const OVER_LIMIT = "/^const OVER_LIMIT = '(.+)'$/m";
 
     private const LIMIT = '/^const LIMIT = (\d+)$/m';
@@ -26,22 +38,24 @@ final class NativeValidationUiTest extends TestCase
     private const SERVER_LIMIT = "/'text'\s*=>\s*\[[^\]]*'max:(\d+)'/";
 
     #[Test]
-    public function no_screen_lets_the_browser_truncate_what_somebody_typed(): void
+    public function no_screen_hands_a_field_to_the_browsers_own_validation(): void
     {
         $offenders = [];
 
         foreach ($this->frontEnd() as $relative => $contents) {
-            if (preg_match('/\b(?:max|min)length\s*=/i', $contents) === 1) {
-                $offenders[] = $relative;
+            foreach (self::NATIVE as $vector => $pattern) {
+                if (preg_match($pattern, $contents) === 1) {
+                    $offenders[] = "{$relative} ({$vector})";
+                }
             }
         }
 
         $this->assertSame(
             [],
             $offenders,
-            'These files enforce a length through the browser, which truncates in silence: the '
-            .'sentence simply stops, with no message and nothing for a screen reader to read. '
-            .'State the limit in the app’s own words instead: '.implode(', ', $offenders)
+            'These files hand a field to the browser’s own validation, which is unstyled, differs '
+            .'by browser, vanishes on the next click and is invisible to some assistive technology. '
+            .'Say it in the app’s own words instead: '.implode(', ', $offenders)
         );
     }
 
