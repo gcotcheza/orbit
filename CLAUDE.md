@@ -35,10 +35,6 @@ overrides them and says why.
 
 ## Exceptions
 
-- **T1, the gate has no secrets step.** `scripts/check.sh` runs seven checks and
-  none of them scans for secrets. Drop this line when
-  `grep -n gitleaks scripts/check.sh` finds a step; follow-up branch
-  `chore/gate-secrets-scan`.
 - **S1, there is no pre-commit hook.** `git ls-files | grep hook` is empty and
   nothing sets `core.hooksPath`, so the only thing between a pasted key and a
   push is review. Drop this line when `git ls-files` lists a tracked hook that
