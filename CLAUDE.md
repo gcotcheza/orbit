@@ -13,7 +13,8 @@ overrides them and says why.
   `.claude/commands/deploy.md` is run, literally: the long-lived containers
   boot the code once, so an unrestarted deploy looks entirely successful and
   serves the old app.
-- **The gate.** `scripts/check.sh`. Browser gate: `scripts/e2e.sh`.
+- **The gate.** `scripts/check.sh dev` against a stack you brought up; the
+  deploy runs `scripts/check.sh overlay`. Browser gate: `scripts/e2e.sh`.
 - **Layers.** `app/Domain` is pure PHP and imports no framework;
   `app/Application` holds the use cases and their `Ports/`;
   `app/Infrastructure` implements a port and imports inward, never the

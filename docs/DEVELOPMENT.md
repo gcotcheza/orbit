@@ -46,16 +46,21 @@ at the first failure: Gitleaks, Pint, `composer audit`, PHPStan (level 8, no
 baseline), `npm audit`, ESLint, Vitest, PHPUnit. It must pass before a PR is
 merged — this project has no baseline for new debt to hide in.
 
+It takes the runner as its one argument, and will not guess: `dev` uses the
+stack you already have up, `overlay` gives every step a throwaway container with
+its own `vendor/` and is what the deploy runbook runs against production, whose
+`vendor/` is `--no-dev`. Same eight checks, same order, either way.
+
 ```bash
 docker compose up -d
-./scripts/check.sh
+./scripts/check.sh dev
 ```
 
 On the server, a worktree must use a sandbox project brought up from that
 same directory and named on the same command line —
 `COMPOSE_PROJECT_NAME=orbit-<name> docker compose up -d postgres redis app`,
-then `COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh` (`web` is left
-out because it publishes `127.0.0.1:3085`, which production owns); the gate
+then `COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh dev` (`web` is
+left out because it publishes `127.0.0.1:3085`, which production owns); the gate
 refuses to run against a stack started from another directory.
 
 **The compose-project trap.** `docker-compose.yml` pins `name: orbit` and
