@@ -53,24 +53,47 @@ final class FareRequestBudgetTest extends TestCase
     }
 
     #[Test]
-    public function a_watchlist_past_the_request_budget_is_an_error_and_names_the_hour(): void
+    public function a_watchlist_past_the_request_budget_is_an_error_and_names_the_worst_window(): void
     {
         $this->watchRoutes(20);
         $this->addRule();
 
         $budget = $this->breach('asks Travelpayouts for more than it allows');
 
-        $this->assertStringContainsString('the 06:00 hour costs 201 requests of ~200', $budget);
+        $this->assertStringContainsString('on Saturday: the 60 minutes from 05:46 cost 219 requests of ~200', $budget);
         $this->assertStringContainsString('(watched routes: 20, active deal rules: 1)', $budget);
 
         $line = $this->line('provider_hourly_requests');
 
         $this->assertSame($budget, $line['message']);
         $this->assertSame(20, $line['context']['watched_routes'] ?? null);
+        $this->assertSame(201, $line['context']['clock_hour_peak'] ?? null);
+        $this->assertSame(219, $line['context']['rolling_window_peak'] ?? null);
         $this->assertSame(
             [4 => 112, 5 => 189, 6 => 201, 7 => 70, 8 => 7],
             $line['context']['requests_per_clock_hour'] ?? null,
         );
+    }
+
+    /**
+     * Nineteen routes: every clock hour is under the allowance and any sixty
+     * minutes is not. Clock buckets alone would have said all-clear.
+     */
+    #[Test]
+    public function the_rolling_window_catches_what_the_clock_hour_misses(): void
+    {
+        $this->watchRoutes(19);
+        $this->addRule();
+
+        $budget = $this->breach('asks Travelpayouts for more than it allows');
+
+        $this->assertStringContainsString('the 60 minutes from 05:46 cost 206 requests of ~200', $budget);
+
+        $line = $this->line('provider_hourly_requests');
+
+        $this->assertSame(189, $line['context']['clock_hour_peak'] ?? null, 'The clock hour is inside the allowance.');
+        $this->assertSame(206, $line['context']['rolling_window_peak'] ?? null);
+        $this->assertSame('05:46', $line['context']['rolling_window_starts'] ?? null);
     }
 
     /**
@@ -160,7 +183,7 @@ final class FareRequestBudgetTest extends TestCase
         config(['orbit.poll.stagger_minutes' => 0]);
 
         $this->assertStringContainsString(
-            'the 06:00 hour costs 211 requests of ~200',
+            'the 06:00 clock hour costs 211 requests of ~200',
             $this->breach('asks Travelpayouts for more than it allows'),
         );
     }
@@ -178,10 +201,28 @@ final class FareRequestBudgetTest extends TestCase
         // One `expectsOutputToContain` per run: Mockery hands a matching write to
         // the first expectation only, so a second never sees it.
         $this->runCommand('orbit:poll-fares')
-            ->expectsOutputToContain('the 06:00 hour costs 201 requests of ~200 (watched routes: 20, active deal rules: 1). Widen orbit.poll.stagger_minutes')
+            ->expectsOutputToContain('the 60 minutes from 05:46 cost 219 requests of ~200 (watched routes: 20, active deal rules: 1). Widen orbit.poll.stagger_minutes')
             ->assertSuccessful();
 
         $this->assertCount(2, $this->log->errors());
+    }
+
+    /**
+     * The empty-watchlist return used to come first, so the one path that runs
+     * every day could skip the guard entirely.
+     */
+    #[Test]
+    public function the_morning_poll_warns_even_with_nothing_on_the_watchlist(): void
+    {
+        $this->addRule();
+        $this->addRule();
+
+        $this->runCommand('orbit:poll-fares')->assertSuccessful();
+
+        $this->assertStringContainsString(
+            '(watched routes: 0, active deal rules: 2)',
+            $this->line('provider_hourly_requests')['message'],
+        );
     }
 
     #[Test]
@@ -208,6 +249,53 @@ final class FareRequestBudgetTest extends TestCase
 
         $this->assertCount(1, $this->log->errors());
         $this->assertStringContainsString('at 15 watched routes', $this->log->errors()[0]['message']);
+    }
+
+    #[Test]
+    public function resuming_a_paused_route_announces_the_crossing(): void
+    {
+        $this->watchRoutes(14);
+        $paused = $this->makeRoute('AMS', 'LIS');
+        $this->watch($this->owner, $paused, active: false, position: 14);
+
+        $this->actingAs($this->owner)
+            ->patchJson('/api/watchlist/AMS-LIS', ['active' => true])
+            ->assertOk();
+
+        $this->assertStringContainsString('at 15 watched routes', $this->line('alert_run_clearance')['message']);
+    }
+
+    #[Test]
+    public function a_second_deal_rule_announces_itself_as_it_is_written(): void
+    {
+        $this->watchRoutes(13);
+        $this->addRule();
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/rules', ['text' => 'somewhere sunny under €80'])
+            ->assertCreated();
+
+        $this->assertStringContainsString(
+            '(watched routes: 13, active deal rules: 2)',
+            $this->line('provider_hourly_requests')['message'],
+        );
+    }
+
+    #[Test]
+    public function resuming_a_paused_deal_rule_announces_the_crossing(): void
+    {
+        $this->watchRoutes(13);
+        $this->addRule();
+        $paused = $this->makeRule($this->owner, 'anywhere cold', ['vibes' => ['ski']], active: false);
+
+        $this->actingAs($this->owner)
+            ->patchJson('/api/rules/'.$paused->id, ['active' => true])
+            ->assertOk();
+
+        $this->assertStringContainsString(
+            '(watched routes: 13, active deal rules: 2)',
+            $this->line('provider_hourly_requests')['message'],
+        );
     }
 
     private function guard(): FareRequestBudget

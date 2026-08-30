@@ -42,7 +42,7 @@ final class QuietHoursTest extends TestCase
             '07:59'                              => [self::minute(7, 59), true],
             '08:00 — the end is not'             => [self::minute(8), false],
             '12:00 — the middle of the day'      => [self::minute(12), false],
-            '07:35 — when the alert run happens' => [self::minute(6, 55), true],
+            '07:35 — when the alert run happens' => [self::minute(7, 35), true],
         ];
     }
 

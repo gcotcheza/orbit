@@ -15,6 +15,7 @@ use App\Http\Resources\RuleResource;
 use App\Http\Requests\ParseRuleRequest;
 use App\Http\Requests\UpdateRuleRequest;
 use App\Application\Ports\RuleTextParser;
+use App\Application\Pricing\FareRequestBudget;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -45,7 +46,7 @@ final class RuleController extends Controller
     /**
      * Save the rule currently on the create screen. 201, with the row.
      */
-    public function store(ParseRuleRequest $request, RuleTextParser $parser, RuleViews $views): JsonResponse
+    public function store(ParseRuleRequest $request, RuleTextParser $parser, RuleViews $views, FareRequestBudget $budget): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -76,6 +77,8 @@ final class RuleController extends Controller
 
         SweepRuleFares::dispatch($rule->id);
 
+        $budget->warnAboutBreaches();
+
         return RuleResource::make($views->of($rule, $user))->response()->setStatusCode(201);
     }
 
@@ -83,7 +86,7 @@ final class RuleController extends Controller
      * Pause a rule or start it again. Its text, its criteria and its place in
      * the list all stay.
      */
-    public function update(UpdateRuleRequest $request, int $id, RuleViews $views): JsonResponse
+    public function update(UpdateRuleRequest $request, int $id, RuleViews $views, FareRequestBudget $budget): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -98,6 +101,8 @@ final class RuleController extends Controller
         if ($rule->active) {
             SweepRuleFares::dispatch($rule->id);
         }
+
+        $budget->warnAboutBreaches();
 
         return RuleResource::make($views->of($rule, $user))->response();
     }

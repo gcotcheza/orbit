@@ -585,15 +585,19 @@ final class TravelpayoutsPriceProviderTest extends TestCase
     public function the_scheduled_mornings_fit_inside_the_providers_hourly_limit(): void
     {
         $limit = (int) config('orbit.travelpayouts.hourly_request_limit');
-        $budget = $this->budget()->at(watchedRoutes: 13, activeRules: 1);
+        $budget = $this->budget()->onSaturday(watchedRoutes: 13, activeRules: 1);
 
-        $this->assertSame(6, $budget->busiestHour(), 'The ordinary morning is still the binding hour.');
+        $this->assertSame(6, $budget->busiestHour(), 'The ordinary morning is still the binding clock hour.');
         $this->assertSame(183, $budget->peak());
+        $this->assertSame(190, $budget->rollingPeak(60), 'The worst sixty minutes are not the worst clock hour.');
         $this->assertFalse($budget->exceeds($limit));
 
-        // The headroom the stagger bought, asserted rather than remembered.
-        $this->assertFalse($budget->withWatchedRoutes(19)->exceeds($limit), 'Nineteen watched routes must still fit.');
-        $this->assertTrue($budget->withWatchedRoutes(20)->exceeds($limit), 'Twenty is where the next plan is owed.');
+        // The headroom the stagger bought, asserted rather than remembered —
+        // and it runs out on the rolling window while the clock hour is quiet.
+        $this->assertFalse($budget->withWatchedRoutes(18)->exceeds($limit), 'Eighteen watched routes must still fit.');
+        $this->assertTrue($budget->withWatchedRoutes(19)->exceeds($limit), 'Nineteen is where the next plan is owed.');
+        $this->assertSame(189, $budget->withWatchedRoutes(19)->peak(), 'Clock hours alone would have stayed silent at nineteen.');
+        $this->assertSame(206, $budget->withWatchedRoutes(19)->rollingPeak(60));
     }
 
     /**
@@ -607,7 +611,7 @@ final class TravelpayoutsPriceProviderTest extends TestCase
 
         config(['orbit.poll.stagger_minutes' => 0]);
 
-        $burst = $this->budget()->at(watchedRoutes: 11, activeRules: 1);
+        $burst = $this->budget()->onSaturday(watchedRoutes: 11, activeRules: 1);
 
         $this->assertFalse($burst->exceeds($limit), 'Eleven watched routes fit even in one burst.');
         $this->assertTrue($burst->withWatchedRoutes(12)->exceeds($limit), 'The documented breach is at twelve, not later.');

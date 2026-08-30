@@ -73,13 +73,15 @@ final class WatchlistItemController extends Controller
     /**
      * Pause or resume. The row, its history and its position all stay.
      */
-    public function update(UpdateWatchedRouteRequest $request, string $code, RouteSnapshots $snapshots): JsonResponse
+    public function update(UpdateWatchedRouteRequest $request, string $code, RouteSnapshots $snapshots, FareRequestBudget $budget): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
 
         $item = self::item($user, $code);
         $item->update(['active' => $request->boolean('active')]);
+
+        $budget->warnAboutBreaches();
 
         return $this->present($item->route, $item->active, $snapshots, 200);
     }

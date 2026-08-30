@@ -24,6 +24,12 @@ final class PollFares extends Command
 
     public function handle(FareRequestBudget $budget): int
     {
+        // Ahead of the empty-watchlist return, and not `components->error()`, which
+        // word-wraps: these are read out of a container log, not off a terminal.
+        foreach ($budget->warnAboutBreaches() as $breach) {
+            $this->error($breach);
+        }
+
         $routes = Route::onWatchlist()->get(['id', 'code']);
 
         if ($routes->isEmpty()) {
@@ -52,12 +58,6 @@ final class PollFares extends Command
                 $route->code,
                 ($inline ? 'polled' : 'queued +'.($index * $stagger).'m').' · '.$window.'d',
             );
-        }
-
-        // Not `components->error()`: it word-wraps, and these sentences are read
-        // out of a container log rather than off a terminal.
-        foreach ($budget->warnAboutBreaches() as $breach) {
-            $this->error($breach);
         }
 
         return self::SUCCESS;

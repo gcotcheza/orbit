@@ -70,6 +70,60 @@ final class RequestBudgetTest extends TestCase
         $this->assertTrue($budget->exceeds(182));
     }
 
+    /**
+     * The reviewer's case: a burst that straddles two clock hours is invisible
+     * to hour buckets and plain in any sixty minutes.
+     */
+    #[Test]
+    public function the_rolling_window_sees_what_the_clock_hour_splits_in_two(): void
+    {
+        $budget = new RequestBudget(
+            [ProviderRun::single('early', '05:46', 120), ProviderRun::single('late', '06:20', 86)],
+            staggerMinutes: 6,
+            watchedRoutes: 13,
+        );
+
+        $this->assertSame([5 => 120, 6 => 86], $budget->perClockHour());
+        $this->assertSame(120, $budget->peak(), 'Neither clock hour is over.');
+        $this->assertSame(206, $budget->rollingPeak(60));
+        $this->assertSame(5 * 60 + 46, $budget->rollingPeakStartsAt(60));
+        $this->assertTrue($budget->exceeds(200), 'exceeds() has to read both measures.');
+    }
+
+    #[Test]
+    public function a_window_shorter_than_the_gap_between_two_jobs_holds_one_of_them(): void
+    {
+        $budget = new RequestBudget(
+            [ProviderRun::single('early', '05:46', 120), ProviderRun::single('late', '06:20', 86)],
+            staggerMinutes: 6,
+            watchedRoutes: 13,
+        );
+
+        $this->assertSame(120, $budget->rollingPeak(34), 'The window ends exclusive of 06:20.');
+        $this->assertSame(206, $budget->rollingPeak(35));
+    }
+
+    #[Test]
+    public function nothing_scheduled_costs_nothing_and_names_no_hour(): void
+    {
+        $budget = new RequestBudget([], staggerMinutes: 6, watchedRoutes: 13);
+
+        $this->assertSame([], $budget->perClockHour());
+        $this->assertSame(0, $budget->peak());
+        $this->assertSame(0, $budget->busiestHour());
+        $this->assertSame(0, $budget->rollingPeak(60));
+        $this->assertFalse($budget->exceeds(200));
+    }
+
+    #[Test]
+    public function a_window_of_no_minutes_is_refused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('A window of 0 minutes holds nothing.');
+
+        (new RequestBudget([ProviderRun::single('sweep', '06:40', 120)], staggerMinutes: 6, watchedRoutes: 1))->rollingPeak(0);
+    }
+
     #[Test]
     public function an_empty_watchlist_costs_only_what_does_not_fan_out(): void
     {
