@@ -19,7 +19,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The guard that reads the watchlist as it is, rather than as a document
- * remembers it (docs/BUSINESS-LOGIC.md §27).
+ * remembers it — both limits (docs/BUSINESS-LOGIC.md §13, §27).
  */
 final class FareRequestBudgetTest extends TestCase
 {
@@ -43,33 +43,82 @@ final class FareRequestBudgetTest extends TestCase
     }
 
     #[Test]
-    public function todays_watchlist_is_inside_the_allowance_and_says_nothing(): void
+    public function todays_watchlist_is_inside_both_limits_and_says_nothing(): void
     {
         $this->watchRoutes(13);
         $this->addRule();
 
-        $this->assertNull($this->guard()->warnIfBreached());
+        $this->assertSame([], $this->guard()->warnAboutBreaches());
         $this->assertSame([], $this->log->errors());
     }
 
     #[Test]
-    public function a_watchlist_past_the_allowance_is_an_error_and_names_the_hour(): void
+    public function a_watchlist_past_the_request_budget_is_an_error_and_names_the_hour(): void
     {
         $this->watchRoutes(20);
         $this->addRule();
 
-        $sentence = $this->guard()->warnIfBreached();
+        $budget = $this->breach('asks Travelpayouts for more than it allows');
 
-        $this->assertNotNull($sentence);
-        $this->assertStringContainsString('the 06:00 hour costs 201 requests of ~200', $sentence);
-        $this->assertStringContainsString('(watched routes: 20, active deal rules: 1)', $sentence);
+        $this->assertStringContainsString('the 06:00 hour costs 201 requests of ~200', $budget);
+        $this->assertStringContainsString('(watched routes: 20, active deal rules: 1)', $budget);
 
-        $this->assertCount(1, $this->log->errors());
-        $this->assertSame($sentence, $this->log->errors()[0]['message']);
-        $this->assertSame(20, $this->log->errors()[0]['context']['watched_routes'] ?? null);
+        $line = $this->line('provider_hourly_requests');
+
+        $this->assertSame($budget, $line['message']);
+        $this->assertSame(20, $line['context']['watched_routes'] ?? null);
         $this->assertSame(
             [4 => 112, 5 => 189, 6 => 201, 7 => 70, 8 => 7],
-            $this->log->errors()[0]['context']['requests_per_clock_hour'] ?? null,
+            $line['context']['requests_per_clock_hour'] ?? null,
+        );
+    }
+
+    /**
+     * The limit that binds first, and the one a wider stagger makes worse
+     * (docs/BUSINESS-LOGIC.md §13).
+     */
+    #[Test]
+    public function the_alert_run_losing_sight_of_a_route_is_its_own_error(): void
+    {
+        $this->watchRoutes(15);
+        $this->addRule();
+
+        $clearance = $this->breach('The alert run no longer sees every route');
+
+        $this->assertStringContainsString(
+            'at 15 watched routes the last fare poll is dispatched 07:34 and needs until 07:38, after orbit:alerts at 07:35',
+            $clearance,
+        );
+        $this->assertStringContainsString('Widening orbit.poll.stagger_minutes fixes the request budget and makes THIS worse', $clearance);
+
+        $this->assertCount(1, $this->log->errors(), 'Fifteen routes is inside the request budget; only clearance is breached.');
+        $this->assertSame('alert_run_clearance', $this->line('alert_run_clearance')['context']['limit'] ?? null);
+    }
+
+    #[Test]
+    public function fourteen_routes_still_clear_the_alert_run(): void
+    {
+        $this->watchRoutes(14);
+        $this->addRule();
+
+        $this->assertSame([], $this->guard()->warnAboutBreaches());
+    }
+
+    /**
+     * Past both limits they are reported separately: different problems, and
+     * the fix for one is what broke the other.
+     */
+    #[Test]
+    public function the_two_limits_are_reported_as_two_sentences(): void
+    {
+        $this->watchRoutes(20);
+        $this->addRule();
+
+        $this->assertCount(2, $this->guard()->warnAboutBreaches());
+        $this->assertCount(2, $this->log->errors());
+        $this->assertSame(
+            ['provider_hourly_requests', 'alert_run_clearance'],
+            array_map(fn (array $line): mixed => $line['context']['limit'] ?? null, $this->log->errors()),
         );
     }
 
@@ -82,7 +131,7 @@ final class FareRequestBudgetTest extends TestCase
         $this->watchRoutes(20, active: false);
         $this->addRule();
 
-        $this->assertNull($this->guard()->warnIfBreached());
+        $this->assertSame([], $this->guard()->warnAboutBreaches());
     }
 
     /**
@@ -96,10 +145,10 @@ final class FareRequestBudgetTest extends TestCase
         $this->addRule();
         $this->addRule();
 
-        $sentence = $this->guard()->warnIfBreached();
-
-        $this->assertNotNull($sentence);
-        $this->assertStringContainsString('(watched routes: 13, active deal rules: 2)', $sentence);
+        $this->assertStringContainsString(
+            '(watched routes: 13, active deal rules: 2)',
+            $this->breach('asks Travelpayouts for more than it allows'),
+        );
     }
 
     #[Test]
@@ -110,8 +159,10 @@ final class FareRequestBudgetTest extends TestCase
 
         config(['orbit.poll.stagger_minutes' => 0]);
 
-        $this->assertNotNull($this->guard()->warnIfBreached(), 'Unstaggered, today\'s watchlist is the 211 that started this.');
-        $this->assertStringContainsString('the 06:00 hour costs 211 requests of ~200', $this->log->errors()[0]['message']);
+        $this->assertStringContainsString(
+            'the 06:00 hour costs 211 requests of ~200',
+            $this->breach('asks Travelpayouts for more than it allows'),
+        );
     }
 
     /**
@@ -130,7 +181,7 @@ final class FareRequestBudgetTest extends TestCase
             ->expectsOutputToContain('the 06:00 hour costs 201 requests of ~200 (watched routes: 20, active deal rules: 1). Widen orbit.poll.stagger_minutes')
             ->assertSuccessful();
 
-        $this->assertCount(1, $this->log->errors());
+        $this->assertCount(2, $this->log->errors());
     }
 
     #[Test]
@@ -147,7 +198,7 @@ final class FareRequestBudgetTest extends TestCase
     #[Test]
     public function the_route_that_crosses_the_line_announces_itself_as_it_is_added(): void
     {
-        $this->watchRoutes(19);
+        $this->watchRoutes(14);
         $this->addRule();
         $this->makeRoute('AMS', 'LIS');
 
@@ -156,12 +207,41 @@ final class FareRequestBudgetTest extends TestCase
             ->assertCreated();
 
         $this->assertCount(1, $this->log->errors());
-        $this->assertStringContainsString('watched routes: 20', $this->log->errors()[0]['message']);
+        $this->assertStringContainsString('at 15 watched routes', $this->log->errors()[0]['message']);
     }
 
     private function guard(): FareRequestBudget
     {
         return $this->app->make(FareRequestBudget::class);
+    }
+
+    /**
+     * The one reported sentence that opens with $opening, and a readable
+     * failure when nothing did.
+     */
+    private function breach(string $opening): string
+    {
+        foreach ($this->guard()->warnAboutBreaches() as $sentence) {
+            if (str_contains($sentence, $opening)) {
+                return $sentence;
+            }
+        }
+
+        $this->fail("Nothing reported was about \"{$opening}\".");
+    }
+
+    /**
+     * @return array{level: string, message: string, context: array<string, mixed>}
+     */
+    private function line(string $limit): array
+    {
+        foreach ($this->log->errors() as $line) {
+            if (($line['context']['limit'] ?? null) === $limit) {
+                return $line;
+            }
+        }
+
+        $this->fail("No error was logged for {$limit}.");
     }
 
     private function watchRoutes(int $count, bool $active = true): void

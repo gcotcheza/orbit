@@ -21,18 +21,18 @@ final readonly class ProviderRun
 
     public static function fanOut(string $name, string $startsAt, int $requestsPerRoute): self
     {
-        return new self($name, self::minuteOfDay($name, $startsAt), true, self::countable($name, $requestsPerRoute));
+        return new self($name, self::minuteOfDay($startsAt), true, self::countable($name, $requestsPerRoute));
     }
 
     public static function single(string $name, string $startsAt, int $requests): self
     {
-        return new self($name, self::minuteOfDay($name, $startsAt), false, self::countable($name, $requests));
+        return new self($name, self::minuteOfDay($startsAt), false, self::countable($name, $requests));
     }
 
-    private static function minuteOfDay(string $name, string $startsAt): int
+    public static function minuteOfDay(string $clock): int
     {
-        if (preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $startsAt, $parts) !== 1) {
-            throw new InvalidArgumentException("{$name} is scheduled at {$startsAt}, which is not a 24-hour clock time.");
+        if (preg_match('/^([01]\d|2[0-3]):([0-5]\d)$/', $clock, $parts) !== 1) {
+            throw new InvalidArgumentException("Not a 24-hour clock time: {$clock}.");
         }
 
         return ((int) $parts[1]) * 60 + (int) $parts[2];

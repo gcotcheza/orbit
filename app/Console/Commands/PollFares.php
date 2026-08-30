@@ -54,11 +54,9 @@ final class PollFares extends Command
             );
         }
 
-        $breach = $budget->warnIfBreached();
-
-        if ($breach !== null) {
-            // Not `components->error()`: it word-wraps, and this sentence is read
-            // out of a container log rather than off a terminal.
+        // Not `components->error()`: it word-wraps, and these sentences are read
+        // out of a container log rather than off a terminal.
+        foreach ($budget->warnAboutBreaches() as $breach) {
             $this->error($breach);
         }
 

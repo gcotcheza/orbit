@@ -125,6 +125,7 @@ final class ScheduleTest extends TestCase
             'orbit:discover'         => FareRequestBudget::DISCOVERY_AT,
             'orbit:poll-fares'       => FareRequestBudget::NEAR_POLL_AT,
             'orbit:sweep-rules'      => FareRequestBudget::RULE_SWEEP_AT,
+            'orbit:alerts'           => FareRequestBudget::ALERTS_AT,
         ];
 
         foreach ($scheduled as $command => $clock) {
@@ -172,23 +173,20 @@ final class ScheduleTest extends TestCase
     #[Test]
     public function the_alert_run_clears_the_polls_fan_out_and_still_sits_inside_quiet_hours(): void
     {
-        $poll = $this->minuteOfDay('orbit:poll-fares');
+        $sweep = $this->minuteOfDay('orbit:sweep-rules');
         $alerts = $this->minuteOfDay('orbit:alerts');
-        $stagger = (int) config('orbit.poll.stagger_minutes');
 
-        // Twelve staggers is a thirteen-route fan-out; 13 minutes is twice the
-        // worst case of the poll job it has to wait for.
-        $this->assertGreaterThanOrEqual(
-            $poll + $stagger * 12 + 13,
-            $alerts,
-            'Widening the stagger without moving the alert run silently drops the tail of the watchlist.',
-        );
+        $this->assertGreaterThan($sweep, $alerts, 'The alert run reads what the sweep wrote.');
 
         $this->assertLessThan(
             8 * 60,
             $alerts,
             'Past 08:00 the default quiet window stops holding the mail, and delivery time changes.',
         );
+
+        // How many routes that clears is FareRequestBudgetTest's question; that
+        // it clears TODAY's is this one's.
+        $this->assertTrue($this->app->make(FareRequestBudget::class)->alertRunClears(13));
     }
 
     #[Test]

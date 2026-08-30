@@ -97,7 +97,7 @@ final class RequestBudgetTest extends TestCase
     public function a_run_scheduled_at_something_that_is_not_a_time_is_refused(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('poll is scheduled at 24:10');
+        $this->expectExceptionMessage('Not a 24-hour clock time: 24:10.');
 
         ProviderRun::fanOut('poll', '24:10', 7);
     }

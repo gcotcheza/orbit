@@ -63,9 +63,9 @@ final class WatchlistItemController extends Controller
         PollRoutePrices::dispatch($route->id);
         RefreshRouteStats::dispatch($route->id);
 
-        // The route that crosses the provider's hourly allowance says so now, not
-        // in a document six weeks later (docs/BUSINESS-LOGIC.md §27).
-        $budget->warnIfBreached();
+        // The route that crosses either morning limit says so now, not in a
+        // document six weeks later (docs/BUSINESS-LOGIC.md §13, §27).
+        $budget->warnAboutBreaches();
 
         return $this->present($route, $item->active, $snapshots, 201);
     }
