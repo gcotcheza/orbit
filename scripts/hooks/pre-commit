@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Usage: git runs this per commit, from the working tree root, once
+# scripts/install-hooks.sh has armed it. See docs/DECISIONS.md: the-pre-commit-guard-has-two-layers
+set -uo pipefail
+
+MIN_ENV_VALUE=8
+
+PATTERNS=(
+    'PRIVATE_KEY_BLOCK|-----BEGIN [A-Z ]*PRIVATE KEY-----'
+    'AWS_ACCESS_KEY_ID|(AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}'
+    'GITHUB_TOKEN|gh[pousr]_[A-Za-z0-9]{36}'
+    'SLACK_TOKEN|xox[abprs]-[A-Za-z0-9-]{12,}'
+    'GOOGLE_API_KEY|AIza[0-9A-Za-z_-]{35}'
+    'STRIPE_KEY|[sr]k_(live|test)_[A-Za-z0-9]{16,}'
+    'ANTHROPIC_API_KEY|sk-ant-[A-Za-z0-9_-]{24,}'
+    'OPENAI_API_KEY|sk-proj-[A-Za-z0-9_-]{24,}'
+    'SECRET_ASSIGNMENT|^[[:space:]]*(export[[:space:]]+)?['\''"]?[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE_KEY|ACCESS_KEY)[A-Z0-9_]*['\''"]?[[:space:]]*[=:][[:space:]]*.?[A-Za-z0-9+/_=-]{20,}'
+)
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || root=$PWD
+
+if ! staged=$(git diff --cached --no-color --diff-filter=ACMR --unified=0 2>/dev/null); then
+    printf 'pre-commit: cannot read the staged changes; refusing the commit.\n' >&2
+    exit 1
+fi
+
+added=$(printf '%s\n' "$staged" | awk '
+    /^\+\+\+ b\// { path = substr($0, 7); next }
+    /^\+\+\+ /    { path = "(unknown file)"; next }
+    /^\+/         { if (path != "") print path "\t" substr($0, 2) }
+')
+
+declare -A hits=()
+
+for rule in "${PATTERNS[@]}"; do
+    line=$(printf '%s\n' "$added" | cut -f2- | grep -E -n -m1 -e "${rule#*|}" | cut -d: -f1) || true
+    [ -n "$line" ] && hits["${rule%%|*}"]=$(printf '%s\n' "$added" | sed -n "${line}p" | cut -f1)
+done
+
+names=()
+values=()
+if [ -r "$root/.env" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+        line=${line%$'\r'}
+        line=${line#export }
+        case "$line" in \#*|'') continue ;; esac
+        case "$line" in *=*) ;; *) continue ;; esac
+        name=${line%%=*}
+        case "$name" in
+            *KEY*|*SECRET*|*TOKEN*|*PASSWORD*|*PASSWD*|*CREDENTIAL*|*DSN*|*SALT*|*CERT*|*PRIVATE*) ;;
+            *) continue ;;
+        esac
+        value=${line#*=}
+        case "$value" in
+            '"'*'"') value=${value#\"}; value=${value%\"} ;;
+            "'"*"'") value=${value#\'}; value=${value%\'} ;;
+        esac
+        [ ${#value} -ge $MIN_ENV_VALUE ] || continue
+        names+=("$name")
+        values+=("$value")
+    done < "$root/.env"
+else
+    printf 'pre-commit: no readable .env — the pattern layer ran, the fixed-string layer did not.\n' >&2
+fi
+
+if [ ${#values[@]} -gt 0 ]; then
+    while IFS=$'\t' read -r path content; do
+        [ -n "$content" ] || continue
+        for i in "${!values[@]}"; do
+            [[ $content == *"${values[$i]}"* ]] && hits["${names[$i]}"]=$path
+        done
+    done <<< "$added"
+fi
+
+[ ${#hits[@]} -eq 0 ] && exit 0
+
+# Names the key and the file, never the value: an echoed secret is in a
+# scrollback and a log the moment the guard catches it (S2).
+{
+    printf 'pre-commit: refusing this commit — a secret is staged.\n'
+    for key in "${!hits[@]}"; do
+        printf '  %s found in %s\n' "$key" "${hits[$key]}"
+    done
+    printf 'Unstage it and put the value in .env.\n'
+} >&2
+exit 1

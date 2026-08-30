@@ -14,6 +14,18 @@ checkout and must stay on `main`. The convention is
 git -C /var/www/orbit worktree add /var/www/orbit-worktrees/feat-thing -b feat/thing
 ```
 
+**The commit guard.** One command, once per clone — linked worktrees share it:
+
+```bash
+scripts/install-hooks.sh
+```
+
+It points `core.hooksPath` at `scripts/hooks`, whose `pre-commit` reads the
+staged diff and refuses the commit if it carries a key-shaped string or any
+value out of this checkout's own `.env`. It names the key and the file it found
+it in, never the value. A clone where nobody has run it commits exactly as
+before: the guard is installed, not inherited.
+
 **The gate.** `scripts/check.sh` runs seven checks in the containers, stopping
 at the first failure: Pint, `composer audit`, PHPStan (level 8, no baseline),
 `npm audit`, ESLint, Vitest, PHPUnit. It must pass before a PR is merged — this
