@@ -7,15 +7,16 @@ cd "$(dirname "$0")/.."
 here=$(pwd -P)
 
 mode=${1-}
-if [ "$mode" != dev ] && [ "$mode" != overlay ]; then
+if [ $# -ne 1 ] || { [ "$mode" != dev ] && [ "$mode" != overlay ]; }; then
     {
         printf 'usage: scripts/check.sh dev|overlay\n\n'
         printf '  dev      the stack is already up from this directory; the PHP steps\n'
         printf '           run inside it with `docker compose exec`.\n'
         printf '  overlay  one throwaway container per step, with its own vendor/ and\n'
         printf '           bootstrap/cache bind-overlaid; what the deploy runbook uses,\n'
-        printf '           because the live vendor/ is installed --no-dev.\n\n'
-        printf 'The mode is not guessed. Name it.\n'
+        printf '           because the live vendor/ is installed --no-dev. Run it as\n'
+        printf '           root: it chowns its overlay to the uid the containers use.\n\n'
+        printf 'The mode is not guessed, and it is the only argument. Name it.\n'
     } >&2
     exit 2
 fi
@@ -69,6 +70,7 @@ node_step() {
 
 if [ "$mode" = overlay ]; then
     step 'Overlay (dev dependencies, outside the live vendor/)'
+    rm -rf /var/tmp/orbit-gate.*
     # bootstrap/cache is overlaid too: `composer install` runs package:discover,
     # whose provider list would otherwise 500 the live --no-dev app on next boot.
     gate=$(mktemp -d /var/tmp/orbit-gate.XXXXXXXX)

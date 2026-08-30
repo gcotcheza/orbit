@@ -26,7 +26,10 @@ final class GateRunnersTest extends TestCase
     ];
 
     /** Commands that mean a gate step has been restated outside the script. */
-    private const RESTATED = ['vendor/bin/', 'zricethezav/', 'npm run ', 'composer audit', 'artisan test'];
+    private const RESTATED = [
+        'vendor/bin/', 'gitleaks', 'phpstan', 'npm run ', 'npm audit', 'npm ci',
+        'composer audit', 'artisan test',
+    ];
 
     #[Test]
     public function the_steps_run_cheapest_first(): void
@@ -44,11 +47,11 @@ final class GateRunnersTest extends TestCase
     {
         $commands = $this->fencedCommands('.claude/commands/deploy.md');
 
-        $this->assertStringContainsString(
-            'scripts/check.sh overlay',
+        $this->assertMatchesRegularExpression(
+            '/^\s*bash .*scripts\/check\.sh overlay\s*$/m',
             $commands,
             'The deploy runbook no longer runs the gate script. Pre-flight step 4 is the only '
-            .'run the merge commit ever gets.'
+            .'run the merge commit ever gets, and a mention in a comment is not a run.'
         );
 
         foreach (self::RESTATED as $restated) {
@@ -76,6 +79,34 @@ final class GateRunnersTest extends TestCase
             'node_modules/.package-lock.json',
             $script,
             'The node steps must guard on the marker npm writes when an install finishes.'
+        );
+    }
+
+    #[Test]
+    public function only_the_overlay_step_is_a_step_a_runner_can_skip(): void
+    {
+        $script = $this->read('scripts/check.sh');
+
+        if (preg_match('/^if \[ "\$mode" = overlay \]; then$(.*?)^fi$/ms', $script, $branch) !== 1) {
+            $this->fail('scripts/check.sh no longer has an overlay-only branch to read.');
+        }
+
+        preg_match_all("/step '([^']+)'/", $branch[1], $guarded);
+
+        $this->assertSame(
+            ['overlay'],
+            array_map(
+                static fn (string $label): string => strtolower(trim(explode('(', $label)[0])),
+                $guarded[1]
+            ),
+            'The eight checks must run in both runners; only the overlay itself is conditional. '
+            .'A check that moved inside this branch stopped running for the developer, or a '
+            .'ninth step was added outside it and now runs twice in overlay mode.'
+        );
+        $this->assertCount(
+            count(self::ORDER) - 1,
+            array_diff($this->stepLabels(), ['overlay']),
+            'dev runs the checks; overlay runs the checks plus its own setup step.'
         );
     }
 
