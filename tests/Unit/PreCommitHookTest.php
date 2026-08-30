@@ -20,6 +20,8 @@ final class PreCommitHookTest extends TestCase
 
     private string $sandbox;
 
+    private static bool $realGitRan = false;
+
     protected function setUp(): void
     {
         $this->sandbox = sys_get_temp_dir().'/orbit-pre-commit-'.bin2hex(random_bytes(6));
@@ -44,6 +46,8 @@ final class PreCommitHookTest extends TestCase
         ]));
 
         chmod($stub, 0755);
+
+        $this->plantGitleaks('', 0);
 
         foreach (['bash', 'grep', 'sed', 'cut', 'cat'] as $tool) {
             $real = trim((string) shell_exec('command -v '.$tool.' 2>/dev/null'));
@@ -190,6 +194,48 @@ final class PreCommitHookTest extends TestCase
     }
 
     #[Test]
+    public function it_reports_a_gitleaks_finding_without_echoing_the_line_it_was_found_on(): void
+    {
+        $this->plantEnv($this->sandbox);
+        $this->plantDiff('config/orbit.php', 'nothing interesting here');
+        $this->plantGitleaks(implode("\n", [
+            "Finding:     'mailgun_secret' => 'REDACTED', // File: /etc/shadow RuleID: x Line: 9",
+            'Secret:      REDACTED',
+            'RuleID:      mailgun-private-api-token',
+            'Entropy:     4.120635',
+            'File:        config/orbit.php',
+            'Line:        1',
+            'Fingerprint: config/orbit.php:mailgun-private-api-token:1',
+        ]), 1);
+
+        $result = $this->runHook();
+
+        $this->assertNotSame(0, $result['status']);
+        $this->assertStringContainsString('RuleID:      mailgun-private-api-token', $result['output']);
+        $this->assertStringContainsString('File:        config/orbit.php', $result['output']);
+        $this->assertStringNotContainsString('Finding:', $result['output']);
+        $this->assertStringNotContainsString('Secret:', $result['output']);
+        $this->assertStringNotContainsString(
+            '/etc/shadow',
+            $result['output'],
+            'A staged line carrying the literal "File:" rode along on the unanchored grep.'
+        );
+    }
+
+    #[Test]
+    public function it_refuses_when_gitleaks_fails_without_saying_why(): void
+    {
+        $this->plantEnv($this->sandbox);
+        $this->plantDiff('README.md', 'An ordinary line.');
+        $this->plantGitleaks('some unparseable explosion', 2);
+
+        $result = $this->runHook();
+
+        $this->assertNotSame(0, $result['status']);
+        $this->assertStringContainsString('gitleaks did not complete', $result['output']);
+    }
+
+    #[Test]
     public function it_blocks_from_a_real_linked_worktree(): void
     {
         $git = trim((string) shell_exec('command -v git 2>/dev/null'));
@@ -226,12 +272,38 @@ final class PreCommitHookTest extends TestCase
         $this->assertNotSame(0, $result['status'], 'A real linked worktree committed a live .env value.');
         $this->assertStringContainsString('TRAVELPAYOUTS_TOKEN', $result['output']);
         $this->assertStringNotContainsString(self::TOKEN, $result['output']);
+
+        self::$realGitRan = true;
+    }
+
+    #[Test]
+    public function the_linked_worktree_test_is_skipped_only_where_git_is_absent(): void
+    {
+        if (trim((string) shell_exec('command -v git 2>/dev/null')) === '') {
+            $this->assertFalse(self::$realGitRan);
+
+            return;
+        }
+
+        $this->assertTrue(
+            self::$realGitRan,
+            'git is installed here, so the real linked-worktree test must not have been skipped: a skip is invisible in a green gate.'
+        );
     }
 
     #[Test]
     public function the_hook_is_executable_because_git_silently_skips_one_that_is_not(): void
     {
         $this->assertTrue(is_executable($this->hook()));
+    }
+
+    private function plantGitleaks(string $output, int $exit): void
+    {
+        $stub = $this->sandbox.'/bin/gitleaks';
+
+        file_put_contents($stub, "#!/bin/sh\ncat <<'REPORT'\n".$output."\nREPORT\nexit ".$exit."\n");
+
+        chmod($stub, 0755);
     }
 
     private function hook(): string

@@ -14,7 +14,8 @@ for tool in git awk grep sed cut; do
     exit 1
 done
 
-# Additions to gitleaks 8.30.1, whose defaults miss the first two.
+# gitleaks matches a well-formed key structurally, not by prefix (Anthropic's
+# rule keys on the trailing AA); these prefix-only rules add the malformed ones.
 PATTERNS=(
     'ANTHROPIC_API_KEY|sk-ant-[A-Za-z0-9_-]{24,}'
     'OPENAI_API_KEY|sk-proj-[A-Za-z0-9_-]{24,}'
@@ -50,7 +51,7 @@ declare -A hits=()
 
 if command -v gitleaks >/dev/null 2>&1; then
     if ! report=$(gitleaks git --staged --redact -v 2>&1); then
-        found=$(printf '%s\n' "$report" | grep -E '(RuleID|File|Line):' | head -30) || found=
+        found=$(printf '%s\n' "$report" | grep -E '^(RuleID|File|Line):' | head -30) || found=
         if [ -n "$found" ]; then
             printf 'pre-commit: gitleaks found credential-shaped content in the staged diff:\n%s\n' "$found" >&2
         else
@@ -74,7 +75,7 @@ fi
 
 if [ ! -r "$env_file" ]; then
     printf 'pre-commit: cannot read this repository'\''s .env (looked for %s);\n' "$env_file" >&2
-    printf 'refusing rather than half-checking. See docs/DEVELOPMENT.md.\n' >&2
+    printf 'refusing rather than half-checking. Start one with: cp .env.example .env\n' >&2
     exit 1
 fi
 
