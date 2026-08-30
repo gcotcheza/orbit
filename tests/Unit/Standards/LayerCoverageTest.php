@@ -126,7 +126,8 @@ final class LayerCoverageTest extends TestCase
     private function shell(string $command): array
     {
         $output = [];
-        $status = 0;
+        // -1, not 0: an exec() that never runs must not leave a passing status behind.
+        $status = -1;
 
         exec('cd '.escapeshellarg($this->root()).' && '.$command, $output, $status);
 
