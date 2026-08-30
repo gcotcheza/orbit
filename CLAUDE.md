@@ -57,8 +57,3 @@ overrides them and says why.
   when `resources/js/lib/` carries that module and a test compares its
   sentences with `app/Http/Requests/`; follow-up branch
   `feat/inline-validation`.
-- **C13, native validation UI.** `resources/js/Views/Create.vue:161` sets
-  `maxlength="500"` on the rule textarea, so the browser silently truncates
-  where every other limit in the app says the sentence itself. Drop this line
-  when `grep -rn maxlength resources/js/` finds nothing; follow-up branch
-  `fix/create-maxlength-becomes-a-sentence`.
