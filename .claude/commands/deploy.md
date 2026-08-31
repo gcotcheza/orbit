@@ -528,6 +528,10 @@ Prefer not to run any of it: `scripts/e2e.sh` (deploy step 6) drives every one o
 these writes through a real browser, against a sandbox where a mistake costs
 nothing.
 
+**This section continues check 3's shell** — `$H`, `$B`, `$OUT` and `$AUTHED` are
+the ones set there. From a fresh shell, run check 3 first; `$AUTHED` from a login
+that has expired gets you a 401, not a write.
+
 **An authenticated write needs the CSRF token lifted again, from the login
 response.** Check 3's `/api/me` is a GET and gets away with the old one; a write
 does not. `Illuminate\Auth\SessionGuard::login()` calls `$session->regenerate()`,
