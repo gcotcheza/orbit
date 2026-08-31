@@ -281,16 +281,38 @@ else
     note '.env.e2e already present (regenerate with --fresh-env)'
 fi
 
-# The three things the stack cannot make for itself. Each is checked rather than
-# rebuilt unconditionally: `composer install` and `npm ci` are minutes, and this
-# script is meant to be run repeatedly.
-if [ ! -d vendor ]; then
+# True when a container of the pinned `orbit` project is serving THIS checkout,
+# and true when docker cannot say: the caller this protects is the deploy.
+checkout_is_live() {
+    local ids id from
+    ids=$(docker ps -aq --filter 'label=com.docker.compose.project=orbit' 2>/dev/null) || return 0
+    [ -n "$ids" ] || return 1
+    for id in $ids; do
+        from=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$id" 2>/dev/null) || return 0
+        [ -n "$from" ] || return 0
+        from=$(readlink -f -- "$from" 2>/dev/null || printf '%s' "$from")
+        if [ "$from" = "$ROOT" ]; then return 0; fi
+    done
+    return 1
+}
+
+# The three things the stack cannot make for itself. Each waits on the marker its
+# installer writes when it FINISHES, never on the directory: an empty vendor/ or
+# node_modules/ satisfies `[ -d ]` and the step then runs against nothing.
+if [ ! -f vendor/autoload.php ]; then
+    if checkout_is_live; then
+        fail "vendor/ is not installed and $ROOT is the deployed checkout.
+    Refusing: this install carries dev dependencies, and package:discover would write
+    dev-only providers into the bootstrap/cache this live app boots from — every
+    request 500s on the next restart (docs/DECISIONS.md). Run the deploy's own
+    composer step instead, which is --no-dev, then re-run this script."
+    fi
     step 'composer install'
     docker run --rm -u "${APP_UID}:${APP_GID}" -v "$ROOT":/var/www/html -w /var/www/html \
         orbit/app:latest composer install --no-interaction --no-progress
 fi
 
-if [ ! -d node_modules ]; then
+if [ ! -f node_modules/.package-lock.json ]; then
     step 'npm ci'
     docker run --rm -u "${APP_UID}:${APP_GID}" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
         -v "$ROOT":/var/www/html -w /var/www/html node:24-alpine \
