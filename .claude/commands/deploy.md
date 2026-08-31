@@ -338,12 +338,15 @@ build is not step 3 any more.
 
 ## Post-deploy verification
 
-Every check below is safe to repeat: it either reads, or is refused before it
-reaches the app. **Nothing in this battery writes** — the one authenticated write
-the runbook documents is in *Authenticated writes* after it, deliberately outside
-the numbered list. Before go-live the vhost is not enabled, so these go at the
-loopback with an explicit `Host:` header — **without it the sidecar answers
-`400`**, which is a correct answer to a hostless request and not a fault.
+**No check below changes application data**, and each is safe to repeat. Two
+carry a cost that is not a change: check 3's `POST /login` really does log in and
+is rate-limited 5/min, and its plumbing probe is a `POST` the app refuses at auth.
+The one authenticated write the runbook documents is in *Authenticated writes*
+after this section, deliberately outside the numbered list.
+
+Before go-live the vhost is not enabled, so these go at the loopback with an
+explicit `Host:` header — **without it the sidecar answers `400`**, which is a
+correct answer to a hostless request and not a fault.
 
 ```bash
 H='Host: flights.ghiecode.io'
@@ -528,9 +531,10 @@ Prefer not to run any of it: `scripts/e2e.sh` (deploy step 6) drives every one o
 these writes through a real browser, against a sandbox where a mistake costs
 nothing.
 
-**This section continues check 3's shell** — `$H`, `$B`, `$OUT` and `$AUTHED` are
-the ones set there. From a fresh shell, run check 3 first; `$AUTHED` from a login
-that has expired gets you a 401, not a write.
+**This section continues the verification shell above.** `$H` and `$B` come from
+that section's preamble; `$OUT` and `$AUTHED` come from check 3. From a fresh
+shell, set `$H` and `$B` first and then run check 3 — without them curl fails with
+`(3) URL rejected`, and an expired `$AUTHED` gets you a 401 rather than a write.
 
 **An authenticated write needs the CSRF token lifted again, from the login
 response.** Check 3's `/api/me` is a GET and gets away with the old one; a write

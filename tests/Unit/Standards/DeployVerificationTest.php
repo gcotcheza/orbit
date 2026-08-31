@@ -17,7 +17,11 @@ final class DeployVerificationTest extends TestCase
 
     private const VERIFICATION = 'Post-deploy verification';
 
-    private const WRITES = '/-X (POST|PUT|PATCH|DELETE)\b/';
+    /** curl names a method two ways, and a body with no method named is a POST regardless. */
+    private const WRITES = '/(?:-X|--request)\s*(?:POST|PUT|PATCH|DELETE)\b'
+        .'|(?:^|\s)(?:-d|--data|--data-raw|--data-binary|--data-urlencode|--json)\b/';
+
+    private const AUTHENTICATED = '/\$\{?AUTHED\b/';
 
     #[Test]
     public function the_post_deploy_battery_makes_no_authenticated_write(): void
@@ -27,12 +31,12 @@ final class DeployVerificationTest extends TestCase
                 continue;
             }
 
-            $this->assertStringNotContainsString(
-                '$AUTHED',
+            $this->assertDoesNotMatchRegularExpression(
+                self::AUTHENTICATED,
                 $command,
                 'A command in the post-deploy battery signs a write with the logged-in session. '
-                ."The section tells its reader every check is safe to repeat, and that promise is\n"
-                ."what gets it run top to bottom against production:\n  {$command}\n"
+                ."The section tells its reader no check changes application data, and that promise\n"
+                ."is what gets it run top to bottom against production:\n  {$command}\n"
                 .'Writes belong under "## Authenticated writes", outside the numbered list.'
             );
         }
@@ -42,37 +46,44 @@ final class DeployVerificationTest extends TestCase
     public function a_documented_pause_is_documented_with_the_command_that_restores_it(): void
     {
         $commands = $this->curlCommands($this->read(self::RUNBOOK));
+        $restores = $this->watchlistWrites($commands, 'true');
 
-        foreach ($this->routeCodes($commands, 'false') as $code) {
-            $this->assertContains(
+        foreach ($this->watchlistWrites($commands, 'false') as $code => $pauses) {
+            $this->assertArrayHasKey(
                 $code,
-                $this->routeCodes($commands, 'true'),
+                $restores,
                 "The runbook pauses {$code} and never puts it back. A paused route is skipped by "
                 .'the morning poll in silence — no alert fires and nothing says so — so the '
-                .'restore is not optional and cannot live in the operator\'s head.'
+                ."restore is not optional and cannot live in the operator's head."
+            );
+            $this->assertGreaterThan(
+                min($pauses),
+                max($restores[$code]),
+                "Every restore for {$code} is written above the pause that needs it. An operator "
+                .'working down the block runs the pause last and walks away from a paused route.'
             );
         }
     }
 
     /**
      * @param  list<string>  $commands
-     * @return list<string>
+     * @return array<string, non-empty-list<int>> route code => positions of the commands setting it
      */
-    private function routeCodes(array $commands, string $active): array
+    private function watchlistWrites(array $commands, string $active): array
     {
-        $codes = [];
+        $found = [];
 
-        foreach ($commands as $command) {
+        foreach ($commands as $position => $command) {
             if (preg_match('/"active"\s*:\s*'.$active.'\b/', $command) !== 1) {
                 continue;
             }
 
-            if (preg_match('#/api/watchlist/([A-Z]{3}-[A-Z]{3})#', $command, $found) === 1) {
-                $codes[] = $found[1];
+            if (preg_match('#/api/watchlist/([^"\s/]+)#', $command, $route) === 1) {
+                $found[$route[1]][] = $position;
             }
         }
 
-        return array_values(array_unique($codes));
+        return $found;
     }
 
     /** @return list<string> */
