@@ -18,6 +18,7 @@ final class GateRunnersTest extends TestCase
         'gitleaks',
         'pint',
         'composer advisories',
+        'deptrac',
         'phpstan',
         'npm advisories',
         'eslint',
@@ -99,7 +100,7 @@ final class GateRunnersTest extends TestCase
                 static fn (string $label): string => strtolower(trim(explode('(', $label)[0])),
                 $guarded[1]
             ),
-            'The eight checks must run in both runners; only the overlay itself is conditional. '
+            'The nine checks must run in both runners; only the overlay itself is conditional. '
             .'A check that moved inside this branch stopped running for the developer, or a '
             .'ninth step was added outside it and now runs twice in overlay mode.'
         );

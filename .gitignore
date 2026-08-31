@@ -1,5 +1,8 @@
 *.log
 .DS_Store
+# deptrac writes it unless --no-cache; untracked, it lands in what the gate's
+# secrets step scans (scripts/check.sh lists with --others).
+.deptrac.cache
 .env
 .env.backup
 # The E2E sandbox's whole identity: its own APP_KEY, its own database password

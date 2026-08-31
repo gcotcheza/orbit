@@ -41,15 +41,16 @@ commit until it has one, because the layer that catches *your* live keys cannot
 run without it; and `git commit --no-verify` bypasses the guard, exactly as it
 bypasses the global one — say so in the pull request if you use it.
 
-**The gate.** `scripts/check.sh` runs eight checks in the containers, stopping
-at the first failure: Gitleaks, Pint, `composer audit`, PHPStan (level 8, no
-baseline), `npm audit`, ESLint, Vitest, PHPUnit. It must pass before a PR is
+**The gate.** `scripts/check.sh` runs nine checks in the containers, stopping
+at the first failure: Gitleaks, Pint, `composer audit`, deptrac (layers, no
+baseline), PHPStan (level 8, no baseline), `npm audit`, ESLint, Vitest,
+PHPUnit. It must pass before a PR is
 merged — this project has no baseline for new debt to hide in.
 
 It takes the runner as its one argument, and will not guess: `dev` uses the
 stack you already have up, `overlay` gives every step a throwaway container with
 its own `vendor/` and is what the deploy runbook runs against production, whose
-`vendor/` is `--no-dev`. Same eight checks, same order, either way.
+`vendor/` is `--no-dev`. Same nine checks, same order, either way.
 
 ```bash
 docker compose up -d

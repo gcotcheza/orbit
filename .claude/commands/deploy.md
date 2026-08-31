@@ -57,7 +57,7 @@
    ```bash
    git -C /var/www/orbit log --oneline -3
    ```
-4. **The eight checks must be green on the merge commit being deployed.** From
+4. **The nine checks must be green on the merge commit being deployed.** From
    PR3 onwards this is the merge gate (`docs/PLAN.md`), so normally it was green
    on the branch before merge — but a merge commit is code no run has seen. Run
    it once here, on `main`, after the pull (deploy step 1).
@@ -84,9 +84,9 @@
    ends — including the failure this runbook calls a stop.
 
    **Good:** Gitleaks `no leaks found`, Pint `PASS`, `composer audit` and
-   `npm audit` reporting no advisories, PHPStan `[OK] No errors`, ESLint
-   silent, Vitest all green, and PHPUnit ending in `OK`. A failure is a stop,
-   not a note.
+   `npm audit` reporting no advisories, deptrac `Violations 0`, PHPStan
+   `[OK] No errors`, ESLint silent, Vitest all green, and PHPUnit ending in
+   `OK`. A failure is a stop, not a note.
 
    - **⚠ `bootstrap/cache` IS OVERLAID FOR A DIFFERENT AND WORSE REASON THAN
      `vendor`.** `composer install` fires `@php artisan package:discover` on
@@ -225,8 +225,8 @@ build is not step 3 any more.
      The whole point of a gate is that there is still something to stop.
 
    **What it adds over pre-flight step 4, and why it is worth the time.** Not one
-   of `check.sh`'s eight checks has ever seen a screen — Vitest runs the front end
-   in jsdom, which has no layout engine and no rasteriser. All eight are green on
+   of `check.sh`'s nine checks has ever seen a screen — Vitest runs the front end
+   in jsdom, which has no layout engine and no rasteriser. All nine are green on
    an app whose globe renders as a black circle and whose calendar renders 31
    identical grey squares. This drives a real Chromium (WebGL on SwiftShader)
    through the eight journeys and fails on any uncaught exception. `docs/E2E.md`

@@ -1,0 +1,107 @@
+# The layers of docs/PLAN.md, executed. Why they are cut this way and how an
+# exception is recorded: docs/DECISIONS.md, the-layer-rule-is-executed-not-reviewed.
+deptrac:
+  paths:
+    - ./app
+
+  layers:
+    - name: Domain
+      collectors:
+        - type: directory
+          value: app/Domain/.*
+
+    - name: Application
+      collectors:
+        - type: directory
+          value: app/Application/.*
+
+    # app/Notifications is the mail-channel payload of the DealNotifier adapter and
+    # has no other importer, so it sits in the adapter ring, not at the edge.
+    - name: Infrastructure
+      collectors:
+        - type: directory
+          value: app/(Infrastructure|Notifications)/.*
+
+    - name: Eloquent
+      collectors:
+        - type: directory
+          value: app/Models/.*
+
+    # The only two jobs a use case runs inline. Named, so that reaching an adapter
+    # through a job is not a legal second hop: this layer may not touch Infrastructure.
+    - name: SyncDispatch
+      collectors:
+        - type: classNameRegex
+          value: '#^App\\Jobs\\(PollRoutePrices|RefreshRouteStats)$#'
+
+    - name: Queue
+      collectors:
+        - type: bool
+          must:
+            - type: directory
+              value: app/Jobs/.*
+          must_not:
+            - type: layer
+              value: SyncDispatch
+
+    - name: Edge
+      collectors:
+        - type: directory
+          value: app/(Console|Http|Providers|Services)/.*
+
+    # Everything Composer installed. `must_not: php_internal` keeps DateTimeImmutable
+    # and friends out of it, so Domain may still be written in plain PHP.
+    - name: Vendor
+      collectors:
+        - type: bool
+          must:
+            - type: classNameRegex
+              value: '#^(?!App\\).*#'
+          must_not:
+            - type: php_internal
+              value: '.*'
+
+  ruleset:
+    # Nothing. This is "pure PHP, imports no framework" as a rule a machine can read.
+    Domain: ~
+
+    Application:
+      - Domain
+      - Eloquent
+      - SyncDispatch
+      - Vendor
+
+    Infrastructure:
+      - Domain
+      - Application
+      - Eloquent
+      - Vendor
+
+    Eloquent:
+      - Domain
+      - Vendor
+
+    SyncDispatch:
+      - Domain
+      - Application
+      - Eloquent
+      - Vendor
+
+    Queue:
+      - Domain
+      - Application
+      - Infrastructure
+      - Eloquent
+      - SyncDispatch
+      - Vendor
+
+    Edge:
+      - Domain
+      - Application
+      - Infrastructure
+      - Eloquent
+      - Queue
+      - SyncDispatch
+      - Vendor
+
+    Vendor: ~

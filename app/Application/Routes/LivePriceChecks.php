@@ -10,7 +10,7 @@ use Psr\Log\LoggerInterface;
 use App\Models\LivePriceCheck;
 use Illuminate\Support\Facades\Date;
 use App\Domain\Discovery\GoogleVerdict;
-use App\Infrastructure\Verify\GoogleFlightsCheck;
+use App\Application\Ports\LiveFareCheck;
 use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
@@ -20,7 +20,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 final readonly class LivePriceChecks
 {
     public function __construct(
-        private GoogleFlightsCheck $google,
+        private LiveFareCheck $google,
         private LoggerInterface $logger,
     ) {}
 

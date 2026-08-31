@@ -17,6 +17,7 @@ use GuzzleHttp\Client as GuzzleClient;
 use App\Application\Ports\DealNotifier;
 use Illuminate\Support\ServiceProvider;
 use Anthropic\Client as AnthropicClient;
+use App\Application\Ports\LiveFareCheck;
 use App\Application\Ports\PriceProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use App\Application\Ports\RuleTextParser;
@@ -109,6 +110,10 @@ final class AppServiceProvider extends ServiceProvider
                 settingsTimeout: (float) $serpapi['settings_timeout'],
             );
         });
+
+        /* The use case takes the port; the settings screen and DiscoverDeals read the
+           adapter's own quota and take the class. */
+        $this->app->bind(LiveFareCheck::class, GoogleFlightsCheck::class);
 
         /*
          * Config read once here into a pure value (Domain calls no config()). `max_eur_per_km` ×
