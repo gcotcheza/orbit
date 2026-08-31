@@ -15,6 +15,8 @@ final class BrowserGateInstallsTest extends TestCase
 {
     private const SCRIPT = 'scripts/e2e.sh';
 
+    private const COMPOSE = 'docker-compose.yml';
+
     /** Presence tests an interrupted install passes, and the marker that replaces each. */
     private const MARKERS = [
         '-d vendor'       => 'vendor/autoload.php',
@@ -28,7 +30,7 @@ final class BrowserGateInstallsTest extends TestCase
 
         foreach (self::MARKERS as $presence => $marker) {
             $this->assertStringNotContainsString(
-                "[ ! -f {$presence}",
+                "[ ! {$presence}",
                 $script,
                 "{$presence} is a test for a directory. An empty one — an interrupted install, a "
                 .'mkdir in a Dockerfile, an ownership fix — satisfies it, the install is skipped '
@@ -64,12 +66,68 @@ final class BrowserGateInstallsTest extends TestCase
         );
     }
 
+    #[Test]
+    public function the_guard_names_the_deployed_project_from_the_file_that_pins_it(): void
+    {
+        $script = $this->read(self::SCRIPT);
+
+        $this->assertMatchesRegularExpression(
+            '/^name:\s*\S+/m',
+            $this->read(self::COMPOSE),
+            'docker-compose.yml no longer pins a project name, so the guard has nothing to read '
+            .'and refuses every install rather than none.'
+        );
+
+        $this->assertStringNotContainsString(
+            'com.docker.compose.project=orbit',
+            $script,
+            'The guard has the deployed project name typed into it. docker-compose.yml pins that '
+            .'name; a rename there would leave this filter matching nothing, and a guard that '
+            .'matches nothing reports the deployed checkout as safe to install into.'
+        );
+
+        $this->assertStringContainsString(
+            self::COMPOSE,
+            $script,
+            'The guard must read the project name from docker-compose.yml.'
+        );
+    }
+
+    #[Test]
+    public function the_guards_docker_calls_cannot_hang(): void
+    {
+        foreach (explode("\n", $this->guardBody()) as $line) {
+            if (preg_match('/\bdocker\s+(?:ps|inspect|volume|compose|run|network)\b/', $line) !== 1) {
+                continue;
+            }
+
+            $this->assertMatchesRegularExpression(
+                '/timeout \d+ docker /',
+                $line,
+                'A docker call in the guard has no timeout. A daemon that REFUSES leaves the guard '
+                ."fail-closed, which is correct; a daemon that HANGS hangs the deploy:\n  "
+                .trim($line)
+            );
+        }
+    }
+
+    private function guardBody(): string
+    {
+        return $this->between('/^checkout_is_live\(\) \{$(.*?)^\}$/ms', 'a checkout_is_live function');
+    }
+
     private function composerBranch(): string
     {
-        $pattern = '/^if \[ ! -f vendor\/autoload\.php \]; then$(.*?)^fi$/ms';
+        return $this->between(
+            '/^if \[ ! -f vendor\/autoload\.php \]; then$(.*?)^fi$/ms',
+            'a composer-install branch'
+        );
+    }
 
+    private function between(string $pattern, string $what): string
+    {
         if (preg_match($pattern, $this->read(self::SCRIPT), $found) !== 1) {
-            $this->fail('scripts/e2e.sh no longer has a composer-install branch to read.');
+            $this->fail('scripts/e2e.sh no longer has '.$what.' to read.');
         }
 
         return $found[1];

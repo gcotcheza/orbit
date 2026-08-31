@@ -281,31 +281,69 @@ else
     note '.env.e2e already present (regenerate with --fresh-env)'
 fi
 
-# True when a container of the pinned `orbit` project is serving THIS checkout,
-# and true when docker cannot say: the caller this protects is the deploy.
+# The project this repo deploys as, read from the file that pins it rather than
+# retyped: a rename must break the deploy's own name before it reaches this guard.
+DEPLOYED_PROJECT=$(sed -n 's/^name:[[:space:]]*//p' docker-compose.yml | head -1)
+
+# Sets live_reason and returns 0 when this checkout must not be installed into —
+# INCLUDING every case where docker cannot say, because the caller is the deploy.
 checkout_is_live() {
-    local ids id from
-    ids=$(docker ps -aq --filter 'label=com.docker.compose.project=orbit' 2>/dev/null) || return 0
-    [ -n "$ids" ] || return 1
+    local ids id from volumes filter
+    live_reason=''
+    filter="label=com.docker.compose.project=${DEPLOYED_PROJECT}"
+
+    if [ -z "$DEPLOYED_PROJECT" ]; then
+        live_reason="docker-compose.yml carries no 'name:', so the deployed project cannot be named"
+        return 0
+    fi
+
+    ids=$(timeout 10 docker ps -aq --filter "$filter" 2>/dev/null) || {
+        live_reason="docker did not answer which checkout ${DEPLOYED_PROJECT} runs from"
+        return 0
+    }
+
     for id in $ids; do
-        from=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$id" 2>/dev/null) || return 0
-        [ -n "$from" ] || return 0
+        from=$(timeout 10 docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$id" 2>/dev/null) || {
+            live_reason="docker did not answer where container ${id} was started from"
+            return 0
+        }
+        if [ -z "$from" ]; then
+            live_reason="container ${id} reports no working directory, so it cannot be ruled out"
+            return 0
+        fi
         from=$(readlink -f -- "$from" 2>/dev/null || printf '%s' "$from")
-        if [ "$from" = "$ROOT" ]; then return 0; fi
+        if [ "$from" = "$ROOT" ]; then
+            live_reason="project ${DEPLOYED_PROJECT} is serving this checkout"
+            return 0
+        fi
     done
+
+    if [ -n "$ids" ]; then
+        return 1
+    fi
+
+    volumes=$(timeout 10 docker volume ls -q --filter "$filter" 2>/dev/null) || {
+        live_reason="docker did not answer whether ${DEPLOYED_PROJECT} still holds volumes"
+        return 0
+    }
+    if [ -n "$volumes" ]; then
+        live_reason="${DEPLOYED_PROJECT} has no containers but still holds its volumes, so the checkout it deploys cannot be told"
+        return 0
+    fi
+
     return 1
 }
 
-# The three things the stack cannot make for itself. Each waits on the marker its
-# installer writes when it FINISHES, never on the directory: an empty vendor/ or
-# node_modules/ satisfies `[ -d ]` and the step then runs against nothing.
+# Each waits on the marker its installer writes when it FINISHES: an empty
+# vendor/ or node_modules/ satisfies `[ -d ]` and the step then runs on nothing.
 if [ ! -f vendor/autoload.php ]; then
     if checkout_is_live; then
-        fail "vendor/ is not installed and $ROOT is the deployed checkout.
-    Refusing: this install carries dev dependencies, and package:discover would write
-    dev-only providers into the bootstrap/cache this live app boots from — every
-    request 500s on the next restart (docs/DECISIONS.md). Run the deploy's own
-    composer step instead, which is --no-dev, then re-run this script."
+        fail "vendor/ is not installed, and this checkout must not be installed into:
+    ${live_reason}.
+    A composer install here carries dev dependencies, and package:discover would write
+    dev-only providers into the bootstrap/cache the live app boots from — every request
+    500s on the next restart (docs/DECISIONS.md). Run the deploy's own --no-dev composer
+    step instead, then re-run this script."
     fi
     step 'composer install'
     docker run --rm -u "${APP_UID}:${APP_GID}" -v "$ROOT":/var/www/html -w /var/www/html \
