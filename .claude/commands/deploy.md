@@ -245,10 +245,13 @@ build is not step 3 any more.
    - It leaves nothing behind: `down -v` at the end, always. `--keep` if you want
      to look at the sandbox afterwards; `scripts/e2e.sh --down` then tears it down.
    - **⚠ It runs off the live checkout's `vendor/`, `node_modules/` and
-     `public/build/`** and installs each only if it is missing — so on this box
-     it uses the `--no-dev` vendor tree, which is all it needs (it drives the app
-     through a browser and runs no PHP tooling). It does **not** need the gate
-     overlay from pre-flight step 4.
+     `public/build/`** — so on this box it uses the `--no-dev` vendor tree, which
+     is all it needs (it drives the app through a browser and runs no PHP
+     tooling). It does **not** need the gate overlay from pre-flight step 4.
+     It installs `node_modules/` and the bundle if they are missing, but it
+     **refuses to install `vendor/` here** and tells you to run step 3 instead:
+     its install carries dev dependencies, and doing that in this checkout is the
+     outage pre-flight step 4 exists to prevent.
    - **⚠ A run is good when every line has a tick.** It used to carry three
      `test.fail()` markers — rendering defects written down as tests that passed
      while the bug was there, printing a `✘` in a green run. All three are fixed
