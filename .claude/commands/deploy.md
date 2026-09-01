@@ -245,10 +245,13 @@ build is not step 3 any more.
    - It leaves nothing behind: `down -v` at the end, always. `--keep` if you want
      to look at the sandbox afterwards; `scripts/e2e.sh --down` then tears it down.
    - **⚠ It runs off the live checkout's `vendor/`, `node_modules/` and
-     `public/build/`** and installs each only if it is missing — so on this box
-     it uses the `--no-dev` vendor tree, which is all it needs (it drives the app
-     through a browser and runs no PHP tooling). It does **not** need the gate
-     overlay from pre-flight step 4.
+     `public/build/`** — so on this box it uses the `--no-dev` vendor tree, which
+     is all it needs (it drives the app through a browser and runs no PHP
+     tooling). It does **not** need the gate overlay from pre-flight step 4.
+     It installs `node_modules/` and the bundle if they are missing, but it
+     **refuses to install `vendor/` here** and tells you to run step 3 instead:
+     its install carries dev dependencies, and doing that in this checkout is the
+     outage pre-flight step 4 exists to prevent.
    - **⚠ A run is good when every line has a tick.** It used to carry three
      `test.fail()` markers — rendering defects written down as tests that passed
      while the bug was there, printing a `✘` in a green run. All three are fixed
@@ -338,10 +341,15 @@ build is not step 3 any more.
 
 ## Post-deploy verification
 
-Everything below is a plain GET and safe to repeat. Before go-live the vhost is
-not enabled, so these go at the loopback with an explicit `Host:` header —
-**without it the sidecar answers `400`**, which is a correct answer to a
-hostless request and not a fault.
+**No check below changes application data**, and each is safe to repeat. Two
+carry a cost that is not a change: check 3's `POST /login` really does log in and
+is rate-limited 5/min, and its plumbing probe is a `POST` the app refuses at auth.
+The one authenticated write the runbook documents is in *Authenticated writes*
+after this section, deliberately outside the numbered list.
+
+Before go-live the vhost is not enabled, so these go at the loopback with an
+explicit `Host:` header — **without it the sidecar answers `400`**, which is a
+correct answer to a hostless request and not a fault.
 
 ```bash
 H='Host: flights.ghiecode.io'
@@ -421,45 +429,12 @@ B='http://127.0.0.1:3085'
    rm -f "$HDR" "$OUT"
    ```
 
-   **⚠ AN AUTHENTICATED *POST* NEEDS THE CSRF TOKEN LIFTED AGAIN, FROM THE LOGIN
-   RESPONSE.** Step 3 above is a GET and gets away with it. Anything that writes
-   does not: `Illuminate\Auth\SessionGuard::login()` calls
-   `$session->regenerate()`, which mints a **new session id and a new CSRF
-   token**, and the login response carries both as fresh `Set-Cookie` headers.
-   Re-using `$XSRF` from before the login sends a token that belongs to a session
-   that no longer exists, and Laravel answers **419** — which reads exactly like
-   "CSRF is broken on this deploy" and is not. Take it off `$OUT`, next to
-   `$AUTHED`:
-
-   ```bash
-   AUTH_XSRF=$(printf '%s' "$AUTHED" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
-               | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
-
-   # e.g. pausing a route, then putting it back — both need the NEW token.
-   curl -s -o /dev/null -w '%{http_code}\n' -X PATCH -H "$H" \
-        -H "Cookie: $AUTHED" -H "X-XSRF-TOKEN: $AUTH_XSRF" \
-        -H 'Accept: application/json' -H 'Content-Type: application/json' \
-        -d '{"active":false}' "$B/api/watchlist/AMS-LIS"
-   ```
-   **Good:** `200`. A `419` here means the token, not the app.
-
-   **⚠ AND A BARE `PUT /api/profile/password` IS 419, NOT 401.** It is the
-   obvious "is the password endpoint protected?" smoke test and it proves
-   nothing: `ValidateCsrfToken` runs **before** `auth` in the `web` group, so a
-   request with no cookies at all is refused for having no token and never
-   reaches the guard. Only the full lift above — session cookie, then
-   `X-XSRF-TOKEN` from the same session — gets far enough for a 401 to mean
-   "unauthenticated". Same trap as the `-c`/`-b` one: a refusal that is real,
-   for a reason that is not the one being tested.
-   **Better still: don't.** `scripts/e2e.sh` (deploy step 6) drives every one
-   of these writes through a real browser that handles the cookie dance itself,
-   against a sandbox where a mistake costs nothing. Hand-rolled `curl` POSTs
-   against **production** change production's data.
-
    **Good:** `204`, then `200` with `{"data":{"id":1,"name":"Ghie",…}}`, then `200`
    with keys `email, id, name`.
    **⚠ `POST /login` is throttled 5/min on `email|ip`** and the throttle runs
    before validation, so a fumbled password costs a slot. It recovers in a minute.
+   A write needs more than this login gives you, and it is not part of this
+   battery: see *Authenticated writes*.
 
    **Cheaper smoke, if the password is not to hand** — still proves the auth stack
    and the JSON error renderer are wired, and needs no cookies at all:
@@ -551,6 +526,67 @@ B='http://127.0.0.1:3085'
      of that.
    - The file does not exist until the first mail is written to it; a `No such
      file` from `tail` on a box that has fired no alerts is not a fault.
+
+## Authenticated writes — not part of the battery
+
+**⚠ EVERYTHING IN THIS SECTION CHANGES PRODUCTION DATA.** Nothing above it does.
+Prefer not to run any of it: `scripts/e2e.sh` (deploy step 6) drives every one of
+these writes through a real browser, against a sandbox where a mistake costs
+nothing.
+
+**This section continues the verification shell above.** `$H` and `$B` come from
+that section's preamble; `$OUT` and `$AUTHED` come from check 3. From a fresh
+shell, set `$H` and `$B` first and then run check 3 — without them curl fails with
+`(3) URL rejected`, and an expired `$AUTHED` gets you a 401 rather than a write.
+
+**An authenticated write needs the CSRF token lifted again, from the login
+response.** Check 3's `/api/me` is a GET and gets away with the old one; a write
+does not. `Illuminate\Auth\SessionGuard::login()` calls `$session->regenerate()`,
+which mints a **new session id and a new CSRF token**, and the login response
+carries both as fresh `Set-Cookie` headers. Re-using `$XSRF` from before the login
+sends a token belonging to a session that no longer exists, and Laravel answers
+**419** — which reads exactly like "CSRF is broken on this deploy" and is not.
+Take it off `$OUT`, next to `$AUTHED`:
+
+```bash
+AUTH_XSRF=$(printf '%s' "$AUTHED" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
+            | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
+```
+
+**Pausing a route, and putting it back.** Both halves are written here as one
+block on purpose. A paused route is skipped by the 06:10 poll in silence — no
+alert fires for it and nothing anywhere says so — until somebody notices by eye.
+Do not run the pause without running the restore.
+
+```bash
+# PAUSE — AMS-LIS stops being polled from this moment.
+curl -s -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -X PATCH -H "$H" \
+     -H "Cookie: $AUTHED" -H "X-XSRF-TOKEN: $AUTH_XSRF" \
+     -H 'Accept: application/json' -H 'Content-Type: application/json' \
+     -d '{"active":false}' "$B/api/watchlist/AMS-LIS"
+
+# RESTORE — and then prove it, rather than trusting the 200.
+curl -s -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -X PATCH -H "$H" \
+     -H "Cookie: $AUTHED" -H "X-XSRF-TOKEN: $AUTH_XSRF" \
+     -H 'Accept: application/json' -H 'Content-Type: application/json' \
+     -d '{"active":true}' "$B/api/watchlist/AMS-LIS"
+
+curl -s --connect-timeout 5 --max-time 15 -H "$H" -H "Cookie: $AUTHED" \
+     -H 'Accept: application/json' "$B/api/watchlist" \
+  | python3 -c 'import sys,json;print([r["active"] for r in json.load(sys.stdin)["data"] if r["code"]=="AMS-LIS"])'
+```
+**Good:** `200` from each PATCH, and `[True]` from the read. A `419` from a PATCH
+means the token, not the app. Anything other than `[True]` at the end means a
+production route is still paused — put it back before you walk away.
+
+**⚠ A bare `PUT /api/profile/password` is 419, not 401.** It is the obvious "is
+the password endpoint protected?" smoke test and it proves nothing:
+`ValidateCsrfToken` runs **before** `auth` in the `web` group, so a request with
+no cookies at all is refused for having no token and never reaches the guard.
+Only the full lift above — session cookie, then `X-XSRF-TOKEN` from the same
+session — gets far enough for a 401 to mean "unauthenticated". Same trap as the
+`-c`/`-b` one: a refusal that is real, for a reason that is not the one being
+tested.
 
 ## Rollback
 
