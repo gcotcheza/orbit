@@ -148,6 +148,20 @@ final class ScheduleTest extends TestCase
         $this->assertSame('Europe/Amsterdam', $event->timezone);
     }
 
+    /**
+     * Daily where its one-way twin is weekly: this run WRITES the morning's round-trip price,
+     * and a morning missed is a hole nothing can fill (docs/BUSINESS-LOGIC.md §15).
+     */
+    #[Test]
+    public function round_trip_statistics_are_refreshed_every_morning_after_the_returns_poll(): void
+    {
+        $event = $this->find('orbit:refresh-return-stats');
+
+        $this->assertSame('10 7 * * *', $event->expression);
+        $this->assertSame('Europe/Amsterdam', $event->timezone);
+        $this->assertTrue($event->withoutOverlapping);
+    }
+
     #[Test]
     public function rules_are_swept_every_morning_after_the_watchlist_poll(): void
     {
