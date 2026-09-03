@@ -52,9 +52,17 @@ has to draw them.
   than from a cron outside it. The measured data reality — sparse coverage, no
   duration grid,
   and the parameters that are load-bearing — is `docs/BUSINESS-LOGIC.md` §15.
-- **returns-2 onwards** — statistics and a score for round trips (a "current
-  price" for a return has to be *defined* before it can be computed); the
-  screens, built for 8–34% coverage rather than against it; `tripLengthNights`
+- **returns-2 — the definition.** What a round trip costs *now* and what it
+  *usually* costs, per route × **duration band**: the cheapest in-band fare the
+  last poll still saw, and a five-number summary of the same pool once five
+  fares exist — `null` below that, because most bands on a real route are
+  thinner than that and an invented distribution is what a screen would render.
+  `orbit:refresh-return-stats` runs daily at 07:10, calls no provider, and
+  starts `return_price_history` accumulating one row per morning ahead of the
+  reader that will blend it. Numbered rules and config keys:
+  `docs/BUSINESS-LOGIC.md` §15.
+- **returns-3 onwards** — a deal score for round trips; the screens, built for
+  8–34% coverage rather than against it; `tripLengthNights`
   finally *matching* rather than only being parsed and shown; and alerts, which
   have to reckon with a cache that is seven days deep.
 
