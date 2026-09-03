@@ -84,6 +84,27 @@ final class ReturnStatsRefreshTest extends TestCase
         $this->assertSame(7, $observation->nights);
     }
 
+    /** R1 — every band with fares is answered, not only the first one found. */
+    #[Test]
+    public function each_band_that_has_fares_gets_a_row_of_its_own(): void
+    {
+        $route = $this->watchedRoute();
+
+        $this->seedFare($route, '2026-09-10', nights: 3, cents: 21000);
+        $this->seedFare($route, '2026-09-12', nights: 7, cents: 41000);
+        $this->seedFare($route, '2026-09-20', nights: 14, cents: 68000);
+
+        $this->refresh($route);
+
+        $this->assertSame(
+            [[2, 3, 21000], [6, 8, 41000], [13, 15, 68000]],
+            ReturnObservation::query()->orderBy('nights_min')->get()
+                ->map(static fn (ReturnObservation $row): array => [$row->nights_min, $row->nights_max, $row->price_cents])
+                ->all(),
+            'Three of the four bands carry a fare here, and each is its own answer.',
+        );
+    }
+
     /** R3 */
     #[Test]
     public function the_morning_row_carries_the_find_time_of_the_fare_that_won(): void

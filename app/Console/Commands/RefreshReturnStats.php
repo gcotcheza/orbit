@@ -9,8 +9,8 @@ use Illuminate\Console\Command;
 use App\Jobs\RefreshReturnBands;
 
 /**
- * The morning round-trip refresh — fan-out only, and it calls no provider. INCLUDES PAUSED
- * ROUTES: a gap in the history cannot be filled in later.
+ * The morning round-trip refresh — fan-out only, and it calls no provider. Paused routes are
+ * included and answer only while their fares stay fresh: `orbit:poll-returns` skips them (§15).
  */
 final class RefreshReturnStats extends Command
 {

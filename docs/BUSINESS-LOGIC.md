@@ -1316,7 +1316,7 @@ looked at their phone. Every entry is `withoutOverlapping()`.
 | **06:40 daily** | `orbit:sweep-rules` | **after** the poll, so the sweep's capped budget is mostly not spent re-fetching routes the watchlist just priced. At a six-minute stagger five are away and a sixth goes out as the sweep starts; seven are still queued, and the sweep may pay for them twice |
 | **07:35 daily** | `orbit:alerts` | **last of the three**, and it moved from 06:55 when the stagger widened: the fan-out's last route is dispatched at 07:22, and a poll job's worst case is ~3m34s (7 calls, each a 15s timeout plus one retry). 07:35 clears twice that, and holds to fourteen watched routes before `FareRequestBudget` starts warning (§27). It talks to no provider, and it stays **before 08:00** on purpose — past the default quiet window's end the mail would stop being held and start going out at evaluation time (§10, §27) |
 | **Mon 05:40** | `orbit:refresh-stats` | ahead of that morning's poll, so the week's scores are read against the week's statistics. Weekly because the answer is monthly: a route's usual price is built from months of fares, and the score is deliberately most sensitive to it — an argument for it being stable, not fresh |
-| **07:10 daily** | `orbit:refresh-return-stats` | round trips, and **daily** where the line above is weekly: this run *writes* the morning's price per duration band into `return_price_history`, and a morning missed is a hole nothing can fill in afterwards (§15). Past 04:40's fan-out even as the watchlist grows — at twenty routes its last job is dispatched at 06:34 — and out of the 06:00 hour, which is already at 183 of ~200 (§27). It calls no provider, so it adds nothing to that count |
+| **07:10 daily** | `orbit:refresh-return-stats` | round trips, and **daily** where `orbit:refresh-stats` is weekly: this run *writes* the morning's price per duration band into `return_price_history`, and a morning missed is a hole nothing can fill in afterwards (§15). Past 04:40's fan-out as the watchlist grows — at twenty routes its last job is dispatched at 06:34 — and out of the 06:00 hour, which is already at 183 of ~200 (§27). **Its ceiling is 26 routes**: at a six-minute stagger the returns fan-out's last dispatch is 04:40 + 6(N−1), which reaches 07:10 itself at 26, and past that this run starts before the fares it reads. It calls no provider, so it adds nothing to that count |
 | **Sun 09:00** | `orbit:digest` | later than the weekday runs on purpose. Everything else is scheduled to be finished before the owner is awake; this one is meant to be read over coffee, and it is the only mail Orbit sends that nothing crossed a threshold to earn |
 | **03:10 daily** | `build:retain` | the quietest hour, nowhere near the morning's runs. Not a fan-out — a manifest read and a handful of unlinks. On the schedule because `emptyOutDir: false` turns a forgotten deploy step from "the pruning did not happen" into "the disk fills up" |
 
@@ -1622,6 +1622,15 @@ until a month of mornings exists; the PR that first *scores* a round trip is the
 one that should decide whether that blend is even the right shape for a pool
 whose rows are one per band. See `docs/DECISIONS.md`:
 the-round-trip-price-is-per-band-and-the-history-is-written-first.
+
+**A paused route's history stops about three days after it is paused.** The
+fan-out includes paused routes, but `orbit:poll-returns` polls **active** ones
+only, so a paused route's rows age past R2's staleness cut
+(`orbit.returns.stale_after_days`) and its pool goes empty: the history continues
+for roughly that long, then stops, and resumes when the route is un-paused. The
+answer is not to poll paused routes — that is a change to the request budget
+(§27), and a decision of its own — it is to say so here rather than imply a
+completeness this run cannot deliver.
 
 **07:10, daily** (§13) — daily where its one-way twin is weekly, because this run
 *writes* a morning's price and a missed morning is a hole nothing can fill in
