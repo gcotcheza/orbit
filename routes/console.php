@@ -57,6 +57,15 @@ Schedule::command('orbit:refresh-stats')
     ->withoutOverlapping();
 
 /*
+ * 07:10 — daily, not weekly: it records the morning's round-trip price, so a missed run is a hole
+ * in a history nothing can fill in later. Calls no provider (docs/BUSINESS-LOGIC.md §15).
+ */
+Schedule::command('orbit:refresh-return-stats')
+    ->dailyAt('07:10')
+    ->timezone($timezone)
+    ->withoutOverlapping();
+
+/*
  * 06:40 — after the watchlist poll on purpose: `SweepRuleFares` skips any route the morning
  * already priced, so sweeping first would waste its capped budget (docs/BUSINESS-LOGIC.md §13).
  */

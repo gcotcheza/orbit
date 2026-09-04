@@ -212,7 +212,7 @@ return [
     | Round trips — going and coming back
     |--------------------------------------------------------------------------
     |
-    | Polled daily; nothing reads the table yet. docs/BUSINESS-LOGIC.md §28.
+    | Polled daily, and summarised per duration band. docs/BUSINESS-LOGIC.md §28.
     |
     */
 
@@ -230,6 +230,16 @@ return [
             [6, 8],
             [13, 15],
             [21, 28],
+        ],
+
+        'stats' => [
+            // `window_days`' number, written out: what is KEPT and what is
+            // COMPARABLE are two decisions that happen to agree. See §28.
+            'window_days' => 334,
+
+            // Below this many in-band fares there is a current price and no
+            // usual one -- five knots, five prices. See §15 R5.
+            'min_samples' => 5,
         ],
     ],
 

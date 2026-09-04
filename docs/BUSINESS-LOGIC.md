@@ -1316,6 +1316,7 @@ looked at their phone. Every entry is `withoutOverlapping()`.
 | **06:40 daily** | `orbit:sweep-rules` | **after** the poll, so the sweep's capped budget is mostly not spent re-fetching routes the watchlist just priced. At a six-minute stagger five are away and a sixth goes out as the sweep starts; seven are still queued, and the sweep may pay for them twice |
 | **07:35 daily** | `orbit:alerts` | **last of the three**, and it moved from 06:55 when the stagger widened: the fan-out's last route is dispatched at 07:22, and a poll job's worst case is ~3m34s (7 calls, each a 15s timeout plus one retry). 07:35 clears twice that, and holds to fourteen watched routes before `FareRequestBudget` starts warning (§27). It talks to no provider, and it stays **before 08:00** on purpose — past the default quiet window's end the mail would stop being held and start going out at evaluation time (§10, §27) |
 | **Mon 05:40** | `orbit:refresh-stats` | ahead of that morning's poll, so the week's scores are read against the week's statistics. Weekly because the answer is monthly: a route's usual price is built from months of fares, and the score is deliberately most sensitive to it — an argument for it being stable, not fresh |
+| **07:10 daily** | `orbit:refresh-return-stats` | round trips, and **daily** where `orbit:refresh-stats` is weekly: this run *writes* the morning's price per duration band into `return_price_history`, and a morning missed is a hole nothing can fill in afterwards (§15). Past 04:40's fan-out as the watchlist grows — at twenty routes its last job is dispatched at 06:34 — and out of the 06:00 hour, which is already at 183 of ~200 (§27). **The last count that clears it is 25**: at a six-minute stagger the returns fan-out's last dispatch is 04:40 + 6(N−1), which reaches 07:10 itself at 26, where 25 puts it at 07:04 — six minutes ahead, against the ~31s worst case of a one-request job (one call, a 15s timeout plus one retry). It calls no provider, so it adds nothing to that count |
 | **Sun 09:00** | `orbit:digest` | later than the weekday runs on purpose. Everything else is scheduled to be finished before the owner is awake; this one is meant to be read over coffee, and it is the only mail Orbit sends that nothing crossed a threshold to earn |
 | **03:10 daily** | `build:retain` | the quietest hour, nowhere near the morning's runs. Not a fan-out — a manifest read and a handful of unlinks. On the schedule because `emptyOutDir: false` turns a forgotten deploy step from "the pruning did not happen" into "the disk fills up" |
 
@@ -1333,6 +1334,7 @@ docker compose exec app php artisan orbit:poll-fares --far --now   # months 7-11
 docker compose exec app php artisan orbit:sweep-rules --now
 docker compose exec app php artisan orbit:alerts --now
 docker compose exec app php artisan orbit:refresh-stats --now
+docker compose exec app php artisan orbit:refresh-return-stats --now
 docker compose exec app php artisan orbit:digest --now
 ```
 
@@ -1419,10 +1421,11 @@ with it rather than silently truncating nothing.
 
 ## 15. Return trips (foundation)
 
-> **Status: groundwork, accumulating.** A port, two adapters, the `return_fares`
-> table and a command to fill it — **now polled daily at 04:40**, so the history
-> is building. **Nothing reads the table yet**: the screens, the statistics and
-> the rule matching are later PRs in this milestone.
+> **Status: priced, not yet drawn.** A port, two adapters, the `return_fares`
+> table and a command to fill it — **polled daily at 04:40** — and, since
+> returns-2, a **definition of what a round trip costs now and usually** per
+> duration band, refreshed daily at 07:10. **No screen, no score and no alert
+> reads any of it yet**, and `tripLengthNights` still does not match on it.
 
 ### Why one-way was never the whole truth
 
@@ -1567,11 +1570,76 @@ for the accumulation to stop silently. Moving the clock into the deployed stack
 cost nothing and removed that. `php artisan orbit:poll-returns --now` still
 fills the table by hand.
 
+### What a return trip costs now, and what it usually costs
+
+`orbit:refresh-return-stats` · `App\Domain\Pricing\ReturnBandPrice` ·
+`App\Application\Pricing\ReturnBandPrices` · `return_price_history` and
+`return_price_stats`.
+
+A one-way fare has one price per departure date, so "the current price" is the
+cheapest of them (§6). A round trip has a price per *pair* of dates, and most
+(route, departure date) pairs here carry exactly one stay length — so "the
+cheapest 7-night trip leaving on 3 November" usually has no answer at all. The
+grain that does have one is the **duration band**, which is also the axis a
+person asks along ("a week away"), and the one `tripLengthNights` was written
+against.
+
+| rule | what |
+| --- | --- |
+| **R1** | The grain is **route × duration band** (`orbit.returns.durations`, inclusive at both ends). A fare belongs to a band when its `nights` falls inside it; a fare in no band is counted nowhere. |
+| **R2** | The **current price** is the cheapest in-band fare Orbit still holds: departures from today to `orbit.returns.stats.window_days` ahead, and only rows a poll has seen within `orbit.returns.stale_after_days`. A tie goes to the fare found most recently, then to the shorter stay. |
+| **R3** | A current price carries the **stay length and find time of the fare that won**. A band is a range, and this endpoint serves a seven-day-deep cache; `found_at` null means "not known", never "found this morning". |
+| **R4** | The **usual price** is the five-number summary (`PriceStats`, nearest-rank) of *the same pool* — same route, same band, same window, same staleness — so today's number is drawn from the days it is compared against. |
+| **R5** | Below `orbit.returns.stats.min_samples` in-band fares there is a current price and **no usual price**: `null`, never an invented distribution. |
+| **R6** | A band with no fares has **no answer at all** — no row of any kind, and nothing inferred from a neighbouring band or from the route's one-way fare. |
+| **R7** | Every morning writes **one row per (route, band)** into `return_price_history`: that morning's current price, its stay length and its find time. A second run the same morning overwrites it; a morning with no in-band fare writes nothing, and the gap is the honest record. |
+| **R8** | A refresh **never deletes what it cannot recompute**. A band that empties or thins keeps its last summary, with `refreshed_at` and `sample_count` saying how old and how thin it is — §6's rule, for §6's reason. |
+
+| what | value | config key |
+| --- | --- | --- |
+| departures considered | 334 days | `orbit.returns.stats.window_days` |
+| a row still counts as quoted for | 3 days | `orbit.returns.stale_after_days` |
+| fares before a usual price is claimed | 5 | `orbit.returns.stats.min_samples` |
+| the bands | `[2,3] [6,8] [13,15] [21,28]` | `orbit.returns.durations` |
+
+**Five fares, because five knots.** A summary of four is four numbers with one of
+them written twice; at five, each of min/p25/median/p75/max can be a price
+somebody was really quoted. Sparse is the *normal* state here — a measured route
+carried two rows — and the honest answer for such a route is a price with no
+verdict attached, which is the same answer §7's day-1 floor gives a young route.
+
+**Staleness is measured on `fetched_at`, not on `found_at`.** The first says the
+last poll still saw the fare; the second says how old the fare was when it was
+found, and on this endpoint it is routinely days old (§15, above). Filtering on
+`found_at` would discard more than half of an already thin table and would answer
+a question nobody asked here; R3 carries that age forward instead, so the PR that
+alerts on these fares can apply `orbit.alerts.max_fare_age_days` itself.
+
+**Nothing reads `return_price_history` yet**, deliberately — the same argument
+that put the poll on the schedule ahead of its first reader. A longitudinal view
+only accumulates in real time, and §6's blend cannot be checked against real data
+until a month of mornings exists; the PR that first *scores* a round trip is the
+one that should decide whether that blend is even the right shape for a pool
+whose rows are one per band. See `docs/DECISIONS.md`:
+the-round-trip-price-is-per-band-and-the-history-is-written-first.
+
+**A paused route's history stops about three days after it is paused.** The
+fan-out includes paused routes, but `orbit:poll-returns` polls **active** ones
+only, so a paused route's rows age past R2's staleness cut
+(`orbit.returns.stale_after_days`) and its pool goes empty: the history continues
+for roughly that long, then stops, and resumes when the route is un-paused. The
+answer is not to poll paused routes — that is a change to the request budget
+(§27), and a decision of its own — it is to say so here rather than imply a
+completeness this run cannot deliver.
+
+**07:10, daily** (§13) — daily where its one-way twin is weekly, because this run
+*writes* a morning's price and a missed morning is a hole nothing can fill in
+afterwards. It calls no provider, so it costs the request budget nothing.
+
 ### What later PRs add
 
-- statistics and a deal score for return trips (the analogue of §6 and §7 — note
-  that a "current price" for returns has to be *defined* before it can be
-  computed, and this PR deliberately writes no observation row)
+- a deal score for round trips (the analogue of §7), now that a current price
+  and a usual one are defined, and the blend of §6 once the mornings exist
 - the screens that read the table, which must be built for the sparsity above
 - `tripLengthNights` finally **matching** rather than only being parsed and shown
   (§11 and `docs/API.md`) — the fact it filters on now exists
@@ -2213,7 +2281,7 @@ Read by `App\Jobs\PollReturnFares`, `TravelpayoutsReturnProvider`, and `FakeRetu
 
 Every price in this app is a one-way fare — right for the EU budget carriers Orbit was built around, wrong for anything long-haul (nobody flies to New York one way). Measured on 2026-08-16, cheapest one-way vs. cheapest round-trip on the same route: AMS-LIS €80 vs €134 (60%), AMS-JFK €334 vs €484 (69%), AMS-BKK €272 vs €472 (58%) — a long-haul one-way is roughly two thirds of a return, not half, so "AMS-JFK from €334" was never a lie about the arithmetic, only about the trip.
 
-**Nothing reads this table yet, but it is polled daily at 04:40.** The foundation PR of the return-trip milestone shipped a port, two adapters, a table, and `orbit:poll-returns` to fill it by hand, with `routes/console.php` deliberately untouched until a screen reads the table. The schedule entry arrived first anyway: the poll was already being run every morning by a cron outside this repository, and a fortnight of accumulated real fares is worth more to the PR that draws them than an empty table.
+**No screen reads this table yet; the statistics do.** The foundation PR of the return-trip milestone shipped a port, two adapters, a table, and `orbit:poll-returns` to fill it by hand, with `routes/console.php` deliberately untouched until a screen reads the table. The schedule entry arrived first anyway: the poll was already being run every morning by a cron outside this repository, and a fortnight of accumulated real fares is worth more to the PR that draws them than an empty table. returns-2 added the first reader — `orbit:refresh-return-stats`, daily at 07:10 — which turns those fares into one current price and one usual price per duration band (§15). Still no score, no screen and no alert.
 
 **The budget is the cheapest thing in this file.** `/v2/prices/latest` with `period_type=year` answers the whole horizon in one request (recorded AMS-LIS ran from the call date to 2027-06-18), where the one-way calendar is billed per calendar month. So: one request per watched route per run — 13 today, W in general, flat. Returns polling never becomes the binding constraint (see §27). Worked out before the schedule entry existed: the 06:00 hour would go over the limit; the 04:00 far-poll hour has room — hence 04:40 daily. There's still no key for it here, because a schedule belongs in `routes/console.php`, where "the returns poll runs at 04:40" is one readable line. The two fan-outs overlap at today's stagger and that is no longer something the clock avoids: §27's table charges every job to the hour it lands in, and `FareRequestBudget` checks the total.
 
@@ -2222,6 +2290,10 @@ Every price in this app is a one-way fare — right for the EU budget carriers O
 `stale_after_days = 3` is one number where the one-way calendar needs two, because this table is fetched whole in a single request — every row is always exactly as fresh as every other. Same sentence as its one-way twin (two missed runs plus a day).
 
 `max_nights = 60` is a sanity ceiling, not a product decision — the longest real stay recorded was 56 nights (AMS-BKK), 60 leaves headroom without letting a corrupt row claim a nine-month trip.
+
+`stats.window_days = 334` is which departures the summary considers, and it is `window_days`'s number written out for the third time in this file — what is **kept** and what is **comparable** are two decisions that happen to agree, the arrangement `selfstats.cross_section_days` has for the same reason, and `tests/Feature/ReturnStatsRefreshTest` is the drift guard. It is deliberately NOT `selfstats.cross_section_days`'s 181: that cap exists because `calendar_fares` is polled at two speeds and the far months are cache-thinned into a seasonal-peak sample, where `return_fares` is fetched whole in one request, and halving an already sparse table would cost more than the skew is measured to be worth. Reverse it when the far half of a return route is measured and found to be peak-heavy — see `docs/DECISIONS.md`: the-round-trip-window-is-the-whole-table.
+
+`stats.min_samples = 5` is how many in-band fares there must be before a *usual* price is claimed at all; below it a band has a current price and a `null` summary (§15 R5). Five because a five-number summary of four fares repeats one of them, and because the honest answer for a route with two rows is a price with no verdict attached — the same answer the day-1 floor gives a young one-way route (§7).
 
 `limit = 1000` is sent on every request, and its absence is a silent 91% data loss: the API's default is 30 records — AMS-BKK returned 338 entries with `limit=1000` and exactly 30 without it, with no error and no truncation marker. 1000 is the documented maximum and no measured route came close, which is also why the adapter doesn't paginate.
 
@@ -2675,6 +2747,7 @@ by anyone.
 | --- | --- |
 | deal score, verdict, advice | `app/Domain/Pricing/` |
 | statistics arithmetic | `app/Domain/Pricing/PriceStats.php`, `app/Infrastructure/Pricing/SelfStatsProvider.php` |
+| what a round trip costs now and usually | `app/Domain/Pricing/ReturnBandPrice.php`, `app/Application/Pricing/ReturnBandPrices.php` |
 | alert decisions, quiet hours | `app/Domain/Alerts/` |
 | rule matching, month windows, chips | `app/Domain/Rules/` |
 | discovery thresholds, ranking, Google verdict | `app/Domain/Discovery/` |

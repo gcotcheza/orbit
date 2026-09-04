@@ -453,11 +453,21 @@ final class ReturnFaresPollTest extends TestCase
 
         $this->assertNotEmpty($bands, 'An empty list leaves the fake with no fares at all.');
 
+        $seen = [];
+
         foreach ($bands as $pair) {
             /** @var array{int, int} $pair */
             $band = NightsBand::of($pair);
 
             $this->assertLessThanOrEqual((int) config('orbit.returns.max_nights'), $band->max);
+
+            // A repeated pair puts two rows with one conflict key into a single upsert, and
+            // Postgres answers SQLSTATE 21000 where SQLite does not (§15).
+            $key = "{$band->min}-{$band->max}";
+
+            $this->assertNotContains($key, $seen, "The duration band [{$key}] is configured twice.");
+
+            $seen[] = $key;
         }
     }
 
