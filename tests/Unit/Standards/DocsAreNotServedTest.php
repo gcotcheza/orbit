@@ -122,12 +122,12 @@ final class DocsAreNotServedTest extends TestCase
 
     private function withoutComments(string $code): string
     {
-        $stripped = preg_replace(
+        $blanked = preg_replace_callback(
             ['#/\*.*?\*/#s', '#<!--.*?-->#s', '#\{\{--.*?--\}\}#s'],
-            '',
+            static fn (array $m): string => str_repeat("\n", substr_count($m[0], "\n")),
             $code
         ) ?? $code;
 
-        return implode("\n", preg_grep('#^\s*(//|\#)#', explode("\n", $stripped), PREG_GREP_INVERT) ?: []);
+        return preg_replace('#^[ \t]*(//|\#(?!\[)).*$#m', '', $blanked) ?? $blanked;
     }
 }
