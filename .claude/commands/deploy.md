@@ -45,6 +45,9 @@
 
 ## Pre-flight checks
 
+After checks 1-3, go to **Docs-only landing** before check 4: a merge that changes
+only documentation is landed there and never reaches the gate.
+
 1. Confirm the branch in `/var/www/orbit` is `main`; if not, warn and stop.
    ```bash
    git -C /var/www/orbit rev-parse --abbrev-ref HEAD    # expect: main
@@ -130,6 +133,100 @@
 
    It has to run **after the asset build**, so it now lives with the deploy steps
    as step 6. Nothing else moved.
+
+## Docs-only landing
+
+**A docs-only merge lands; it does not deploy.** After pre-flight checks 1-3,
+ask what the merge commit actually changes. If the answer is documentation and
+nothing else, the code about to run is byte-identical to the code already
+running — a gate on that merge commit is a repeat, not a check, and everything
+below is a rebuild of what is already on disk.
+
+```bash
+git -C /var/www/orbit fetch origin main
+sha=$(git -C /var/www/orbit rev-parse FETCH_HEAD)
+cd /var/www/orbit && scripts/docs-only.sh "$sha"
+```
+
+**⚠ CAPTURE THE SHA ONCE AND USE IT TWICE.** What gets classified has to be what
+gets landed. `git pull` fetches again, so a merge pushed to `main` in the seconds
+between the two commands would land unclassified and ungated — which is why the
+landing below merges `"$sha"` rather than pulling.
+
+**⚠ THE SCRIPT DECIDES, NOT THE PULL REQUEST'S FILE LIST.** It diffs **this
+checkout's own HEAD** against the merge commit, so a second commit riding inside
+the merge — or a docs merge sitting on top of a code merge that was never
+deployed — comes back as `CODE`. A person reading the PR sees neither of those.
+
+- **`DOCS-ONLY: <n> file(s)`** (exit 0) → do the landing below.
+- **`CODE: <path>`**, one line per file (exit 1) → this is an ordinary deploy.
+  Continue to pre-flight check 4. A path git had to quote comes back escaped and
+  with no reason given: an unusual path is code until someone looks.
+- **`NOTHING TO LAND`** (exit 2) → the merge changes nothing here. Stop.
+- **Refused** (exit 3) → HEAD is not an ancestor of the merge commit, so
+  something was committed on the box. Stop and report: a landing is a
+  fast-forward or it is not a landing.
+- **Exit 64** → the script was called wrong. Stop; nothing was classified.
+
+**⚠ WHATEVER IT PRINTED, THE FETCH ABOVE RAN AS ROOT.** Every exit path leaves
+root-owned objects in `.git`, including the two that stop, so run this before
+doing anything else with the answer:
+
+```bash
+chown -R orbit:orbit /var/www/orbit
+```
+
+**What counts as documentation.** An allowlist, because a denylist ships the
+file nobody thought of: `README*`, `CHANGELOG*`, `LICENSE*`, `docs/**` and
+`design/**` — minus two files that are documentation an agent *acts on* rather
+than reads. `docs/STANDARDS.md` is loaded as agent instructions through
+`.claude/rules/standards.md`, so changing it changes how the next change gets
+built; `docs/GO-LIVE.md` is a procedure, and a procedure that has not been run
+has not been checked. Everything else is code by construction — this runbook,
+`CLAUDE.md`, `scripts/**`, `.env.example`, the lockfiles, `resources/**`,
+`public/**`.
+
+**⚠ THIS RUNBOOK AND `scripts/**` TAKE THE FULL PATH, ALWAYS.** Running the
+procedure is the only test a procedure gets.
+
+### The landing
+
+1. **Merge the sha that was classified** — not a second pull, which would
+   fetch again and could land something newer than the answer above.
+   ```bash
+   git -C /var/www/orbit merge --ff-only "$sha"
+   ```
+   **Good:** a fast-forward, and `git -C /var/www/orbit rev-parse HEAD` is
+   exactly `$sha`. `--ff-only` refuses anything else rather than writing a merge
+   commit on the box.
+
+2. **Fix ownership again** — the merge just ran as root too, exactly as a
+   deploy's pull does, and left more root-owned objects in `.git`.
+   ```bash
+   chown -R orbit:orbit /var/www/orbit
+   ```
+   **Good:** silent. Verify with `ls -ld /var/www/orbit/.git` → `orbit orbit`.
+
+3. **Prove the site is still serving** — a plain GET and a look at the stack,
+   nothing that writes.
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' https://flights.ghiecode.io/
+   docker compose ps
+   ```
+   **Good:** `200`, and all six services `Up`.
+
+**Then stop.** No gate, no migration, no asset build, no browser gate, no
+`retain`, no `view:clear`, no restart — because not one running process reads a
+Markdown file, so there is nothing new for any of them to boot.
+
+**And that last sentence is checked, within limits worth knowing.**
+`tests/Unit/Standards/DocsAreNotServedTest.php` scans the shipped trees and the
+infrastructure files for a string literal shaped like a documentation path and
+fails the gate on one. That is a heuristic, not a proof: it reads literals, so a
+path built at runtime, assembled from pieces, or reached through a glob would go
+unseen. It is strong enough to catch the change that would quietly make this
+whole section unsafe, and it is why a documentation change is treated as not
+being an app change — but it is evidence, not a guarantee.
 
 ## Deploy steps
 
