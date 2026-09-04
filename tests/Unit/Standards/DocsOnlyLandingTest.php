@@ -39,6 +39,8 @@ final class DocsOnlyLandingTest extends TestCase
     #[TestWith(['composer.lock', 'A lockfile move is an install.'])]
     #[TestWith(['.env.example', 'It is read by the deploy, not by a person.'])]
     #[TestWith(['resources/js/App.vue', 'A screen is code.'])]
+    #[TestWith(['README-assets/evil.php', 'A `*` in a case pattern spans `/`, so a README* arm would admit a whole subtree.'])]
+    #[TestWith(['LICENSES/x.php', 'LICENSES/ is a directory, not the LICENSE file.'])]
     public function code_deploys(string $path, string $why): void
     {
         $result = $this->classify([$path]);
@@ -98,27 +100,166 @@ final class DocsOnlyLandingTest extends TestCase
         );
     }
 
+    #[Test]
+    public function a_root_readme_lands_whatever_it_is_called(): void
+    {
+        $result = $this->classify(['README.php']);
+
+        $this->assertSame(
+            0,
+            $result['status'],
+            'The three root files are matched by prefix and the extension is not read, so a root '
+            .'README.php lands. That is the deliberate choice: nothing loads a root-level PHP file '
+            .'— the only entry point is public/index.php — and narrowing this to a list of '
+            .'documentation extensions buys nothing against a file that has to be added on purpose. '
+            .'Change it here, and in docs/DECISIONS.md, if that stops being true.'
+        );
+    }
+
+    #[Test]
+    public function a_file_moved_out_of_the_app_is_not_documentation(): void
+    {
+        $result = $this->classify(['app/Foo.php', 'docs/Foo.php']);
+
+        $this->assertSame(1, $result['status'], 'A rename out of app/ into docs/ must deploy.');
+        $this->assertStringContainsString('CODE: app/Foo.php', $result['output']);
+    }
+
+    #[Test]
+    public function the_diff_is_asked_not_to_detect_renames(): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/git diff --no-renames --name-only/',
+            $this->read(self::SCRIPT),
+            'Without --no-renames git reports `git mv app/Foo.php docs/Foo.php` as the destination '
+            .'alone, the change set reads as one Markdown file, and a PHP file lands with no gate '
+            .'and no restart.'
+        );
+    }
+
+    #[Test]
+    public function a_rename_into_docs_is_code_in_a_real_repository(): void
+    {
+        if (trim((string) shell_exec('command -v git 2>/dev/null')) === '') {
+            $this->markTestSkipped('No git in this image, so the rename cannot be staged for real here.');
+        }
+
+        $sandbox = sys_get_temp_dir().'/orbit-docs-only-'.bin2hex(random_bytes(6));
+
+        $script = str_replace(
+            ['{SANDBOX}', '{SCRIPT}'],
+            [$sandbox, dirname(__DIR__, 3).'/'.self::SCRIPT],
+            <<<'SH'
+                set -e
+                export GIT_CONFIG_NOSYSTEM=1 HOME={SANDBOX}
+                mkdir -p {SANDBOX}/repo/app {SANDBOX}/repo/scripts
+                cd {SANDBOX}/repo
+                git init -q
+                git config user.email t@example.test
+                git config user.name t
+                cp {SCRIPT} scripts/docs-only.sh
+                printf '<?php\n' > app/Foo.php
+                printf 'x\n' > README.md
+                git add app/Foo.php README.md scripts/docs-only.sh
+                git commit -qm base
+                git rev-parse HEAD > {SANDBOX}/base
+                mkdir -p docs README-assets LICENSES
+                git mv app/Foo.php docs/Foo.php
+                printf '<?php\n' > README-assets/evil.php
+                printf '<?php\n' > LICENSES/x.php
+                git add docs/Foo.php README-assets/evil.php LICENSES/x.php
+                git commit -qm moved
+                git rev-parse HEAD > {SANDBOX}/tip
+                git checkout -q "$(cat {SANDBOX}/base)"
+                bash scripts/docs-only.sh "$(cat {SANDBOX}/tip)"
+            SH
+        );
+
+        $result = $this->execute(['bash', '-c', $script]);
+
+        $this->assertSame(
+            1,
+            $result['status'],
+            "A rename out of app/ and two files under README-/LICENSE- directories all landed:\n"
+            .$result['output']
+        );
+        $this->assertStringContainsString('CODE: app/Foo.php', $result['output']);
+        $this->assertStringContainsString('CODE: README-assets/evil.php', $result['output']);
+        $this->assertStringContainsString('CODE: LICENSES/x.php', $result['output']);
+
+        $this->remove($sandbox);
+    }
+
+    #[Test]
+    public function every_document_loaded_as_agent_instructions_is_excluded(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $rules = glob($root.'/.claude/rules/*') ?: [];
+
+        $this->assertNotSame([], $rules, '.claude/rules/ is empty, so this test vets nothing.');
+
+        $script = $this->read(self::SCRIPT);
+        $checked = 0;
+
+        foreach ($rules as $rule) {
+            $target = realpath($rule);
+
+            if ($target === false || ! str_starts_with($target, $root.'/')) {
+                continue;
+            }
+
+            $relative = substr($target, strlen($root) + 1);
+
+            if (! str_starts_with($relative, 'docs/') && ! str_starts_with($relative, 'design/')) {
+                continue;
+            }
+
+            $checked++;
+
+            $this->assertStringContainsString(
+                $relative,
+                $script,
+                "{$relative} is loaded as agent instructions through .claude/rules/, so a change to "
+                .'it changes how the next change gets built — but the classifier would land it as '
+                .'documentation with no gate. Add it to the exclusion arm.'
+            );
+        }
+
+        $this->assertGreaterThan(0, $checked, 'No rule resolved into docs/ or design/ to vet.');
+    }
+
     /**
      * @param  list<string>  $paths
      * @return array{status: int, output: string}
      */
     private function classify(array $paths): array
     {
-        $root = dirname(__DIR__, 3);
+        return $this->execute(
+            ['bash', dirname(__DIR__, 3).'/'.self::SCRIPT, '--paths'],
+            $paths === [] ? '' : implode("\n", $paths)."\n"
+        );
+    }
+
+    /**
+     * @param  list<string>  $command
+     * @return array{status: int, output: string}
+     */
+    private function execute(array $command, string $stdin = ''): array
+    {
         $pipes = [];
 
         $process = proc_open(
-            ['bash', $root.'/'.self::SCRIPT, '--paths'],
+            $command,
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
-            $root
+            dirname(__DIR__, 3)
         );
 
         if ($process === false) {
-            $this->fail('Could not start '.self::SCRIPT);
+            $this->fail('Could not start '.implode(' ', $command));
         }
 
-        fwrite($pipes[0], $paths === [] ? '' : implode("\n", $paths)."\n");
+        fwrite($pipes[0], $stdin);
         fclose($pipes[0]);
 
         $output = (string) stream_get_contents($pipes[1]).(string) stream_get_contents($pipes[2]);
@@ -127,6 +268,27 @@ final class DocsOnlyLandingTest extends TestCase
         fclose($pipes[2]);
 
         return ['status' => proc_close($process), 'output' => $output];
+    }
+
+    private function remove(string $path): void
+    {
+        if (is_file($path) || is_link($path)) {
+            unlink($path);
+
+            return;
+        }
+
+        if (! is_dir($path)) {
+            return;
+        }
+
+        foreach (scandir($path) ?: [] as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                $this->remove($path.'/'.$entry);
+            }
+        }
+
+        rmdir($path);
     }
 
     private function read(string $relative): string

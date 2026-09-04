@@ -12,9 +12,9 @@ usage() {
         printf '               change. Run it BEFORE the pull: the comparison is against\n'
         printf '               this checkout HEAD, which is the code that is running.\n'
         printf '  --paths      classify a newline-separated path list read from stdin.\n\n'
-        printf 'Exit 0 docs-only, 1 code, 2 nothing to land, 3 refused.\n'
+        printf 'Exit 0 docs-only, 1 code, 2 nothing to land, 3 refused, 64 misused.\n'
     } >&2
-    exit 2
+    exit 64
 }
 
 refuse() {
@@ -28,7 +28,11 @@ refuse() {
 is_documentation() {
     case "$1" in
         docs/STANDARDS.md | docs/GO-LIVE.md) return 1 ;;
-        README* | CHANGELOG* | LICENSE* | docs/* | design/*) return 0 ;;
+        docs/* | design/*) return 0 ;;
+        # `*` spans `/` in a case pattern, so the three root files are matched
+        # only after every deeper path has been sent to code.
+        */*) return 1 ;;
+        README* | CHANGELOG* | LICENSE*) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -74,4 +78,8 @@ live=$(git rev-parse HEAD)
 git merge-base --is-ancestor "$live" "$merge" \
     || refuse "HEAD ($(git rev-parse --short HEAD)) is not an ancestor of ${1} ($(git rev-parse --short "$merge"))."
 
-classify <<<"$(git diff --name-only "$live" "$merge")"
+# --no-renames, or a file moved out of app/ into docs/ is reported as the
+# destination alone and lands as documentation.
+changed=$(git diff --no-renames --name-only "$live" "$merge")
+
+classify <<<"$changed"

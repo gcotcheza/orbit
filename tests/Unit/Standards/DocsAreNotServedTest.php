@@ -15,12 +15,20 @@ use PHPUnit\Framework\Attributes\Test;
  */
 final class DocsAreNotServedTest extends TestCase
 {
-    private const TREES = ['app', 'config', 'routes', 'resources/js', 'resources/views', 'public', 'bootstrap'];
+    private const TREES = [
+        'app', 'config', 'routes', 'resources/js', 'resources/views', 'resources/css',
+        'public', 'bootstrap', 'docker',
+    ];
 
-    private const SOURCE = '/\.(php|js|vue|css|txt|htaccess)$/';
+    /** Not a tree: the files that build and wire the image, which can serve a path too. */
+    private const INFRASTRUCTURE = [
+        'docker-compose.yml', 'docker-compose.e2e.yml', 'vite.config.js', 'composer.json',
+    ];
+
+    private const SOURCE = '/(\.(php|js|ts|mjs|json|vue|css|txt|htaccess|conf|yml)$|^Dockerfile)/';
 
     /** A quoted run with no whitespace in it is a path; a sentence that mentions a doc is prose. */
-    private const DOCUMENTATION_PATH = '#[\'"`]([^\'"`\s]*(?:docs/|design/|README|CHANGELOG)[^\'"`\s]*)[\'"`]#';
+    private const DOCUMENTATION_PATH = '#[\'"`]([^\'"`\s]*(?:\bdocs\b|\bdesign\b|README|CHANGELOG|LICENSE)[^\'"`\s]*)[\'"`]#';
 
     private const ANY_LITERAL = '#[\'"`][^\'"`\n]*[\'"`]#';
 
@@ -82,6 +90,14 @@ final class DocsAreNotServedTest extends TestCase
     private function sources(): iterable
     {
         $root = dirname(__DIR__, 3);
+
+        foreach (self::INFRASTRUCTURE as $file) {
+            $path = $root.'/'.$file;
+
+            $this->assertFileExists($path, "{$file} is missing, so it was not scanned.");
+
+            yield $file => $this->withoutComments((string) file_get_contents($path));
+        }
 
         foreach (self::TREES as $tree) {
             $directory = $root.'/'.$tree;
