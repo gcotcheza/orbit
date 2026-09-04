@@ -153,7 +153,7 @@ before flipping anything. The keys that change behaviour:
 | `ORBIT_STATS_PROVIDER` | `fake` | `fake` \| `self`. `self` computes the usual price from Orbit's own tables and needs no key |
 | `ORBIT_RETURNS_PROVIDER` | `fake` | `fake` \| `travelpayouts`. Round trips, from a different endpoint with different coverage — its own switch, not a mode of the price provider. Real fares need `TRAVELPAYOUTS_TOKEN` |
 | `ORBIT_SWEEP_PROVIDER` | follows `ORBIT_PRICE_PROVIDER` | `fake` \| `travelpayouts`. The origin sweep behind discovery. Left unset it follows the price provider deliberately: a fake sweep beside real prices puts invented routes on the discovery screen |
-| `TRAVELPAYOUTS_TOKEN` | unset | required by, and only by, the real price adapter |
+| `TRAVELPAYOUTS_TOKEN` | unset | required by the three real Travelpayouts adapters — prices, the origin sweep and round trips — and by nothing else |
 | `TRAVELPAYOUTS_MARKER` | unset | the affiliate marker, read into config and deliberately sent to nobody |
 | `ANTHROPIC_API_KEY` | unset | its presence selects the Claude rule parser; absent, the regex parser runs |
 | `ORBIT_NLP_PARSER` | derived | overrides that choice — `regex` pins the deterministic parser on a box that has a key |
