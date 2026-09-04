@@ -131,6 +131,79 @@
    It has to run **after the asset build**, so it now lives with the deploy steps
    as step 6. Nothing else moved.
 
+## Docs-only landing
+
+**A docs-only merge lands; it does not deploy.** After pre-flight checks 1-3,
+ask what the merge commit actually changes. If the answer is documentation and
+nothing else, the code about to run is byte-identical to the code already
+running — a gate on that merge commit is a repeat, not a check, and everything
+below is a rebuild of what is already on disk.
+
+```bash
+git -C /var/www/orbit fetch origin main
+cd /var/www/orbit && scripts/docs-only.sh FETCH_HEAD
+```
+
+**⚠ THE SCRIPT DECIDES, NOT THE PULL REQUEST'S FILE LIST.** It diffs **this
+checkout's own HEAD** against the merge commit, so a second commit riding inside
+the merge — or a docs merge sitting on top of a code merge that was never
+deployed — comes back as `CODE`. A person reading the PR sees neither of those.
+
+- **`DOCS-ONLY: <n> file(s)`** → do the landing below.
+- **`CODE: <path>`**, one line per file → this is an ordinary deploy. Continue
+  to pre-flight check 4.
+- **`NOTHING TO LAND`** → the merge changes nothing in this checkout. Stop.
+- **Refused** (HEAD is not an ancestor of the merge commit) → something was
+  committed on the box. Stop and report: a landing is a fast-forward or it is
+  not a landing.
+
+**What counts as documentation.** An allowlist, because a denylist ships the
+file nobody thought of: `README*`, `CHANGELOG*`, `LICENSE*`, `docs/**` and
+`design/**` — minus two files that are documentation an agent *acts on* rather
+than reads. `docs/STANDARDS.md` is loaded as agent instructions through
+`.claude/rules/standards.md`, so changing it changes how the next change gets
+built; `docs/GO-LIVE.md` is a procedure, and a procedure that has not been run
+has not been checked. Everything else is code by construction — this runbook,
+`CLAUDE.md`, `scripts/**`, `.env.example`, the lockfiles, `resources/**`,
+`public/**`.
+
+**⚠ THIS RUNBOOK AND `scripts/**` TAKE THE FULL PATH, ALWAYS.** Running the
+procedure is the only test a procedure gets.
+
+### The landing
+
+1. **Pull**
+   ```bash
+   git -C /var/www/orbit pull origin main
+   ```
+   **Good:** a fast-forward, and `git log --oneline -1` is the merge commit you
+   expected.
+
+2. **Fix ownership** — the fetch above and this pull both ran as root and left
+   root-owned objects in the checkout *and in `.git`*, exactly as a deploy does.
+   ```bash
+   chown -R orbit:orbit /var/www/orbit
+   ```
+   **Good:** silent. Verify with `ls -ld /var/www/orbit/.git` → `orbit orbit`.
+
+3. **Prove the site is still serving** — a plain GET and a look at the stack,
+   nothing that writes.
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' https://flights.ghiecode.io/
+   docker compose ps
+   ```
+   **Good:** `200`, and all six services `Up`.
+
+**Then stop.** No gate, no migration, no asset build, no browser gate, no
+`retain`, no `view:clear`, no restart — because not one running process reads a
+Markdown file, so there is nothing new for any of them to boot.
+
+**And that last sentence is checked, not asserted.**
+`tests/Unit/Standards/DocsAreNotServedTest.php` fails the gate the moment
+anything under `app/`, `config/`, `routes/`, `resources/`, `public/` or
+`bootstrap/` names a documentation file as a path to open or serve. It is the
+whole reason a documentation change can be assumed not to be an app change.
+
 ## Deploy steps
 
 If any step fails, **stop and report** — do not continue to the next one.
