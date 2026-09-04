@@ -94,16 +94,26 @@ so the same route shows the same prices on every deploy.
 
 ## How the data moves
 
-Every morning, in an order that is load-bearing: **06:10** `orbit:poll-fares`
-fans out one job per watched route and writes both the ~91-day calendar window
-and one price observation (today's cheapest); **06:40** `orbit:sweep-rules`
-fetches fares for the routes each rule is about, skipping anything the poll
-already priced; **07:35** `orbit:alerts` decides what is worth interrupting
-somebody about and talks to no provider at all, because everything it reads was
-written by the two runs before it. **Monday 05:40** refreshes the route
-statistics, **Sunday 09:00** sends the digest, **03:10** prunes old asset
-builds. Every time is Europe/Amsterdam, from `config('orbit.timezone')` —
-storage stays UTC, but "06:10" is a statement about the owner's morning.
+Every morning, in an order that is load-bearing: **03:10** `build:retain` prunes
+old asset builds; **Saturday 04:10** `orbit:poll-fares --far` refreshes the far
+months (7–11) on the weekday in `config('orbit.poll.far_refresh_weekday')`,
+without replacing that morning's ordinary poll; **04:40** `orbit:poll-returns`
+makes one round-trip request per watched route and fills `return_fares`;
+**05:20** `orbit:discover` sweeps the home airports for insanely cheap routes
+nobody is watching and only surfaces them — no mail, no alert, ever; **Monday
+05:40** `orbit:refresh-stats` refreshes the route statistics ahead of that
+morning's poll; **06:10** `orbit:poll-fares` fans out one job per watched route
+and writes both the ~91-day calendar window and one price observation (today's
+cheapest); **06:40** `orbit:sweep-rules` fetches fares for the routes each rule
+is about, skipping anything the poll already priced; **07:10**
+`orbit:refresh-return-stats` records, per route and duration band, this
+morning's round-trip price and the usual price once five fares exist — one
+history row per morning, and it calls no provider; **07:35** `orbit:alerts`
+decides what is worth interrupting somebody about and talks to no provider at
+all, because everything it reads was written by the 06:10 poll and the 06:40
+sweep; **Sunday 09:00** `orbit:digest` sends the weekly digest. Every time is
+Europe/Amsterdam, from `config('orbit.timezone')` — storage stays UTC, but
+"06:10" is a statement about the owner's morning.
 
 The rules behind all of that, with their numbers and their config keys, are
 [`docs/BUSINESS-LOGIC.md`](docs/BUSINESS-LOGIC.md).
@@ -113,7 +123,7 @@ The rules behind all of that, with their numbers and their config keys, are
 | path | what |
 | --- | --- |
 | `app/Domain/` | pure business rules — scoring, alert policy, rule matching |
-| `app/Application/` | use cases and the four ports |
+| `app/Application/` | use cases and their `Ports/` |
 | `app/Infrastructure/` | adapters: Travelpayouts, self stats, NLP parsers, mail |
 | `app/Jobs/`, `app/Console/Commands/` | the queued work and the fan-out commands that schedule it |
 | `app/Http/` | controllers, form requests, API resources |
@@ -141,6 +151,8 @@ before flipping anything. The keys that change behaviour:
 | `ORBIT_TIMEZONE` | `Europe/Amsterdam` | which calendar day a fare counts toward, what "leaving Friday" means, when everything on the schedule runs |
 | `ORBIT_PRICE_PROVIDER` | `fake` | `fake` \| `travelpayouts`. Real fares need `TRAVELPAYOUTS_TOKEN`; without it the adapter refuses to resolve |
 | `ORBIT_STATS_PROVIDER` | `fake` | `fake` \| `self`. `self` computes the usual price from Orbit's own tables and needs no key |
+| `ORBIT_RETURNS_PROVIDER` | `fake` | `fake` \| `travelpayouts`. Round trips, from a different endpoint with different coverage — its own switch, not a mode of the price provider. Real fares need `TRAVELPAYOUTS_TOKEN` |
+| `ORBIT_SWEEP_PROVIDER` | follows `ORBIT_PRICE_PROVIDER` | `fake` \| `travelpayouts`. The origin sweep behind discovery. Left unset it follows the price provider deliberately: a fake sweep beside real prices puts invented routes on the discovery screen |
 | `TRAVELPAYOUTS_TOKEN` | unset | required by, and only by, the real price adapter |
 | `TRAVELPAYOUTS_MARKER` | unset | the affiliate marker, read into config and deliberately sent to nobody |
 | `ANTHROPIC_API_KEY` | unset | its presence selects the Claude rule parser; absent, the regex parser runs |
