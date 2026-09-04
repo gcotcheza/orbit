@@ -158,6 +158,14 @@ checkout's own HEAD** against the merge commit, so a second commit riding inside
 the merge — or a docs merge sitting on top of a code merge that was never
 deployed — comes back as `CODE`. A person reading the PR sees neither of those.
 
+**⚠ WHATEVER IT PRINTED, THE FETCH ABOVE RAN AS ROOT.** Every exit path leaves
+root-owned objects in `.git`, including the two that stop, so run this before
+reading the answer:
+
+```bash
+chown -R orbit:orbit /var/www/orbit
+```
+
 - **`DOCS-ONLY: <n> file(s)`** (exit 0) → do the landing below.
 - **`CODE: <path>`**, one line per file (exit 1) → this is an ordinary deploy.
   Continue to pre-flight check 4. A path git had to quote comes back escaped and
@@ -167,14 +175,6 @@ deployed — comes back as `CODE`. A person reading the PR sees neither of those
   something was committed on the box. Stop and report: a landing is a
   fast-forward or it is not a landing.
 - **Exit 64** → the script was called wrong. Stop; nothing was classified.
-
-**⚠ WHATEVER IT PRINTED, THE FETCH ABOVE RAN AS ROOT.** Every exit path leaves
-root-owned objects in `.git`, including the two that stop, so run this before
-doing anything else with the answer:
-
-```bash
-chown -R orbit:orbit /var/www/orbit
-```
 
 **What counts as documentation.** An allowlist, because a denylist ships the
 file nobody thought of: `README*`, `CHANGELOG*`, `LICENSE*`, `docs/**` and
