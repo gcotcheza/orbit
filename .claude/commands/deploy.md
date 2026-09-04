@@ -142,39 +142,45 @@ nothing else, the code about to run is byte-identical to the code already
 running — a gate on that merge commit is a repeat, not a check, and everything
 below is a rebuild of what is already on disk.
 
+**⚠ ONE BLOCK, AND IT HAS TO STAY ONE BLOCK.** Each fenced block runs in a
+fresh shell; a variable set in one is empty in the next, so splitting this would
+hand `merge --ff-only "$sha"` an empty string.
+
 ```bash
 git -C /var/www/orbit fetch origin main
 sha=$(git -C /var/www/orbit rev-parse FETCH_HEAD)
 cd /var/www/orbit && scripts/docs-only.sh "$sha"
+[ $? -eq 0 ] && git -C /var/www/orbit merge --ff-only "$sha" && echo "landed $sha"
+chown -R orbit:orbit /var/www/orbit
 ```
 
 **⚠ CAPTURE THE SHA ONCE AND USE IT TWICE.** What gets classified has to be what
 gets landed. `git pull` fetches again, so a merge pushed to `main` in the seconds
 between the two commands would land unclassified and ungated — which is why the
-landing below merges `"$sha"` rather than pulling.
+block merges `"$sha"` rather than pulling.
 
 **⚠ THE SCRIPT DECIDES, NOT THE PULL REQUEST'S FILE LIST.** It diffs **this
 checkout's own HEAD** against the merge commit, so a second commit riding inside
 the merge — or a docs merge sitting on top of a code merge that was never
 deployed — comes back as `CODE`. A person reading the PR sees neither of those.
 
-- **`DOCS-ONLY: <n> file(s)`** (exit 0) → do the landing below.
-- **`CODE: <path>`**, one line per file (exit 1) → this is an ordinary deploy.
-  Continue to pre-flight check 4. A path git had to quote comes back escaped and
-  with no reason given: an unusual path is code until someone looks.
-- **`NOTHING TO LAND`** (exit 2) → the merge changes nothing here. Stop.
-- **Refused** (exit 3) → HEAD is not an ancestor of the merge commit, so
-  something was committed on the box. Stop and report: a landing is a
-  fast-forward or it is not a landing.
-- **Exit 64** → the script was called wrong. Stop; nothing was classified.
+**⚠ THE FETCH AND THE MERGE BOTH RAN AS ROOT**, which is why the block ends in
+a `chown` sitting after them and outside the `&&` chain, so it runs on every
+exit path — including the three that merge nothing.
 
-**⚠ WHATEVER IT PRINTED, THE FETCH ABOVE RAN AS ROOT.** Every exit path leaves
-root-owned objects in `.git`, including the two that stop, so run this before
-doing anything else with the answer:
-
-```bash
-chown -R orbit:orbit /var/www/orbit
-```
+- **`DOCS-ONLY: <n> file(s)`** (exit 0) → the block printed `landed <sha>` and
+  the merge has already happened. Go to the landing below and verify it.
+- **`CODE: <path>`**, one line per file (exit 1) → nothing was merged. This is
+  an ordinary deploy: continue to pre-flight check 4. A path git had to quote
+  comes back escaped and with no reason given: an unusual path is code until
+  someone looks.
+- **`NOTHING TO LAND`** (exit 2) → nothing was merged; the merge changes nothing
+  here. Stop.
+- **Refused** (exit 3) → nothing was merged. HEAD is not an ancestor of the
+  merge commit, so something was committed on the box. Stop and report: a
+  landing is a fast-forward or it is not a landing.
+- **Exit 64** → the script was called wrong. Nothing was classified and nothing
+  was merged. Stop.
 
 **What counts as documentation.** An allowlist, because a denylist ships the
 file nobody thought of: `README*`, `CHANGELOG*`, `LICENSE*`, `docs/**` and
@@ -191,21 +197,24 @@ procedure is the only test a procedure gets.
 
 ### The landing
 
-1. **Merge the sha that was classified** — not a second pull, which would
-   fetch again and could land something newer than the answer above.
+1. **Check the merge landed** — the block above already did it; this is where
+   you prove it.
    ```bash
-   git -C /var/www/orbit merge --ff-only "$sha"
+   git -C /var/www/orbit rev-parse HEAD
+   git -C /var/www/orbit log --oneline -1
    ```
-   **Good:** a fast-forward, and `git -C /var/www/orbit rev-parse HEAD` is
-   exactly `$sha`. `--ff-only` refuses anything else rather than writing a merge
-   commit on the box.
+   **Good:** HEAD is exactly the sha the block echoed after `landed`, and the
+   log line is the merge you expected. A HEAD that did not move means the
+   landing did not happen: `--ff-only` refuses anything but a fast-forward
+   rather than writing a merge commit on the box. Stop and read the output
+   again.
 
-2. **Fix ownership again** — the merge just ran as root too, exactly as a
-   deploy's pull does, and left more root-owned objects in `.git`.
+2. **Check ownership came back** — the block's `chown` has already run, so this
+   reads rather than writes.
    ```bash
-   chown -R orbit:orbit /var/www/orbit
+   ls -ld /var/www/orbit/.git
    ```
-   **Good:** silent. Verify with `ls -ld /var/www/orbit/.git` → `orbit orbit`.
+   **Good:** `orbit orbit`.
 
 3. **Prove the site is still serving** — a plain GET and a look at the stack,
    nothing that writes.

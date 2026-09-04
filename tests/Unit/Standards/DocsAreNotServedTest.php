@@ -16,8 +16,8 @@ use PHPUnit\Framework\Attributes\Test;
 final class DocsAreNotServedTest extends TestCase
 {
     private const TREES = [
-        'app', 'config', 'routes', 'resources/js', 'resources/views', 'resources/css',
-        'public', 'bootstrap', 'docker',
+        'app', 'config', 'database', 'routes', 'resources/js', 'resources/views',
+        'resources/css', 'public', 'bootstrap', 'docker',
     ];
 
     /** Not a tree: the files that build and wire the image, which can serve a path too. */
@@ -25,7 +25,7 @@ final class DocsAreNotServedTest extends TestCase
         'docker-compose.yml', 'docker-compose.e2e.yml', 'vite.config.js', 'composer.json',
     ];
 
-    private const SOURCE = '/(\.(php|js|ts|mjs|json|vue|css|txt|htaccess|conf|yml)$|^Dockerfile)/';
+    private const SOURCE = '/(\.(php|js|ts|mjs|json|vue|css|txt|htaccess|conf|ini|yml)$|^Dockerfile)/';
 
     /** A quoted run with no whitespace in it is a path; a sentence that mentions a doc is prose. */
     private const DOCUMENTATION_PATH = '#[\'"`]([^\'"`\s]*(?:\bdocs\b|\bdesign\b|README|CHANGELOG|LICENSE)[^\'"`\s]*)[\'"`]#';
@@ -122,12 +122,12 @@ final class DocsAreNotServedTest extends TestCase
 
     private function withoutComments(string $code): string
     {
-        $stripped = preg_replace(
+        $blanked = preg_replace_callback(
             ['#/\*.*?\*/#s', '#<!--.*?-->#s', '#\{\{--.*?--\}\}#s'],
-            '',
+            static fn (array $m): string => str_repeat("\n", substr_count($m[0], "\n")),
             $code
         ) ?? $code;
 
-        return implode("\n", preg_grep('#^\s*(//|\#)#', explode("\n", $stripped), PREG_GREP_INVERT) ?: []);
+        return preg_replace('#^[ \t]*(//|\#(?!\[)).*$#m', '', $blanked) ?? $blanked;
     }
 }
