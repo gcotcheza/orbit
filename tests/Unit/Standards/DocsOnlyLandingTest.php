@@ -101,6 +101,52 @@ final class DocsOnlyLandingTest extends TestCase
     }
 
     #[Test]
+    public function the_landing_merges_the_sha_it_classified(): void
+    {
+        $commands = $this->landingCommands();
+
+        $this->assertStringContainsString(
+            'merge --ff-only "$sha"',
+            $commands,
+            'The landing section no longer runs the merge it classified. Classifying and '
+            .'merging share one fenced block because each block runs in a fresh shell: split '
+            .'them and $sha is empty by the time merge sees it, so the landing merges nothing.'
+        );
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/\bgit (-C \S+ )?pull\b/',
+            $commands,
+            'The landing section pulls. A pull fetches again, so it can land a commit newer '
+            .'than the one docs-only.sh classified — untested code, through the path that '
+            .'exists precisely because nothing needed testing. Naming `git pull` in prose is '
+            .'fine; only the fenced blocks are read here.'
+        );
+    }
+
+    /** The fenced blocks between the landing heading and the deploy steps, not the prose. */
+    private function landingCommands(): string
+    {
+        $runbook = $this->read(self::RUNBOOK);
+
+        $from = strpos($runbook, "\n## Docs-only landing");
+        $to = strpos($runbook, "\n## Deploy steps");
+
+        $this->assertIsInt($from, 'The deploy runbook has no "## Docs-only landing" section.');
+        $this->assertIsInt($to, 'The deploy runbook has no "## Deploy steps" section.');
+        $this->assertGreaterThan($from, $to, 'The landing section runs past the deploy steps.');
+
+        preg_match_all(
+            '/^[ \t]*```[a-z]*$(.*?)^[ \t]*```$/ms',
+            substr($runbook, $from, $to - $from),
+            $fences
+        );
+
+        $this->assertNotSame([], $fences[1], 'The landing section has no fenced commands at all.');
+
+        return implode("\n", $fences[1]);
+    }
+
+    #[Test]
     public function a_root_readme_lands_whatever_it_is_called(): void
     {
         $result = $this->classify(['README.php']);
