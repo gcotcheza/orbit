@@ -16,10 +16,11 @@ if [ $# -ne 1 ] || { [ "$mode" != dev ] && [ "$mode" != overlay ]; }; then
         printf 'usage: scripts/check.sh dev|overlay\n\n'
         printf '  dev      the stack is already up from this directory; the PHP steps\n'
         printf '           run inside it with `docker compose exec`.\n'
-        printf '  overlay  one throwaway container per step, with its own vendor/ and\n'
-        printf '           bootstrap/cache bind-overlaid; what the deploy runbook uses,\n'
-        printf '           because the live vendor/ is installed --no-dev. Run it as\n'
-        printf '           root: it chowns its overlay to the uid the containers use.\n\n'
+        printf '  overlay  one throwaway container per step, with its own vendor/,\n'
+        printf '           bootstrap/cache and node_modules/ bind-overlaid; what the\n'
+        printf '           deploy runbook uses, because the live vendor/ is installed\n'
+        printf '           --no-dev. Run it as root: it chowns its overlay to the uid\n'
+        printf '           the containers use.\n\n'
         printf 'The mode is not guessed, and it is the only argument. Name it.\n'
         printf 'CI_GIT names the git the secrets step lists the tree with. The deploy\n'
         printf 'sets it to `git-as orbit -C /var/www/orbit`, because root git cannot\n'
@@ -80,9 +81,17 @@ php_step() {
 
 # `.package-lock.json` is npm's own marker of a finished install; a bare
 # `[ -d node_modules ]` passes on an empty directory and lints nothing (exit 127).
+node_install='[ -f node_modules/.package-lock.json ] || npm ci --no-audit --fund=false'
+
 node_step() {
-    docker compose --profile build run --rm --entrypoint sh assets -c \
-        "set -e; [ -f node_modules/.package-lock.json ] || npm ci --no-audit --fund=false; $1"
+    if [ "$mode" = dev ]; then
+        docker compose --profile build run --rm --entrypoint sh \
+            assets -c "set -e; $node_install; $1"
+    else
+        docker compose --profile build run --rm --entrypoint sh \
+            -v "$gate/node_modules:/var/www/html/node_modules" \
+            assets -c "set -e; $node_install; $1"
+    fi
 }
 
 if [ "$mode" = overlay ]; then
@@ -91,8 +100,11 @@ if [ "$mode" = overlay ]; then
     # bootstrap/cache is overlaid too: `composer install` runs package:discover,
     # whose provider list would otherwise 500 the live --no-dev app on next boot.
     gate=$(mktemp -d /var/tmp/orbit-gate.XXXXXXXX)
-    mkdir -p "$gate/vendor" "$gate/bootstrap-cache"
+    mkdir -p "$gate/vendor" "$gate/bootstrap-cache" "$gate/node_modules"
     chown -R 115:119 "$gate"
+    # storage/ is the app's own writable directory, not a build product, so it is
+    # handed over rather than overlaid. docs/DECISIONS.md, worktrees-live-outside-the-served-tree
+    chown -R 115:119 "$here/storage"
     php_step composer install --no-interaction --no-progress
 fi
 
