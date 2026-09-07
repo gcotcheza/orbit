@@ -19,25 +19,19 @@ git -C /srv/sessions/orbit/repo worktree add \
 ```
 
 The clone is root-owned and every container here runs as `115:119`, so the tree
-they mount is one they can read and cannot write. The worktree needs an `.env`:
-`docker-compose.yml` interpolates `DB_*` and `REDIS_PASSWORD` out of it, and
-postgres exits at boot on an empty password (*"You must specify
-POSTGRES_PASSWORD to a non-empty value for the superuser"*).
+they mount is one they can read and cannot write — and for the overlay runner
+that needs nothing done about it by hand. It wants no `.env` either: `docker
+compose` prints one *"variable is not set"* warning per unset `DB_*` and
+`REDIS_PASSWORD` and carries on, and the suite reads the committed
+`.env.testing` rather than this file. The gate below was proved in a worktree
+that had no `.env` at all.
 
-```bash
-cd /srv/sessions/orbit/worktrees/feat-thing
-cp .env.example .env
-key="base64:$(openssl rand -base64 32)"
-sed -i "s|^APP_KEY=.*|APP_KEY=${key}|; s|^DB_PASSWORD=.*|DB_PASSWORD=sandbox|; s|^APP_ENV=.*|APP_ENV=local|" .env
-```
-
-Nothing else has to be handed over by hand. `vendor/`, `bootstrap/cache` and
-`node_modules/` are bind-overlaid outside the tree by the overlay runner, and
-`storage/` — the application's own writable directory, which the suite logs into
-through Monolog — is chowned to `115:119` by that runner's overlay step, which
-already runs as root and already chowns its own overlay. On the deployed
-checkout the same line is a no-op, because `storage/` is app-owned there
-already. PHPUnit warns once per run that it cannot write
+`vendor/`, `bootstrap/cache` and `node_modules/` are bind-overlaid outside the
+tree by that runner, and `storage/` — the application's own writable directory,
+which the suite logs into through Monolog — is chowned to `115:119` by its
+overlay step, which already runs as root and already chowns its own overlay. On
+the deployed checkout the same line is a no-op, because `storage/` is app-owned
+there already. PHPUnit warns once per run that it cannot write
 `.phpunit.result.cache` at the tree root; it is a warning, the run is still
 green, and opening the root would give away the thing a root-owned clone is for.
 
@@ -100,10 +94,23 @@ same directory and named on the same command line —
 `COMPOSE_PROJECT_NAME=orbit-<name> docker compose up -d postgres redis app`,
 then `COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh dev` (`web` is
 left out because it publishes `127.0.0.1:3085`, which production owns); the gate
-refuses to run against a stack started from another directory. What this page
-proves from a root-owned worktree is the `overlay` runner; `dev` there
-additionally needs `vendor/` and `node_modules/` handed over the way the gate
-hands over `storage/`, and that is not proven here.
+refuses to run against a stack started from another directory.
+
+That stack is where an `.env` becomes necessary: `docker-compose.yml`
+interpolates `DB_*` and `REDIS_PASSWORD` out of it, and postgres exits at boot
+on an empty password (*"You must specify POSTGRES_PASSWORD to a non-empty value
+for the superuser"*).
+
+```bash
+cd /srv/sessions/orbit/worktrees/feat-thing
+cp .env.example .env
+key="base64:$(openssl rand -base64 32)"
+sed -i "s|^APP_KEY=.*|APP_KEY=${key}|; s|^DB_PASSWORD=.*|DB_PASSWORD=sandbox|; s|^APP_ENV=.*|APP_ENV=local|" .env
+```
+
+What this page proves from a root-owned worktree is the `overlay` runner; `dev`
+there additionally needs `vendor/` and `node_modules/` handed over the way the
+gate hands over `storage/`, and that is not proven here.
 
 A worktree made the way this page shows needs no seam: it is root-owned, root's
 git owns it, and the gate's secrets step — the one check that reads the tree
