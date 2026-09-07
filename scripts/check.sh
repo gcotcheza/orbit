@@ -102,6 +102,9 @@ if [ "$mode" = overlay ]; then
     gate=$(mktemp -d /var/tmp/orbit-gate.XXXXXXXX)
     mkdir -p "$gate/vendor" "$gate/bootstrap-cache" "$gate/node_modules"
     chown -R 115:119 "$gate"
+    # storage/ is the app's own writable directory, not a build product, so it is
+    # handed over rather than overlaid. docs/DECISIONS.md, worktrees-live-outside-the-served-tree
+    chown -R 115:119 "$here/storage"
     php_step composer install --no-interaction --no-progress
 fi
 

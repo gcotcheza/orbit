@@ -10,40 +10,36 @@ repository went public.
 `/srv/sessions/orbit/repo`. `/var/www/orbit` is the deployed checkout, is
 bind-mounted into the running containers and is app-owned, so root's git does
 not enter it and no worktree is made there; `/var/www/orbit-worktrees/` is
-retired (`docs/DECISIONS.md`: `worktrees-live-outside-the-served-tree`). This is
-the branch in this page's own examples:
+retired (`docs/DECISIONS.md`: `worktrees-live-outside-the-served-tree`):
 
 ```bash
 git -C /srv/sessions/orbit/repo fetch origin
 git -C /srv/sessions/orbit/repo worktree add \
-    /srv/sessions/orbit/worktrees/gate-node-overlay \
-    -b fix/gate-node-modules-overlay origin/main
+    /srv/sessions/orbit/worktrees/feat-thing -b feat/thing origin/main
 ```
 
 The clone is root-owned and every container here runs as `115:119`, so the tree
-they mount is one they can read and cannot write. Two things follow from that.
-The worktree needs an `.env`, because `docker-compose.yml` interpolates `DB_*`
-and `REDIS_PASSWORD` out of it and postgres exits at boot on an empty password
-(*"You must specify POSTGRES_PASSWORD to a non-empty value for the superuser"*).
-And `storage/` has to be handed to the containers, because the suite writes
-`storage/logs/laravel.log` through Monolog: without it 146 tests fail on *"The
-stream or file … could not be opened in append mode"*, and with it the suite is
-green.
+they mount is one they can read and cannot write. The worktree needs an `.env`:
+`docker-compose.yml` interpolates `DB_*` and `REDIS_PASSWORD` out of it, and
+postgres exits at boot on an empty password (*"You must specify
+POSTGRES_PASSWORD to a non-empty value for the superuser"*).
 
 ```bash
-cd /srv/sessions/orbit/worktrees/gate-node-overlay
+cd /srv/sessions/orbit/worktrees/feat-thing
 cp .env.example .env
 key="base64:$(openssl rand -base64 32)"
 sed -i "s|^APP_KEY=.*|APP_KEY=${key}|; s|^DB_PASSWORD=.*|DB_PASSWORD=sandbox|; s|^APP_ENV=.*|APP_ENV=local|" .env
-chown -R 115:119 storage
 ```
 
-`storage/` is the only directory that needs the chown. `vendor/`,
-`bootstrap/cache` and `node_modules/` are bind-overlaid outside the tree by the
-overlay runner, which is why they are not in that line. PHPUnit warns once per
-run that it cannot write `.phpunit.result.cache` at the tree root; it is a
-warning, the run is still green, and opening the root would give away the thing
-a root-owned clone is for.
+Nothing else has to be handed over by hand. `vendor/`, `bootstrap/cache` and
+`node_modules/` are bind-overlaid outside the tree by the overlay runner, and
+`storage/` — the application's own writable directory, which the suite logs into
+through Monolog — is chowned to `115:119` by that runner's overlay step, which
+already runs as root and already chowns its own overlay. On the deployed
+checkout the same line is a no-op, because `storage/` is app-owned there
+already. PHPUnit warns once per run that it cannot write
+`.phpunit.result.cache` at the tree root; it is a warning, the run is still
+green, and opening the root would give away the thing a root-owned clone is for.
 
 That runner brings no stack up — its PHP steps are `docker compose run --rm
 --no-deps` and `assets` is a profile-gated task, so nothing reaches postgres or
@@ -52,7 +48,7 @@ redis. Name a sandbox project on the same command line anyway, because a bare
 serializer:
 
 ```bash
-COMPOSE_PROJECT_NAME=orbit-gatefix heavy-work orbit-gate-fix -- bash scripts/check.sh overlay
+COMPOSE_PROJECT_NAME=orbit-thing heavy-work orbit-gate-thing -- bash scripts/check.sh overlay
 ```
 
 **The commit guard.** Run it once, in the main checkout — it refuses to run
@@ -90,8 +86,9 @@ merged — this project has no baseline for new debt to hide in.
 
 It takes the runner as its one argument, and will not guess: `dev` uses the
 stack you already have up, `overlay` gives every step a throwaway container with
-its own `vendor/` and is what the deploy runbook runs against production, whose
-`vendor/` is `--no-dev`. Same nine checks, same order, either way.
+its own `vendor/`, `bootstrap/cache` and `node_modules/`, and is what the deploy
+runbook runs against production, whose `vendor/` is `--no-dev`. Same nine
+checks, same order, either way.
 
 ```bash
 docker compose up -d
@@ -103,7 +100,10 @@ same directory and named on the same command line —
 `COMPOSE_PROJECT_NAME=orbit-<name> docker compose up -d postgres redis app`,
 then `COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh dev` (`web` is
 left out because it publishes `127.0.0.1:3085`, which production owns); the gate
-refuses to run against a stack started from another directory.
+refuses to run against a stack started from another directory. What this page
+proves from a root-owned worktree is the `overlay` runner; `dev` there
+additionally needs `vendor/` and `node_modules/` handed over the way the gate
+hands over `storage/`, and that is not proven here.
 
 A worktree made the way this page shows needs no seam: it is root-owned, root's
 git owns it, and the gate's secrets step — the one check that reads the tree

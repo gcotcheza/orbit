@@ -84,7 +84,7 @@ final class GateRunnersTest extends TestCase
     }
 
     #[Test]
-    public function the_overlay_runner_installs_node_modules_outside_the_checkout(): void
+    public function the_overlay_runner_hands_over_what_the_containers_must_write(): void
     {
         $script = $this->withoutComments($this->read('scripts/check.sh'));
 
@@ -124,6 +124,14 @@ final class GateRunnersTest extends TestCase
             'The overlay block must create node_modules/ before a step mounts it, and inside the '
             .'directory the chown covers: docker creates a missing bind source root-owned, which '
             .'is the refusal being fixed.'
+        );
+        $this->assertMatchesRegularExpression(
+            '/^\s*chown -R 115:119 "\$here\/storage"/m',
+            $branch[1],
+            'The overlay block must hand storage/ to the containers as well as its own overlay. '
+            .'storage/ is the application\'s writable directory rather than a build product, so it '
+            .'cannot be overlaid; in a root-owned checkout without it 146 tests fail in Monolog on '
+            .'a log file that cannot be opened in append mode.'
         );
     }
 
