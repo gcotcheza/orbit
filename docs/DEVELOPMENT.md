@@ -67,6 +67,19 @@ then `COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh dev` (`web` is
 left out because it publishes `127.0.0.1:3085`, which production owns); the gate
 refuses to run against a stack started from another directory.
 
+A worktree made the way this page shows is `orbit`-owned, so the gate's secrets
+step — the one check that reads the tree with git — dies on "dubious ownership"
+when root runs it there. Hand it the same seam the deploy uses, pointed at the
+worktree:
+
+```bash
+export CI_GIT="git-as orbit -C /var/www/orbit-worktrees/<name>"
+```
+
+Or work in a root-owned private clone under `/srv/worker-scratch` instead, where
+plain git is root's own and no variable is needed — which is what the last four
+Orbit pull requests used.
+
 **The compose-project trap.** `docker-compose.yml` pins `name: orbit` and
 publishes `127.0.0.1:3085`; the browser sandbox pins `orbit-e2e` on
 `127.0.0.1:3185` with its own generated `.env.e2e`. A compose command is

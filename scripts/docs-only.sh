@@ -72,6 +72,13 @@ if [ "$1" = --paths ]; then
     classify
 fi
 
+# The classification is against THIS checkout's HEAD, so a seam naming another
+# tree would classify a merge nobody is deploying here.
+seam_dir=$(set -- $GIT; while [ $# -gt 0 ]; do case $1 in -C) printf '%s' "${2-}"; break ;; -C?*) printf '%s' "${1#-C}"; break ;; esac; shift; done)
+if [ -n "$seam_dir" ] && [ "$(realpath -- "$seam_dir" 2>/dev/null)" != "$(pwd -P)" ]; then
+    refuse "DOCS_ONLY_GIT points at $seam_dir but this script runs in $(pwd -P)."
+fi
+
 merge=$($GIT rev-parse --verify --quiet "${1}^{commit}") \
     || refuse "$1 is not a commit in this checkout — fetch it first."
 

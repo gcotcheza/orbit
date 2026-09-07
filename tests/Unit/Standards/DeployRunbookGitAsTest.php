@@ -118,6 +118,69 @@ final class DeployRunbookGitAsTest extends TestCase
             "The revert itself is unchanged — -m 1 keeps main's side of the merge — only where it "
             .'is made has moved.'
         );
+        $this->assertMatchesRegularExpression(
+            '/^git switch -c revert\/<sha>/m',
+            $section,
+            'A fresh clone is on main, so a revert committed there has main as its head and '
+            .'`gh pr create --base main` is asked for a pull request from a branch into itself. '
+            .'The revert needs its own branch before it is made.'
+        );
+        $this->assertMatchesRegularExpression(
+            '/^gh pr create .*--fill.*--head revert\/<sha>/m',
+            $section,
+            'gh takes its head from the current branch and prompts for a title when neither '
+            .'--fill nor --title is given — which hangs the non-interactive shell a runbook is '
+            .'read into. Name the head and fill the body from the commit.'
+        );
+    }
+
+    #[Test]
+    public function the_agent_runtimes_local_settings_are_ignored(): void
+    {
+        $this->assertMatchesRegularExpression(
+            '#^\.claude/settings\.local\.json$#m',
+            $this->read('.gitignore'),
+            'Claude Code writes .claude/settings.local.json into its working directory, which for '
+            .'the orbit session IS the served checkout. Untracked and unignored it shows up as '
+            .'`?? .claude/settings.local.json` in pre-flight check 2, whose expected output is '
+            .'nothing at all — so every deploy stops on a per-machine permissions file. It is '
+            .'local by definition and belongs in .gitignore, not in a runbook exception.'
+        );
+    }
+
+    #[Test]
+    public function a_classifier_seam_pointing_at_another_tree_is_refused(): void
+    {
+        $elsewhere = $this->runScript([], seamDirectory: '/elsewhere');
+
+        $this->assertSame(
+            3,
+            $elsewhere['status'],
+            "A seam naming another tree has to be refused, not classified.\n".$elsewhere['output']
+        );
+        $this->assertStringContainsString(
+            'DOCS_ONLY_GIT points at /elsewhere but this script runs in',
+            $elsewhere['output'],
+            'The refusal names both directories, because the whole failure is that they differ.'
+        );
+        $this->assertSame(
+            [],
+            $elsewhere['seam'],
+            'The refusal comes before the first git call: nothing may be classified against the '
+            .'wrong tree.'
+        );
+
+        $matching = $this->runScript(
+            ['STUB_DIFF_PATHS' => 'docs/API.md'],
+            seamDirectory: dirname(__DIR__, 3)
+        );
+
+        $this->assertSame(
+            0,
+            $matching['status'],
+            "The runbook's own export names one tree twice and must pass this guard.\n".$matching['output']
+        );
+        $this->assertStringContainsString('DOCS-ONLY: 1 file(s)', $matching['output']);
     }
 
     #[Test]
@@ -454,7 +517,7 @@ final class DeployRunbookGitAsTest extends TestCase
      * @param  array<string, string>  $stub
      * @return array{status: int, output: string, seam: list<string>, plain: list<string>}
      */
-    private function runScript(array $stub, bool $seam = true): array
+    private function runScript(array $stub, bool $seam = true, ?string $seamDirectory = null): array
     {
         $root = dirname(__DIR__, 3);
         $bin = sys_get_temp_dir().'/orbit-git-seam-'.bin2hex(random_bytes(6));
@@ -466,8 +529,9 @@ final class DeployRunbookGitAsTest extends TestCase
 
         $environment = ['PATH' => $bin.':'.(getenv('PATH') ?: '/usr/bin:/bin')] + $stub;
 
-        if ($seam) {
-            $environment['DOCS_ONLY_GIT'] = $bin.'/fake-git '.self::SEAM_FLAG;
+        if ($seam || $seamDirectory !== null) {
+            $environment['DOCS_ONLY_GIT'] = $bin.'/fake-git '.self::SEAM_FLAG
+                .($seamDirectory === null ? '' : ' -C '.$seamDirectory);
         }
 
         $result = $this->execute(['bash', $root.'/'.self::SCRIPT, 'deadbee'], $environment, $root);
@@ -496,6 +560,9 @@ final class DeployRunbookGitAsTest extends TestCase
                 fi
                 shift
             fi
+            case "\$1" in
+                -C) shift 2 ;;
+            esac
             printf '%s\\n' "\$*" >> '{$log}'
             sub=\$1
             shift

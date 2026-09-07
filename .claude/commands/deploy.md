@@ -60,6 +60,9 @@ only documentation is landed there and never reaches the gate.
    ```bash
    git-as orbit -C /var/www/orbit --no-optional-locks status --porcelain            # expect: no output
    ```
+   A `??` under `.claude/` is the orbit session's own Claude Code runtime, whose
+   working directory is this checkout until backlog item 32 moves it out — not a
+   change to the app; anything else is somebody having edited production.
 3. Show the last 3 commits so the user can confirm what is already live.
    ```bash
    git-as orbit -C /var/www/orbit --no-optional-locks log --oneline -3
@@ -774,9 +777,10 @@ root's git cannot read it at all):
 ```bash
 git clone git@github.com:gcotcheza/orbit.git /srv/worker-scratch/orbit-revert
 cd /srv/worker-scratch/orbit-revert
+git switch -c revert/<sha>                             # the clone is on main; a PR needs its own head
 git revert -m 1 --no-edit <sha>                        # -m 1 = keep main's side
-git push origin HEAD:revert/<sha>
-gh pr create --draft --base main
+git push -u origin revert/<sha>
+gh pr create --draft --fill --base main --head revert/<sha>
 ```
 
 Ghie merges it; the next deploy lands it, and the `reset --hard` above is what
