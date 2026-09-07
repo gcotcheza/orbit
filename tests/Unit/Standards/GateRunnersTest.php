@@ -84,6 +84,50 @@ final class GateRunnersTest extends TestCase
     }
 
     #[Test]
+    public function the_overlay_runner_installs_node_modules_outside_the_checkout(): void
+    {
+        $script = $this->withoutComments($this->read('scripts/check.sh'));
+
+        if (preg_match('/^node_step\(\) \{$(.*?)^\}$/ms', $script, $function) !== 1) {
+            $this->fail('scripts/check.sh no longer has a node_step function to read.');
+        }
+
+        $arms = preg_split('/^\s*else$/m', $function[1]) ?: [];
+
+        $this->assertCount(
+            2,
+            $arms,
+            'node_step stopped branching on the runner, so the overlay runner installs into the '
+            .'checkout again. `assets` runs as 115:119 (docker-compose.yml, user:), and a '
+            .'root-owned tree answers that npm ci with EACCES mkdir /var/www/html/node_modules.'
+        );
+        $this->assertStringNotContainsString(
+            '-v ',
+            $arms[0],
+            'dev overlays nothing: it uses the node_modules/ of the tree the developer brought the '
+            .'stack up from.'
+        );
+        $this->assertStringContainsString(
+            '-v "$gate/node_modules:/var/www/html/node_modules"',
+            $arms[1],
+            'The overlay runner must hand the node steps a node_modules/ under $gate, the way '
+            .'php_step hands the PHP steps vendor/ and bootstrap/cache.'
+        );
+
+        if (preg_match('/^if \[ "\$mode" = overlay \]; then$(.*?)^fi$/ms', $script, $branch) !== 1) {
+            $this->fail('scripts/check.sh no longer has an overlay-only branch to read.');
+        }
+
+        $this->assertMatchesRegularExpression(
+            '/^\s*mkdir -p[^\n]*"\$gate\/node_modules"/m',
+            $branch[1],
+            'The overlay block must create node_modules/ before a step mounts it, and inside the '
+            .'directory the chown covers: docker creates a missing bind source root-owned, which '
+            .'is the refusal being fixed.'
+        );
+    }
+
+    #[Test]
     public function only_the_overlay_step_is_a_step_a_runner_can_skip(): void
     {
         $script = $this->read('scripts/check.sh');

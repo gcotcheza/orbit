@@ -4,11 +4,13 @@ Fleet engineering standards: `docs/STANDARDS.md` (also loaded via
 `.claude/rules/standards.md`). They apply here in full; anything below
 overrides them and says why.
 
-- **Where work happens.** A git worktree, one per branch, at
-  `/var/www/orbit-worktrees/<short-name>` — never in the checkout itself.
+- **Where work happens.** A git worktree, one per branch, cut from the
+  root-owned clone at `/srv/sessions/orbit/repo`:
+  `git -C /srv/sessions/orbit/repo worktree add /srv/sessions/orbit/worktrees/<name> -b <branch> origin/main`.
   `/var/www/orbit` IS production and is bind-mounted into the running
   containers, so editing, branching or building there changes the live site
-  immediately.
+  immediately; root's git does not enter it at all, and
+  `/var/www/orbit-worktrees/` is retired.
 - **Merging to `main` does not deploy.** Nothing ships until
   `.claude/commands/deploy.md` is run, literally: the long-lived containers
   boot the code once, so an unrestarted deploy looks entirely successful and
