@@ -5,6 +5,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# The deploy runs this as root against a checkout root's git refuses to read.
+# Unquoted on purpose: the value is a command with arguments.
+GIT=${DOCS_ONLY_GIT:-git}
+
 usage() {
     {
         printf 'usage: scripts/docs-only.sh <merge-sha> | --paths\n\n'
@@ -68,18 +72,18 @@ if [ "$1" = --paths ]; then
     classify
 fi
 
-merge=$(git rev-parse --verify --quiet "${1}^{commit}") \
+merge=$($GIT rev-parse --verify --quiet "${1}^{commit}") \
     || refuse "$1 is not a commit in this checkout — fetch it first."
 
-live=$(git rev-parse HEAD)
+live=$($GIT rev-parse HEAD)
 
 # A landing is a fast-forward or it is not a landing: anything else means this
 # checkout carries a commit the merge does not.
-git merge-base --is-ancestor "$live" "$merge" \
-    || refuse "HEAD ($(git rev-parse --short HEAD)) is not an ancestor of ${1} ($(git rev-parse --short "$merge"))."
+$GIT merge-base --is-ancestor "$live" "$merge" \
+    || refuse "HEAD ($($GIT rev-parse --short HEAD)) is not an ancestor of ${1} ($($GIT rev-parse --short "$merge"))."
 
 # --no-renames, or a file moved out of app/ into docs/ is reported as the
 # destination alone and lands as documentation.
-changed=$(git diff --no-renames --name-only "$live" "$merge")
+changed=$($GIT diff --no-renames --name-only "$live" "$merge")
 
 classify <<<"$changed"

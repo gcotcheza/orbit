@@ -6,6 +6,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 here=$(pwd -P)
 
+# CI_GIT is a COMMAND WITH ARGUMENTS, so $GIT is unquoted on purpose; it carries
+# its own -C, so no call site below adds one. docs/DECISIONS.md, the-gate-scans-for-secrets-over-gits-view-of-the-tree
+GIT=${CI_GIT:-git}
+
 mode=${1-}
 if [ $# -ne 1 ] || { [ "$mode" != dev ] && [ "$mode" != overlay ]; }; then
     {
@@ -17,6 +21,9 @@ if [ $# -ne 1 ] || { [ "$mode" != dev ] && [ "$mode" != overlay ]; }; then
         printf '           because the live vendor/ is installed --no-dev. Run it as\n'
         printf '           root: it chowns its overlay to the uid the containers use.\n\n'
         printf 'The mode is not guessed, and it is the only argument. Name it.\n'
+        printf 'CI_GIT names the git the secrets step lists the tree with. The deploy\n'
+        printf 'sets it to `git-as orbit -C /var/www/orbit`, because root git cannot\n'
+        printf 'read that checkout at all; unset, it is plain `git`.\n'
     } >&2
     exit 2
 fi
@@ -85,7 +92,7 @@ step 'Gitleaks (secrets)'
 work=$(mktemp -d)
 mkdir "$work/scan"
 
-git -C "$here" ls-files -z --cached --others --exclude-standard >"$work/list"
+$GIT ls-files -z --cached --others --exclude-standard >"$work/list"
 if [ ! -s "$work/list" ]; then
     printf 'check.sh: git listed no file to scan in %s. The secrets\n' "$here" >&2
     printf '  step would have scanned nothing and reported no leaks. That is\n' >&2
