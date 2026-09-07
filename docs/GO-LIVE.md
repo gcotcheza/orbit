@@ -87,7 +87,8 @@ Worth knowing so nobody "fixes" them:
 ### After the merges
 
 ```bash
-git -C /var/www/orbit pull origin main
+git-as orbit -C /var/www/orbit pull origin main
+export CI_GIT='git-as orbit -C /var/www/orbit'
 bash /var/www/orbit/scripts/check.sh overlay
 ```
 

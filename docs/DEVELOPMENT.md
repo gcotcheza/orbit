@@ -8,10 +8,13 @@ repository went public.
 
 **Work in a git worktree, one per branch** — `/var/www/orbit` is the deployed
 checkout and must stay on `main`. The convention is
-`/var/www/orbit-worktrees/<short-name>`:
+`/var/www/orbit-worktrees/<short-name>`, whose parent has to be writable by
+`orbit` — it is `root:orbit` mode 2775 today, so it is; one non-recursive
+`chown --reference=/var/www/orbit /var/www/orbit-worktrees` would make it owned
+rather than merely writable:
 
 ```bash
-git -C /var/www/orbit worktree add /var/www/orbit-worktrees/feat-thing -b feat/thing
+git-as orbit -C /var/www/orbit worktree add /var/www/orbit-worktrees/feat-thing -b feat/thing
 ```
 
 **The commit guard.** Run it once, in the main checkout — it refuses to run
@@ -63,6 +66,19 @@ same directory and named on the same command line —
 then `COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh dev` (`web` is
 left out because it publishes `127.0.0.1:3085`, which production owns); the gate
 refuses to run against a stack started from another directory.
+
+A worktree made the way this page shows is `orbit`-owned, so the gate's secrets
+step — the one check that reads the tree with git — dies on "dubious ownership"
+when root runs it there. Hand it the same seam the deploy uses, pointed at the
+worktree:
+
+```bash
+export CI_GIT="git-as orbit -C /var/www/orbit-worktrees/<name>"
+```
+
+Or work in a root-owned private clone under `/srv/worker-scratch` instead, where
+plain git is root's own and no variable is needed — which is what the last four
+Orbit pull requests used.
 
 **The compose-project trap.** `docker-compose.yml` pins `name: orbit` and
 publishes `127.0.0.1:3085`; the browser sandbox pins `orbit-e2e` on

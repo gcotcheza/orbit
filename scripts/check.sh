@@ -6,6 +6,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 here=$(pwd -P)
 
+# CI_GIT is a COMMAND WITH ARGUMENTS, so $GIT is unquoted on purpose; it carries
+# its own -C, so no call site below adds one. docs/DECISIONS.md, the-gate-scans-for-secrets-over-gits-view-of-the-tree
+GIT=${CI_GIT:-git}
+
 mode=${1-}
 if [ $# -ne 1 ] || { [ "$mode" != dev ] && [ "$mode" != overlay ]; }; then
     {
@@ -17,7 +21,20 @@ if [ $# -ne 1 ] || { [ "$mode" != dev ] && [ "$mode" != overlay ]; }; then
         printf '           because the live vendor/ is installed --no-dev. Run it as\n'
         printf '           root: it chowns its overlay to the uid the containers use.\n\n'
         printf 'The mode is not guessed, and it is the only argument. Name it.\n'
+        printf 'CI_GIT names the git the secrets step lists the tree with. The deploy\n'
+        printf 'sets it to `git-as orbit -C /var/www/orbit`, because root git cannot\n'
+        printf 'read that checkout at all; unset, it is plain `git`. Its -C, if it\n'
+        printf 'carries one, must be THIS checkout: the list and the copy are paired.\n'
     } >&2
+    exit 2
+fi
+
+# The step lists with $GIT and copies with `tar -C "$here"`; a seam pointing
+# somewhere else would fill the copy from a tree nothing listed.
+seam_dir=$(set -- $GIT; while [ $# -gt 0 ]; do case $1 in -C) printf '%s' "${2-}"; break ;; -C?*) printf '%s' "${1#-C}"; break ;; esac; shift; done)
+if [ -n "$seam_dir" ] && [ "$(realpath -- "$seam_dir" 2>/dev/null)" != "$here" ]; then
+    printf 'check.sh: CI_GIT points at %s but this script runs in %s — the list and\n' "$seam_dir" "$here" >&2
+    printf '  the copy would disagree.\n' >&2
     exit 2
 fi
 
@@ -85,7 +102,7 @@ step 'Gitleaks (secrets)'
 work=$(mktemp -d)
 mkdir "$work/scan"
 
-git -C "$here" ls-files -z --cached --others --exclude-standard >"$work/list"
+$GIT ls-files -z --cached --others --exclude-standard >"$work/list"
 if [ ! -s "$work/list" ]; then
     printf 'check.sh: git listed no file to scan in %s. The secrets\n' "$here" >&2
     printf '  step would have scanned nothing and reported no leaks. That is\n' >&2

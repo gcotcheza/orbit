@@ -365,10 +365,9 @@ if [ ! -f public/build/manifest.json ]; then
 fi
 
 # The two directories the browser container writes into, made and handed over
-# BEFORE it starts. It runs as 115:119, and a checkout whose e2e/ tree is
-# root-owned (a `git pull` as root, which the deploy runbook warns about) gives
-# it EACCES on the first screenshot — reported by Playwright as a failing
-# assertion, which sends you looking at the app.
+# BEFORE it starts. It runs as 115:119, so a root-owned e2e/ tree gives it EACCES
+# on the first screenshot, which Playwright reports as a failing assertion.
+# The deploy runbook's narrow find/chown pair is the repair.
 #
 # `baselines` is included even though a passing run only READS it: writing is
 # exactly what `--update-snapshots` does, and that is the one run where being

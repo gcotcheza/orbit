@@ -106,21 +106,80 @@ final class DocsOnlyLandingTest extends TestCase
         $commands = $this->landingCommands();
 
         $this->assertStringContainsString(
-            'merge --ff-only "$sha"',
+            'git-as orbit -C /var/www/orbit merge --ff-only "$sha"',
             $commands,
-            'The landing section no longer runs the merge it classified. Classifying and '
-            .'merging share one fenced block because each block runs in a fresh shell: split '
-            .'them and $sha is empty by the time merge sees it, so the landing merges nothing.'
+            'The landing section no longer runs the merge it classified as the user that owns '
+            .'the checkout. Classifying and merging share one fenced block because each block '
+            .'runs in a fresh shell: split them and $sha is empty by the time merge sees it, so '
+            .'the landing merges nothing.'
         );
 
         $this->assertDoesNotMatchRegularExpression(
-            '/\bgit (-C \S+ )?pull\b/',
+            '/\bgit(?:-as \S+)? (?:-C \S+ )?pull\b/',
             $commands,
             'The landing section pulls. A pull fetches again, so it can land a commit newer '
             .'than the one docs-only.sh classified — untested code, through the path that '
             .'exists precisely because nothing needed testing. Naming `git pull` in prose is '
-            .'fine; only the fenced blocks are read here.'
+            .'fine; only the fenced blocks are read here. The git-as arm is there because every '
+            .'git here now carries it; without it the guard reads a wrapped pull as prose.'
         );
+    }
+
+    #[Test]
+    public function the_landing_block_proves_its_ownership_last_and_shows_both_outcomes(): void
+    {
+        $block = $this->landingBlock();
+
+        $lines = array_values(array_filter(
+            explode("\n", trim($block)),
+            static fn (string $line): bool => trim($line) !== ''
+        ));
+
+        $this->assertSame(
+            "find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l",
+            trim((string) end($lines)),
+            'Every git in this block runs as orbit through git-as, so it leaves nothing '
+            .'root-owned. That count is the proof, and it has to be the last line to run on every '
+            .'exit path — including a refused fast-forward. The .claude/ carve-out is not '
+            .'decoration: the orbit session runs Claude Code with /var/www/orbit as its working '
+            .'directory and leaves root-owned runtime files there, excluded from git and never '
+            .'deployed, and counting them would make a clean tree read as a repair due.'
+        );
+        $this->assertStringNotContainsString(
+            'chown',
+            $block,
+            'The chown here only ever repaired root git, which this block no longer runs. One '
+            .'that repairs nothing hides the day something starts needing repair again.'
+        );
+        $this->assertStringContainsString(
+            'landed $sha',
+            $block,
+            'The success outcome must be visible in the block itself, not only described in prose.'
+        );
+        $this->assertStringContainsString(
+            'NOT LANDED',
+            $block,
+            'A refused fast-forward must stay visible — silently falling through to the proof '
+            .'line reads as a landing that happened when the checkout never advanced.'
+        );
+    }
+
+    /** The one fenced block that classifies and lands. */
+    private function landingBlock(): string
+    {
+        preg_match_all(
+            '/^[ \t]*```[a-z]*$(.*?)^[ \t]*```$/ms',
+            $this->read(self::RUNBOOK),
+            $fences
+        );
+
+        foreach ($fences[1] as $fence) {
+            if (str_contains($fence, 'scripts/docs-only.sh')) {
+                return $fence;
+            }
+        }
+
+        $this->fail('No fenced block in the runbook invokes scripts/docs-only.sh.');
     }
 
     /** The fenced blocks between the landing heading and the deploy steps, not the prose. */
@@ -175,11 +234,12 @@ final class DocsOnlyLandingTest extends TestCase
     public function the_diff_is_asked_not_to_detect_renames(): void
     {
         $this->assertMatchesRegularExpression(
-            '/git diff --no-renames --name-only/',
+            '/\$GIT diff --no-renames --name-only/',
             $this->read(self::SCRIPT),
             'Without --no-renames git reports `git mv app/Foo.php docs/Foo.php` as the destination '
             .'alone, the change set reads as one Markdown file, and a PHP file lands with no gate '
-            .'and no restart.'
+            .'and no restart. $GIT is the seam the deploy hands this script; see '
+            .'DeployRunbookGitAsTest.'
         );
     }
 

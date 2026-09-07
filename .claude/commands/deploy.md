@@ -23,9 +23,13 @@
   disk changes nothing until they are told. This is why step 9 exists and is not
   optional — a deploy that skips it looks completely successful and serves the
   old app.
-- **⚠ Root-run git re-owns files.** `git pull` as root leaves root-owned objects
-  in the checkout *and in `.git`*, and the next `sudo -u orbit` git operation then
-  fails on its own repository. Step 2 chowns the whole tree, `.git` included.
+- **⚠ Every git here runs as `orbit`, never as root.** `git-as` is the fleet
+  wrapper that drops to the account owning the tree it is handed, and it is not
+  optional: root's git refuses this checkout with
+  `fatal: detected dubious ownership`, so a root-run deploy stops at its first
+  git call. Before that check existed it was worse — root's git succeeded and
+  left root-owned objects in the worktree *and in `.git`* for the next `orbit`
+  git to fail on. Nothing chowns any more; step 2 counts instead.
 - **The host nginx vhost is a separate file.** `/etc/nginx/sites-available/flights-ghiecode`
   is what nginx reads; `deploy/nginx/flights-ghiecode.conf` in this repo is the
   reviewable copy. Editing the repo copy deploys nothing. See `docs/GO-LIVE.md`.
@@ -50,15 +54,18 @@ only documentation is landed there and never reaches the gate.
 
 1. Confirm the branch in `/var/www/orbit` is `main`; if not, warn and stop.
    ```bash
-   git -C /var/www/orbit rev-parse --abbrev-ref HEAD    # expect: main
+   git-as orbit -C /var/www/orbit --no-optional-locks rev-parse --abbrev-ref HEAD   # expect: main
    ```
 2. Confirm the working tree is clean; if not, warn and ask before continuing.
    ```bash
-   git -C /var/www/orbit status --porcelain             # expect: no output
+   git-as orbit -C /var/www/orbit --no-optional-locks status --porcelain            # expect: no output
    ```
+   A `??` under `.claude/` is the orbit session's own Claude Code runtime, whose
+   working directory is this checkout until backlog item 32 moves it out — not a
+   change to the app; anything else is somebody having edited production.
 3. Show the last 3 commits so the user can confirm what is already live.
    ```bash
-   git -C /var/www/orbit log --oneline -3
+   git-as orbit -C /var/www/orbit --no-optional-locks log --oneline -3
    ```
 4. **The nine checks must be green on the merge commit being deployed.** From
    PR3 onwards this is the merge gate (`docs/PLAN.md`), so normally it was green
@@ -79,6 +86,7 @@ only documentation is landed there and never reaches the gate.
    writes is visible to the running containers:
 
    ```bash
+   export CI_GIT='git-as orbit -C /var/www/orbit'
    bash /var/www/orbit/scripts/check.sh overlay
    ```
 
@@ -114,7 +122,15 @@ only documentation is landed there and never reaches the gate.
      root-owned files in the checkout: the containers it drives are already
      `user: '115:119'`, which *is* the `orbit` user (see "How this is wired"),
      so file ownership is handled inside them rather than by the invoking shell.
-     The overlay directory is chowned to the same uid for the same reason.
+     The overlay directory is chowned to the same uid for the same reason, and
+     the one step that reads the checkout with git goes through `CI_GIT`.
+   - **⚠ `CI_GIT` IS NOT OPTIONAL, AND ITS ABSENCE READS LIKE A BROKEN GATE.**
+     The secrets step lists the tree with git — the one check that reads the
+     checkout rather than a container — and root's git refuses this checkout.
+     Without the export the run stops in its first step on
+     `fatal: detected dubious ownership`: a missing environment variable, not a
+     leak and not a broken scanner. The value carries its own `-C`, which names
+     the same directory as the path on the line below it.
    - **⚠ The PHPUnit step writes into `storage/logs/laravel.log`.** It is the
      real checkout, bind-mounted, so a test that exercises a logging path leaves
      `testing.INFO` / `testing.ERROR` lines in production's application log.
@@ -147,11 +163,13 @@ fresh shell; a variable set in one is empty in the next, so splitting this would
 hand `merge --ff-only "$sha"` an empty string.
 
 ```bash
-git -C /var/www/orbit fetch origin main
-sha=$(git -C /var/www/orbit rev-parse FETCH_HEAD)
+git-as orbit -C /var/www/orbit fetch origin main
+sha=$(git-as orbit -C /var/www/orbit --no-optional-locks rev-parse FETCH_HEAD)
+# The classifier reads this checkout with git too, so it takes the same seam.
+export DOCS_ONLY_GIT='git-as orbit -C /var/www/orbit'
 cd /var/www/orbit && scripts/docs-only.sh "$sha"
-[ $? -eq 0 ] && git -C /var/www/orbit merge --ff-only "$sha" && echo "landed $sha"
-chown -R orbit:orbit /var/www/orbit
+[ $? -eq 0 ] && { git-as orbit -C /var/www/orbit merge --ff-only "$sha" && echo "landed $sha" || echo "NOT LANDED: fast-forward refused, checkout unchanged"; }
+find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
 ```
 
 **⚠ CAPTURE THE SHA ONCE AND USE IT TWICE.** What gets classified has to be what
@@ -164,21 +182,46 @@ checkout's own HEAD** against the merge commit, so a second commit riding inside
 the merge — or a docs merge sitting on top of a code merge that was never
 deployed — comes back as `CODE`. A person reading the PR sees neither of those.
 
-**⚠ THE FETCH AND THE MERGE BOTH RAN AS ROOT**, which is why the block ends in
-a `chown` sitting after them and outside the `&&` chain, so it runs on every
-exit path — including the three that merge nothing.
+**⚠ NOTHING CHOWNS HERE ANY MORE, AND NOTHING NEEDS TO.** Every git above runs
+as `orbit` through `git-as`, the fleet wrapper that runs git as the account
+owning the directory it is handed — so root never reads a tree it does not own,
+and no root-owned object is left behind to repair. The `find` is that claim's
+proof and is the last line of the block, on purpose: it runs on every exit path,
+including the three that merge nothing. It must print `0`. `.claude/` is carved
+out because the orbit session's own Claude Code runtime (working directory
+`/var/www/orbit`) writes root-owned files there — `.claude/scheduled_tasks.lock`
+today — which recur until backlog item 32 moves the session's working directory
+out of the served tree; those files are in `.git/info/exclude` and never deploy.
+
+**⚠ A NON-ZERO COUNT IS A REPAIR THAT IS DUE BEFORE THE NEXT MERGE STEP.** It is
+residue from the root git this replaced, and git running as `orbit` cannot write
+into a root-owned `.git`, so the next fast-forward is what breaks. Repair it by
+hand, and repair only what is wrong — a blanket `chown -R` over the whole tree
+also rewrites `vendor/`, `node_modules/` and `public/build`, which says
+something happened to them that did not:
+
+```bash
+find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' -exec chown orbit:orbit {} +
+find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l     # must print 0
+```
+
+That pair repairs whatever the count is on the day it is run — 1 on 2026-09-07:
+`.git/index`, from a root `git status` on 2026-09-06.
 
 - **`DOCS-ONLY: <n> file(s)`** (exit 0) → the block printed `landed <sha>` and
   the merge has already happened. Go to the landing below and verify it.
+  `NOT LANDED` in its place means the fast-forward was refused and the checkout
+  never advanced: stop and report.
 - **`CODE: <path>`**, one line per file (exit 1) → nothing was merged. This is
   an ordinary deploy: continue to pre-flight check 4. A path git had to quote
   comes back escaped and with no reason given: an unusual path is code until
   someone looks.
 - **`NOTHING TO LAND`** (exit 2) → nothing was merged; the merge changes nothing
   here. Stop.
-- **Refused** (exit 3) → nothing was merged. HEAD is not an ancestor of the
-  merge commit, so something was committed on the box. Stop and report: a
-  landing is a fast-forward or it is not a landing.
+- **Refused** (exit 3) → nothing was merged. The sha is not a commit in this
+  checkout, HEAD is not an ancestor of it because something was committed on the
+  box, or `git-as` refused the tree — the stderr above the refusal says which.
+  Stop and report: a landing is a fast-forward or it is not a landing.
 - **Exit 64** → the script was called wrong. Nothing was classified and nothing
   was merged. Stop.
 
@@ -200,8 +243,8 @@ procedure is the only test a procedure gets.
 1. **Check the merge landed** — the block above already did it; this is where
    you prove it.
    ```bash
-   git -C /var/www/orbit rev-parse HEAD
-   git -C /var/www/orbit log --oneline -1
+   git-as orbit -C /var/www/orbit --no-optional-locks rev-parse HEAD
+   git-as orbit -C /var/www/orbit --no-optional-locks log --oneline -1
    ```
    **Good:** HEAD is exactly the sha the block echoed after `landed`, and the
    log line is the merge you expected. A HEAD that did not move means the
@@ -209,12 +252,13 @@ procedure is the only test a procedure gets.
    rather than writing a merge commit on the box. Stop and read the output
    again.
 
-2. **Check ownership came back** — the block's `chown` has already run, so this
-   reads rather than writes.
+2. **Check nothing is root-owned** — the block's last line already counted;
+   this is where you read the number.
    ```bash
-   ls -ld /var/www/orbit/.git
+   find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
    ```
-   **Good:** `orbit orbit`.
+   **Good:** `0`. Anything else is the repair above, and it is due before the
+   next merge step rather than at leisure.
 
 3. **Prove the site is still serving** — a plain GET and a look at the stack,
    nothing that writes.
@@ -261,22 +305,23 @@ build is not step 3 any more.
 
 1. **Pull latest code**
    ```bash
-   git -C /var/www/orbit pull origin main
+   git-as orbit -C /var/www/orbit pull origin main
+   git-as orbit -C /var/www/orbit --no-optional-locks log --oneline -1
    ```
-   **Good:** a fast-forward, and `git log --oneline -1` is the merge commit you
-   expected. If it is not a fast-forward, stop: something was committed on the box.
+   **Good:** a fast-forward, and the log line is the merge commit you expected.
+   If it is not a fast-forward, stop: something was committed on the box.
 
-2. **Fix ownership** (root-run git re-owns files — see above)
+2. **Prove nothing is root-owned** — the pull above ran as `orbit`, so this
+   counts rather than repairs.
    ```bash
-   chown -R orbit:orbit /var/www/orbit
+   find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
    ```
-   **Good:** silent. Verify with `ls -ld /var/www/orbit/.git` → `orbit orbit`.
-   **`.git` is included on purpose**; chowning only the worktree leaves the next
-   `sudo -u orbit git` call failing on "dubious ownership".
+   **Good:** `0`. A non-zero count is a repair due before the next merge step,
+   and the landing section says how to make it narrowly.
 
 3. **Composer dependencies — ONLY if `composer.lock` moved**
    ```bash
-   git -C /var/www/orbit diff --name-only HEAD@{1} HEAD -- composer.lock    # empty? skip this step
+   git-as orbit -C /var/www/orbit --no-optional-locks diff --name-only HEAD@{1} HEAD -- composer.lock   # empty? skip
    docker compose exec -T app composer install --no-dev --optimize-autoloader --no-interaction
    ```
    **Good:** `Nothing to install, update or remove` (if you ran it anyway) or a
@@ -633,6 +678,15 @@ B='http://127.0.0.1:3085'
    - The file does not exist until the first mail is written to it; a `No such
      file` from `tail` on a box that has fired no alerts is not a fault.
 
+10. **Nothing in the checkout is root-owned.**
+    ```bash
+    find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
+    ```
+    **Good:** `0`. Every git above ran as `orbit` through `git-as` and every
+    container step runs as `115:119`, which *is* `orbit`, so there is nothing
+    for a chown to fix. A number here is what would break the next deploy's
+    fast-forward, and finding it now is cheaper than finding it then.
+
 ## Authenticated writes — not part of the battery
 
 **⚠ EVERYTHING IN THIS SECTION CHANGES PRODUCTION DATA.** Nothing above it does.
@@ -696,16 +750,41 @@ tested.
 
 ## Rollback
 
-The deploy is a merge commit, so the rollback is a revert of that merge — not a
-`reset`, which would leave `main` behind its remote and the next deploy would
-"pull" the bad code straight back.
+The deploy is a merge commit, so what has to reach `main` is a revert of that
+merge. A reset on the box alone is not a rollback: it leaves `main` carrying the
+bad code and the next deploy pulls it straight back.
+
+**⚠ NOTHING ON THIS BOX CAN PUSH.** `git-as` uses the app's deploy key and GitHub
+registered it read-only — on purpose, so a compromised app cannot rewrite its own
+source — so a push from here answers `ERROR: The key you are authenticating with
+has been marked as read only`. Root's git cannot enter this tree at all. The
+rollback is therefore two separate things: the box is put back on disk, and the
+revert is recorded through a pull request from somewhere else.
+
+**On disk — put the checkout back on the sha pre-flight check 3 printed:**
 
 ```bash
-git -C /var/www/orbit log --oneline -5                 # find the merge commit <sha>
-git -C /var/www/orbit revert -m 1 --no-edit <sha>      # -m 1 = keep main's side
-git -C /var/www/orbit push origin main
-chown -R orbit:orbit /var/www/orbit
+git-as orbit -C /var/www/orbit --no-optional-locks log --oneline -5   # confirm what is live
+git-as orbit -C /var/www/orbit reset --hard <the sha from pre-flight check 3>
+find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
 ```
+
+**For the record — the revert PR, from a root-owned private clone, never from
+this tree and never from a worktree of it** (a worktree of this checkout is
+`orbit`-owned too, so `git-as` would push it with the same read-only key, and
+root's git cannot read it at all):
+
+```bash
+git clone git@github.com:gcotcheza/orbit.git /srv/worker-scratch/orbit-revert
+cd /srv/worker-scratch/orbit-revert
+git switch -c revert/<sha>                             # the clone is on main; a PR needs its own head
+git revert -m 1 --no-edit <sha>                        # -m 1 = keep main's side
+git push -u origin revert/<sha>
+gh pr create --draft --fill --base main --head revert/<sha>
+```
+
+Ghie merges it; the next deploy lands it, and the `reset --hard` above is what
+holds until then.
 
 Then **redeploy from step 5** — the revert is only code on disk until the assets
 are rebuilt and the containers are restarted. Reverting and not restarting leaves
