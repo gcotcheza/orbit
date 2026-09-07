@@ -20,8 +20,8 @@ final class DeployRunbookGitAsTest extends TestCase
 
     private const SEAM = 'git-as orbit -C /var/www/orbit';
 
-    /** Measured on the runbook this test landed with: 16 lines carry the seam. */
-    private const SEAM_LINES = 16;
+    /** Measured on the runbook this test landed with: 15 lines carry the seam. */
+    private const SEAM_LINES = 15;
 
     /**
      * `.claude/` is carved out because the orbit session's Claude Code runtime
@@ -32,17 +32,26 @@ final class DeployRunbookGitAsTest extends TestCase
     /** The value is a command WITH FLAGS; recording it proves $GIT still splits. */
     private const SEAM_FLAG = '--as=orbit';
 
+    /** Saying a dropped shape out loud is allowed; teaching it is not. */
+    private const QUOTING_THE_OLD_SHAPE = ['used to', 'no longer'];
+
     #[Test]
     public function no_command_in_the_runbook_runs_git_as_root(): void
     {
         $offenders = [];
         $scanned = 0;
 
-        foreach ($this->fencedLines() as $number => $line) {
-            $scanned++;
+        foreach ($this->fencedBlocks() as $block) {
+            if ($this->isPrivateClone($block)) {
+                continue;
+            }
 
-            if (preg_match('#(?<![\w./-])git(?!-as\b)\b#', $line) === 1) {
-                $offenders[] = "{$number}: ".trim($line);
+            foreach ($block as $number => $line) {
+                $scanned++;
+
+                if (preg_match('#(?<![\w./-])git(?!-as\b)\b#', $line) === 1) {
+                    $offenders[] = "{$number}: ".trim($line);
+                }
             }
         }
 
@@ -51,6 +60,98 @@ final class DeployRunbookGitAsTest extends TestCase
             [],
             $offenders,
             "Every git in this runbook runs inside /var/www/orbit, which root's git refuses:\n"
+            .implode("\n", $offenders)
+        );
+    }
+
+    #[Test]
+    public function nothing_in_the_runbook_pushes_from_the_served_tree(): void
+    {
+        $offenders = [];
+
+        foreach ($this->fencedLines() as $number => $line) {
+            if (! str_contains($line, '/var/www')) {
+                continue;
+            }
+
+            if (preg_match('/\bgit(?:-as)?\b.*\bpush\b/', $line) === 1) {
+                $offenders[] = "{$number}: ".trim($line);
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "git-as pushes with the app's deploy key, which GitHub registered read-only — "
+            .'`ERROR: The key you are authenticating with has been marked as read only` — and a '
+            .'worktree under the served tree is orbit-owned too, so it is the same refused key '
+            ."while root's git cannot enter either. The revert PR comes from a private clone:\n"
+            .implode("\n", $offenders)
+        );
+    }
+
+    #[Test]
+    public function the_rollback_resets_on_disk_and_reverts_by_pull_request(): void
+    {
+        $start = strpos($this->read(self::RUNBOOK), "\n## Rollback");
+
+        $this->assertIsInt($start, 'The runbook has no "## Rollback" section.');
+
+        $section = substr($this->read(self::RUNBOOK), $start);
+
+        $this->assertStringContainsString(
+            self::SEAM.' reset --hard',
+            $section,
+            'The on-disk rollback can no longer be a revert plus a push, because the box cannot '
+            .'push. What puts the checkout back is a reset to the sha pre-flight check 3 printed.'
+        );
+        $this->assertMatchesRegularExpression(
+            '#git clone \S+ /srv/worker-scratch/\S+#',
+            $section,
+            'The revert for the record is a pull request from a root-owned private clone. Naming '
+            .'where it is made is the whole point: the two trees that cannot make it are the '
+            .'served checkout and any worktree under it.'
+        );
+        $this->assertStringContainsString(
+            'git revert -m 1 --no-edit',
+            $section,
+            "The revert itself is unchanged — -m 1 keeps main's side of the merge — only where it "
+            .'is made has moved.'
+        );
+    }
+
+    #[Test]
+    public function no_document_teaches_the_shape_the_runbook_dropped(): void
+    {
+        $offenders = [];
+        $scanned = 0;
+
+        foreach ($this->pagesThatTeach() as $relative => $contents) {
+            foreach (explode("\n", $contents) as $index => $line) {
+                $scanned++;
+
+                if (preg_match('#(?<![\w./-])git -C /var/www/orbit|chown -R orbit:orbit#', $line) !== 1) {
+                    continue;
+                }
+
+                foreach (self::QUOTING_THE_OLD_SHAPE as $marker) {
+                    if (str_contains($line, $marker)) {
+                        continue 2;
+                    }
+                }
+
+                $offenders[] = "{$relative}:".($index + 1).': '.trim($line);
+            }
+        }
+
+        $this->assertGreaterThan(0, $scanned, 'No page was scanned, so this test vets nothing.');
+        $this->assertSame(
+            [],
+            $offenders,
+            "Root's git cannot enter /var/www/orbit and the blanket chown repairs a problem the "
+            .'deploy no longer has, so a page still teaching either shape hands its reader a '
+            .'command that fails or a repair that hides the next one. Write the current shape, or '
+            .'say on the same line that it is what this "used to"/"no longer" be:'."\n"
             .implode("\n", $offenders)
         );
     }
@@ -309,6 +410,44 @@ final class DeployRunbookGitAsTest extends TestCase
     private function fencedLines(): array
     {
         return array_replace([], ...$this->fencedBlocks());
+    }
+
+    /**
+     * A block that works in a private clone and never names the served tree. Root's
+     * git is refused by /var/www/orbit and by nothing else, so plain git belongs here.
+     *
+     * @param  array<int, string>  $block
+     */
+    private function isPrivateClone(array $block): bool
+    {
+        $joined = implode("\n", $block);
+
+        return str_contains($joined, '/srv/worker-scratch') && ! str_contains($joined, '/var/www/orbit');
+    }
+
+    /**
+     * The pages an operator or a contributor copies commands out of.
+     *
+     * @return array<string, string>
+     */
+    private function pagesThatTeach(): array
+    {
+        $root = dirname(__DIR__, 3);
+        $pages = [];
+
+        foreach ([...(glob($root.'/docs/*.md') ?: []), $root.'/scripts/e2e.sh'] as $path) {
+            $relative = substr($path, strlen($root) + 1);
+
+            $this->assertFileExists($path, "{$relative} is missing.");
+
+            $contents = file_get_contents($path);
+
+            $this->assertIsString($contents, "{$relative} could not be read.");
+
+            $pages[$relative] = $contents;
+        }
+
+        return $pages;
     }
 
     /**

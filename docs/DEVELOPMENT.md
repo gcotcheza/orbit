@@ -8,10 +8,13 @@ repository went public.
 
 **Work in a git worktree, one per branch** — `/var/www/orbit` is the deployed
 checkout and must stay on `main`. The convention is
-`/var/www/orbit-worktrees/<short-name>`:
+`/var/www/orbit-worktrees/<short-name>`, whose parent has to be writable by
+`orbit` — it is `root:orbit` mode 2775 today, so it is; one non-recursive
+`chown --reference=/var/www/orbit /var/www/orbit-worktrees` would make it owned
+rather than merely writable:
 
 ```bash
-git -C /var/www/orbit worktree add /var/www/orbit-worktrees/feat-thing -b feat/thing
+git-as orbit -C /var/www/orbit worktree add /var/www/orbit-worktrees/feat-thing -b feat/thing
 ```
 
 **The commit guard.** Run it once, in the main checkout — it refuses to run

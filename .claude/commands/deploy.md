@@ -747,19 +747,40 @@ tested.
 
 ## Rollback
 
-The deploy is a merge commit, so the rollback is a revert of that merge — not a
-`reset`, which would leave `main` behind its remote and the next deploy would
-"pull" the bad code straight back.
+The deploy is a merge commit, so what has to reach `main` is a revert of that
+merge. A reset on the box alone is not a rollback: it leaves `main` carrying the
+bad code and the next deploy pulls it straight back.
+
+**⚠ NOTHING ON THIS BOX CAN PUSH.** `git-as` uses the app's deploy key and GitHub
+registered it read-only — on purpose, so a compromised app cannot rewrite its own
+source — so a push from here answers `ERROR: The key you are authenticating with
+has been marked as read only`. Root's git cannot enter this tree at all. The
+rollback is therefore two separate things: the box is put back on disk, and the
+revert is recorded through a pull request from somewhere else.
+
+**On disk — put the checkout back on the sha pre-flight check 3 printed:**
 
 ```bash
-git-as orbit -C /var/www/orbit --no-optional-locks log --oneline -5   # find the merge commit <sha>
-git-as orbit -C /var/www/orbit revert -m 1 --no-edit <sha>            # -m 1 = keep main's side
-git-as orbit -C /var/www/orbit push origin main
+git-as orbit -C /var/www/orbit --no-optional-locks log --oneline -5   # confirm what is live
+git-as orbit -C /var/www/orbit reset --hard <the sha from pre-flight check 3>
 find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
 ```
 
-The push authenticates with the app's own deploy key, which `git-as` hands git —
-not with whatever agent the root shell happened to have.
+**For the record — the revert PR, from a root-owned private clone, never from
+this tree and never from a worktree of it** (a worktree of this checkout is
+`orbit`-owned too, so `git-as` would push it with the same read-only key, and
+root's git cannot read it at all):
+
+```bash
+git clone git@github.com:gcotcheza/orbit.git /srv/worker-scratch/orbit-revert
+cd /srv/worker-scratch/orbit-revert
+git revert -m 1 --no-edit <sha>                        # -m 1 = keep main's side
+git push origin HEAD:revert/<sha>
+gh pr create --draft --base main
+```
+
+Ghie merges it; the next deploy lands it, and the `reset --hard` above is what
+holds until then.
 
 Then **redeploy from step 5** — the revert is only code on disk until the assets
 are rebuilt and the containers are restarted. Reverting and not restarting leaves

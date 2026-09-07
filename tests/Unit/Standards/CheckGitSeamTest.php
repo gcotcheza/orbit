@@ -56,6 +56,37 @@ final class CheckGitSeamTest extends TestCase
     }
 
     #[Test]
+    public function a_seam_pointing_at_another_tree_is_refused(): void
+    {
+        $elsewhere = $this->runScript(seamDirectory: '/elsewhere');
+
+        $this->assertSame(
+            2,
+            $elsewhere['status'],
+            "A seam naming another tree has to stop the run before the copy.\n".$elsewhere['output']
+        );
+        $this->assertStringContainsString(
+            'check.sh: CI_GIT points at /elsewhere but this script runs in',
+            $elsewhere['output'],
+            'The refusal names both directories, because the whole failure is that they differ.'
+        );
+        $this->assertSame(
+            [],
+            $elsewhere['seam'],
+            'The refusal comes before the listing: nothing may be scanned against the wrong tree.'
+        );
+
+        $matching = $this->runScript(seamDirectory: dirname(__DIR__, 3));
+
+        $this->assertSame(
+            1,
+            $matching['status'],
+            "The runbook's own pair names one tree twice and must pass this guard.\n".$matching['output']
+        );
+        $this->assertSame([self::LISTING], $matching['seam'], 'The matching pair still lists through the seam.');
+    }
+
+    #[Test]
     public function the_usage_names_the_seam(): void
     {
         $result = $this->execute(
@@ -119,7 +150,7 @@ final class CheckGitSeamTest extends TestCase
     /**
      * @return array{status: int, output: string, seam: list<string>, plain: list<string>}
      */
-    private function runScript(bool $seam = true): array
+    private function runScript(bool $seam = true, ?string $seamDirectory = null): array
     {
         $root = dirname(__DIR__, 3);
         $bin = sys_get_temp_dir().'/orbit-check-seam-'.bin2hex(random_bytes(6));
@@ -130,11 +161,13 @@ final class CheckGitSeamTest extends TestCase
         $this->writeFakeGit($bin.'/fake-git', $bin.'/seam.log', self::SEAM_FLAG);
         $this->writeFakeDocker($bin.'/docker');
 
+        $value = $bin.'/fake-git '.self::SEAM_FLAG.($seamDirectory === null ? '' : ' -C '.$seamDirectory);
+
         // `dev` on purpose: the overlay runner's first act is `rm -rf
         // /var/tmp/orbit-gate.*`, which is a real directory on the box.
         $environment = [
             'PATH'   => $bin.':'.(getenv('PATH') ?: '/usr/bin:/bin'),
-            'CI_GIT' => $seam ? $bin.'/fake-git '.self::SEAM_FLAG : '',
+            'CI_GIT' => $seam || $seamDirectory !== null ? $value : '',
         ];
 
         $result = $this->execute(['bash', $root.'/'.self::SCRIPT, 'dev'], $environment, $root);
@@ -164,6 +197,9 @@ final class CheckGitSeamTest extends TestCase
                 fi
                 shift
             fi
+            case "\$1" in
+                -C) shift 2 ;;
+            esac
             printf '%s\\n' "\$*" >> '{$log}'
             case "\$1" in
                 ls-files) printf 'composer.json\\0scripts/check.sh\\0' ;;

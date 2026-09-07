@@ -722,7 +722,7 @@ one in what a wait actually proves:
 | --- | --- |
 | `port 3185 is taken by something that is not the orbit-e2e stack` | a previous `--keep` run, or something else. `scripts/e2e.sh --down`. |
 | `cannot talk to docker` | run it as root, not `sudo -u orbit`. |
-| `EACCES … mkdir '/work/e2e/baselines'` | the checkout is root-owned. `chown -R orbit:orbit .` — this is the `git pull` as root trap the deploy runbook warns about. |
+| `EACCES … mkdir '/work/e2e/baselines'` | a root-owned file in the checkout. Repair it narrowly, the way the deploy runbook does: `find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' -exec chown orbit:orbit {} +`, then read the count back. |
 | `.env.e2e is missing` | run `scripts/e2e.sh`, which generates it. |
 | `.env.e2e has no E2E_FIXED_NOW` | a file written before the frozen clock; `scripts/e2e.sh` regenerates it by itself. |
 | the globe times out in `waitForGlobe` | the earth texture 404'd, or `--enable-unsafe-swiftshader` stopped being accepted by a newer Chromium. Check `e2e/artifacts/report/index.html`. |
