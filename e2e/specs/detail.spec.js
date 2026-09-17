@@ -132,6 +132,37 @@ test('the price, the gauge, the chart and the booking link are all really there'
     await shot(page, 'route-detail')
 })
 
+// What a ROUND TRIP costs, by length of stay (design/README.md §2). The fake provider is
+// deterministic, so every band's answer is the same on every run.
+test('the return trips section lists every band and prices what Orbit holds', async ({ page }) => {
+    await page.goto('/route/AMS-OPO')
+
+    const section = page.locator('.ret')
+
+    await expect(section.getByRole('heading', { name: 'Return trips' })).toBeVisible()
+    await expect(section.locator('.ret__row')).toHaveCount(4)
+
+    // Every band names its stay, priced or not — the list is the config's, not the data's.
+    await expect(section.locator('.ret__nights')).toHaveText([
+        '2–3 nights',
+        '6–8 nights',
+        '13–15 nights',
+        '21–28 nights',
+    ])
+
+    const prices = section.locator('.ret__price')
+
+    expect(await prices.count(), 'no band on a seeded route carries a fare').toBeGreaterThan(0)
+    await expect(prices.first()).toHaveText(/^from €\d+$/)
+
+    // A DEPARTURE date and a stay length, never an observation date.
+    await expect(section.locator('.ret__meta').first()).toHaveText(
+        /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), \w{3} \d{1,2} · \d{1,2} nights$/,
+    )
+
+    await shot(page, 'route-detail-returns')
+})
+
 /** A seeded route no other spec writes to; this one puts it above its usual price. */
 const WAITING = 'AMS-NAP'
 
@@ -285,6 +316,21 @@ test('a route that is already watched gets no strip and no extra fetch', async (
     await expect(page.locator('.detail__code')).toHaveText('AMS → LIS')
     await expect(page.locator('.watch')).toHaveCount(0)
     await expect(page.locator('.checking')).toHaveCount(0)
+})
+
+// Every band empty: EIN-VIE is priced on first view and never polled for round trips (§15, R6).
+// It runs after the first-view test on purpose — that one needs this route still unpriced.
+test('a route with no round-trip fares says so in every band', async ({ page, browserConsole }) => {
+    browserConsole.allow(/Failed to load resource.*404/)
+
+    await page.goto('/route/EIN-VIE')
+    await expect(page.locator('.detail__code')).toHaveText('EIN → VIE')
+
+    const section = page.locator('.ret')
+
+    await expect(section.locator('.ret__row--none')).toHaveCount(4)
+    await expect(section.locator('.ret__none').first()).toHaveText('No return fares seen yet')
+    await expect(section.locator('.ret__price')).toHaveCount(0)
 })
 
 /* An unrecognised code ("look before you watch") needs two refusals: the

@@ -25,6 +25,10 @@ export const DETAIL = [
     '.callout__icon',
     '.callout__title',
     '.callout__body',
+    '.ret__price',
+    '.ret__vs',
+    '.ret__meta',
+    '.ret__gone',
 ]
 
 /** The theme is read out of localStorage before the app mounts (stores/theme.js). */

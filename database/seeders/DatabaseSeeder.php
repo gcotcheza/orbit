@@ -23,6 +23,7 @@ final class DatabaseSeeder extends Seeder
             WorldAirportSeeder::class,
             WatchlistSeeder::class,
             FakeHistorySeeder::class,
+            FakeReturnFaresSeeder::class,
             // Last: needs the world import and reachable fares (docs/BUSINESS-LOGIC.md §36).
             DiscoverySeeder::class,
         ]);
