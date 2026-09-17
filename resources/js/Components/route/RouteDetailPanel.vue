@@ -11,7 +11,8 @@ import AdviceCallout from '@/Components/route/AdviceCallout.vue'
 import BookingCta from '@/Components/route/BookingCta.vue'
 import DealScoreGauge from '@/Components/route/DealScoreGauge.vue'
 import PriceHistoryChart from '@/Components/route/PriceHistoryChart.vue'
-import { departureLabel, euro, hoursSince, seenLabel, shortDayLabel } from '@/lib/format'
+import ReturnTrips from '@/Components/route/ReturnTrips.vue'
+import { departureLabel, euro, seenIfOld, seenLabel, shortDayLabel } from '@/lib/format'
 import { goBack } from '@/lib/back'
 
 // Case-normalised here (a display concern) so a bad shape is rejected locally instead of by a round
@@ -21,10 +22,6 @@ const CODE_PATTERN = /^[A-Z]{3}-[A-Z]{3}$/
 // 25s: several times a healthy fetch's own 2-3s, still short of anyone's patience. Giving up loses
 // nothing — the writes behind it are upserts (docs/BUSINESS-LOGIC.md §36).
 const LOOKUP_TIMEOUT_MS = 25_000
-
-// 24h, matching the poll's own daily period — under it is an ordinary watched route; past it, a
-// fare that survived a morning it should not have (docs/BUSINESS-LOGIC.md §36).
-const SEEN_AFTER_HOURS = 24
 
 /* Ends the WAIT, not the work: the server stores what it paid for either way. */
 const LIVE_CHECK_TIMEOUT_MS = 30_000
@@ -99,18 +96,16 @@ const lastChecked = computed(() => shortDayLabel(meta.value?.fares?.fetchedAt ||
 // one at zero.
 const median = computed(() => detail.value?.stats?.median ?? null)
 
+/** Every configured duration band, the empty ones included; `[]` from an answer without the field. */
+const returns = computed(() => detail.value?.returns ?? [])
+
 /** `cheapest.date` is a DEPARTURE date, never derived from `history[].date` (the day we looked).
  *  Null before the first poll. */
 const departure = computed(() => departureLabel(detail.value?.cheapest?.date ?? null))
 
 /** `cheapest.foundAt` is a THIRD date, when the price was found. Null unless there is an honest age
  *  to show. */
-const seen = computed(() => {
-  const foundAt = detail.value?.cheapest?.foundAt ?? null
-  const age = hoursSince(foundAt)
-
-  return age === null || age < SEEN_AFTER_HOURS ? null : seenLabel(foundAt)
-})
+const seen = computed(() => seenIfOld(detail.value?.cheapest?.foundAt ?? null))
 
 /** ⚠ The SERVER's judgement, never recomputed here — `=== true` because
  *  an older build's answer carries no such field. */
@@ -545,7 +540,7 @@ onActivated(() => {
 
           <!-- Replaces the plain "Seen …" line rather than joining it. -->
           <p v-if="demoted" class="price__gone">{{ goneLabel }}</p>
-          <!-- Qualifies the departure line; only past a day old (SEEN_AFTER_HOURS).
+          <!-- Qualifies the departure line; only past a day old (seenIfOld).
                Absent, not reassuring, when age is unknown. -->
           <p v-else-if="seen && livePrice === null" class="price__seen">Seen {{ seen }}</p>
 
@@ -576,6 +571,12 @@ onActivated(() => {
         <!-- `status` and not `alert`: nothing is broken. -->
         <p v-if="liveError" class="live__error" role="status">{{ liveError }}</p>
       </div>
+    </div>
+
+    <!-- Not in a pane: the landing pane's whole point is a detail short enough to leave the
+         globe its pixels (docs/DESKTOP-LAYOUT-PLAN.md, layout-screens.spec.js). -->
+    <div v-if="!embedded" class="detail__group detail__group--returns">
+      <ReturnTrips :returns="returns" />
     </div>
 
     <div class="detail__group detail__group--chart">

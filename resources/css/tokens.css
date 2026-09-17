@@ -108,7 +108,7 @@
     --globe-scrim: rgba(10, 15, 30, 0.72);
 
     /* --- Type -----------------------------------------------------------
-       The seven steps in design/README.md, no more. A size that is not on this
+       The steps in design/README.md, no more. A size that is not on this
        list is a decision somebody should have to make deliberately. */
     --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
     --font-body: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
@@ -118,6 +118,9 @@
     --text-md: 12px;
     --text-lg: 13.5px;
     --text-xl: 15px;
+    /* The eighth step, and the only one a single row asks for: the return
+       trip's price, at the size the approved mockup drew it. */
+    --text-price: 17px;
     --text-2xl: 23px;
     --text-3xl: 27px;
 
