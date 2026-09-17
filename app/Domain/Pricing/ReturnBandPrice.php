@@ -15,6 +15,7 @@ final readonly class ReturnBandPrice
     public function __construct(
         public NightsBand $band,
         public int $currentCents,
+        public DateTimeImmutable $departureDate,
         public int $nights,
         /** When the PROVIDER found the current fare; null when it does not say. */
         public ?DateTimeImmutable $foundAt,
@@ -53,6 +54,7 @@ final readonly class ReturnBandPrice
         return new self(
             band: $band,
             currentCents: $cheapest->cents,
+            departureDate: $cheapest->departureDate,
             nights: $cheapest->nights,
             foundAt: $cheapest->foundAt,
             usual: count($cents) >= $minSamples ? PriceStats::fromSamples($cents) : null,

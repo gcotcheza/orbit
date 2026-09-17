@@ -22,23 +22,43 @@ final readonly class ReturnBandPrices
      */
     public function for(Route $route): array
     {
+        $prices = [];
+
+        foreach ($this->everyBandFor($route) as $band) {
+            if ($band['price'] !== null) {
+                $prices[] = $band['price'];
+            }
+        }
+
+        return $prices;
+    }
+
+    /**
+     * Every configured band in config order, holding a null price where Orbit has no fare —
+     * what the detail screen draws (R6); `for()` is this list without the holes.
+     *
+     * @return list<array{band: NightsBand, price: ReturnBandPrice|null}>
+     */
+    public function everyBandFor(Route $route): array
+    {
         $trips = $this->quotedTrips($route);
         $minSamples = (int) config('orbit.returns.stats.min_samples');
 
         /** @var list<array{int, int}> $durations */
         $durations = config('orbit.returns.durations', []);
 
-        $prices = [];
+        $bands = [];
 
         foreach ($durations as $pair) {
-            $price = ReturnBandPrice::from(NightsBand::of($pair), $trips, $minSamples);
+            $band = NightsBand::of($pair);
 
-            if ($price !== null) {
-                $prices[] = $price;
-            }
+            $bands[] = [
+                'band'  => $band,
+                'price' => ReturnBandPrice::from($band, $trips, $minSamples),
+            ];
         }
 
-        return $prices;
+        return $bands;
     }
 
     /**

@@ -15,6 +15,7 @@ use App\Http\Resources\LivePriceResource;
 use App\Application\Routes\RouteSnapshots;
 use App\Application\Routes\LivePriceChecks;
 use App\Http\Resources\RouteDetailResource;
+use App\Application\Pricing\ReturnBandPrices;
 
 /**
  * One route, in full (design/README.md §2). Keyed on the code so `/route/AMS-LIS` is
@@ -22,6 +23,8 @@ use App\Http\Resources\RouteDetailResource;
  */
 final class RouteController extends Controller
 {
+    public function __construct(private readonly ReturnBandPrices $returns) {}
+
     public function show(Request $request, string $code, RouteSnapshots $snapshots, FareFreshness $freshness, LivePriceChecks $liveChecks): JsonResponse
     {
         $route = self::find($code);
@@ -111,7 +114,7 @@ final class RouteController extends Controller
            lunchtime is what this screen shows at teatime. */
         $liveCheck = $departure === null ? null : $liveChecks->latest($route, $departure);
 
-        return RouteDetailResource::make($snapshot, $liveCheck)
+        return RouteDetailResource::make($snapshot, $liveCheck, $this->returns->everyBandFor($route))
             ->additional(['meta' => [
                 'watched'   => self::isWatched($request, $route),
                 'liveCheck' => $liveCheck === null ? null : LivePriceResource::make($liveCheck)->toArray($request),

@@ -8,6 +8,7 @@ use App\Models\Route;
 use DateTimeImmutable;
 use App\Domain\Pricing\DatedFare;
 use App\Domain\Pricing\DealScore;
+use App\Domain\Pricing\MayBeGone;
 use App\Domain\Pricing\PriceStats;
 use App\Domain\Pricing\PriceHistory;
 
@@ -36,25 +37,22 @@ final readonly class RouteSnapshot
         return $this->stats?->usualCents();
     }
 
-    /**
-     * Whether the cheapest DEPARTURE has probably gone — old AND well under usual, both halves
-     * required, and a null `foundAt` is never demoted (docs/BUSINESS-LOGIC.md §17).
-     */
     public function cheapestMayBeGone(DateTimeImmutable $now, int $staleAfterHours, int $underUsualPercent): bool
     {
-        $foundAt = $this->cheapest?->foundAt;
+        $cheapest = $this->cheapest;
 
-        if ($this->cheapest === null || $foundAt === null || $this->stats === null) {
+        if ($cheapest === null) {
             return false;
         }
 
-        $ageHours = ($now->getTimestamp() - $foundAt->getTimestamp()) / 3600;
-
-        if ($ageHours <= $staleAfterHours) {
-            return false;
-        }
-
-        return $this->stats->percentUnderUsual($this->cheapest->cents) >= $underUsualPercent;
+        return MayBeGone::decide(
+            $cheapest->cents,
+            $cheapest->foundAt,
+            $this->stats,
+            $now,
+            $staleAfterHours,
+            $underUsualPercent,
+        );
     }
 
     /**
