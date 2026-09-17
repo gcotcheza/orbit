@@ -1421,11 +1421,12 @@ with it rather than silently truncating nothing.
 
 ## 15. Return trips (foundation)
 
-> **Status: priced, not yet drawn.** A port, two adapters, the `return_fares`
-> table and a command to fill it — **polled daily at 04:40** — and, since
-> returns-2, a **definition of what a round trip costs now and usually** per
-> duration band, refreshed daily at 07:10. **No screen, no score and no alert
-> reads any of it yet**, and `tripLengthNights` still does not match on it.
+> **Status: priced, and drawn.** A port, two adapters, the `return_fares` table
+> and a command to fill it — **polled daily at 04:40** — and, since returns-2, a
+> **definition of what a round trip costs now and usually** per duration band,
+> refreshed daily at 07:10. Since returns-3 the **route detail screen draws that
+> definition**, one row per band (`docs/API.md`, `returns`). **No score and no
+> alert reads any of it yet**, and `tripLengthNights` still does not match on it.
 
 ### Why one-way was never the whole truth
 
@@ -1639,8 +1640,13 @@ afterwards. It calls no provider, so it costs the request budget nothing.
 ### What later PRs add
 
 - a deal score for round trips (the analogue of §7), now that a current price
-  and a usual one are defined, and the blend of §6 once the mornings exist
-- the screens that read the table, which must be built for the sparsity above
+  and a usual one are defined, and the blend of §6 once the mornings exist — the
+  screen is already there for it to colour, and its rows carry no tone until that
+  score exists
+- **shipped (returns-3): the route detail's "Return trips" section**, which reads
+  the definition through `ReturnBandPrices` at request time rather than out of
+  `return_price_stats`, lists **all four** bands in config order and draws a quiet
+  row for a band nothing is held for (R6). No score, no tone colour, no alert
 - `tripLengthNights` finally **matching** rather than only being parsed and shown
   (§11 and `docs/API.md`) — the fact it filters on now exists
 - alerts on round-trip fares, which have to reckon with the seven-day-deep cache

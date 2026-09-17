@@ -61,10 +61,16 @@ has to draw them.
   starts `return_price_history` accumulating one row per morning ahead of the
   reader that will blend it. Numbered rules and config keys:
   `docs/BUSINESS-LOGIC.md` §15.
-- **returns-3 onwards** — a deal score for round trips; the screens, built for
-  8–34% coverage rather than against it; `tripLengthNights`
-  finally *matching* rather than only being parsed and shown; and alerts, which
-  have to reckon with a cache that is seven days deep.
+- **returns-3 — the screen.** The route detail's "Return trips" section: one row
+  per duration band, what it costs from and what that band usually costs, built
+  for 8–34% coverage rather than against it — every band is listed and an empty
+  one says so. It reads the definition at request time (`docs/API.md`,
+  `returns`), so it agrees with what Orbit *holds* rather than with the last
+  summary a thinning band left behind. No score and no tone colour on the rows.
+- **returns-4 onwards** — a deal score for round trips, which colours the rows
+  that section already draws; `tripLengthNights` finally *matching* rather than
+  only being parsed and shown; and alerts, which have to reckon with a cache that
+  is seven days deep.
 
 ## What is switched on
 - **Travelpayouts: real one-way fares.** `ORBIT_PRICE_PROVIDER=travelpayouts` with `TRAVELPAYOUTS_TOKEN` in `.env` (`/v2/prices/month-matrix`). `php artisan orbit:reset-history --confirm` was run in the same breath, because the recorded history was all simulated and mixing the two would make every trend and deal score a comparison between two different universes. Day coverage runs 41-87%, and the "tracking N days" charts are honest about it.
