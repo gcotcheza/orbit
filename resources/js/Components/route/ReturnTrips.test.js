@@ -20,6 +20,15 @@ const FARE = {
     foundAt: '2026-10-11T06:12:07+02:00',
     mayBeGone: false,
     sampleCount: 7,
+    booking: { aviasales: 'https://www.aviasales.com/search/AMS1110OPO13101?marker=123456' },
+}
+
+/** A second priced band, so "one link per fare" is a count and not a coincidence. */
+const WEEK = {
+    ...FARE,
+    current: 134,
+    nights: 7,
+    booking: { aviasales: 'https://www.aviasales.com/search/AMS1110OPO18101?marker=123456' },
 }
 
 const section = (returns) => mount(ReturnTrips, { props: { returns } })
@@ -124,13 +133,55 @@ describe('the section itself', () => {
         expect(section([]).find('.ret').exists()).toBe(false)
     })
 
-    // A heading and no controls: the rows are not interactive, so there is
-    // nothing here to reach by keyboard (docs/STANDARDS.md T8).
-    it('is a real section under a real heading, with nothing to click', () => {
+    it('is a real section under a real heading', () => {
         const wrapper = section([band('A long weekend', [2, 3], FARE)])
 
         expect(wrapper.get('section h2').text()).toBe('Return trips')
         expect(wrapper.get('.ret__sub').text()).toBe('Round trip, by length of stay')
-        expect(wrapper.findAll('button, a')).toHaveLength(0)
+    })
+})
+
+// The whole card is the tap target and it goes to the server's own round-trip search
+// (design/README.md §2, docs/API.md `returns[].fare.booking.aviasales`).
+describe('tapping a priced row', () => {
+    const priced = () =>
+        section([
+            band('A long weekend', [2, 3], FARE),
+            band('A week away', [6, 8], WEEK),
+            band('A fortnight', [13, 15]),
+        ])
+
+    it('opens the round trip the row is priced for', () => {
+        const link = priced().findAll('.ret__row')[0]
+
+        expect(link.element.tagName).toBe('A')
+        expect(link.attributes('href')).toBe(FARE.booking.aviasales)
+    })
+
+    it('leaves the app the way the Aviasales button does', () => {
+        const link = priced().findAll('.ret__row')[0]
+
+        expect(link.attributes('target')).toBe('_blank')
+        expect(link.attributes('rel')).toBe('noopener')
+    })
+
+    it('gives every band with a fare its own link and no band without one', () => {
+        const wrapper = priced()
+
+        expect(wrapper.findAll('a.ret__row').map((row) => row.attributes('href'))).toEqual([
+            FARE.booking.aviasales,
+            WEEK.booking.aviasales,
+        ])
+    })
+
+    // Nothing is held, so there is nothing to open — and no chevron promising there is.
+    it('leaves a band with no fare unlinked and without a chevron', () => {
+        const wrapper = priced()
+        const quiet = wrapper.findAll('.ret__row')[2]
+
+        expect(quiet.element.tagName).toBe('DIV')
+        expect(quiet.attributes('href')).toBeUndefined()
+        expect(quiet.find('.ret__chevron').exists()).toBe(false)
+        expect(wrapper.findAll('.ret__chevron')).toHaveLength(2)
     })
 })
