@@ -35,6 +35,9 @@ function meta(fare, seen) {
   return parts.join(' · ')
 }
 
+// How BookingCta.vue opens Aviasales; a return row leaves the app the same way.
+const OPENS_AVIASALES = { target: '_blank', rel: 'noopener' }
+
 function toRow({ band, fare }) {
   const named = {
     key: band.nights.join('-'),
@@ -43,7 +46,7 @@ function toRow({ band, fare }) {
   }
 
   if (fare === null || fare === undefined) {
-    return { ...named, fare: null }
+    return { ...named, tag: 'div', attrs: {}, fare: null }
   }
 
   const seen = seenIfOld(fare.foundAt ?? null)
@@ -52,6 +55,8 @@ function toRow({ band, fare }) {
 
   return {
     ...named,
+    tag: 'a',
+    attrs: { href: fare.booking.aviasales, ...OPENS_AVIASALES },
     fare: {
       price: `from ${euro(fare.current)}`,
       comparison: comparison(fare),
@@ -70,7 +75,14 @@ const rows = computed(() => props.returns.map(toRow))
     <p class="ret__sub">Round trip, by length of stay</p>
 
     <div class="ret__rows">
-      <div v-for="row in rows" :key="row.key" class="ret__row" :class="{ 'ret__row--none': row.fare === null }">
+      <component
+        :is="row.tag"
+        v-for="row in rows"
+        :key="row.key"
+        v-bind="row.attrs"
+        class="ret__row"
+        :class="row.fare === null ? 'ret__row--none' : 'ret__row--link'"
+      >
         <div>
           <p class="ret__name">{{ row.label }}</p>
           <p class="ret__nights">{{ row.nights }}</p>
@@ -88,7 +100,12 @@ const rows = computed(() => props.returns.map(toRow))
 
           <p v-else class="ret__none">No return fares seen yet</p>
         </div>
-      </div>
+
+        <!-- Same chevron affordance as WatchRow.vue, sized to this row. -->
+        <svg v-if="row.fare" class="ret__chevron" width="15" height="15" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <path d="M6 4l5 5-5 5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </component>
     </div>
   </section>
 </template>
@@ -130,6 +147,12 @@ const rows = computed(() => props.returns.map(toRow))
   background: var(--card);
 }
 
+.ret__row--link {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
 .ret__name {
   font-size: var(--text-lg);
   font-weight: 600;
@@ -147,7 +170,10 @@ const rows = computed(() => props.returns.map(toRow))
   color: var(--muted);
 }
 
+/* The row's free space is spent here, so a third child lands at the right edge instead of
+   pushing the price into the middle of the card. */
 .ret__fare {
+  margin-left: auto;
   text-align: right;
 }
 
@@ -190,5 +216,14 @@ const rows = computed(() => props.returns.map(toRow))
   padding-top: 1px;
   font-size: var(--text-md);
   color: var(--muted);
+}
+
+.ret__chevron {
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.ret__chevron path {
+  stroke: var(--muted);
 }
 </style>

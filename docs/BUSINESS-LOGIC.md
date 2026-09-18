@@ -1238,6 +1238,8 @@ and which one is first is a correctness matter rather than a preference.
 | **primary** | `https://www.aviasales.com` | `orbit.booking.aviasales_base` | `App\Application\Routes\BookingLink` |
 | params | `{ORIGIN}{DDMM}{DEST}{passengers}`, **upper-case IATA, day before month** | — | ditto |
 | dated form | `/search/AMS1509OPO1` | — | ditto |
+| round-trip params | `{ORIGIN}{DDMM}{DEST}{DDMM}{passengers}`, **the return date second** | — | ditto |
+| dated round-trip form | `/search/AMS1210OPO14101` | — | ditto |
 | undated form | `/?params=AMSOPO1` — the pre-filled search box | — | ditto |
 | marker | appended as `?marker=` when set | `orbit.travelpayouts.marker` | ditto |
 | **secondary** | `https://www.skyscanner.nl/transport/flights` | `orbit.booking.skyscanner_base` | ditto |
@@ -1268,6 +1270,12 @@ of a class letter. One-way matches the fare: every price in this app is one-way
 be the number the user just tapped. The params string is **case-sensitive** in a
 way that fails silently: `PAR1607ROc1` is Romania in business class,
 `PAR1607ROC1` is Rochester airport in economy.
+
+**A return row hands off round trip**, because there the price on screen *is* one:
+the two-date grammar `PAR0101NYC0201` — "Flight from Paris to New York on January 1,
+return on January 2" — is Travelpayouts' documented format (help-centre article
+*Aviasales affiliate links*, id 5711895629714), with the same empty class letter for
+economy and the same mandatory adults count.
 
 The undated forms are the right fallback for a route with no fares yet — for
 Aviasales that is the pre-filled search box rather than a results page, because

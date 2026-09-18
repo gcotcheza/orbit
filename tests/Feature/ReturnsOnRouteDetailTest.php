@@ -128,6 +128,25 @@ final class ReturnsOnRouteDetailTest extends TestCase
         $response->assertJsonPath('data.returns.1.fare.foundAt', null);
     }
 
+    /** Each priced band hands off its OWN trip: that departure out, that stay back. */
+    #[Test]
+    public function a_priced_band_carries_the_round_trip_link_for_its_own_dates(): void
+    {
+        config()->set('orbit.travelpayouts.marker', '123456');
+
+        $this->seedFare('2026-09-20', nights: 7, cents: 33400);
+
+        $response = $this->read();
+
+        $response->assertJsonPath(
+            'data.returns.1.fare.booking.aviasales',
+            'https://www.aviasales.com/search/AMS2009LIS27091?marker=123456',
+        );
+
+        /* A band with no fare has no fare to hang a hand-off on. */
+        $response->assertJsonPath('data.returns.0.fare', null);
+    }
+
     /** The section is the detail's alone: the watchlist's rows are unchanged. */
     #[Test]
     public function the_summary_the_other_screens_share_carries_no_return_trips(): void

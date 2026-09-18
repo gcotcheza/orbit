@@ -44,6 +44,22 @@ final readonly class BookingLink
     }
 
     /**
+     * The round-trip hand-off one "Return trips" row opens: both legs dated, so the search
+     * that answers is the one that band's price came out of (docs/BUSINESS-LOGIC.md §12).
+     */
+    public static function aviasalesReturn(
+        Route $route,
+        DateTimeInterface $departure,
+        DateTimeInterface $return,
+    ): string {
+        return self::marked(
+            self::base('orbit.booking.aviasales_base')
+                .'/search/'
+                .self::params($route, $departure->format('dm'), $return->format('dm')),
+        );
+    }
+
+    /**
      * The same link with a `{ddmm}` hole, for the calendar's day sheet: only the client
      * knows which day was tapped (see RouteCalendarController).
      */
@@ -82,14 +98,15 @@ final readonly class BookingLink
     }
 
     /**
-     * `AMS0509LIS1` — origin, date, destination, passengers, no separators. UPPER-CASED
-     * here: this string is case-SENSITIVE and fails silently (docs/BUSINESS-LOGIC.md §12).
+     * `AMS0509LIS1`, or `AMS0509LIS12091` with a return leg. UPPER-CASED here: this string
+     * is case-SENSITIVE and fails silently (docs/BUSINESS-LOGIC.md §12).
      */
-    private static function params(Route $route, string $date): string
+    private static function params(Route $route, string $date, string $return = ''): string
     {
         return mb_strtoupper($route->origin->iata)
             .$date
             .mb_strtoupper($route->destination->iata)
+            .$return
             .self::AVIASALES_PASSENGERS;
     }
 

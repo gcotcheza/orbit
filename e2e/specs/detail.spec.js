@@ -160,6 +160,24 @@ test('the return trips section lists every band and prices what Orbit holds', as
         /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), \w{3} \d{1,2} · \d{1,2} nights$/,
     )
 
+    // The whole row is the tap target, and it opens a search with BOTH legs dated.
+    const row = await page.evaluate(() => {
+        const first = [...document.querySelectorAll('.ret__row')].find((one) => one.querySelector('.ret__price'))
+
+        return {
+            tag: first.tagName,
+            target: first.getAttribute('target'),
+            href: first.getAttribute('href'),
+            /* A finger, not a line of text. */
+            tappable: first.getBoundingClientRect().height >= 44,
+        }
+    })
+
+    expect(row.tag).toBe('A')
+    expect(row.target).toBe('_blank')
+    expect(row.tappable).toBe(true)
+    expect(row.href).toMatch(/\/search\/[A-Z]{3}\d{4}[A-Z]{3}\d{4}1(\?marker=|$)/)
+
     await shot(page, 'route-detail-returns')
 })
 
@@ -331,6 +349,10 @@ test('a route with no round-trip fares says so in every band', async ({ page, br
     await expect(section.locator('.ret__row--none')).toHaveCount(4)
     await expect(section.locator('.ret__none').first()).toHaveText('No return fares seen yet')
     await expect(section.locator('.ret__price')).toHaveCount(0)
+
+    // Nothing held is nothing to open: the quiet row is not a link.
+    await expect(section.locator('.ret__row').first()).toHaveJSProperty('tagName', 'DIV')
+    await expect(section.locator('.ret__row a')).toHaveCount(0)
 })
 
 /* An unrecognised code ("look before you watch") needs two refusals: the

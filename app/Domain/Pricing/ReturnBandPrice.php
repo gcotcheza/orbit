@@ -24,6 +24,12 @@ final readonly class ReturnBandPrice
         public int $sampleCount,
     ) {}
 
+    /** The day you would fly home — derived the way `ReturnTrip::returnDate()` derives it. */
+    public function returnDate(): DateTimeImmutable
+    {
+        return $this->departureDate->modify("+{$this->nights} days");
+    }
+
     /**
      * Null when the band holds no fare at all — nothing is inferred from a neighbouring
      * band (R6).

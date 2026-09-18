@@ -182,9 +182,9 @@ The route detail screen (`design/README.md` §2). The summary above, plus:
     },
     "returns": [
       { "band": { "label": "A long weekend", "nights": [2, 3] },
-        "fare": { "current": 112, "usual": 122, "pctBelow": 8, "nights": 2, "departure": "2026-10-11", "foundAt": "2026-10-07T06:12:07+02:00", "mayBeGone": false, "sampleCount": 7 } },
+        "fare": { "current": 112, "usual": 122, "pctBelow": 8, "nights": 2, "departure": "2026-10-11", "foundAt": "2026-10-07T06:12:07+02:00", "mayBeGone": false, "sampleCount": 7, "booking": { "aviasales": "https://www.aviasales.com/search/AMS1110OPO13101?marker=123456" } } },
       { "band": { "label": "A week away", "nights": [6, 8] },
-        "fare": { "current": 134, "usual": null, "pctBelow": null, "nights": 7, "departure": "2026-10-09", "foundAt": null, "mayBeGone": false, "sampleCount": 3 } },
+        "fare": { "current": 134, "usual": null, "pctBelow": null, "nights": 7, "departure": "2026-10-09", "foundAt": null, "mayBeGone": false, "sampleCount": 3, "booking": { "aviasales": "https://www.aviasales.com/search/AMS0910OPO16101?marker=123456" } } },
       { "band": { "label": "A fortnight", "nights": [13, 15] }, "fare": null },
       { "band": { "label": "Three to four weeks", "nights": [21, 28] }, "fare": null }
     ],
@@ -215,6 +215,7 @@ The route detail screen (`design/README.md` §2). The summary above, plus:
 | `returns[].fare.foundAt` | When the provider *found* that fare, ISO-8601 with the owner's offset; **`null` means "not known"**, never "found this morning" (R3). Same semantics as `cheapest.foundAt`, and round-trip fares are structurally older: this endpoint's cache runs seven days deep. |
 | `returns[].fare.mayBeGone` | The same judgement as `cheapest.mayBeGone`, and the same thresholds (`orbit.live_check.stale_after_hours`, `orbit.live_check.under_usual_percent`), measured against **this band's** `usual`. `false` whenever `foundAt` or `usual` is `null`. Do not recompute it in a client. |
 | `returns[].fare.sampleCount` | How many in-band fares the answer was drawn from — the thinness `usual`'s absence is explained by. |
+| `returns[].fare.booking.aviasales` | **The hand-off for this exact trip**: Aviasales' round-trip results for `departure` out and `departure` + `nights` back, one adult, economy; the same marker rule as `booking.aviasales`. **Never absent when `fare` is present**, and there is no undated fallback, because a band's fare always has both dates. No Skyscanner here: the second opinion stays the screen-level `booking.skyscanner`. |
 | `booking.aviasales` | **The primary hand-off**, aimed at `cheapest.date`. Falls back to Aviasales' *pre-filled search form* (`/?params=AMSOPO1`) when there are no fares — there is no day to show results for, so the reader gets the search box with the route already in it. Carries the affiliate marker when the box has one. Always present. |
 | `booking.skyscanner` | The secondary "compare" link, same date. Falls back to the route without a date (`…/ams/opo/`). No marker — this one has never been monetised. Always present. |
 

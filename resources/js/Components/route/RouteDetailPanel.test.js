@@ -289,6 +289,7 @@ describe('the return trips section', () => {
                 foundAt: null,
                 mayBeGone: false,
                 sampleCount: 7,
+                booking: { aviasales: 'https://www.aviasales.com/search/AMS1110LIS13101' },
             },
         },
         { band: { label: 'A week away', nights: [6, 8] }, fare: null },
