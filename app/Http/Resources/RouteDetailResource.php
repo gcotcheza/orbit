@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use DateTimeZone;
+use DateTimeImmutable;
 use Illuminate\Http\Request;
 use App\Models\LivePriceCheck;
+use App\Domain\Pricing\MayBeGone;
+use App\Domain\Pricing\NightsBand;
 use App\Domain\Pricing\PricePoint;
 use Illuminate\Support\Facades\Date;
 use App\Application\Routes\BookingLink;
+use App\Domain\Pricing\ReturnBandPrice;
 use App\Application\Routes\RouteSnapshot;
 
 /**
@@ -18,8 +22,16 @@ use App\Application\Routes\RouteSnapshot;
  */
 final class RouteDetailResource extends RouteSummaryResource
 {
-    public function __construct(RouteSnapshot $snapshot, private readonly ?LivePriceCheck $live = null)
-    {
+    /**
+     * Every configured duration band, the empty ones included (docs/API.md, `returns`).
+     *
+     * @param  list<array{band: NightsBand, price: ReturnBandPrice|null}>  $returns
+     */
+    public function __construct(
+        RouteSnapshot $snapshot,
+        private readonly ?LivePriceCheck $live = null,
+        private readonly array $returns = [],
+    ) {
         parent::__construct($snapshot);
     }
 
@@ -34,11 +46,13 @@ final class RouteDetailResource extends RouteSummaryResource
 
         $summary = parent::toArray($request);
 
-        $mayBeGone = $snapshot->cheapestMayBeGone(
-            Date::now()->toDateTimeImmutable(),
-            (int) config('orbit.live_check.stale_after_hours'),
-            (int) config('orbit.live_check.under_usual_percent'),
-        );
+        $now = Date::now()->toDateTimeImmutable();
+        $zone = new DateTimeZone((string) config('orbit.timezone'));
+
+        $staleAfterHours = (int) config('orbit.live_check.stale_after_hours');
+        $underUsualPercent = (int) config('orbit.live_check.under_usual_percent');
+
+        $mayBeGone = $snapshot->cheapestMayBeGone($now, $staleAfterHours, $underUsualPercent);
 
         return [
             ...$summary,
@@ -64,9 +78,7 @@ final class RouteDetailResource extends RouteSummaryResource
 
             'cheapest' => $summary['cheapest'] === null ? null : [
                 ...$summary['cheapest'],
-                'foundAt' => $cheapest?->foundAt?->setTimezone(
-                    new DateTimeZone((string) config('orbit.timezone')),
-                )->format('c'),
+                'foundAt' => $cheapest?->foundAt?->setTimezone($zone)->format('c'),
 
                 /*
                  * ⚠ THE SERVER'S JUDGEMENT AND NOT THE CLIENT'S: old enough AND
@@ -75,10 +87,56 @@ final class RouteDetailResource extends RouteSummaryResource
                 'mayBeGone' => $mayBeGone,
             ],
 
+            'returns' => array_map(fn (array $band): array => [
+                'band' => [
+                    'label'  => $band['band']->label(),
+                    'nights' => [$band['band']->min, $band['band']->max],
+                ],
+                'fare' => $band['price'] === null
+                    ? null
+                    : $this->returnFare($band['price'], $now, $zone, $staleAfterHours, $underUsualPercent),
+            ], $this->returns),
+
             'booking' => [
                 'aviasales'  => BookingLink::aviasales($snapshot->route, $cheapest?->departureDate),
                 'skyscanner' => BookingLink::skyscanner($snapshot->route, $cheapest?->departureDate),
             ],
+        ];
+    }
+
+    /**
+     * What one band holds, or nothing at all — the same judgement and the same thresholds the
+     * headline fare gets, against this band's own usual price (docs/API.md, `returns`).
+     *
+     * @return array<string, mixed>
+     */
+    private function returnFare(
+        ReturnBandPrice $price,
+        DateTimeImmutable $now,
+        DateTimeZone $zone,
+        int $staleAfterHours,
+        int $underUsualPercent,
+    ): array {
+        $usual = $price->usual;
+
+        $mayBeGone = MayBeGone::decide(
+            $price->currentCents,
+            $price->foundAt,
+            $usual,
+            $now,
+            $staleAfterHours,
+            $underUsualPercent,
+        );
+
+        return [
+            'current'     => Euros::from($price->currentCents),
+            'usual'       => $usual === null ? null : Euros::from($usual->usualCents()),
+            'pctBelow'    => $usual?->percentUnderUsual($price->currentCents),
+            'nights'      => $price->nights,
+            'departure'   => $price->departureDate->format('Y-m-d'),
+            'foundAt'     => $price->foundAt?->setTimezone($zone)->format('c'),
+            'mayBeGone'   => $mayBeGone,
+            'sampleCount' => $price->sampleCount,
         ];
     }
 

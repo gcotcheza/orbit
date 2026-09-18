@@ -2,7 +2,7 @@
 // fabricated ages, NaN), so the clock is pinned here (docs/BUSINESS-LOGIC.md §36).
 import { describe, expect, it } from 'vitest'
 
-import { departureLabel, hoursSince, seenLabel, shortDayLabel, withDateTokens } from './format'
+import { SEEN_AFTER_HOURS, departureLabel, hoursSince, seenIfOld, seenLabel, shortDayLabel, withDateTokens } from './format'
 
 /** A fixed "now", with an offset, exactly as the API sends its timestamps. */
 const NOW = new Date('2026-08-15T12:00:00+02:00').getTime()
@@ -85,6 +85,25 @@ describe('hoursSince', () => {
 
     it('is negative for a timestamp in the future', () => {
         expect(hoursSince(ago(-3), NOW)).toBeCloseTo(-3, 5)
+    })
+})
+
+describe('seenIfOld', () => {
+    // The threshold from both sides, in one place: two screens read this, and a second copy of
+    // the number is how they would come to disagree (docs/BUSINESS-LOGIC.md §36).
+    it('says nothing until a fare has survived a morning it should have been repriced in', () => {
+        expect(seenIfOld(ago(23.9), NOW)).toBeNull()
+        expect(seenIfOld(ago(SEEN_AFTER_HOURS), NOW)).toBe('1 day ago')
+        expect(seenIfOld(ago(96), NOW)).toBe('4 days ago')
+    })
+
+    it('says nothing at all when the age is unknown', () => {
+        expect(seenIfOld(null, NOW)).toBeNull()
+        expect(seenIfOld('the seventh of never', NOW)).toBeNull()
+    })
+
+    it('is seenLabel once it speaks at all', () => {
+        expect(seenIfOld(ago(30), NOW)).toBe(seenLabel(ago(30), NOW))
     })
 })
 

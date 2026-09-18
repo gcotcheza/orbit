@@ -180,6 +180,14 @@ The route detail screen (`design/README.md` §2). The summary above, plus:
       "foundAt": "2026-08-11T22:04:13+02:00",
       "mayBeGone": false
     },
+    "returns": [
+      { "band": { "label": "A long weekend", "nights": [2, 3] },
+        "fare": { "current": 112, "usual": 122, "pctBelow": 8, "nights": 2, "departure": "2026-10-11", "foundAt": "2026-10-07T06:12:07+02:00", "mayBeGone": false, "sampleCount": 7 } },
+      { "band": { "label": "A week away", "nights": [6, 8] },
+        "fare": { "current": 134, "usual": null, "pctBelow": null, "nights": 7, "departure": "2026-10-09", "foundAt": null, "mayBeGone": false, "sampleCount": 3 } },
+      { "band": { "label": "A fortnight", "nights": [13, 15] }, "fare": null },
+      { "band": { "label": "Three to four weeks", "nights": [21, 28] }, "fare": null }
+    ],
     "booking": {
       "aviasales": "https://www.aviasales.com/search/AMS1509OPO1?marker=123456",
       "skyscanner": "https://www.skyscanner.nl/transport/flights/ams/opo/260915/"
@@ -195,6 +203,18 @@ The route detail screen (`design/README.md` §2). The summary above, plus:
 | `advice` | The tinted callout. `title` equals `verdict.label` and `tone` equals `verdict.tone` — generated together, so the prose and the gauge cannot disagree — **except in the two states where the same document doubts its own headline**: when `cheapest.mayBeGone` is true, and when a fresh `meta.liveCheck.lowest` is **dearer** than `cheapest.price`. Then the callout is replaced and `tone` is `warn` while `verdict` is unchanged, because the gauge is still about the price level and the callout is about whether to act on it. **The client renders `advice` and must not compose its own qualification**; the booking hand-off reads `advice.tone` alone. |
 | `cheapest.foundAt` | **Detail only** — the summary's `cheapest` carries `date` and `price` alone. When the cheapest fare was *found*, same semantics and same null rule as the calendar's `days[].foundAt`. The detail screen prints "Seen 4 days ago" beside the departure line **only past 24 h**: under that it is the ordinary state of a route polled this morning, and a line nobody needs teaches people to skip the place the important version appears. The three summary-only screens have no room for it and do not get it. |
 | `cheapest.mayBeGone` | **Detail only, and the one JUDGEMENT in `data`.** `true` when the cheapest fare was found more than `orbit.live_check.stale_after_hours` (48 h) ago **and** is at least `orbit.live_check.under_usual_percent` (20%) below usual — the combination that put DUS→VCE on screen at €36, "seen 3 days ago", against a live market of about $150. The client **demotes the headline** and labels it ("Seen 3 days ago — may be gone") instead of drawing the app's most confident number over a fare that has probably sold. Both halves are required: age alone is the ordinary state of a quiet route, cheapness alone is what this app is for. **`false` whenever `foundAt` is null** — not-knowing is never demoted. Do not recompute it in a client: the thresholds are the server's. |
+| `returns` | **Detail only.** What a ROUND TRIP costs on this route, one entry per configured duration band (`orbit.returns.durations`), **in config order and always all of them** — the screen draws a quiet row for a band nothing is held for rather than dropping it (`docs/BUSINESS-LOGIC.md` §15, R6). Computed from the fares Orbit still holds at request time, not read from the morning summary table. |
+| `returns[].band.label` | The band's name, as the screen prints it: "A long weekend", "A week away", "A fortnight", "Three to four weeks". **The server's copy** — a client must not name a band itself, or the two fall out of step the day a band is retuned. |
+| `returns[].band.nights` | `[min, max]` nights, **inclusive at both ends** — the same pair `orbit.returns.durations` carries and `tripLengthNights` is parsed into. |
+| `returns[].fare` | The cheapest round trip Orbit still holds in that band, or **`null`** when it holds none. `null` is the ordinary state on a thin route and is never inferred from a neighbouring band (§15, R6). |
+| `returns[].fare.current` | R2's current price in euros, a whole number when the fare is one: the cheapest in-band fare inside `orbit.returns.stats.window_days`, still quoted within `orbit.returns.stale_after_days`. Never `null` when `fare` is present. |
+| `returns[].fare.usual` | The median of that band's own pool (R4), in euros, a whole number when the fare is one. **`null`** below `orbit.returns.stats.min_samples` (5) fares — a price with no verdict attached, never an invented distribution (R5). |
+| `returns[].fare.pctBelow` | Whole percent under `usual`, by the same arithmetic as the summary's `price.pctBelow`. **Always `0` or more here**, unlike the summary's: a band's `current` is the cheapest fare of the very pool `usual` is the median of, so it cannot sit above it. **`null`** when `usual` is. |
+| `returns[].fare.nights` | The stay length of the fare that won, inside `band.nights` (R3). A band is a range; this is the one trip the price is for. |
+| `returns[].fare.departure` | That fare's **departure date**, `YYYY-MM-DD` — the other axis again, never an observation date. |
+| `returns[].fare.foundAt` | When the provider *found* that fare, ISO-8601 with the owner's offset; **`null` means "not known"**, never "found this morning" (R3). Same semantics as `cheapest.foundAt`, and round-trip fares are structurally older: this endpoint's cache runs seven days deep. |
+| `returns[].fare.mayBeGone` | The same judgement as `cheapest.mayBeGone`, and the same thresholds (`orbit.live_check.stale_after_hours`, `orbit.live_check.under_usual_percent`), measured against **this band's** `usual`. `false` whenever `foundAt` or `usual` is `null`. Do not recompute it in a client. |
+| `returns[].fare.sampleCount` | How many in-band fares the answer was drawn from — the thinness `usual`'s absence is explained by. |
 | `booking.aviasales` | **The primary hand-off**, aimed at `cheapest.date`. Falls back to Aviasales' *pre-filled search form* (`/?params=AMSOPO1`) when there are no fares — there is no day to show results for, so the reader gets the search box with the route already in it. Carries the affiliate marker when the box has one. Always present. |
 | `booking.skyscanner` | The secondary "compare" link, same date. Falls back to the route without a date (`…/ams/opo/`). No marker — this one has never been monetised. Always present. |
 

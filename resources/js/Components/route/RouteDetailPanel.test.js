@@ -14,7 +14,7 @@ vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), back: vi.fn() 
 
 import RouteDetailPanel from './RouteDetailPanel.vue'
 
-const document_ = (code, city, price) => ({
+const document_ = (code, city, price, extra = {}) => ({
     data: {
         data: {
             code,
@@ -31,6 +31,8 @@ const document_ = (code, city, price) => ({
             stats: { min: 46, median: 111, max: 149 },
             advice: { title: 'Good price — book', body: 'A solid time to lock it in.', tone: 'good' },
             booking: { aviasales: 'https://example.test/a', skyscanner: 'https://example.test/s' },
+            returns: [],
+            ...extra,
         },
         meta: { watched: true, fares: { fetchedAt: '2026-08-14T06:12:00+02:00', fresh: true } },
     },
@@ -241,6 +243,7 @@ describe('the two-column wrappers', () => {
 
         expect(groups.map((group) => group.classes()[1])).toEqual([
             'detail__group--summary',
+            'detail__group--returns',
             'detail__group--chart',
             'detail__group--advice',
             'detail__group--booking',
@@ -248,9 +251,11 @@ describe('the two-column wrappers', () => {
 
         expect(groups[0].find('.detail__head').exists()).toBe(true)
         expect(groups[0].find('.price').exists()).toBe(true)
-        expect(groups[1].find('.chart-card').exists()).toBe(true)
-        expect(groups[2].find('.callout').exists()).toBe(true)
-        expect(groups[3].find('.booking').exists()).toBe(true)
+        // This fixture carries no bands, and the group it sits in draws nothing for them.
+        expect(groups[1].find('.ret').exists()).toBe(false)
+        expect(groups[2].find('.chart-card').exists()).toBe(true)
+        expect(groups[3].find('.callout').exists()).toBe(true)
+        expect(groups[4].find('.booking').exists()).toBe(true)
     })
 
     // A skeleton or a "no such route" is one thing, and wrapping it would give the grid a column
@@ -266,6 +271,80 @@ describe('the two-column wrappers', () => {
 
         expect(wrapper.get('.empty__title').text()).toBe('No such route')
         expect(wrapper.findAll('.detail__group')).toHaveLength(0)
+    })
+})
+
+// The pane beside the globe is deliberately a short detail, so the section belongs to the route's
+// own screen and to no pane (design/README.md §2, docs/DESKTOP-LAYOUT-PLAN.md).
+describe('the return trips section', () => {
+    const RETURNS = [
+        {
+            band: { label: 'A long weekend', nights: [2, 3] },
+            fare: {
+                current: 112,
+                usual: 122,
+                pctBelow: 8,
+                nights: 2,
+                departure: '2026-10-11',
+                foundAt: null,
+                mayBeGone: false,
+                sampleCount: 7,
+            },
+        },
+        { band: { label: 'A week away', nights: [6, 8] }, fare: null },
+        { band: { label: 'A fortnight', nights: [13, 15] }, fare: null },
+        { band: { label: 'Three to four weeks', nights: [21, 28] }, fare: null },
+    ]
+
+    it('draws every band the server sent, between the price block and the chart', async () => {
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75, { returns: RETURNS }))
+
+        const wrapper = mount(RouteDetailPanel, {
+            props: { code: 'AMS-LIS' },
+            global: { plugins: [createPinia()] },
+        })
+        await flushPromises()
+
+        expect(wrapper.findAll('.ret__row')).toHaveLength(4)
+        expect(wrapper.get('.ret__price').text()).toBe('from €112')
+
+        expect(wrapper.findAll('.detail__group').map((group) => group.classes()[1])).toEqual([
+            'detail__group--summary',
+            'detail__group--returns',
+            'detail__group--chart',
+            'detail__group--advice',
+            'detail__group--booking',
+        ])
+    })
+
+    // The pane beside the globe is a short detail by design: four more rows there are four
+    // fewer for the globe (docs/DESKTOP-LAYOUT-PLAN.md).
+    it('leaves the section off a panel inside a pane', async () => {
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75, { returns: RETURNS }))
+
+        const wrapper = mount(RouteDetailPanel, {
+            props: { code: 'AMS-LIS', embedded: true },
+            global: { plugins: [createPinia()] },
+        })
+        await flushPromises()
+
+        expect(wrapper.find('.ret').exists()).toBe(false)
+        expect(wrapper.get('.price__value').text()).toBe('€75')
+    })
+
+    // An older build, or a route answered before this field existed: the rest of the screen
+    // must not depend on it.
+    it('draws no section at all when the answer carries no bands', async () => {
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75))
+
+        const wrapper = mount(RouteDetailPanel, {
+            props: { code: 'AMS-LIS' },
+            global: { plugins: [createPinia()] },
+        })
+        await flushPromises()
+
+        expect(wrapper.find('.ret').exists()).toBe(false)
+        expect(wrapper.get('.price__value').text()).toBe('€75')
     })
 })
 

@@ -71,6 +71,9 @@ export function usualPriceLabel(pctBelow) {
 // HOW OLD A PRICE IS. `foundAt` is a third date (docs/API.md): not the day you fly and not the
 // day we looked. One implementation for both screens, which have two rules over one arithmetic.
 
+/** 24h, the daily poll's own period: a fare older than this survived a morning it should not have. */
+export const SEEN_AFTER_HOURS = 24
+
 /** The clock, in ms, as one place so the tests can pass their own. */
 function elapsedMs(iso, now) {
     if (iso === null || iso === undefined) {
@@ -126,6 +129,21 @@ export function seenLabel(iso, now = Date.now()) {
     const days = Math.floor(elapsed / 86_400_000)
 
     return `${days} ${days === 1 ? 'day' : 'days'} ago`
+}
+
+/**
+ * `seenLabel`, but only once the age is worth saying: NULL under a day, where "seen" is the
+ * ordinary state of a route polled this morning and a line nobody needs teaches people to skip
+ * the place the important version appears. The threshold is the poll's own period.
+ *
+ * @param {string|null|undefined} iso
+ * @param {number} [now] epoch ms, injectable for tests
+ * @returns {string|null}
+ */
+export function seenIfOld(iso, now = Date.now()) {
+    const age = hoursSince(iso, now)
+
+    return age === null || age < SEEN_AFTER_HOURS ? null : seenLabel(iso, now)
 }
 
 /**
