@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use DateTimeZone;
+use App\Models\Route;
 use DateTimeImmutable;
 use Illuminate\Http\Request;
 use App\Models\LivePriceCheck;
@@ -94,7 +95,14 @@ final class RouteDetailResource extends RouteSummaryResource
                 ],
                 'fare' => $band['price'] === null
                     ? null
-                    : $this->returnFare($band['price'], $now, $zone, $staleAfterHours, $underUsualPercent),
+                    : $this->returnFare(
+                        $snapshot->route,
+                        $band['price'],
+                        $now,
+                        $zone,
+                        $staleAfterHours,
+                        $underUsualPercent,
+                    ),
             ], $this->returns),
 
             'booking' => [
@@ -111,6 +119,7 @@ final class RouteDetailResource extends RouteSummaryResource
      * @return array<string, mixed>
      */
     private function returnFare(
+        Route $route,
         ReturnBandPrice $price,
         DateTimeImmutable $now,
         DateTimeZone $zone,
@@ -137,6 +146,9 @@ final class RouteDetailResource extends RouteSummaryResource
             'foundAt'     => $price->foundAt?->setTimezone($zone)->format('c'),
             'mayBeGone'   => $mayBeGone,
             'sampleCount' => $price->sampleCount,
+            'booking'     => [
+                'aviasales' => BookingLink::aviasalesReturn($route, $price->departureDate, $price->returnDate()),
+            ],
         ];
     }
 

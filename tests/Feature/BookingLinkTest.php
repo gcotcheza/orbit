@@ -215,6 +215,77 @@ final class BookingLinkTest extends TestCase
     }
 
     /**
+     * `AMS1210OPO14101` — the return date sits AFTER the destination code, and only
+     * then the passenger count (docs/BUSINESS-LOGIC.md §12).
+     */
+    #[Test]
+    public function the_round_trip_link_dates_the_outbound_then_the_return(): void
+    {
+        $url = BookingLink::aviasalesReturn(
+            $this->route(),
+            new DateTimeImmutable('2026-10-12'),
+            new DateTimeImmutable('2026-10-14'),
+        );
+
+        $this->assertSame(
+            'https://www.aviasales.com/search/AMS1210OPO14101?marker='.self::MARKER,
+            $url,
+        );
+    }
+
+    /** Day before month on BOTH legs: `0201`/`0403`, never `0102`/`0304`. */
+    #[Test]
+    public function both_legs_of_a_round_trip_put_the_day_before_the_month(): void
+    {
+        $url = BookingLink::aviasalesReturn(
+            $this->route(),
+            new DateTimeImmutable('2026-01-02'),
+            new DateTimeImmutable('2026-03-04'),
+        );
+
+        $this->assertSame(
+            'https://www.aviasales.com/search/AMS0201OPO04031?marker='.self::MARKER,
+            $url,
+        );
+    }
+
+    /**
+     * A stay that ends next year: the params carry no year at all, so `3112` out and
+     * `0201` back is the whole of it.
+     */
+    #[Test]
+    public function a_round_trip_returning_after_new_year_keeps_the_same_four_digits(): void
+    {
+        $url = BookingLink::aviasalesReturn(
+            $this->route(),
+            new DateTimeImmutable('2026-12-31'),
+            new DateTimeImmutable('2027-01-02'),
+        );
+
+        $this->assertSame(
+            'https://www.aviasales.com/search/AMS3112OPO02011?marker='.self::MARKER,
+            $url,
+        );
+    }
+
+    /** Absent rather than empty here too (docs/BUSINESS-LOGIC.md §12). */
+    #[Test]
+    #[DataProvider('missingMarkers')]
+    public function an_unset_marker_leaves_the_round_trip_link_bare(?string $marker): void
+    {
+        config()->set('orbit.travelpayouts.marker', $marker);
+
+        $this->assertSame(
+            'https://www.aviasales.com/search/AMS1210OPO14101',
+            BookingLink::aviasalesReturn(
+                $this->route(),
+                new DateTimeImmutable('2026-10-12'),
+                new DateTimeImmutable('2026-10-14'),
+            ),
+        );
+    }
+
+    /**
      * MEMOISED, because `routes.code` is unique and several of these tests ask
      * for the route more than once. One route per test, made on first use.
      */

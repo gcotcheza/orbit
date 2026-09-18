@@ -214,10 +214,33 @@ final class ReturnBandPriceTest extends TestCase
         $this->assertNull(ReturnBandPrice::from(new NightsBand(6, 8), [], self::MIN_SAMPLES));
     }
 
-    private function trip(int $nights, int $cents, ?string $foundAt = null): ReturnTrip
+    /** The winning trip's own return date, derived the way `ReturnTrip` derives it. */
+    #[Test]
+    public function the_return_date_is_the_winning_departure_plus_its_stay(): void
+    {
+        $price = ReturnBandPrice::from(new NightsBand(2, 3), [
+            $this->trip(nights: 2, cents: 8000, departure: '2026-12-12'),
+        ], self::MIN_SAMPLES);
+
+        $this->assertNotNull($price);
+        $this->assertSame('2026-12-14', $price->returnDate()->format('Y-m-d'));
+    }
+
+    #[Test]
+    public function a_return_date_crosses_a_year_end_without_drifting(): void
+    {
+        $price = ReturnBandPrice::from(new NightsBand(2, 3), [
+            $this->trip(nights: 2, cents: 8000, departure: '2026-12-31'),
+        ], self::MIN_SAMPLES);
+
+        $this->assertNotNull($price);
+        $this->assertSame('2027-01-02', $price->returnDate()->format('Y-m-d'));
+    }
+
+    private function trip(int $nights, int $cents, ?string $foundAt = null, string $departure = '2026-11-03'): ReturnTrip
     {
         return new ReturnTrip(
-            new DateTimeImmutable('2026-11-03'),
+            new DateTimeImmutable($departure),
             $nights,
             $cents,
             $foundAt === null ? null : new DateTimeImmutable($foundAt),
