@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps({
   /** The destination, byte for byte — the marker query is affiliate attribution. */
@@ -14,11 +14,12 @@ const NAMED_SITES = {
 }
 
 const panel = ref(null)
+let onward = 0
 
 const site = computed(() => {
   const host = new URL(props.href, window.location.href).hostname.replace(/^www\./, '')
 
-  return NAMED_SITES[host] ?? host
+  return NAMED_SITES[host] ?? (host || 'the booking site')
 })
 
 const sentence = computed(
@@ -57,15 +58,35 @@ function onKeydown(event) {
 
 // Removing the anchor inside its own click cancels the navigation it started.
 function onContinue() {
-  setTimeout(() => emit('close'))
+  onward = setTimeout(() => emit('close'))
+}
+
+function arm() {
+  window.addEventListener('keydown', onKeydown, true)
+}
+
+function release() {
+  window.removeEventListener('keydown', onKeydown, true)
 }
 
 onMounted(() => {
-  window.addEventListener('keydown', onKeydown, true)
+  arm()
   panel.value.focus()
 })
 
-onUnmounted(() => window.removeEventListener('keydown', onKeydown, true))
+onActivated(arm)
+
+// `Home` is kept alive (App.vue), so a Back navigation deactivates this rather
+// than unmounting it: it must let go of the keyboard and close, not wait.
+onDeactivated(() => {
+  release()
+  emit('close')
+})
+
+onUnmounted(() => {
+  release()
+  clearTimeout(onward)
+})
 </script>
 
 <template>

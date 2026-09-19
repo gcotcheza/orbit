@@ -165,16 +165,15 @@ describe('DaySheet', () => {
 
     // The actions sit INSIDE the sheet; the backdrop is its sibling, so a
     // tap on either cannot also dismiss.
-    it('still closes on the backdrop and on Escape, and not on its own actions', async () => {
+    it('closes on the backdrop and on Escape, never on its own actions', async () => {
         const wrapper = sheet()
 
         await booking(wrapper).trigger('click')
         await wrapper.findComponent(RouterLinkStub).trigger('click')
         expect(wrapper.emitted('close')).toBeUndefined()
 
-        // The booking action opened Orbit's own confirmation over the sheet, and
-        // that dialog takes the next Escape for itself (docs/DECISIONS.md:
-        // an-interstitial-sits-on-top-of-the-new-tab-link).
+        // The booking action opened a confirmation over the sheet, and that
+        // dialog takes the next Escape (docs/DECISIONS.md, an-interstitial-...).
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
         expect(wrapper.emitted('close')).toBeUndefined()
 

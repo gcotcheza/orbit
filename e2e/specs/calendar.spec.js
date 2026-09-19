@@ -398,8 +398,8 @@ test('switching route redraws the month', async ({ page }) => {
 /* The sheet's hand-off goes through the same confirmation the route screen
  * uses (design/README.md "Leaving the app") — over a dialog that is already up. */
 test('a day sheet hand-off asks first, and one Escape closes only the question', async ({ page }) => {
-    // Answered here rather than by the booking site: this suite may reach no
-    // third party (docs/E2E.md).
+    // Answered here, not by the booking site (docs/E2E.md, "The suite
+    // reaches no third party").
     await page.context().route('https://www.aviasales.com/**', (route) =>
         route.fulfill({ contentType: 'text/html', body: '<title>Aviasales</title>' }),
     )
@@ -434,13 +434,11 @@ test('a day sheet hand-off asks first, and one Escape closes only the question',
         expect((await control.boundingBox()).height).toBeGreaterThanOrEqual(44)
     }
 
-    for (let press = 0; press < 4; press += 1) {
+    // NAMED PER PRESS, not "still inside .leaving" — the panel contains itself,
+    // so that reading passes for a trap that moves nothing. One lap and one more.
+    for (const expected of [stay, onward, stay, onward]) {
         await page.keyboard.press('Tab')
-
-        expect(
-            await page.evaluate(() => document.querySelector('.leaving').contains(document.activeElement)),
-            'Tab escaped the dialog',
-        ).toBe(true)
+        await expect(expected).toBeFocused()
     }
 
     // THE SHEET LISTENS FOR ESCAPE TOO: one press must close the question and

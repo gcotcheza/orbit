@@ -3,6 +3,7 @@
 // an-interstitial-sits-on-top-of-the-new-tab-link).
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { h, KeepAlive, nextTick, ref } from 'vue'
 import LeavingOrbitDialog from './LeavingOrbitDialog.vue'
 
 const AVIASALES = 'https://www.aviasales.com/search/AMS1509OPO1?marker=123456'
@@ -13,6 +14,31 @@ function dialog(href = AVIASALES) {
     wrapper = mount(LeavingOrbitDialog, { attachTo: document.body, props: { href } })
 
     return document.body.querySelector('.leaving')
+}
+
+/** Home's <KeepAlive> (App.vue), as far as this dialog can tell. */
+function cached(href = AVIASALES) {
+    const shown = ref(true)
+    const closed = vi.fn()
+
+    wrapper = mount(
+        {
+            setup: () => () => h(KeepAlive, null, {
+                default: () => (shown.value ? h(LeavingOrbitDialog, { href, onClose: closed }) : null),
+            }),
+        },
+        { attachTo: document.body },
+    )
+
+    return { closed, shown }
+}
+
+function escape() {
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+
+    document.body.dispatchEvent(event)
+
+    return event
 }
 
 const stay = () => document.body.querySelector('.leaving__stay')
@@ -50,6 +76,8 @@ describe('the leaving confirmation', () => {
         // The third party nobody has added yet is the point of the fallback.
         ['https://www.kiwi.com/en/search/AMS/OPO', 'kiwi.com'],
         ['https://flights.example.org/AMS-OPO', 'flights.example.org'],
+        // No hostname at all would otherwise read "Continue to " and stop.
+        ['mailto:fares@example.org', 'the booking site'],
     ])('reads %s as %s', (href, site) => {
         dialog(href)
 
@@ -139,12 +167,48 @@ describe('the leaving confirmation', () => {
         expect(tab.defaultPrevented).toBe(true)
     })
 
-    it('stops listening once it is gone', () => {
+    it('lets go of the keyboard once it is gone', () => {
         dialog()
         wrapper.unmount()
         wrapper = null
 
-        expect(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))).not.toThrow()
+        expect(escape().defaultPrevented).toBe(false)
         expect(document.body.querySelector('.leaving')).toBeNull()
+    })
+
+    /*
+     * The one screen that is kept alive never unmounts, so `onUnmounted` is not
+     * the hook that runs on a Back navigation (RouteDetailPanel.test.js).
+     */
+    it('lets go of the keyboard when a cached screen goes away', async () => {
+        const { shown } = cached()
+
+        expect(escape().defaultPrevented).toBe(true)
+
+        shown.value = false
+        await nextTick()
+
+        expect(escape().defaultPrevented).toBe(false)
+    })
+
+    it('closes itself when a cached screen goes away', async () => {
+        const { closed, shown } = cached()
+
+        shown.value = false
+        await nextTick()
+
+        expect(closed).toHaveBeenCalledTimes(1)
+    })
+
+    it('takes the keyboard back when that screen returns', async () => {
+        const { shown } = cached()
+
+        shown.value = false
+        await nextTick()
+
+        shown.value = true
+        await nextTick()
+
+        expect(escape().defaultPrevented).toBe(true)
     })
 })

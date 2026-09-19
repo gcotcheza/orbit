@@ -404,8 +404,8 @@ test('an unknown route code says so instead of throwing', async ({ page, browser
 /* The way out of the app is Orbit's own dialog first (design/README.md
  * "Leaving the app"); the browser's native UI is never used for any of it. */
 test('a booking link asks before it hands anyone over', async ({ page }) => {
-    // The onward tab is answered here rather than by the booking site: this
-    // suite may reach no third party (docs/E2E.md).
+    // Answered here, not by the booking site (docs/E2E.md, "The suite
+    // reaches no third party").
     await page.context().route('https://www.aviasales.com/**', (route) =>
         route.fulfill({ contentType: 'text/html', body: '<title>Aviasales</title>' }),
     )
@@ -439,14 +439,11 @@ test('a booking link asks before it hands anyone over', async ({ page }) => {
         expect((await control.boundingBox()).height).toBeGreaterThanOrEqual(44)
     }
 
-    // Four presses is one full lap and one more: a leak shows on any of them.
-    for (let press = 0; press < 4; press += 1) {
+    // NAMED PER PRESS, not "still inside .leaving" — the panel contains itself,
+    // so that reading passes for a trap that moves nothing. One lap and one more.
+    for (const expected of [stay, onward, stay, onward]) {
         await page.keyboard.press('Tab')
-
-        expect(
-            await page.evaluate(() => document.querySelector('.leaving').contains(document.activeElement)),
-            'Tab escaped the dialog',
-        ).toBe(true)
+        await expect(expected).toBeFocused()
     }
 
     await page.keyboard.press('Escape')
