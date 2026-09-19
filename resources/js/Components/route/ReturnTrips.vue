@@ -4,6 +4,8 @@
  * Every number and every band name is the server's — nothing here is a judgement.
  */
 import { computed } from 'vue'
+import Chevron from '@/Components/Chevron.vue'
+import NewTabLink from '@/Components/NewTabLink.vue'
 import { departureLabel, euro, seenIfOld } from '@/lib/format'
 
 const props = defineProps({
@@ -35,9 +37,6 @@ function meta(fare, seen) {
   return parts.join(' · ')
 }
 
-// How BookingCta.vue opens Aviasales; a return row leaves the app the same way.
-const OPENS_AVIASALES = { target: '_blank', rel: 'noopener' }
-
 function toRow({ band, fare }) {
   const named = {
     key: band.nights.join('-'),
@@ -55,8 +54,8 @@ function toRow({ band, fare }) {
 
   return {
     ...named,
-    tag: 'a',
-    attrs: { href: fare.booking.aviasales, ...OPENS_AVIASALES },
+    tag: NewTabLink,
+    attrs: { href: fare.booking.aviasales },
     fare: {
       price: `from ${euro(fare.current)}`,
       comparison: comparison(fare),
@@ -101,10 +100,7 @@ const rows = computed(() => props.returns.map(toRow))
           <p v-else class="ret__none">No return fares seen yet</p>
         </div>
 
-        <!-- Same chevron affordance as WatchRow.vue, sized to this row. -->
-        <svg v-if="row.fare" class="ret__chevron" width="15" height="15" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <path d="M6 4l5 5-5 5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <Chevron v-if="row.fare" class="ret__chevron" />
       </component>
     </div>
   </section>
@@ -221,9 +217,5 @@ const rows = computed(() => props.returns.map(toRow))
 .ret__chevron {
   align-self: center;
   flex-shrink: 0;
-}
-
-.ret__chevron path {
-  stroke: var(--muted);
 }
 </style>

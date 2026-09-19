@@ -5,6 +5,7 @@
  */
 import { computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
+import NewTabLink from '@/Components/NewTabLink.vue'
 import { euro, seenLabel, withDateTokens } from '@/lib/format'
 import { heatColour } from './heat'
 import { dayLabel } from './month'
@@ -104,24 +105,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
     <!-- THE TWO HAND-OFFS, AS A PAIR — the same shape and order as BookingCta.vue, because they are
          one decision on two screens (docs/BUSINESS-LOGIC.md §36). -->
     <div class="actions">
-      <a
-        v-if="skyscannerUrl"
-        class="action action--quiet compare"
-        :href="skyscannerUrl"
-        target="_blank"
-        rel="noopener"
-      >
+      <NewTabLink v-if="skyscannerUrl" class="action action--quiet compare" :href="skyscannerUrl">
         <span>Compare on Skyscanner</span>
-      </a>
+      </NewTabLink>
 
-      <a v-if="aviasalesUrl" class="action action--solid" :href="aviasalesUrl" target="_blank" rel="noopener">
+      <NewTabLink v-if="aviasalesUrl" class="action action--solid" :href="aviasalesUrl">
         <span>See this fare on Aviasales</span>
         <!-- Stroked from the style block, on the accent fill — the same arrow
              BookingCta uses, for the same reason. -->
         <svg width="15" height="15" viewBox="0 0 17 17" fill="none" aria-hidden="true">
           <path d="M5 12L12 5M12 5H6M12 5v6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-      </a>
+      </NewTabLink>
     </div>
 
     <!-- Word for word BookingCta's, duplicated rather than shared: what they have in common is the

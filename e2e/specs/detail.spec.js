@@ -110,10 +110,11 @@ test('the price, the gauge, the chart and the booking link are all really there'
         ),
     )
 
-    // Both open away from the app, and safely.
+    // Both open away from the app, safely, and say so before they are followed.
     for (const link of [booking, compare]) {
         await expect(link).toHaveAttribute('target', '_blank')
         await expect(link).toHaveAttribute('rel', /noopener/)
+        await expect(link).toHaveAccessibleName(/\(opens in a new tab\)$/)
     }
 
     // One disclaimer line, merged from the old separate "we don't sell
@@ -168,6 +169,7 @@ test('the return trips section lists every band and prices what Orbit holds', as
             tag: first.tagName,
             target: first.getAttribute('target'),
             href: first.getAttribute('href'),
+            spoken: first.textContent,
             /* A finger, not a line of text. */
             tappable: first.getBoundingClientRect().height >= 44,
         }
@@ -175,6 +177,7 @@ test('the return trips section lists every band and prices what Orbit holds', as
 
     expect(row.tag).toBe('A')
     expect(row.target).toBe('_blank')
+    expect(row.spoken).toMatch(/\(opens in a new tab\)$/)
     expect(row.tappable).toBe(true)
     expect(row.href).toMatch(/\/search\/[A-Z]{3}\d{4}[A-Z]{3}\d{4}1(\?marker=|$)/)
 
@@ -248,6 +251,7 @@ test('a route the app says to wait on gets the quiet Book button', async ({ page
     await expect(booking).toHaveClass(/booking__cta--secondary/)
     // Still the same target, the same size and the same one tap.
     await expect(booking).toHaveAttribute('target', '_blank')
+    await expect(booking).toHaveAccessibleName(/\(opens in a new tab\)$/)
 
     // Both hand-offs go unfilled under a "wait" warning — leaving one
     // accented would still be the app arguing with itself, just more quietly.

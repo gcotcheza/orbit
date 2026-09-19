@@ -61,7 +61,7 @@ describe('DaySheet', () => {
         expect(link.attributes('href')).toBe(
             'https://www.skyscanner.nl/transport/flights/ams/opo/260915/',
         )
-        expect(link.text()).toBe('Compare on Skyscanner')
+        expect(link.text()).toBe('Compare on Skyscanner (opens in a new tab)')
     })
 
     // Which one is loud is a correctness matter (docs/BUSINESS-LOGIC.md §36).

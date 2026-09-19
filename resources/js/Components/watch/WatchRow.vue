@@ -4,6 +4,7 @@
  * is day-1 honest, and the link stops at the tear line (docs/BUSINESS-LOGIC.md §36).
  */
 import { computed, ref } from 'vue'
+import Chevron from '@/Components/Chevron.vue'
 import ToggleSwitch from '@/Components/ToggleSwitch.vue'
 import VerdictPill from '@/Components/VerdictPill.vue'
 import { euro } from '@/lib/format'
@@ -99,10 +100,7 @@ function confirmRemove() {
           </p>
         </div>
 
-        <!-- Same chevron affordance as SpotlightCard.vue, sized to this row. -->
-        <svg class="chevron" width="15" height="15" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <path d="M6 4l5 5-5 5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <Chevron class="chevron" />
       </div>
     </RouterLink>
 
@@ -281,10 +279,6 @@ function confirmRemove() {
 .chevron {
   align-self: center;
   flex-shrink: 0;
-}
-
-.chevron path {
-  stroke: var(--muted);
 }
 
 /* Notches use var(--bg), not a transparent hole — the page has a gradient

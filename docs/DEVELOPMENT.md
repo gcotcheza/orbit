@@ -108,9 +108,10 @@ key="base64:$(openssl rand -base64 32)"
 sed -i "s|^APP_KEY=.*|APP_KEY=${key}|; s|^DB_PASSWORD=.*|DB_PASSWORD=sandbox|; s|^APP_ENV=.*|APP_ENV=local|" .env
 ```
 
-What this page proves from a root-owned worktree is the `overlay` runner; `dev`
-there additionally needs `vendor/` and `node_modules/` handed over the way the
-gate hands over `storage/`, and that is not proven here.
+What this page proves from a root-owned worktree is the `overlay` runner and
+the browser gate; `dev` there additionally needs `vendor/` and `node_modules/`
+handed over the way the gate hands over `storage/`, and that is not proven
+here.
 
 A worktree made the way this page shows needs no seam: it is root-owned, root's
 git owns it, and the gate's secrets step — the one check that reads the tree
@@ -137,6 +138,36 @@ scripts/e2e.sh                                # everything
 scripts/e2e.sh -- specs/globe.spec.js         # one spec
 scripts/e2e.sh --keep -- --grep "heat map"    # one test, stack left up
 ```
+
+**From a root-owned worktree it needs five paths handed over first.** The
+overlay gate above leaves none of them behind, and this script installs
+`vendor/` and `node_modules/` into the checkout rather than over it
+(`scripts/e2e.sh:348-350`, `:353-358`), as one-off containers running `115:119`.
+It cannot do that in a root-owned tree until those directories exist and are
+theirs — a `115:119` container cannot create one (`mkdir: Permission denied`) —
+and the single refusal it carries (`:340-347`) is about a checkout that is being
+*served*, not about a worktree. This is the whole of it, run as it stands:
+
+```bash
+wt=/srv/sessions/orbit/worktrees/feat-thing
+cd "$wt"
+mkdir -p vendor node_modules public/build bootstrap/cache storage
+chown -R 115:119 vendor node_modules public/build bootstrap/cache storage
+docker run --rm -u 115:119 -v "$wt":/var/www/html -w /var/www/html \
+    orbit/app:latest composer install --no-interaction --no-progress
+docker run --rm -u 115:119 -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
+    -v "$wt":/var/www/html -w /var/www/html node:24-alpine npm ci --no-audit --fund=false
+chmod -R go-w vendor node_modules
+heavy-work orbit-e2e-thing -- bash scripts/e2e.sh
+```
+
+No `.env` is needed for any of it — the script writes its own `.env.e2e`. A
+present `public/build/manifest.json` makes it skip `vite build`
+(`scripts/e2e.sh:360-364`), so empty `public/build/` after a front-end edit or
+the browser will drive the previous bundle and agree with itself. Everything
+after `--` reaches `playwright test` unchanged (`scripts/e2e.sh:86`, `:430`),
+which is how one spec, `--project=tablet`, or a re-recording
+`--update-snapshots=changed` gets through.
 
 Eight green checks have never seen a screen — [`docs/E2E.md`](E2E.md)
 explains what that costs and what this harness found.

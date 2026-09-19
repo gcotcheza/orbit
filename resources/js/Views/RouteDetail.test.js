@@ -364,7 +364,7 @@ describe('the booking hand-off', () => {
         const compare = wrapper.get('.booking__compare')
 
         expect(compare.attributes('href')).toBe(DETAIL.booking.skyscanner)
-        expect(compare.text()).toBe('Compare on Skyscanner')
+        expect(compare.text()).toBe('Compare on Skyscanner (opens in a new tab)')
     })
 
     // Word for word the day sheet's — duplicated, not shared.

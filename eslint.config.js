@@ -79,6 +79,14 @@ export default [
     },
 
     {
+        // The icon's name is the shape it draws; there is no honest second word.
+        files: ['resources/js/Components/Chevron.vue'],
+        rules: {
+            'vue/multi-word-component-names': 'off',
+        },
+    },
+
+    {
         // Build tooling: runs in node, not in the browser.
         files: ['vite.config.js', 'eslint.config.js'],
         languageOptions: {

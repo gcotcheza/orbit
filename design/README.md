@@ -78,6 +78,7 @@ The prototype renders inside a 372×760 phone frame; content area ≈ 352×740, 
 - Tab bar: 5 items — Orbit (home), Calendar, center + button (Create), Watch, Alerts; active tint `--accent`, inactive `--muted`; center button 48×42, radius 14, accent bg.
 - Animations used throughout: rise-in `translateY(16px)→0` 0.5s on cards; sheet slide-up; 2.2s pulse on live dot.
 - Screens with no tab bar: route detail (and onboarding, not present in this variant).
+- **Leaving the app**: every control that opens another site in a new tab (the Aviasales and Skyscanner links on Route detail and the day sheet, a priced Return-trips row) ends with the screen-reader-only text ` (opens in a new tab)`, appended inside the link so the spoken name is "See this fare on Aviasales (opens in a new tab)"; nothing visible changes.
 
 ## State Management
 - `screen` (home | detail | calendar | create | watch | settings), `activeIndex` (toured route), `selId` (detail route), `theme`, `calId`/`calDay` (calendar route + tapped day sheet), `ruleText` + `removedChips` (create), `watch[]` (id, active) + add-form state, `settings` (email/push/weekly/quiet booleans, sens 0–2).

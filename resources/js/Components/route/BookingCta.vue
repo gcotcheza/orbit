@@ -3,6 +3,8 @@
  * The hand-off (design/README.md §2): an anchor, not a button; two destinations with Aviasales
  * the loud one; the copy says "see this fare", not "book" (docs/BUSINESS-LOGIC.md §12).
  */
+import NewTabLink from '@/Components/NewTabLink.vue'
+
 defineProps({
   /** The primary hand-off — the search Orbit's own price came out of. */
   aviasalesUrl: { type: String, required: true },
@@ -30,22 +32,14 @@ defineProps({
     <!-- LEFT THEN RIGHT, AND THE ORDER IS THE OWNER'S: the check before the act, so the thing that
          spends money is furthest from an idle thumb. -->
     <div class="booking__actions">
-      <a
-        v-if="skyscannerUrl"
-        class="booking__link booking__compare"
-        :href="skyscannerUrl"
-        target="_blank"
-        rel="noopener"
-      >
+      <NewTabLink v-if="skyscannerUrl" class="booking__link booking__compare" :href="skyscannerUrl">
         <span>Compare on Skyscanner</span>
-      </a>
+      </NewTabLink>
 
-      <a
+      <NewTabLink
         class="booking__link booking__cta"
         :class="`booking__cta--${variant}`"
         :href="aviasalesUrl"
-        target="_blank"
-        rel="noopener"
       >
         <span>See this fare on Aviasales</span>
         <!-- Stroked from the style block (see AdviceCallout.vue). Only the loud one carries it: two
@@ -53,7 +47,7 @@ defineProps({
         <svg width="16" height="16" viewBox="0 0 17 17" fill="none" aria-hidden="true">
           <path d="M5 12L12 5M12 5H6M12 5v6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-      </a>
+      </NewTabLink>
     </div>
 
     <p class="booking__disclaimer">
