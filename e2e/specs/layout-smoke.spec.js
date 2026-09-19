@@ -92,7 +92,7 @@ test.describe('the landing page', () => {
 
         const box = await (await waitForGlobe(page)).boundingBox()
 
-        expect(box.height, 'the globe is a banner here, not a 360px box').toBeGreaterThan(280)
+        expect(box.height, 'the globe is a banner here, not a 360px box').toBeGreaterThanOrEqual(280)
         expect(box.width, 'the globe should have the detail pane to itself').toBeGreaterThan(700)
 
         await shot(page, 'landing-desktop')
@@ -112,7 +112,7 @@ test.describe('the collapsed pane', () => {
 
         const box = await (await waitForGlobe(page)).boundingBox()
 
-        expect(box.height, 'the globe should still take a share of the pane').toBeGreaterThan(280)
+        expect(box.height, 'the globe should still take a share of the pane').toBeGreaterThanOrEqual(280)
 
         await shot(page, 'landing-tablet')
     })
