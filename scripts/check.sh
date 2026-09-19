@@ -120,6 +120,22 @@ node_step() {
     fi
 }
 
+step 'ShellCheck (shell scripts)'
+# Every file under scripts/ that declares a shell, the sourced libraries included:
+# a lint over a subset reports reads it cannot see. docs/DECISIONS.md, the-gate-lints-shell-at-warning
+shell_files=()
+while IFS= read -r file; do
+    if head -2 "$file" | grep -qE '^#!.*sh|^# shellcheck shell='; then shell_files+=("$file"); fi
+done < <(find scripts -type f | sort)
+
+if [ ${#shell_files[@]} -eq 0 ]; then
+    printf 'check.sh: no shell script was found under scripts/, so this step linted nothing.\n' >&2
+    exit 1
+fi
+
+docker run --rm --network none -v "$here:/mnt:ro" -w /mnt koalaman/shellcheck:v0.11.0 \
+    -S warning "${shell_files[@]}"
+
 if [ "$mode" = overlay ]; then
     step 'Overlay (dev dependencies, outside the live vendor/)'
     rm -rf /var/tmp/orbit-gate.*

@@ -72,8 +72,9 @@ commit until it has one, because the layer that catches *your* live keys cannot
 run without it; and `git commit --no-verify` bypasses the guard, exactly as it
 bypasses the global one — say so in the pull request if you use it.
 
-**The gate.** `scripts/check.sh` runs nine checks in the containers, stopping
-at the first failure: Gitleaks, Pint, `composer audit`, deptrac (layers, no
+**The gate.** `scripts/check.sh` runs ten checks in the containers, stopping
+at the first failure: ShellCheck (every shell script under `scripts/`, at
+`-S warning`), Gitleaks, Pint, `composer audit`, deptrac (layers, no
 baseline), PHPStan (level 8, no baseline), `npm audit`, ESLint, Vitest,
 PHPUnit. It must pass before a PR is
 merged — this project has no baseline for new debt to hide in.
@@ -170,7 +171,7 @@ served checkout it refuses the rebuild instead. Everything after `--` reaches
 (`scripts/e2e.sh:107`, `:480`), which is how one spec, `--project=tablet`, or a
 re-recording `--update-snapshots=changed` gets through.
 
-Eight green checks have never seen a screen — [`docs/E2E.md`](E2E.md)
+Ten green checks have never seen a screen — [`docs/E2E.md`](E2E.md)
 explains what that costs and what this harness found.
 
 ## Deploy

@@ -14,6 +14,7 @@ use PHPUnit\Framework\Attributes\Test;
 final class GateRunnersTest extends TestCase
 {
     private const ORDER = [
+        'shellcheck',
         'overlay',
         'gitleaks',
         'pint',
@@ -154,9 +155,9 @@ final class GateRunnersTest extends TestCase
                 static fn (string $label): string => strtolower(trim(explode('(', $label)[0])),
                 $guarded[1]
             ),
-            'The nine checks must run in both runners; only the overlay itself is conditional. '
+            'The ten checks must run in both runners; only the overlay itself is conditional. '
             .'A check that moved inside this branch stopped running for the developer, or a '
-            .'ninth step was added outside it and now runs twice in overlay mode.'
+            .'further step was added outside it and now runs twice in overlay mode.'
         );
         $this->assertCount(
             count(self::ORDER) - 1,
