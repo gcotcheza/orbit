@@ -4,6 +4,9 @@
 #
 #   scripts/deploy-mutants.sh
 #
+# A verify.sh mutation is run against scripts/verify-test.sh; everything else
+# against scripts/deploy-test.sh, which fakes verify.sh out entirely.
+#
 # It never reads /var/www/orbit, never runs docker and never runs gh.
 # shellcheck disable=SC2016  # every mutation below is sed source, not shell
 set -uo pipefail
@@ -15,15 +18,17 @@ missed=0
 n=0
 
 mutant() {
-    local name=$1 target=$2 expr=$3 out rc dir red expect
+    local name=$1 target=$2 expr=$3 out rc dir red expect harness
     shift 3
     n=$((n + 1))
     dir="${WORK}/${n}"
     mkdir -p "${dir}"
     cp -r "${SCRIPT_DIR}" "${dir}/scripts"
     sed -i "${expr}" "${dir}/scripts/${target}" || { printf 'BROKEN %s: sed failed\n' "${name}"; missed=$((missed + 1)); return; }
-    out="$(DEPLOY_SH="${dir}/scripts/deploy.sh" GATE_LEDGER_LIB="${dir}/scripts/lib/deploy/ledger.sh" \
-        bash "${dir}/scripts/deploy-test.sh" 2>&1)"
+    harness="${dir}/scripts/deploy-test.sh"
+    [ "${target}" = 'verify.sh' ] && harness="${dir}/scripts/verify-test.sh"
+    out="$(DEPLOY_SH="${dir}/scripts/deploy.sh" VERIFY_SH="${dir}/scripts/verify.sh" \
+        GATE_LEDGER_LIB="${dir}/scripts/lib/deploy/ledger.sh" bash "${harness}" 2>&1)"
     rc=$?
     for expect in "$@"; do
         red="$(printf '%s\n' "${out}" | grep -F "FAIL ${expect}" | head -1)"
@@ -70,15 +75,25 @@ mutant 'the composer guard never matches' deploy.sh \
     's/-- composer.lock)/-- composer.lock.absent)/' \
     'composer.lock moving runs composer'
 mutant 'the image guard never matches' deploy.sh \
-    's#-- docker/app)#-- docker/app.absent)#' \
-    'docker/app moving rebuilds the image'
+    's#-- docker/app docker-compose.yml)#-- docker/app.absent)#' \
+    'docker moving recreates rather than restarts' 'compose moving recreates rather than restarts'
+mutant 'a compose-only change is restarted, not recreated' deploy.sh \
+    's#-- docker/app docker-compose.yml)#-- docker/app)#' \
+    'compose moving recreates rather than restarts'
 mutant 'the front-end guard never matches' deploy.sh \
     's/-- \$FRONT_END)/-- composer.lock.absent)/' \
     'frontend moving builds the assets' 'npm moving builds the assets' \
-    'vite moving builds the assets' 'publicasset moving builds the assets'
-mutant 'the front-end guard loses the build-output exclusion' deploy.sh \
-    "s/ ':(exclude)public\/build'//" \
-    'public/build moving is the build OUTPUT and builds nothing'
+    'vite moving builds the assets' 'publicasset moving builds the assets' \
+    'pkgjson moving builds the assets' 'npmrc moving builds the assets'
+mutant 'the front end forgets its own build script' deploy.sh \
+    's/ package.json package-lock.json/ package-lock.json/' \
+    'pkgjson moving builds the assets'
+mutant 'the front end forgets the npm config' deploy.sh \
+    's/ .npmrc vite.config.js/ vite.config.js/' \
+    'npmrc moving builds the assets'
+mutant 'the marker the job writes and the one the parent reads disagree' deploy.sh \
+    's/echo "@@STEP 3 RAN/echo "STEP 3 RAN/' \
+    'composer.lock moving runs composer'
 mutant 'retain snapshots the build it is about to replace' deploy.sh \
     '/exec -T app php artisan build:retain$/d
 /^    \$COMPOSE --profile build run --rm assets$/i\
@@ -145,6 +160,58 @@ mutant 'the browser gate loses errexit inside its functions' e2e.sh \
 mutant 'the check gate records from an EXIT trap' check.sh \
     's/^\(trap .*gate_record.*\) ERR$/\1 EXIT/' \
     'a gate records from an EXIT trap'
+mutant 'the browser gate records teardown as the suite' e2e.sh \
+    's/^gate_record 0$/gate_record "$TEARDOWN_STATUS"/' \
+    'scripts/e2e.sh records teardown status as the suite result'
+
+# --- a half-finished deploy, a head that is not here, and the battery ---------
+mutant 'rc 2 is always nothing to land' deploy.sh \
+    's/^        2) nothing_to_land ;;$/        2) say "nothing to land"; exit 0 ;;/' \
+    'a checkout already on the merge with no finished deploy is refused, not called nothing to land'
+mutant 'every sha counts as already deployed' deploy.sh \
+    's/^finished_log() {/finished_log() { printf earlier.log; return 0;/' \
+    'a checkout already on the merge with no finished deploy is refused, not called nothing to land'
+mutant 'no sha counts as already deployed' deploy.sh \
+    's/^finished_log() {/finished_log() { return 1;/' \
+    'a sha an earlier log says DONE for is nothing to land'
+mutant 'a head that is not in this checkout is never named' deploy.sh \
+    's/^head_is_present() {/head_is_present() { return 0;/' \
+    'a head this checkout never had is named, not blamed on the tree'
+
+mutant 'the battery asks a healthchecked service for bare Up' verify.sh \
+    "s/for s in horizon postgres redis; do ps_says \"\\\$s\" '(healthy)'; done/for s in horizon postgres redis; do ps_says \"\\\$s\" 'Up'; done/" \
+    'an unhealthy horizon fails' 'a container still starting its healthcheck fails'
+mutant 'the battery accepts any published port' verify.sh \
+    's/^case "\$ports" in 127.0.0.1:\*)/case "$ports" in *)/' \
+    'a stack on the internet fails'
+mutant 'the battery calls any start time a restart' verify.sh \
+    's/elif \[ "\$now" -gt "\$then_" \]; then/elif true; then/' \
+    'containers that never restarted fail the deploy'
+mutant 'an unread StartedAt reaches date -d' verify.sh \
+    's/^epoch() { \[ -n "\$1" \] && date/epoch() { date/' \
+    'and check 7 names the service whose StartedAt it could not read'
+mutant 'the log window is not applied' verify.sh \
+    's/substr(\$0,2,19) > s/1/' \
+    'a production.ERROR older than the restart is not this deploy'
+mutant 'an unchanged bundle is never a failure' verify.sh \
+    "s/elif \[ \"\\\$backend_only\" = 'yes' \]; then/elif true; then/" \
+    'an unchanged bundle with no --backend-only fails the deploy'
+mutant 'an unreachable container reads as no mail yet' verify.sh \
+    "s/bad 'could not read the app container, so mail.log is unchecked — that is not the same as no mail yet'/ok 'no mail.log yet'/" \
+    'a container that cannot be reached fails check 9' \
+    'and check 9 names the container, not a missing file'
+mutant 'any policy header will do' verify.sh \
+    "s/case \"\\\$csp\" in \*\"script-src 'self'\"\*)/case \"\\\$csp\" in *)/" \
+    'a shell served with no policy fails'
+mutant 'the edge is never compared' verify.sh \
+    's/elif \[ "\$eb" = "\$b" \]; then/elif true; then/' \
+    'an edge holding the previous release fails'
+mutant 'the battery always exits 0' verify.sh \
+    's/^exit \$((fails > 0))$/exit 0/' \
+    'root-owned paths fail' 'a stack on the internet fails'
+mutant 'a green run keeps its baseline' verify.sh \
+    's/^    rm -f "\$SNAP" && note/    true \&\& note/' \
+    'a green run consumes the baseline'
 
 if [ "${missed}" -eq 0 ]; then
     printf '\ndeploy-mutants: %s mutation(s), every one caught\n' "${n}"

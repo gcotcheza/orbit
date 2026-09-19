@@ -171,6 +171,7 @@ step 'The deploy script (scripts/deploy-test.sh)'
 # On the host, not in a container, and below the first containerised step:
 # CheckGitSeamTest stubs docker and must stop before this one runs under its PATH.
 "$here/scripts/deploy-test.sh"
+"$here/scripts/verify-test.sh"
 
 step 'Composer advisories'
 # --locked --no-dev: an advisory against phpunit or pint is not on the site.

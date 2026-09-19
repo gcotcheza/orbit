@@ -133,7 +133,12 @@ write_checkout() {
     printf 'export default {}\n' >"${ROOT}/resources/js/app.js"
     printf 'export default {}\n' >"${ROOT}/vite.config.js"
     printf '<svg/>\n' >"${ROOT}/public/icons/pin.svg"
-    printf '{}\n' >"${ROOT}/public/build/manifest.json"
+    printf '{"name":"orbit"}\n' >"${ROOT}/package.json"
+    printf 'audit=false\n' >"${ROOT}/.npmrc"
+    printf 'name: orbit\n' >"${ROOT}/docker-compose.yml"
+    # Like the real checkout: public/build is the build's OUTPUT and .gitignore holds
+    # it, which is why the front-end pathspec needs no exclusion for it.
+    printf '/public/build\n' >"${ROOT}/.gitignore"
     cat >"${ROOT}/scripts/docs-only.sh" <<'SH'
 #!/bin/sh
 printf 'fake classifier: rc=%s for %s\n' "${FAKE_CLASSIFY_RC}" "$1"
@@ -182,6 +187,9 @@ fixture() {
             vite)        printf '// moved\n' >>"${ROOT}/vite.config.js" ;;
             publicasset) printf '<!-- moved -->\n' >>"${ROOT}/public/icons/pin.svg" ;;
             publicbuild) printf '{"moved":1}\n' >>"${ROOT}/public/build/manifest.json" ;;
+            pkgjson)     printf '{"name":"orbit","scripts":{"build":"vite build"}}\n' >"${ROOT}/package.json" ;;
+            npmrc)       printf 'fund=false\n' >>"${ROOT}/.npmrc" ;;
+            compose)     printf '  app: {}\n' >>"${ROOT}/docker-compose.yml" ;;
         esac
     done
     git_at add -A
@@ -407,6 +415,7 @@ equals 'view:clear, then the drain, then the four restarts, in that order' \
     "$(logged compose.argv | grep -E 'view:clear|horizon:terminate|^restart' | tr '\n' '|')" \
     'exec -T app php artisan view:clear|exec -T horizon php artisan horizon:terminate|restart app horizon scheduler web|'
 absent 'postgres and redis are never restarted' "$(logged compose.argv)" 'restart app horizon scheduler web postgres'
+contains 'the record the parent parses cannot be forged by a dedent' "$(cat "${CASE}/logs/"*.log 2>/dev/null)" '@@ROOT-OWNED 0'
 contains 'the ownership proof carves out the agent runtime' "$(logged find.argv)" \
     "${ROOT} -user root -not -path ${ROOT}/.claude/*"
 equals 'a good run stays inside 40 lines of stdout' \
@@ -419,7 +428,7 @@ if [ -f "${LOGFILE}" ]; then
     absent 'nothing in the job merges origin/main' "$(cat "${LOGFILE}")" 'merge --ff-only origin/main'
     contains 'the job asserts what it landed' "$(cat "${LOGFILE}")" 'is not the resolved merge'
     equals 'the steps ran in the runbook order' \
-        "$(grep -oE '^(step [0-9.]+|STEP [0-9.]+ RAN)' "${LOGFILE}" | tr '\n' ' ')" \
+        "$(grep -oE '^(step [0-9.]+|@@STEP [0-9.]+ RAN)' "${LOGFILE}" | sed 's/^@@//' | tr '\n' ' ')" \
         'step 1 step 2 step 3 step 4 step 5 step 8 '
 else
     fail "the log named in DONE does not exist: [${LOGFILE}]"
@@ -440,7 +449,15 @@ equals 'composer runs before migrate when the lockfile moved' \
     "$(logged compose.argv | grep -E 'composer install|artisan migrate' | tr '\n' '|')" \
     'exec -T app composer install --no-dev --optimize-autoloader --no-interaction|exec -T app php artisan migrate --force|'
 
-fixture moved-docker docker
+for moved in docker compose; do
+    fixture "moved-${moved}" "${moved}"
+    run_deploy "${PR_NUMBER}"
+    contains "${moved} moving recreates rather than restarts" "${OUT}" 'conditional steps ran: 4.5'
+    contains 'and the three containers on that image are recreated' "$(logged compose.argv)" 'up -d app horizon scheduler'
+    contains 'and web after them' "$(logged compose.argv)" 'up -d --force-recreate web'
+done
+
+fixture moved-docker-order docker
 run_deploy "${PR_NUMBER}"
 contains 'docker/app moving rebuilds the image' "${OUT}" 'conditional steps ran: 4.5'
 contains 'and the three containers on that image are recreated, never restarted alone' \
@@ -451,7 +468,7 @@ equals 'the image is built before anything is recreated' \
     "$(logged compose.argv | grep -E '^(build|up -d)' | tr '\n' '|')" \
     'build app horizon scheduler|up -d app horizon scheduler|up -d --force-recreate web|'
 
-for moved in frontend npm vite publicasset; do
+for moved in frontend npm vite publicasset pkgjson npmrc; do
     fixture "moved-${moved}" "${moved}"
     run_deploy "${PR_NUMBER}"
     contains "${moved} moving builds the assets" "${OUT}" 'conditional steps ran: 5 7'
@@ -465,7 +482,7 @@ done
 
 fixture moved-publicbuild publicbuild
 run_deploy "${PR_NUMBER}"
-contains 'public/build moving is the build OUTPUT and builds nothing' "${OUT}" 'conditional steps ran: none'
+contains 'a write under the ignored public/build is not a change at all' "${OUT}" 'conditional steps ran: none'
 absent 'no asset build' "$(logged compose.argv)" 'assets'
 absent 'and no retain, which would snapshot the build already on disk' "$(logged compose.argv)" 'build:retain'
 contains 'so an unchanged bundle is what the verification expects' "${OUT}" 'VERIFY --backend-only'
@@ -504,6 +521,38 @@ contains 'root-owned paths that appear during the deploy are repaired narrowly' 
     "${ROOT} -user root -not -path ${ROOT}/.claude/* -exec chown orbit:orbit {} +"
 absent 'never with a blanket chown over the tree' "$(logged chown.argv)" "-R orbit:orbit ${ROOT}"
 contains 'and the deploy finishes once the count is 0' "${OUT}" 'root-owned 0 verify'
+
+# --- 8b. a run that died after the fast-forward -------------------------------
+fixture half-finished
+git_at merge -q --ff-only "${MERGE_SHA}"
+CLASSIFY_RC=2
+run_deploy "${PR_NUMBER}"
+contains 'a checkout already on the merge with no finished deploy is refused, not called nothing to land' \
+    "${OUT}" "REFUSED: ${MERGE_SHORT} is on disk and no log in"
+contains 'and it says what is live and what may not be' "${OUT}" 'the containers may still be booted on the previous release'
+contains 'and which records say what ran' "${OUT}" "'@@STEP n RAN' lines are what did run"
+contains 'and the steps left, in order' "${OUT}" 'horizon:terminate IN the horizon container'
+contains 'and the rollback' "${OUT}" 'roll back with the block in .claude/commands/deploy.md'
+equals 'and it builds nothing' "$(logged heavy.argv)" ''
+absent 'and it never says DONE' "${OUT}" 'DONE #90'
+
+fixture already-deployed
+git_at merge -q --ff-only "${MERGE_SHA}"
+printf 'DONE #90 live %s was 1234567 gated ledger root-owned 0 verify full log x\n' \
+    "$(git_at rev-parse --short HEAD)" >"${LOGS}/20260918T000000Z-pr90.log"
+CLASSIFY_RC=2
+run_deploy "${PR_NUMBER}"
+contains 'a sha an earlier log says DONE for is nothing to land' "${OUT}" 'is already deployed'
+absent 'and that is not a refusal' "${OUT}" 'REFUSED'
+equals 'and it builds nothing' "$(logged heavy.argv)" ''
+
+fixture head-absent-from-checkout
+sed -i 's/"headRefOid":"[0-9a-f]*"/"headRefOid":"0123456789abcdef0123456789abcdef01234567"/' "${CASE}/gh.json"
+run_deploy "${PR_NUMBER}"
+contains 'a head this checkout never had is named, not blamed on the tree' "${OUT}" \
+    "REFUSED: PR #90's head 0123456 is not a commit in this checkout"
+contains 'and it names the shape that causes it' "${OUT}" 'a squash or a rebase merge'
+absent 'and it does not blame the tree' "${OUT}" 'merge tree differs from the gated head'
 
 # --- 9. a phase that fails ----------------------------------------------------
 fixture failing-baseline
@@ -568,6 +617,11 @@ if [ -n "${CHECK_CLEARED}" ] && [ -n "${CHECK_LAST_REFUSAL}" ] && [ "${CHECK_CLE
     pass "the check gate clears GATE_FILTERED at line ${CHECK_CLEARED}, below its last refusal at ${CHECK_LAST_REFUSAL}"
 else
     fail "scripts/check.sh records a run that never reached the list (cleared at [${CHECK_CLEARED}], last refusal at [${CHECK_LAST_REFUSAL}])"
+fi
+if grep -qE '^gate_record 0$' "${E2E_SH}" && grep -qE '^exit "\$TEARDOWN_STATUS"$' "${E2E_SH}"; then
+    pass 'the browser gate records the SUITE and still fails the run on a bad teardown'
+else
+    fail 'scripts/e2e.sh records teardown status as the suite result: a down -v that fails then writes a red line for a green suite, last-line-wins makes deploy.sh refuse, and an operator re-runs six minutes of browsers for nothing'
 fi
 for gate in "${CHECK_SH}" "${E2E_SH}"; do
     if grep -q '^set -Eeuo pipefail' "${gate}"; then

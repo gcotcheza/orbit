@@ -28,10 +28,12 @@ final class DeployVerificationTest extends TestCase
     public function the_post_deploy_battery_makes_no_authenticated_write(): void
     {
         $scanned = 0;
+        $signed = 0;
 
         foreach (self::BATTERY as $script) {
             foreach ($this->shellCurls($script) as $command) {
                 $scanned++;
+                $signed += preg_match(self::AUTHENTICATED, $command);
 
                 if (preg_match(self::WRITES, $command) !== 1) {
                     continue;
@@ -51,6 +53,17 @@ final class DeployVerificationTest extends TestCase
             0,
             $scanned,
             'No curl was scanned in '.implode(' or ', self::BATTERY).', so this test vets nothing.'
+        );
+
+        // Counting curls is not enough: the guard is keyed to one variable name, so a
+        // rename would leave every assertion above passing against nothing.
+        $this->assertGreaterThan(
+            0,
+            $signed,
+            'Nothing in '.implode(' or ', self::BATTERY).' matches '.self::AUTHENTICATED.', so the '
+            .'name this test keys on is gone. It only ever catches a write signed with the '
+            .'logged-in session, and it cannot see one under a different variable name: rename the '
+            .'variable here too, or this test is watching an empty set.'
         );
     }
 
