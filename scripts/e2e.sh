@@ -358,6 +358,7 @@ if [ ! -f node_modules/.package-lock.json ]; then
 fi
 
 vite_build_reason=''
+vite_build_stale=0
 if [ ! -f public/build/manifest.json ]; then
     vite_build_reason='no bundle'
 else
@@ -365,11 +366,12 @@ else
         || fail 'could not compare the bundle with its inputs'
     if [ -n "$newer" ]; then
         vite_build_reason='bundle older than its inputs'
+        vite_build_stale=1
     fi
 fi
 
 if [ -n "$vite_build_reason" ]; then
-    if [ "$vite_build_reason" = 'bundle older than its inputs' ] && checkout_is_live; then
+    if [ "$vite_build_stale" = 1 ] && checkout_is_live; then
         fail "public/build/ is older than its inputs, and this checkout must not be rebuilt into:
     ${live_reason}.
     A rebuild here would overwrite the live public/build/ while the site serves it — a
