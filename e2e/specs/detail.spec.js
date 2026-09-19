@@ -400,3 +400,68 @@ test('an unknown route code says so instead of throwing', async ({ page, browser
     // Which half, in the server's own words (App\Http\Requests\RoutePairRequest).
     await expect(page.locator('.empty__why')).toHaveText(/Orbit does not know that airport yet/)
 })
+
+/* The way out of the app is Orbit's own dialog first (design/README.md
+ * "Leaving the app"); the browser's native UI is never used for any of it. */
+test('a booking link asks before it hands anyone over', async ({ page }) => {
+    // Answered here, not by the booking site (docs/E2E.md, "The suite
+    // reaches no third party").
+    await page.context().route('https://www.aviasales.com/**', (route) =>
+        route.fulfill({ contentType: 'text/html', body: '<title>Aviasales</title>' }),
+    )
+
+    await page.goto('/')
+    await waitForGlobe(page)
+    await page.locator('.spotlight').click()
+
+    const booking = page.getByRole('link', { name: /see this fare on aviasales/i })
+    const href = await booking.getAttribute('href')
+
+    await booking.click()
+
+    // A DOM dialog of Orbit's own — a native confirm() would be invisible here
+    // and would have blocked this click instead.
+    const leaving = page.locator('.leaving')
+
+    await expect(leaving).toHaveAttribute('role', 'dialog')
+    await expect(leaving).toHaveAttribute('aria-modal', 'true')
+    await expect(leaving.getByRole('heading', { name: 'You\'re leaving Orbit' })).toBeVisible()
+    await expect(leaving.locator('.leaving__body')).toHaveText(
+        'Aviasales opens in a new tab, so Orbit stays where it is. The price and availability'
+        + ' there are theirs, and can differ from what we recorded this morning.',
+    )
+
+    const stay = leaving.getByRole('button', { name: 'Stay in Orbit' })
+    const onward = leaving.getByRole('link', { name: 'Continue to Aviasales' })
+
+    // Fingers, not lines of text — on both, and they are real elements.
+    for (const control of [stay, onward]) {
+        expect((await control.boundingBox()).height).toBeGreaterThanOrEqual(44)
+    }
+
+    // NAMED PER PRESS, not "still inside .leaving" — the panel contains itself,
+    // so that reading passes for a trap that moves nothing. One lap and one more.
+    for (const expected of [stay, onward, stay, onward]) {
+        await page.keyboard.press('Tab')
+        await expect(expected).toBeFocused()
+    }
+
+    await page.keyboard.press('Escape')
+    await expect(leaving).toHaveCount(0)
+    await expect(booking).toBeFocused()
+
+    // And the way through is a real link to the same place, in a real new tab.
+    await booking.click()
+    await expect(onward).toHaveAttribute('target', '_blank')
+    await expect(onward).toHaveAttribute('rel', 'noopener')
+    await expect(onward).toHaveAttribute('href', href)
+
+    const [opened] = await Promise.all([page.context().waitForEvent('page'), onward.click()])
+
+    // Byte for byte the link's own href — that is where the affiliate marker
+    // rides when the sandbox has one configured.
+    expect(opened.url()).toBe(href)
+
+    await opened.close()
+    await expect(page.locator('.detail__code')).toBeVisible()
+})
