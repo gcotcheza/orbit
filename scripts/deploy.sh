@@ -75,8 +75,8 @@ classify() {
     esac
 }
 
-# resolve compares the gated head's tree with the merge's and blames the tree. A head
-# this checkout has never had — a squash or a rebase merge — is a different fact.
+# resolve compares the head's tree with the merge's to pick GATE_SHA. A head this
+# checkout has never had — a squash or a rebase merge — is a different fact.
 head_is_present() {
     local repo json head
     repo=${DEPLOY_GH_REPO:-$(gh_repo)} || return 0
@@ -94,8 +94,8 @@ head_is_present() {
 gate_or_recipe() {
     local wt="/srv/worker-scratch/orbit-gate-pr$PR"
     if ! ( exec 3>/dev/null; gated ) >/dev/null 2>&1; then
-        say "NOT GATED ${HEAD_SHA:0:7}: gate that head in a worktree cut from the root-owned clone, never in this checkout — it is bind-mounted into the running containers."
-        say "  git -C /srv/sessions/orbit/repo worktree add $wt $HEAD_SHA"
+        say "NOT GATED ${GATE_SHA:0:7}: gate that $GATE_WHAT in a worktree cut from the root-owned clone, never in this checkout — it is bind-mounted into the running containers."
+        say "  git -C /srv/sessions/orbit/repo worktree add $wt $GATE_SHA"
         say "  cd $wt"
         say "  COMPOSE_PROJECT_NAME=orbit-gate-pr$PR heavy-work orbit-gate-pr$PR -- bash scripts/check.sh overlay"
         say "  heavy-work orbit-e2e-pr$PR -- bash scripts/e2e.sh"
@@ -365,6 +365,8 @@ main() {
     GATED=''
     HEAD_SHA=''
     MERGE_SHA=''
+    GATE_SHA=''
+    GATE_WHAT=''
     ROOTED=''
     RAN=''
     VERIFY_MODE=''

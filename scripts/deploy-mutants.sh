@@ -48,8 +48,30 @@ mutant 'resolve stops comparing the tip' lib/deploy/resolve.sh \
     's/\[ "\$tip" = "\$MERGE_SHA" \]/true/' \
     'a merge behind the tip is refused'
 mutant 'resolve stops comparing the trees' lib/deploy/resolve.sh \
-    's/\$GIT diff --quiet "\$HEAD_SHA" "\$MERGE_SHA"/true/' \
-    'a merge tree that is not the gated tree is refused'
+    's/if \$GIT diff --quiet "\$HEAD_SHA" "\$MERGE_SHA"; then/if true; then/' \
+    'a merge tree that is not the head tree names the merge as the commit to gate' \
+    'and a green head does not deploy a merge the ledger never saw' \
+    'an ungated merge builds nothing' \
+    'a gated merge commit deploys'
+mutant 'the merge commit is announced as a head' lib/deploy/resolve.sh \
+    's/GATE_WHAT=merge/GATE_WHAT=head/' \
+    'and a green head does not deploy a merge the ledger never saw' \
+    'and DONE says the merge was the commit that was gated'
+mutant 'the differing-tree line stops naming the merge' lib/deploy/resolve.sh \
+    's/so the merge commit itself is what must be gated/so re-gate/' \
+    'a merge tree that is not the head tree names the merge as the commit to gate'
+mutant 'gated reads the branch head, not the commit that was gated' lib/deploy/ledger.sh \
+    's/awk -v sha="\$GATE_SHA"/awk -v sha="$HEAD_SHA"/' \
+    'a gated merge commit deploys' \
+    'and the ledger read is the merge commit, not the branch head'
+mutant 'the summary never says which commit was gated' lib/deploy/ledger.sh \
+    's/GATED="ledger \$GATE_WHAT \${GATE_SHA:0:7}"/GATED=ledger/' \
+    'and DONE says the merge was the commit that was gated' \
+    'and DONE says the head was the commit that was gated'
+mutant 'the recipe sends the operator to the branch head' deploy.sh \
+    's/worktree add \$wt \$GATE_SHA/worktree add $wt $HEAD_SHA/' \
+    'and the recipe names the merge commit' \
+    'never the branch head, gating which would change nothing'
 mutant 'gated stops reading the ledger' lib/deploy/ledger.sh \
     's/^gated() {/gated() { GATED=ledger; return 0;/' \
     'a missing ledger is refused' 'a head absent from the ledger is refused' 'ci without e2e is refused'
@@ -191,7 +213,8 @@ mutant 'no sha counts as already deployed' deploy.sh \
     'a sha an earlier log says DONE for is nothing to land'
 mutant 'a head that is not in this checkout is never named' deploy.sh \
     's/^head_is_present() {/head_is_present() { return 0;/' \
-    'a head this checkout never had is named, not blamed on the tree'
+    'a head this checkout never had is named, not blamed on the tree' \
+    'and it is not quietly gated as a merge commit instead'
 
 mutant 'the battery asks a healthchecked service for bare Up' verify.sh \
     "s/for s in horizon postgres redis; do ps_says \"\\\$s\" '(healthy)'; done/for s in horizon postgres redis; do ps_says \"\\\$s\" 'Up'; done/" \
