@@ -133,10 +133,13 @@ test('the price, the gauge, the chart and the booking link are all really there'
     await shot(page, 'route-detail')
 })
 
+/** The seeded route this section is read on; the same one the baselines photograph. */
+const RETURNS_ROUTE = 'AMS-OPO'
+
 // What a ROUND TRIP costs, by length of stay (design/README.md §2). The fake provider is
 // deterministic, so every band's answer is the same on every run.
 test('the return trips section lists every band and prices what Orbit holds', async ({ page }) => {
-    await page.goto('/route/AMS-OPO')
+    await page.goto(`/route/${RETURNS_ROUTE}`)
 
     const section = page.locator('.ret')
 
@@ -180,6 +183,28 @@ test('the return trips section lists every band and prices what Orbit holds', as
     expect(row.spoken).toMatch(/\(opens in a new tab\)$/)
     expect(row.tappable).toBe(true)
     expect(row.href).toMatch(/\/search\/[A-Z]{3}\d{4}[A-Z]{3}\d{4}1(\?marker=|$)/)
+
+    // The pill is the server's word in the server's tone, on the rows the server judged
+    // and on no others (docs/API.md `returns[].fare.verdict`).
+    const bands = (await (await page.request.get(`/api/routes/${RETURNS_ROUTE}`)).json()).data.returns
+
+    expect(bands).toHaveLength(4)
+    expect(
+        bands.filter((one) => one.fare?.verdict).length,
+        'no band on the seeded route carries a verdict, so this proves nothing',
+    ).toBeGreaterThan(0)
+
+    for (const [index, { fare }] of bands.entries()) {
+        const pill = section.locator('.ret__row').nth(index).locator('.pill')
+
+        if (!fare?.verdict) {
+            await expect(pill).toHaveCount(0)
+            continue
+        }
+
+        await expect(pill).toHaveText(fare.verdict.short)
+        await expect(pill).toHaveAttribute('data-tone', fare.verdict.tone)
+    }
 
     await shot(page, 'route-detail-returns')
 })

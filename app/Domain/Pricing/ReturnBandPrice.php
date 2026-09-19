@@ -38,10 +38,7 @@ final readonly class ReturnBandPrice
      */
     public static function from(NightsBand $band, array $trips, int $minSamples): ?self
     {
-        $inBand = array_values(array_filter(
-            $trips,
-            static fn (ReturnTrip $trip): bool => $band->contains($trip->nights),
-        ));
+        $inBand = $band->within($trips);
 
         if ($inBand === []) {
             return null;

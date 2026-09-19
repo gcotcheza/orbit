@@ -9,6 +9,7 @@ use App\Models\Route;
 use DateTimeImmutable;
 use Illuminate\Http\Request;
 use App\Models\LivePriceCheck;
+use App\Domain\Pricing\DealScore;
 use App\Domain\Pricing\MayBeGone;
 use App\Domain\Pricing\NightsBand;
 use App\Domain\Pricing\PricePoint;
@@ -26,7 +27,7 @@ final class RouteDetailResource extends RouteSummaryResource
     /**
      * Every configured duration band, the empty ones included (docs/API.md, `returns`).
      *
-     * @param  list<array{band: NightsBand, price: ReturnBandPrice|null}>  $returns
+     * @param  list<array{band: NightsBand, price: ReturnBandPrice|null, deal: DealScore|null}>  $returns
      */
     public function __construct(
         RouteSnapshot $snapshot,
@@ -98,6 +99,7 @@ final class RouteDetailResource extends RouteSummaryResource
                     : $this->returnFare(
                         $snapshot->route,
                         $band['price'],
+                        $band['deal'],
                         $now,
                         $zone,
                         $staleAfterHours,
@@ -121,6 +123,7 @@ final class RouteDetailResource extends RouteSummaryResource
     private function returnFare(
         Route $route,
         ReturnBandPrice $price,
+        ?DealScore $deal,
         DateTimeImmutable $now,
         DateTimeZone $zone,
         int $staleAfterHours,
@@ -148,6 +151,13 @@ final class RouteDetailResource extends RouteSummaryResource
             'sampleCount' => $price->sampleCount,
             'booking'     => [
                 'aviasales' => BookingLink::aviasalesReturn($route, $price->departureDate, $price->returnDate()),
+            ],
+
+            /* Null on a thin band and null on a ghost: neither is worth an opinion (§15, R9). */
+            'verdict' => $deal === null || $mayBeGone ? null : [
+                'label' => $deal->verdict->label,
+                'short' => $deal->verdict->short,
+                'tone'  => $deal->verdict->tone,
             ],
         ];
     }

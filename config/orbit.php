@@ -240,6 +240,12 @@ return [
             // Below this many in-band fares there is a current price and no
             // usual one -- five knots, five prices. See §15 R5.
             'min_samples' => 5,
+
+            // The tripwire on `window_days`: how far out a departure has to be
+            // to count as far, and what makes far fares worth a warning. See §15 R10.
+            'far_horizon_days' => 181,
+            'far_min_samples'  => 10,
+            'far_skew_pct'     => 25,
         ],
     ],
 

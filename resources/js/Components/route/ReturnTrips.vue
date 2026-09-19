@@ -7,6 +7,7 @@ import { computed } from 'vue'
 import Chevron from '@/Components/Chevron.vue'
 import NewTabLink from '@/Components/NewTabLink.vue'
 import { departureLabel, euro, seenIfOld } from '@/lib/format'
+import VerdictPill from '@/Components/VerdictPill.vue'
 
 const props = defineProps({
   /** `data.returns` from docs/API.md: every configured band, `fare: null` where none is held. */
@@ -61,6 +62,7 @@ function toRow({ band, fare }) {
       comparison: comparison(fare),
       gone,
       meta: meta(fare, gone === null ? seen : null),
+      verdict: fare.verdict,
     },
   }
 }
@@ -85,6 +87,14 @@ const rows = computed(() => props.returns.map(toRow))
         <div>
           <p class="ret__name">{{ row.label }}</p>
           <p class="ret__nights">{{ row.nights }}</p>
+
+          <VerdictPill
+            v-if="row.fare && row.fare.verdict"
+            class="ret__verdict"
+            size="sm"
+            :label="row.fare.verdict.short"
+            :tone="row.fare.verdict.tone"
+          />
         </div>
 
         <div class="ret__fare">
@@ -164,6 +174,10 @@ const rows = computed(() => props.returns.map(toRow))
   margin-top: 2px;
   font-size: var(--text-xs);
   color: var(--muted);
+}
+
+.ret__verdict {
+  margin-top: 4px;
 }
 
 /* The row's free space is spent here, so a third child lands at the right edge instead of

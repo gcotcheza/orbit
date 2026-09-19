@@ -66,11 +66,13 @@ has to draw them.
   for 8–34% coverage rather than against it — every band is listed and an empty
   one says so. It reads the definition at request time (`docs/API.md`,
   `returns`), so it agrees with what Orbit *holds* rather than with the last
-  summary a thinning band left behind. No score and no tone colour on the rows.
+  summary a thinning band left behind. It shipped without a score; the score
+  followed as returns-4.
 - **returns-4 onwards** — a deal score for round trips, which colours the rows
   that section already draws; `tripLengthNights` finally *matching* rather than
   only being parsed and shown; and alerts, which have to reckon with a cache that
-  is seven days deep.
+  is seven days deep. The score shipped 2026-09-19 as the verdict pill on each
+  priced row (`docs/BUSINESS-LOGIC.md` §15, R9); matching and alerts remain.
 
 ## What is switched on
 - **Travelpayouts: real one-way fares.** `ORBIT_PRICE_PROVIDER=travelpayouts` with `TRAVELPAYOUTS_TOKEN` in `.env` (`/v2/prices/month-matrix`). `php artisan orbit:reset-history --confirm` was run in the same breath, because the recorded history was all simulated and mixing the two would make every trend and deal score a comparison between two different universes. Day coverage runs 41-87%, and the "tracking N days" charts are honest about it.

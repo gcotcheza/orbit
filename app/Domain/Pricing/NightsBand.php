@@ -57,4 +57,16 @@ final readonly class NightsBand
     {
         return $nights >= $this->min && $nights <= $this->max;
     }
+
+    /**
+     * @param  list<ReturnTrip>  $trips
+     * @return list<ReturnTrip>
+     */
+    public function within(array $trips): array
+    {
+        return array_values(array_filter(
+            $trips,
+            fn (ReturnTrip $trip): bool => $this->contains($trip->nights),
+        ));
+    }
 }

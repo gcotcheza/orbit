@@ -23,6 +23,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $p75_cents
  * @property int $max_cents
  * @property int $sample_count
+ * @property int $far_count
+ * @property int|null $far_median_cents
  * @property CarbonImmutable $refreshed_at
  * @property-read Route $route
  */
@@ -49,15 +51,17 @@ final class ReturnStats extends Model
     protected function casts(): array
     {
         return [
-            'nights_min'   => 'integer',
-            'nights_max'   => 'integer',
-            'min_cents'    => 'integer',
-            'p25_cents'    => 'integer',
-            'median_cents' => 'integer',
-            'p75_cents'    => 'integer',
-            'max_cents'    => 'integer',
-            'sample_count' => 'integer',
-            'refreshed_at' => 'immutable_datetime',
+            'nights_min'       => 'integer',
+            'nights_max'       => 'integer',
+            'min_cents'        => 'integer',
+            'p25_cents'        => 'integer',
+            'median_cents'     => 'integer',
+            'p75_cents'        => 'integer',
+            'max_cents'        => 'integer',
+            'sample_count'     => 'integer',
+            'far_count'        => 'integer',
+            'far_median_cents' => 'integer',
+            'refreshed_at'     => 'immutable_datetime',
         ];
     }
 }

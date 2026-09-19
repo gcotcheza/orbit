@@ -7,9 +7,15 @@ namespace Tests\Feature;
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Route;
+use DateTimeImmutable;
 use App\Models\ReturnFare;
+use App\Models\ReturnObservation;
 use Illuminate\Http\JsonResponse;
+use App\Domain\Pricing\DealScorer;
+use App\Domain\Pricing\PricePoint;
+use App\Domain\Pricing\PriceStats;
 use Tests\Concerns\BuildsRouteData;
+use App\Domain\Pricing\PriceHistory;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
@@ -147,6 +153,131 @@ final class ReturnsOnRouteDetailTest extends TestCase
         $response->assertJsonPath('data.returns.0.fare', null);
     }
 
+    /**
+     * R9 — the words are the one-way scorer's, run on this band's own pool. The expectation is
+     * computed THROUGH the scorer: hand-picking a word would let the two drift apart.
+     */
+    #[Test]
+    public function a_band_with_a_usual_price_and_a_history_carries_the_scorers_own_verdict(): void
+    {
+        $this->seedBand(foundAt: null);
+        $history = $this->seedMornings([16000, 15000, 14000, 13000, 12000, 11000, 10500, 10000]);
+
+        $response = $this->read();
+
+        $verdict = $this->app->make(DealScorer::class)->score(
+            10000,
+            PriceStats::fromSamples([10000, 20000, 30000, 40000, 50000, 60000]),
+            new PriceHistory($history),
+            trackingDays: 8,
+        )->verdict;
+
+        $response->assertJsonPath('data.returns.1.fare.verdict.label', $verdict->label);
+        $response->assertJsonPath('data.returns.1.fare.verdict.short', $verdict->short);
+        $response->assertJsonPath('data.returns.1.fare.verdict.tone', $verdict->tone);
+    }
+
+    /** R9 — R5 withholds the usual price, so there is nothing to score against. */
+    #[Test]
+    public function a_band_too_thin_for_a_usual_price_has_no_verdict(): void
+    {
+        foreach ([41000, 38000, 45000] as $index => $cents) {
+            $this->seedFare($this->departure($index), nights: 7, cents: $cents);
+        }
+
+        $this->seedMornings([16000, 15000, 14000, 13000, 12000, 11000, 10500, 10000]);
+
+        $response = $this->read();
+
+        $response->assertJsonStructure([
+            'data' => ['returns' => [1 => ['fare' => [
+                'current', 'usual', 'pctBelow', 'nights', 'departure',
+                'foundAt', 'mayBeGone', 'sampleCount', 'booking', 'verdict',
+            ]]]],
+        ]);
+
+        $response->assertJsonPath('data.returns.1.fare.usual', null);
+        $response->assertJsonPath('data.returns.1.fare.verdict', null);
+    }
+
+    /** R9 — a ghost is not scored, so the verdict pill and the "may be gone" pill never meet. */
+    #[Test]
+    public function a_fare_that_may_already_be_gone_is_not_scored(): void
+    {
+        $this->seedBand(foundAt: '2026-08-29 20:11:25');
+        $this->seedMornings([16000, 15000, 14000, 13000, 12000, 11000, 10500, 10000]);
+
+        $response = $this->read();
+
+        $response->assertJsonPath('data.returns.1.fare.mayBeGone', true);
+        $response->assertJsonPath('data.returns.1.fare.usual', 300);
+        $response->assertJsonPath('data.returns.1.fare.verdict', null);
+    }
+
+    /** §7's day-1 floor, on a band: two mornings is a state, not a verdict. */
+    #[Test]
+    public function a_band_orbit_has_only_just_started_pricing_says_new(): void
+    {
+        $this->seedBand(foundAt: null);
+        $this->seedMornings([10500, 10000], from: '2026-09-02');
+
+        $response = $this->read();
+
+        $response->assertJsonPath('data.returns.1.fare.verdict.short', 'New');
+        $response->assertJsonPath('data.returns.1.fare.verdict.label', 'Not enough data yet');
+        $response->assertJsonPath('data.returns.1.fare.verdict.tone', 'normal');
+    }
+
+    /**
+     * R9 — a run of mornings that stopped is not a trend. `lastDays()` counts back from the
+     * newest point, so without the freshness bound June's slide would be published as today's.
+     */
+    #[Test]
+    public function a_band_whose_mornings_stopped_weeks_ago_is_scored_on_its_pool_alone(): void
+    {
+        $this->seedBand(foundAt: null);
+
+        /* Eight mornings ending 45 days ago, and nothing since. */
+        $this->seedMornings([16000, 15000, 14000, 13000, 12000, 11000, 10500, 10000], from: '2026-07-13');
+
+        $response = $this->read();
+
+        $verdict = $this->app->make(DealScorer::class)->score(
+            10000,
+            PriceStats::fromSamples([10000, 20000, 30000, 40000, 50000, 60000]),
+            PriceHistory::empty(),
+            trackingDays: 53,
+        )->verdict;
+
+        $response->assertJsonPath('data.returns.1.fare.verdict.label', $verdict->label);
+        $this->assertNotSame(
+            'Cheap & still falling',
+            $response->json('data.returns.1.fare.verdict.label'),
+            'A trend that ended in July must not be published as one that is still going.',
+        );
+    }
+
+    /** R9 — the chart's bound hides the oldest mornings; it must not shorten the route's age. */
+    #[Test]
+    public function a_band_first_seen_beyond_the_charts_depth_is_still_a_band_orbit_knows(): void
+    {
+        $this->seedBand(foundAt: null);
+
+        /* One morning 100 days back, outside the chart's depth, and two inside it. */
+        $this->seedMorning('2026-05-26', 40000);
+        $this->seedMorning('2026-09-02', 10000);
+        $this->seedMorning('2026-09-03', 10000);
+
+        $response = $this->read();
+
+        $this->assertNotSame(
+            'New',
+            $response->json('data.returns.1.fare.verdict.short'),
+            'Orbit has held this band for 101 days; only two of them are inside the chart.',
+        );
+        $response->assertJsonPath('data.returns.1.fare.verdict.tone', 'good');
+    }
+
     /** The section is the detail's alone: the watchlist's rows are unchanged. */
     #[Test]
     public function the_summary_the_other_screens_share_carries_no_return_trips(): void
@@ -175,6 +306,42 @@ final class ReturnsOnRouteDetailTest extends TestCase
         foreach ([20000, 30000, 40000, 50000, 60000] as $index => $cents) {
             $this->seedFare($this->departure($index + 1), nights: 7, cents: $cents);
         }
+    }
+
+    /**
+     * Consecutive mornings of the 6-8 band's own history, oldest first, and the same points as
+     * a list for the expectation to be scored from.
+     *
+     * @param  list<int>  $cents
+     * @return list<PricePoint>
+     */
+    private function seedMornings(array $cents, string $from = '2026-08-27'): array
+    {
+        $points = [];
+
+        foreach ($cents as $index => $amount) {
+            $points[] = $this->seedMorning(Date::parse($from)->addDays($index)->toDateString(), $amount);
+        }
+
+        return $points;
+    }
+
+    /** One morning of that band's history, and the point the scorer would see it as. */
+    private function seedMorning(string $observedOn, int $cents): PricePoint
+    {
+        ReturnObservation::query()->insert([
+            'route_id'    => $this->route->id,
+            'nights_min'  => 6,
+            'nights_max'  => 8,
+            'observed_on' => $observedOn,
+            'price_cents' => $cents,
+            'nights'      => 7,
+            'found_at'    => null,
+            'created_at'  => Date::now(),
+            'updated_at'  => Date::now(),
+        ]);
+
+        return new PricePoint(new DateTimeImmutable($observedOn), $cents);
     }
 
     private function departure(int $index): string
