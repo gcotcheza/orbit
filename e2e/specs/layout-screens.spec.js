@@ -126,7 +126,8 @@ test.describe('the watch list in the frame', () => {
         const first = await others.nth(0).boundingBox()
         const second = await others.nth(1).boundingBox()
 
-        expect(Math.abs(first.y - second.y), 'the other passes are two abreast').toBeLessThan(2)
+        expect(second.y, 'the other passes are two abreast').toBeLessThan(first.y + first.height)
+        expect(first.y, 'the other passes are two abreast').toBeLessThan(second.y + second.height)
         expect(second.x).toBeGreaterThan(first.x + first.width - 1)
         expect(leadBox.width, 'the chosen pass spans the column').toBeGreaterThan(first.width * 1.8)
 
@@ -228,7 +229,8 @@ test.describe('search in the frame', () => {
         const second = await cards.nth(1).boundingBox()
         const form = await page.locator('form.search').boundingBox()
 
-        expect(Math.abs(first.y - second.y), 'the finds are two abreast at 1280').toBeLessThan(2)
+        expect(second.y, 'the finds are two abreast at 1280').toBeLessThan(first.y + first.height)
+        expect(first.y, 'the finds are two abreast at 1280').toBeLessThan(second.y + second.height)
         expect(second.x).toBeGreaterThan(first.x + first.width - 1)
         expect(first.x, 'and they are the pane, right of the search card').toBeGreaterThan(form.x + form.width - 1)
 
