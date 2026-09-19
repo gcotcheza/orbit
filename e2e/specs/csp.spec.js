@@ -36,9 +36,10 @@ test('a deliberate inline script is refused by the served policy', async ({ page
     })
 
     await expect
-        .poll(() => violations.length, { message: 'the browser policed nothing, so nothing was served' })
-        .toBeGreaterThan(0)
-    expect(violations[0].violatedDirective).toContain('script-src')
+        .poll(() => violations.some((violation) => violation.violatedDirective.includes('script-src')), {
+            message: 'the browser policed nothing, so nothing was served',
+        })
+        .toBe(true)
     expect(
         await page.evaluate(() => window.__inlineScriptRan),
         'the script was reported and ran anyway, which is report-only, not enforcement'

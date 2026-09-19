@@ -18,25 +18,45 @@ final class ContentSecurityPolicyTest extends TestCase
 
     private const VHOST = 'deploy/nginx/flights-ghiecode.conf';
 
+    /** Anchored: a commented-out add_header reads like a policy and serves none. */
+    private const SERVED = '/^\s*add_header Content-Security-Policy "/';
+
+    private const COMMENTED = '/^\s*#.*add_header Content-Security-Policy/';
+
+    private const EITHER_SPELLING = '/^\s*add_header Content-Security-Policy(?:-Report-Only)? "/';
+
     #[Test]
     public function the_sidecar_serves_exactly_one_policy(): void
     {
         $this->assertCount(
             1,
-            $this->policyLines(self::SIDECAR),
+            $this->linesMatching(self::SIDECAR, self::SERVED),
             'Two policies on one response are enforced as their intersection, which is a policy '
             .'nobody wrote down; none at all is a gate that cannot tell enforcing from absent.'
         );
     }
 
     #[Test]
-    public function the_policy_survives_a_location_that_sets_a_header_of_its_own(): void
+    public function a_commented_out_policy_is_not_a_policy(): void
+    {
+        $this->assertSame(
+            [],
+            $this->linesMatching(self::SIDECAR, self::COMMENTED),
+            'A commented-out add_header serves nothing, so every other case here would stay green '
+            .'while the browser was handed no policy at all.'
+        );
+    }
+
+    #[Test]
+    public function the_policy_reaches_a_response_the_app_did_not_answer_200_to(): void
     {
         $this->assertStringEndsWith(
             '" always;',
-            trim($this->policyLines(self::SIDECAR)[0] ?? ''),
-            'Without `always` nginx drops the header on every response the app did not generate '
-            .'itself — a 304 from the browser cache included, which is most of them.'
+            trim($this->linesMatching(self::SIDECAR, self::SERVED)[0] ?? ''),
+            'add_header is conditional on the response status, and the default list is 2xx/3xx '
+            .'only: without `always` a 4xx/5xx document goes out with no policy at all — a 401, '
+            .'419, 422 or 500 from the app, the =404 from try_files, the dotfile 403, or the 502 '
+            .'nginx answers with while php-fpm is down.'
         );
     }
 
@@ -47,7 +67,7 @@ final class ContentSecurityPolicyTest extends TestCase
     {
         $this->assertStringContainsString(
             $directive,
-            $this->policyLines(self::SIDECAR)[0] ?? '',
+            $this->policy(),
             "The served policy no longer carries `{$directive}`: {$why}."
         );
     }
@@ -72,7 +92,7 @@ final class ContentSecurityPolicyTest extends TestCase
     {
         foreach ($this->filesUnder('docker/web') as $relative => $contents) {
             $this->assertDoesNotMatchRegularExpression(
-                '/report-only/i',
+                '/add_header\s+\S*Report-Only/i',
                 $contents,
                 "{$relative} serves a report-only policy. Reporting and enforcing look identical "
                 .'from the outside, and only one of them refuses the script.'
@@ -85,26 +105,29 @@ final class ContentSecurityPolicyTest extends TestCase
     {
         $this->assertSame(
             [],
-            $this->policyLines(self::VHOST),
-            'The vhost has a policy again. Two copies drift, and the one the browser gate can '
-            .'exercise is the sidecar, so this one is the copy that goes.'
+            $this->linesMatching(self::VHOST, self::EITHER_SPELLING),
+            'The vhost carries a policy again, enforcing or report-only. Two copies drift, and the '
+            .'one the browser gate can exercise is the sidecar, so this is the copy that goes.'
         );
     }
 
     /** @return list<string> */
-    private function policyLines(string $relative): array
+    private function linesMatching(string $relative, string $pattern): array
     {
-        return array_values(array_filter(
-            explode("\n", $this->read($relative)),
-            static fn (string $line): bool => str_contains($line, 'add_header Content-Security-Policy "')
-        ));
+        return array_values(preg_grep($pattern, explode("\n", $this->read($relative))) ?: []);
+    }
+
+    /** The quoted value, so a clause is never read out of the directive around it. */
+    private function policy(): string
+    {
+        preg_match('/"([^"]*)"/', $this->linesMatching(self::SIDECAR, self::SERVED)[0] ?? '', $quoted);
+
+        return $quoted[1] ?? '';
     }
 
     private function scriptSrc(): string
     {
-        $policy = $this->policyLines(self::SIDECAR)[0] ?? '';
-
-        foreach (explode(';', $policy) as $clause) {
+        foreach (explode(';', $this->policy()) as $clause) {
             if (str_starts_with(trim($clause), 'script-src ')) {
                 return $clause;
             }
@@ -116,20 +139,27 @@ final class ContentSecurityPolicyTest extends TestCase
     /** @return array<string, string> */
     private function filesUnder(string $relative): array
     {
-        $root = dirname(__DIR__, 3);
-        $paths = glob($root.'/'.$relative.'/*') ?: [];
+        $found = [];
 
-        $this->assertNotSame([], $paths, "{$relative}/ is empty, so this test reads nothing.");
-
-        $files = [];
-
-        foreach ($paths as $path) {
-            if (is_file($path)) {
-                $files[substr($path, strlen($root) + 1)] = $this->read(substr($path, strlen($root) + 1));
+        foreach (scandir(dirname(__DIR__, 3).'/'.$relative) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
             }
+
+            $path = $relative.'/'.$entry;
+
+            if (is_dir(dirname(__DIR__, 3).'/'.$path)) {
+                $found += $this->filesUnder($path);
+
+                continue;
+            }
+
+            $found[$path] = $this->read($path);
         }
 
-        return $files;
+        $this->assertNotSame([], $found, "{$relative}/ holds no file, so this test reads nothing.");
+
+        return $found;
     }
 
     private function read(string $relative): string
