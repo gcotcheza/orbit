@@ -12,9 +12,10 @@ means. The first deploy of all is `docs/GO-LIVE.md` and is not repeated here.
 ## Before you run it
 
 1. **Ghie merged the pull request.** Nobody else merges, and only a merged pull request deploys.
-2. **The ledger holds a green `ci` and a green `e2e` for the merged head.** Both gates append their own line to
-   `/var/lib/fleet/gate-ledger` from the clone that ran them, so they are proved before the merge and **not** re-run here: the
-   merge's tree is identical to the gated head's, which `resolve` checks.
+2. **The ledger holds a green `ci` and a green `e2e` for the commit that is about to be deployed.** Both gates append their
+   own line to `/var/lib/fleet/gate-ledger` from the clone that ran them, so they are proved before the merge and **not**
+   re-run here. `RESOLVED` names that commit: the merged head while the merge left its tree untouched, and the merge commit
+   itself when the merge has a tree of its own, which is the ordinary case once `main` has moved.
 3. **Run as root**, from the box. Talking to `/var/run/docker.sock` is a group membership `orbit` does not have; every git line
    goes through `git-as`, and every container already runs as `115:119`.
 4. **One deploy a day, and this is that one.** Ghie's rule, not a technical limit.
@@ -57,15 +58,16 @@ The script prints this recipe with the shas filled in. **The gate runs in a work
 production (`docs/DECISIONS.md`). An accepted hazard, until it did not have to be.
 
 ```bash
-git -C /srv/sessions/orbit/repo worktree add /srv/worker-scratch/orbit-gate-pr<N> <the merged head>
+git -C /srv/sessions/orbit/repo worktree add /srv/worker-scratch/orbit-gate-pr<N> <the sha NOT GATED printed>
 cd /srv/worker-scratch/orbit-gate-pr<N>
 export COMPOSE_PROJECT_NAME=orbit-gate-pr<N>
 heavy-work orbit-gate-pr<N> -- bash scripts/check.sh overlay
 heavy-work orbit-e2e-pr<N> -- bash scripts/e2e.sh
 ```
 
-Both write their ledger line at the end of a green run; then re-run `scripts/deploy.sh <PR#>`. A head without both greens is
-re-gated, not argued with. `docs/DEVELOPMENT.md` lists the five paths `scripts/e2e.sh` needs handed over in a root-owned worktree.
+Both write their ledger line at the end of a green run; then re-run `scripts/deploy.sh <PR#>`. A commit without both greens
+is re-gated, not argued with. Gate the sha the line named and nothing else: gating the branch head when the script asked for
+the merge commit leaves the ledger exactly as empty as it was. `docs/DEVELOPMENT.md` lists the five paths `scripts/e2e.sh` needs handed over in a root-owned worktree.
 
 ## What it prints
 
@@ -73,9 +75,9 @@ One line per phase on stdout, the whole run in `/root/personal-vps-deploys/orbit
 
 | line | what it means |
 |---|---|
-| `RESOLVED #N head … merge …` | gh says MERGED, the merge commit **is** `origin/main`, and its tree is the tree that was gated |
+| `RESOLVED #N head … merge …` | gh says MERGED, the merge commit **is** `origin/main`, and which commit must be gated: the merged head when the two trees are identical, the merge commit itself when they are not |
 | `CLASSIFIED code` / `LANDED docs-only …` | the classifier's answer; a landing ends the run |
-| `GATED … ci and e2e both green` | the ledger was read. `NOT GATED` prints the recipe above and stops |
+| `GATED … ci and e2e both green` | the ledger was read, for the sha `RESOLVED` named. `NOT GATED` prints the recipe above and stops |
 | `PRE-FLIGHT load … available …` | the box as it was; it never refuses |
 | `STEP 0 baseline recorded` | the served bundle hash and the four containers' start times, before anything moves |
 | `STEP 1 rollback target <sha>` | the sha to go back to. It is also `was …` in `DONE` |
@@ -83,7 +85,7 @@ One line per phase on stdout, the whole run in `/root/personal-vps-deploys/orbit
 | `HEALTH … healthy …` | docker's own healthchecks for the restarted services have all gone green, which is the state the battery's check 6 demands. `HEALTH TIMEOUT` means the release is landed and serving and the battery was **not** run — it names the container and its last healthchecks, and it is not a rollback |
 | `VERIFY --backend-only` / `VERIFY full` | `--backend-only` when step 5 did not run, so an unchanged bundle is expected |
 | `HOST VHOST NEEDED, NOT RUN …` | `deploy/nginx` moved, and nginx reads `/etc/nginx/sites-available/flights.ghiecode.io`, which no pull touches. By hand, in this order: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`. Both tests say `syntax is ok`; never reload on a failed second one |
-| `DONE #N live … was … gated … root-owned 0 verify …` | the deploy is finished. `root-owned` must read `0` |
+| `DONE #N live … was … gated … root-owned 0 verify …` | the deploy is finished. `gated` says what was read and for which commit — `ledger head <sha>`, `ledger merge <sha>` or `by hand`. `root-owned` must read `0` |
 | `PAPERWORK PR #N deployed …` | backlog, handoff and the fleet-docs page still want a line from you |
 | `REFUSED: …` | nothing moved. `FAILED rc=…` with a 20-line tail means something did — read the log, do not re-run a step |
 

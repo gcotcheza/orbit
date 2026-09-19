@@ -81,8 +81,8 @@ merged — this project has no baseline for new debt to hide in.
 It takes the runner as its one argument, and will not guess: `dev` uses the
 stack you already have up, `overlay` gives every step a throwaway container with
 its own `vendor/`, `bootstrap/cache` and `node_modules/`, and is the one to use
-in a tree with no stack up — including the worktree a merged head is gated in
-when the ledger holds no green for it. Same checks, same order, either way.
+in a tree with no stack up — including the worktree a merged head, or the merge
+commit the deploy named instead, is gated in when the ledger holds no green for it. Same checks, same order, either way.
 **A green run appends its own line to the gate ledger**, which is what
 `scripts/deploy.sh` reads instead of re-running the gate on the box.
 

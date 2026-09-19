@@ -368,10 +368,31 @@ run_deploy "${PR_NUMBER}"
 contains 'a merge behind the tip is refused' "${OUT}" \
     'REFUSED: main moved since the merge: re-gate.'
 
-fixture trees-differ trees-differ
+# An ordinary merge commit has a tree of its own, and that tree is what deploys, so
+# it is the commit the ledger must hold; the branch head's greens say nothing about it.
+fixture trees-differ-ungated trees-differ
 run_deploy "${PR_NUMBER}"
-contains 'a merge tree that is not the gated tree is refused' "${OUT}" \
-    'REFUSED: merge tree differs from the gated head: re-gate the merge commit.'
+contains 'a merge tree that is not the head tree names the merge as the commit to gate' "${OUT}" \
+    "RESOLVED #90 merge ${MERGE_SHA:0:7} is origin/main and its tree is not head ${HEAD_SHA:0:7}'s, so the merge commit itself is what must be gated"
+contains 'and a green head does not deploy a merge the ledger never saw' "${OUT}" \
+    "the ledger holds no green ci for ${MERGE_SHA:0:7}: gate that merge, then deploy."
+contains 'and the recipe names the merge commit' "${OUT}" \
+    "worktree add /srv/worker-scratch/orbit-gate-pr90 ${MERGE_SHA}"
+absent 'never the branch head, gating which would change nothing' "${OUT}" \
+    "worktree add /srv/worker-scratch/orbit-gate-pr90 ${HEAD_SHA}"
+equals 'an ungated merge builds nothing' "$(logged heavy.argv)" ''
+absent 'and an ungated merge never says DONE' "${OUT}" 'DONE #90'
+
+fixture trees-differ-gated trees-differ
+printf '%s ci 2026-09-19T07:00:00Z 0 -\n%s e2e 2026-09-19T07:30:00Z 0 -\n' \
+    "${MERGE_SHA}" "${MERGE_SHA}" >"${LEDGER}"
+run_deploy "${PR_NUMBER}"
+contains 'a gated merge commit deploys' "${OUT}" "DONE #90 live ${MERGE_SHORT} was"
+contains 'and the ledger read is the merge commit, not the branch head' "${OUT}" \
+    "GATED ${MERGE_SHA:0:7} ci and e2e both green"
+contains 'and DONE says the merge was the commit that was gated' "${OUT}" \
+    "gated ledger merge ${MERGE_SHA:0:7}"
+absent 'and a gated merge is never sent to the recipe' "${OUT}" 'worktree add'
 
 # --- 3. the ledger ------------------------------------------------------------
 fixture no-ledger
@@ -472,6 +493,10 @@ run_deploy "${PR_NUMBER}"
 contains 'code takes the full path' "${OUT}" 'CLASSIFIED code: the full deploy path'
 contains 'the deploy finishes' "${OUT}" "DONE #90 live ${MERGE_SHORT} was"
 contains 'the deploy is gated by the ledger' "${OUT}" 'gated ledger'
+contains 'identical trees gate the branch head' "${OUT}" \
+    "RESOLVED #90 head ${HEAD_SHA:0:7} merge ${MERGE_SHA:0:7} is origin/main, trees identical"
+contains 'and DONE says the head was the commit that was gated' "${OUT}" \
+    "gated ledger head ${HEAD_SHA:0:7}"
 contains 'DONE carries the root-owned count and the verify mode' "${OUT}" 'root-owned 0 verify backend-only'
 equals 'the steps are ONE heavy-work job' "$(logged heavy.argv | grep -c 'orbit-deploy')" '1'
 equals 'nothing reached the real git-as wrapper' "$(logged git-as.argv)" ''
@@ -624,7 +649,8 @@ run_deploy "${PR_NUMBER}"
 contains 'a head this checkout never had is named, not blamed on the tree' "${OUT}" \
     "REFUSED: PR #90's head 0123456 is not a commit in this checkout"
 contains 'and it names the shape that causes it' "${OUT}" 'a squash or a rebase merge'
-absent 'and it does not blame the tree' "${OUT}" 'merge tree differs from the gated head'
+absent 'and it is not quietly gated as a merge commit instead' "${OUT}" \
+    'so the merge commit itself is what must be gated'
 
 # --- 9. a phase that fails ----------------------------------------------------
 fixture failing-baseline
