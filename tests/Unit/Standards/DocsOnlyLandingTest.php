@@ -79,7 +79,7 @@ final class DocsOnlyLandingTest extends TestCase
         $script = $this->read(self::DEPLOY);
 
         $this->assertStringContainsString(
-            'DOCS_ONLY_GIT="$GIT" "$ROOT/scripts/docs-only.sh" "$MERGE_SHA"',
+            'DOCS_ONLY_GIT="$GIT" "$SCRIPT_DIR/docs-only.sh" "$MERGE_SHA"',
             $script,
             'scripts/deploy.sh no longer asks the classifier what the merge changes, so every '
             .'documentation merge would take the full deploy path — a gate, a build and four '
