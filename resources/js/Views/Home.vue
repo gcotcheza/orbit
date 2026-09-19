@@ -494,11 +494,18 @@ onActivated(() => {
   .home__panel :deep(.detail__group) {
     display: block;
     min-width: 0;
+    grid-column: 1;
   }
 
   .home__panel :deep(.detail__group--chart),
   .home__panel :deep(.detail__group--booking) {
     grid-column: 2;
+  }
+
+  /* The left column is three groups deep since the returns section joined it, so the chart is
+     pinned to the first row rather than auto-flowed into whichever one is free. */
+  .home__panel :deep(.detail__group--chart) {
+    grid-row: 1;
   }
 
   /* Both columns start on the same line: the pane's own padding is the breathing room here, and

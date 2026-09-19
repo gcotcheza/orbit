@@ -573,9 +573,7 @@ onActivated(() => {
       </div>
     </div>
 
-    <!-- Not in a pane: the landing pane's whole point is a detail short enough to leave the
-         globe its pixels (docs/DESKTOP-LAYOUT-PLAN.md, layout-screens.spec.js). -->
-    <div v-if="!embedded" class="detail__group detail__group--returns">
+    <div class="detail__group detail__group--returns">
       <ReturnTrips :returns="returns" />
     </div>
 
