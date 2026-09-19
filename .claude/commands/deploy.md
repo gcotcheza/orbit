@@ -19,6 +19,14 @@ means. The first deploy of all is `docs/GO-LIVE.md` and is not repeated here.
    goes through `git-as`, and every container already runs as `115:119`.
 4. **One deploy a day, and this is that one.** Ghie's rule, not a technical limit.
 
+**The first landing of the script itself** is the one deploy `/var/www/orbit` cannot run, because the script and its helpers
+arrive with the merge that needs them. Run it from the clone instead; it reads its helpers from beside itself and the checkout
+to deploy from `DEPLOY_ROOT`:
+
+```bash
+DEPLOY_ROOT=/var/www/<app> bash <clone>/scripts/deploy.sh <PR#>
+```
+
 ## The one command
 
 ```bash
@@ -62,6 +70,7 @@ One line per phase on stdout, the whole run in `/root/personal-vps-deploys/orbit
 | `STEP 0 baseline recorded` | the served bundle hash and the four containers' start times, before anything moves |
 | `STEP 1 rollback target <sha>` | the sha to go back to. It is also `was …` in `DONE` |
 | `STEPS 1-10 ok in one heavy-work job` | fetch, fast-forward, migrate, the restarts, and only the steps whose files moved; it names which ran |
+| `HEALTH … healthy …` | docker's own healthchecks for the restarted services have all gone green, which is the state the battery's check 6 demands. `HEALTH TIMEOUT` means the release is landed and serving and the battery was **not** run — it names the container and its last healthchecks, and it is not a rollback |
 | `VERIFY --backend-only` / `VERIFY full` | `--backend-only` when step 5 did not run, so an unchanged bundle is expected |
 | `HOST VHOST NEEDED, NOT RUN …` | `deploy/nginx` moved, and nginx reads `/etc/nginx/sites-available/flights.ghiecode.io`, which no pull touches. By hand, in this order: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`. Both tests say `syntax is ok`; never reload on a failed second one |
 | `DONE #N live … was … gated … root-owned 0 verify …` | the deploy is finished. `root-owned` must read `0` |

@@ -104,8 +104,11 @@ mutant 'horizon is drained in the app container' deploy.sh \
     'horizon is drained IN the horizon container' \
     'never in app, where it exits 0 having terminated nothing'
 mutant 'the restart leaves horizon on old code' deploy.sh \
-    's/^\$COMPOSE restart app horizon scheduler web$/$COMPOSE restart app scheduler web/' \
+    "s/^RESTARTED='app horizon scheduler web'$/RESTARTED='app scheduler web'/" \
     'view:clear, then the drain, then the four restarts, in that order'
+mutant 'the battery is run before the containers report healthy' deploy.sh \
+    '/^    await_health$/d' \
+    'a container that never reports healthy stops before the battery'
 mutant 'the migration never runs' deploy.sh \
     '/php artisan migrate --force/d' \
     'migrate is the first command the job asks of compose when no lockfile moved'
@@ -135,8 +138,14 @@ mutant 'the root-owned repair is a blanket chown' deploy.sh \
     's#find "\$ROOT" -user root -not -path "\$ROOT/\.claude/\*" -exec chown orbit:orbit {} +#chown -R orbit:orbit "\$ROOT"#' \
     'root-owned paths that appear during the deploy are repaired narrowly'
 mutant 'every release verifies backend-only' deploy.sh \
-    's#^\( *\)"\$ROOT/scripts/verify.sh" || rc=\$?$#\1"$ROOT/scripts/verify.sh" --backend-only || rc=$?#' \
+    's#^\( *\)ORBIT_DIR="\$ROOT" "\$SCRIPT_DIR/verify.sh" || rc=\$?$#\1ORBIT_DIR="$ROOT" "$SCRIPT_DIR/verify.sh" --backend-only || rc=$?#' \
     'and never passes --backend-only'
+mutant 'a helper is addressed through the checkout being deployed' deploy.sh \
+    's#ORBIT_DIR="\$ROOT" "\$SCRIPT_DIR/verify.sh" --before#"$ROOT/scripts/verify.sh" --before#' \
+    'a helper is read from the script directory, never from the checkout being deployed'
+mutant 'the battery is never told which checkout to verify' deploy.sh \
+    's#ORBIT_DIR="\$ROOT" "\$SCRIPT_DIR/verify.sh"#"$SCRIPT_DIR/verify.sh"#' \
+    'and each call names the checkout being deployed, not the battery default'
 mutant 'no baseline is taken at all' deploy.sh \
     '/^    baseline$/d' \
     'the baseline is taken before anything moves'

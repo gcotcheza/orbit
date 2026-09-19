@@ -11,6 +11,10 @@
 # in main() and bash has the whole script before the disk moves.
 set -u
 
+# The helpers are this script's own, not the deployed checkout's: a first landing
+# runs from a clone, and the checkout has neither file until the merge arrives.
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
 # Vendored from gcotcheza/engineering-standards and not edited here:
 # tests/Unit/Standards/DeployLibDriftTest.php recomputes each file's own hash.
 # shellcheck source=scripts/lib/deploy/summary.sh
@@ -58,7 +62,7 @@ land() {
 
 classify() {
     local rc
-    DOCS_ONLY_GIT="$GIT" "$ROOT/scripts/docs-only.sh" "$MERGE_SHA"
+    DOCS_ONLY_GIT="$GIT" "$SCRIPT_DIR/docs-only.sh" "$MERGE_SHA"
     rc=$?
     case "$rc" in
         0) land ;;
@@ -135,7 +139,7 @@ nothing_to_land() {
 
 baseline() {
     local rc=0
-    "$ROOT/scripts/verify.sh" --before || rc=$?
+    ORBIT_DIR="$ROOT" "$SCRIPT_DIR/verify.sh" --before || rc=$?
     if [ "$rc" -ne 0 ]; then
         fail_tail 'STEP 0' "$rc"
         exit "$rc"
@@ -147,6 +151,9 @@ baseline() {
 # The front end's inputs, including the build script itself and the npm config.
 # public/build needs no exclusion: .gitignore holds it, so it never reaches a diff.
 FRONT_END="resources/ package.json package-lock.json .npmrc vite.config.js public/"
+
+# The services the job restarts; await_health asks docker which of them it checks.
+RESTARTED='app horizon scheduler web'
 
 # The pull opens one window — new code, old schema — and migrate closes it, so
 # nothing slow goes between them. docs/DECISIONS.md: the-deploy-script-is-the-runbook
@@ -190,7 +197,7 @@ fi
 echo "step 8 view:clear, then terminate horizon IN horizon, then restart the four"
 $COMPOSE exec -T app php artisan view:clear
 $COMPOSE exec -T horizon php artisan horizon:terminate
-$COMPOSE restart app horizon scheduler web
+$COMPOSE restart $RESTARTED
 rooted=\$(rooted_count)
 if [ "\$rooted" -ne 0 ]; then
     echo "STEP 10 REPAIR: \$rooted root-owned path(s)"
@@ -221,6 +228,52 @@ deploy_steps() {
     say "STEPS 1-10 ok in one heavy-work job, conditional steps ran: ${RAN:-none}"
 }
 
+# A status carrying one of the three is a service docker healthchecks; a bare `Up`
+# is one it does not, and asking docker beats a list that drifts.
+health_of() { $COMPOSE ps "$1" 2>&1 | grep -oE '\(healthy\)|\(unhealthy\)|\(health: starting\)' | tail -1; }
+
+# `ps` says a container is not healthy yet; only its own checks say why.
+health_log() {
+    local id
+    id=$($COMPOSE ps -q "$1" 2>/dev/null | head -1)
+    [ -n "$id" ] || { printf '  no container id for %s\n' "$1"; return 0; }
+    $DOCKER inspect --format '{{range .State.Health.Log}}exit {{.ExitCode}}: {{.Output}}
+{{end}}' "$id" 2>&1 | grep -v '^[[:space:]]*$' | tail -3 | sed 's/^/  /'
+}
+
+# A restart leaves a healthchecked container at `health: starting` until its first
+# check answers, and the battery is right to refuse that. docs/DECISIONS.md
+await_health() {
+    local s state waited=0 watched='' pending
+    for s in $RESTARTED; do
+        [ -n "$(health_of "$s")" ] && watched="$watched $s"
+    done
+    watched=${watched# }
+    if [ -z "$watched" ]; then
+        say 'HEALTH nothing to wait for: docker healthchecks none of the restarted services'
+        return 0
+    fi
+    while :; do
+        pending=''
+        for s in $watched; do
+            [ "$(health_of "$s")" = '(healthy)' ] || pending="$pending $s"
+        done
+        [ -n "$pending" ] || break
+        if [ "$waited" -ge "$HEALTH_TIMEOUT" ]; then
+            for s in $pending; do
+                state=$(health_of "$s")
+                say "HEALTH TIMEOUT: $s is ${state:-unreadable} ${waited}s after its restart, so the battery was not run. THE RELEASE IS LANDED AND SERVING and this is NOT a rollback. Its last healthchecks:"
+                say "$(health_log "$s")"
+            done
+            say "Watch them with '$COMPOSE ps${pending}'; when they report healthy, run scripts/verify.sh against $ROOT."
+            exit 1
+        fi
+        sleep "$HEALTH_INTERVAL"
+        waited=$((waited + HEALTH_INTERVAL))
+    done
+    say "HEALTH ${watched} healthy ${waited}s after the restart"
+}
+
 # The file nginx reads is /etc/nginx/sites-available/flights.ghiecode.io; no pull
 # touches it, so a moved deploy/nginx is a host step this script announces.
 vhost_notice() {
@@ -239,12 +292,12 @@ verify() {
         *' 5 '*)
             VERIFY_MODE=full
             say 'VERIFY full: step 5 built the front end, so the bundle must have moved'
-            "$ROOT/scripts/verify.sh" || rc=$?
+            ORBIT_DIR="$ROOT" "$SCRIPT_DIR/verify.sh" || rc=$?
             ;;
         *)
             VERIFY_MODE=backend-only
             say 'VERIFY --backend-only: step 5 did not run, so an unchanged bundle is expected'
-            "$ROOT/scripts/verify.sh" --backend-only || rc=$?
+            ORBIT_DIR="$ROOT" "$SCRIPT_DIR/verify.sh" --backend-only || rc=$?
             ;;
     esac
     if [ "$rc" -ne 0 ]; then
@@ -276,6 +329,9 @@ main() {
     GH=${DEPLOY_GH:-gh}
     HEAVY=${DEPLOY_HEAVY:-heavy-work}
     COMPOSE=${DEPLOY_COMPOSE:-docker compose}
+    DOCKER=${DEPLOY_DOCKER:-docker}
+    HEALTH_TIMEOUT=${DEPLOY_HEALTH_TIMEOUT:-180}
+    HEALTH_INTERVAL=${DEPLOY_HEALTH_INTERVAL:-3}
     LEDGER=${DEPLOY_LEDGER:-/var/lib/fleet/gate-ledger}
     HOST=${ORBIT_HOST:-flights.ghiecode.io}
     BASE=${ORBIT_BASE:-http://127.0.0.1:3085}
@@ -304,6 +360,7 @@ main() {
     preflight
     baseline
     deploy_steps
+    await_health
     vhost_notice
     verify
     EXTRA_DONE="root-owned $ROOTED verify $VERIFY_MODE$VHOST_EXTRA"
