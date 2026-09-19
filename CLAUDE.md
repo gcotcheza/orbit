@@ -38,15 +38,6 @@ overrides them and says why.
 
 ## Exceptions
 
-- **S4, the policy is on the host vhost and is report-only.**
-  `deploy/nginx/flights-ghiecode.conf:164` ships a full
-  `Content-Security-Policy-Report-Only` that `resources/views/app.blade.php:11`
-  already writes against, and `docs/GO-LIVE.md:364` holds the promotion item
-  and its stop condition; but `docker/web/nginx.conf` — the app's own nginx,
-  which is what S4 asks for — sets three `Cache-Control` headers and no CSP.
-  Drop this line when `grep -n Content-Security-Policy docker/web/nginx.conf`
-  finds an enforcing policy and a browser test proves a deliberate inline
-  script is caught; follow-up branch `feat/csp`.
 - **C12, validation happens on the server and nowhere else.** The three forms
   (`resources/js/Views/Login.vue:74`, `resources/js/Views/Search.vue:257`,
   `resources/js/Components/settings/ChangePassword.vue:115`) render the
