@@ -16,7 +16,8 @@
 #
 #   1. generate .env.e2e if it is not there (fresh APP_KEY, throwaway database
 #      password, a seeded login that exists nowhere else)
-#   2. make sure vendor/, node_modules/ and public/build/ are present
+#   2. build the sandbox's own image, `orbit/app:e2e`, and make sure vendor/,
+#      node_modules/ and public/build/ are present
 #   3. `up -d --wait` the orbit-e2e stack on 127.0.0.1:3185
 #   4. migrate, then seed — including the 60-day fake price backfill, so the
 #      charts and the calendar have something to draw
@@ -87,6 +88,10 @@ E2E_FIXED_NOW='2026-08-23T09:00:00+02:00'
 
 APP_UID='115'
 APP_GID='119'
+
+# NOT `orbit/app:latest`: that tag is what docker-compose.yml's three PHP services
+# boot, and this stack rebuilds its own image (docker-compose.e2e.yml).
+APP_IMAGE='orbit/app:e2e'
 
 COMPOSE=(docker compose -p orbit-e2e -f docker-compose.e2e.yml --env-file .env.e2e)
 
@@ -362,6 +367,11 @@ checkout_is_live() {
     return 1
 }
 
+# Built here rather than left to `up` below, because the vendor install is a
+# one-off `docker run` against this tag and nothing else has created it.
+step 'Building the sandbox image'
+"${COMPOSE[@]}" build app
+
 # Each waits on the marker its installer writes when it FINISHES: an empty
 # vendor/ or node_modules/ satisfies `[ -d ]` and the step then runs on nothing.
 if [ ! -f vendor/autoload.php ]; then
@@ -375,7 +385,7 @@ if [ ! -f vendor/autoload.php ]; then
     fi
     step 'composer install'
     docker run --rm -u "${APP_UID}:${APP_GID}" -v "$ROOT":/var/www/html -w /var/www/html \
-        orbit/app:latest composer install --no-interaction --no-progress
+        "$APP_IMAGE" composer install --no-interaction --no-progress
 fi
 
 if [ ! -f node_modules/.package-lock.json ]; then

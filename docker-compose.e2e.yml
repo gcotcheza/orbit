@@ -26,6 +26,8 @@
 #      to start this file with any other env file, including the checkout's own
 #      `.env` — which is what stops a stray `docker compose -f
 #      docker-compose.e2e.yml up` from pointing the sandbox at real credentials.
+#   5. `orbit/app:e2e`, not the `orbit/app:latest` that docker-compose.yml's three
+#      PHP services boot: a rebuild here must not replace production's runtime.
 #
 # ---------------------------------------------------------------------------
 # HOW IT DIFFERS FROM docker-compose.yml, AND WHY EACH DIFFERENCE IS DELIBERATE
@@ -64,7 +66,7 @@ services:
       args:
         APP_UID: '115'
         APP_GID: '119'
-    image: orbit/app:latest
+    image: orbit/app:e2e
     user: '115:119'
     security_opt: ['no-new-privileges:true']
     cap_drop: ['ALL']

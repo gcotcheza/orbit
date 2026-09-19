@@ -48,9 +48,10 @@ browser.** Not "assert the component mounted". Look at it.
 1. **Generates `.env.e2e`** if there is not one — a fresh `APP_KEY`, a throwaway
    database password, and a seeded login (`e2e@orbit.test`) that exists on no
    other box. Gitignored. `--fresh-env` regenerates it.
-2. **Checks the prerequisites** it cannot make: `vendor/`, `node_modules/`,
-   `public/build/`. `vendor/` and `node_modules/` are built only if missing,
-   because this script is meant to be run twenty times an afternoon;
+2. **Builds the sandbox image** `orbit/app:e2e` — never the `orbit/app:latest`
+   production boots — and **checks the prerequisites** it cannot make:
+   `vendor/`, `node_modules/`, `public/build/`. The last two are installed only
+   if missing, because this script is meant to be run twenty times an afternoon;
    `public/build/` is rebuilt when it is older than its inputs too — in a
    served checkout it refuses instead of rebuilding into the live bundle.
 3. **Brings up the `orbit-e2e` stack** on `127.0.0.1:3185` and waits for it to
