@@ -132,10 +132,16 @@ final class BrowserGateInstallsTest extends TestCase
         }
 
         $this->assertStringContainsString(
-            'elif',
+            'checkout_is_live',
             $block,
-            'The bare presence test `[ ! -f public/build/manifest.json ]` must not be the only '
-            .'condition that triggers a rebuild.'
+            'A stale bundle in a served checkout must refuse to rebuild rather than overwrite '
+            .'the live public/build/ while the site serves it.'
+        );
+
+        $this->assertStringContainsString(
+            'npm run build',
+            $block,
+            'The staleness decision must still reach the build it decided on.'
         );
     }
 
@@ -154,7 +160,7 @@ final class BrowserGateInstallsTest extends TestCase
 
     private function viteBuildDecision(): string
     {
-        return $this->between('/^vite_build_reason=(.*?)^fi$/ms', 'a vite-build staleness check');
+        return $this->between('/^vite_build_reason=(.*?npm run build)$/ms', 'a vite-build staleness check');
     }
 
     private function between(string $pattern, string $what): string

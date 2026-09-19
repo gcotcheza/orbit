@@ -360,12 +360,22 @@ fi
 vite_build_reason=''
 if [ ! -f public/build/manifest.json ]; then
     vite_build_reason='no bundle'
-elif [ -n "$(find resources package-lock.json vite.config.js -newer public/build/manifest.json -print -quit)" ]; then
-    # -newer needs the manifest to exist; the branch above already guarantees that here.
-    vite_build_reason='bundle older than its inputs'
+else
+    newer=$(find resources package-lock.json vite.config.js -newer public/build/manifest.json -print -quit) \
+        || fail 'could not compare the bundle with its inputs'
+    if [ -n "$newer" ]; then
+        vite_build_reason='bundle older than its inputs'
+    fi
 fi
 
 if [ -n "$vite_build_reason" ]; then
+    if [ "$vite_build_reason" = 'bundle older than its inputs' ] && checkout_is_live; then
+        fail "public/build/ is older than its inputs, and this checkout must not be rebuilt into:
+    ${live_reason}.
+    A rebuild here would overwrite the live public/build/ while the site serves it — a
+    silent partial front-end deploy. Run the deploy's own asset-build step instead
+    (docker compose --profile build run --rm assets), then re-run this script."
+    fi
     step "vite build (${vite_build_reason})"
     docker run --rm -u "${APP_UID}:${APP_GID}" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
         -v "$ROOT":/var/www/html -w /var/www/html node:24-alpine \

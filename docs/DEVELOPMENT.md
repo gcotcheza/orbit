@@ -159,12 +159,13 @@ chmod -R go-w vendor node_modules
 
 The `chmod` is last on purpose: until the script has run there is nothing in
 those two directories to tighten. No `.env` is needed for any of it — the
-script writes its own `.env.e2e`. The gate rebuilds `vite build` whenever
+script writes its own `.env.e2e`. The gate reruns `vite build` whenever
 `public/build/manifest.json` is missing or older than `resources/`,
-`package-lock.json` or `vite.config.js` (`scripts/e2e.sh:360-373`), so emptying
-`public/build/` by hand after a front-end edit is no longer needed. Everything
-after `--` reaches `playwright test` unchanged
-(`scripts/e2e.sh:86`, `:430`), which is how one spec, `--project=tablet`, or a
+`package-lock.json` or `vite.config.js` (`scripts/e2e.sh:360-383`), so emptying
+`public/build/` by hand after a front-end edit is no longer needed — in a
+served checkout it refuses the rebuild instead. Everything after `--` reaches
+`playwright test` unchanged
+(`scripts/e2e.sh:86`, `:448`), which is how one spec, `--project=tablet`, or a
 re-recording `--update-snapshots=changed` gets through.
 
 Eight green checks have never seen a screen — [`docs/E2E.md`](E2E.md)

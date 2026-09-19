@@ -49,8 +49,10 @@ browser.** Not "assert the component mounted". Look at it.
    database password, and a seeded login (`e2e@orbit.test`) that exists on no
    other box. Gitignored. `--fresh-env` regenerates it.
 2. **Checks the prerequisites** it cannot make: `vendor/`, `node_modules/`,
-   `public/build/`. Each is built only if missing, because this script is meant
-   to be run twenty times an afternoon.
+   `public/build/`. `vendor/` and `node_modules/` are built only if missing;
+   `public/build/` is rebuilt when it is older than its inputs too, because
+   this script is meant to be run twenty times an afternoon — in a served
+   checkout it refuses instead of rebuilding into the live bundle.
 3. **Brings up the `orbit-e2e` stack** on `127.0.0.1:3185` and waits for it to
    be healthy.
 4. **Migrates and seeds** — the account, 3,270 airports, six watched routes, and
