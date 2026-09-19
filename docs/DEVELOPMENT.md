@@ -147,7 +147,7 @@ overlay gate above leaves none of them behind, and this script installs
 containers running `115:119`.
 It cannot do that in a root-owned tree until those directories exist and are
 theirs — a `115:119` container cannot create one (`mkdir: Permission denied`) —
-and the two refusals it carries (`scripts/e2e.sh:377-384`, `:411-417`) are about a checkout
+and the two refusals it carries (`scripts/e2e.sh:378-385`, `:412-418`) are about a checkout
 that is being *served*, not about a worktree. This is the whole of it, run as it stands:
 
 ```bash
@@ -163,11 +163,11 @@ The `chmod` is last on purpose: until the script has run there is nothing in
 those two directories to tighten. No `.env` is needed for any of it — the
 script writes its own `.env.e2e`. The gate reruns `vite build` whenever
 `public/build/manifest.json` is missing or older than `resources/`,
-`package-lock.json` or `vite.config.js` (`scripts/e2e.sh:397-408`), so emptying
+`package-lock.json` or `vite.config.js` (`scripts/e2e.sh:398-409`), so emptying
 `public/build/` by hand after a front-end edit is no longer needed — in a
 served checkout it refuses the rebuild instead. Everything after `--` reaches
 `playwright test` unchanged
-(`scripts/e2e.sh:111`, `:489`), which is how one spec, `--project=tablet`, or a
+(`scripts/e2e.sh:112`, `:490`), which is how one spec, `--project=tablet`, or a
 re-recording `--update-snapshots=changed` gets through.
 
 Eight green checks have never seen a screen — [`docs/E2E.md`](E2E.md)
