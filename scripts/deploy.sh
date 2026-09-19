@@ -31,8 +31,8 @@ usage() {
 loopback_code() { curl -s -o /dev/null -w '%{http_code}' --max-time 15 --connect-timeout 5 -H "Host: $HOST" "$BASE$1"; }
 edge_code()     { curl -s -o /dev/null -w '%{http_code}' --max-time 15 --connect-timeout 5 "$PUBLIC$1"; }
 
-# .claude/ is carved out: the orbit session's Claude Code runtime writes
-# root-owned files there, excluded from git and never deployed. DECISIONS.md
+# .claude/ is carved out by OWNER, not by what ships: the orbit session's Claude
+# Code runtime leaves root-owned runtime files there. docs/DECISIONS.md
 rooted_count() { find "$ROOT" -user root -not -path "$ROOT/.claude/*" | wc -l; }
 
 land() {
@@ -63,11 +63,25 @@ classify() {
     case "$rc" in
         0) land ;;
         1) say 'CLASSIFIED code: the full deploy path' ;;
-        2) say 'STOP: NOTHING TO LAND — the merge changes nothing here.'; exit 0 ;;
+        2) nothing_to_land ;;
         3) say 'STOP: the classifier refused. A landing is a fast-forward or it is not a landing, and nothing was classified.'; exit 1 ;;
         64) say 'STOP: the classifier was called wrong; nothing was classified.'; exit 1 ;;
         *) say "STOP: git itself failed (rc=$rc). A failed command must never be read as 'nothing to land'."; exit 1 ;;
     esac
+}
+
+# resolve compares the gated head's tree with the merge's and blames the tree. A head
+# this checkout has never had — a squash or a rebase merge — is a different fact.
+head_is_present() {
+    local repo json head
+    repo=${DEPLOY_GH_REPO:-$(gh_repo)} || return 0
+    [ -n "$repo" ] || return 0
+    json=$($GH pr view "$PR" -R "$repo" --json headRefOid) || return 0
+    head=$(json_value "$json" headRefOid)
+    [ -n "$head" ] || return 0
+    $GIT fetch origin >/dev/null 2>&1 || return 0
+    $GIT cat-file -e "$head^{commit}" 2>/dev/null && return 0
+    refuse "PR #$PR's head ${head:0:7} is not a commit in this checkout, so nothing can compare its tree with the merge's — which is what a squash or a rebase merge looks like. Gate the merge commit itself in a worktree and deploy it with --gated-by-hand."
 }
 
 # The library's gated() refuses and exits, so the recipe goes out ahead of it. The
@@ -85,6 +99,40 @@ gate_or_recipe() {
     gated
 }
 
+# A finished deploy of $1 leaves a DONE line in an earlier log. Its absence is what
+# separates "already deployed" from "an earlier run died after the fast-forward".
+finished_log() {
+    local dir file
+    dir=$(dirname "$LOG")
+    for file in "$dir"/*.log; do
+        [ -f "$file" ] || continue
+        [ "$file" = "$LOG" ] && continue
+        if grep -qE "^DONE #[0-9]+ live $1 " "$file"; then
+            printf '%s' "$file"
+            return 0
+        fi
+    done
+    return 1
+}
+
+nothing_to_land() {
+    local short done_in
+    if [ "$($GIT rev-parse HEAD)" != "$MERGE_SHA" ]; then
+        say 'STOP: NOTHING TO LAND — the merge changes nothing here.'
+        exit 0
+    fi
+    short=$($GIT rev-parse --short HEAD)
+    if done_in=$(finished_log "$short"); then
+        say "STOP: NOTHING TO LAND — $short is already deployed ($done_in said DONE)."
+        exit 0
+    fi
+    say "REFUSED: $short is on disk and no log in $(dirname "$LOG") says a deploy of it ever finished, so an earlier run died after the fast-forward. The code is live, the containers may still be booted on the previous release, and the schema may be ahead of both."
+    say "  Read the newest log in $(dirname "$LOG"): its '@@STEP n RAN' lines are what did run."
+    say "  Finish the rest by hand, in this order: migrate --force, the assets profile, build:retain, view:clear, horizon:terminate IN the horizon container, restart app horizon scheduler web."
+    say "  Or roll back with the block in .claude/commands/deploy.md. Either way a half-finished deploy is not 'nothing to land'."
+    exit 1
+}
+
 baseline() {
     local rc=0
     "$ROOT/scripts/verify.sh" --before || rc=$?
@@ -96,9 +144,9 @@ baseline() {
     say "STEP 0 baseline recorded: the served bundle and the four start times are in $LOG"
 }
 
-# The front end's inputs, as a pathspec the job's own shell re-parses. public/build
-# is the build's OUTPUT: a deploy that only pruned chunks did not move the front end.
-FRONT_END="resources/ package-lock.json vite.config.js public/ ':(exclude)public/build'"
+# The front end's inputs, including the build script itself and the npm config.
+# public/build needs no exclusion: .gitignore holds it, so it never reaches a diff.
+FRONT_END="resources/ package.json package-lock.json .npmrc vite.config.js public/"
 
 # The pull opens one window — new code, old schema — and migrate closes it, so
 # nothing slow goes between them. docs/DECISIONS.md: the-deploy-script-is-the-runbook
@@ -117,7 +165,7 @@ echo "step 2 root-owned proof"
 rooted=\$(rooted_count)
 [ "\$rooted" -eq 0 ] || { echo "STEP 2 FAILED: \$rooted root-owned path(s) before anything was built, and git running as orbit cannot write into a root-owned .git"; exit 1; }
 if [ -n "\$($GIT diff --name-only $BEFORE $MERGE_SHA -- composer.lock)" ]; then
-    echo "STEP 3 RAN: composer.lock moved"
+    echo "@@STEP 3 RAN: composer.lock moved"
     $COMPOSE exec -T app composer install --no-dev --optimize-autoloader --no-interaction
     $COMPOSE exec -T app chmod -R go-w vendor
 else
@@ -125,16 +173,16 @@ else
 fi
 echo "step 4 migrate"
 $COMPOSE exec -T app php artisan migrate --force
-if [ -n "\$($GIT diff --name-only $BEFORE $MERGE_SHA -- docker/app)" ]; then
-    echo "STEP 4.5 RAN: docker/app moved"
+if [ -n "\$($GIT diff --name-only $BEFORE $MERGE_SHA -- docker/app docker-compose.yml)" ]; then
+    echo "@@STEP 4.5 RAN: docker/app or docker-compose.yml moved"
     $COMPOSE build app horizon scheduler
     $COMPOSE up -d app horizon scheduler
     $COMPOSE up -d --force-recreate web
 fi
 if [ -n "\$($GIT diff --name-only $BEFORE $MERGE_SHA -- $FRONT_END)" ]; then
-    echo "STEP 5 RAN: the front end moved"
+    echo "@@STEP 5 RAN: the front end moved"
     $COMPOSE --profile build run --rm assets
-    echo "STEP 7 RAN: build:retain snapshots the build that is on disk"
+    echo "@@STEP 7 RAN: build:retain snapshots the build that is on disk"
     $COMPOSE exec -T app php artisan build:retain
 else
     echo "step 5 not needed, so step 7 is not either: retain would snapshot the build already on disk"
@@ -149,13 +197,14 @@ if [ "\$rooted" -ne 0 ]; then
     find "$ROOT" -user root -not -path "$ROOT/.claude/*" -exec chown orbit:orbit {} +
     rooted=\$(rooted_count)
 fi
-echo "ROOT-OWNED \$rooted"
+echo "@@ROOT-OWNED \$rooted"
 EOF
 }
 
 deploy_steps() {
     local job rc=0
     say "STEP 1 rollback target $BEFORE"
+    say "STEPS 1-10 are one heavy-work job and can queue behind another; nothing prints here until it returns. Watch it with: tail -f $LOG"
     job=$(deploy_job)
     detail "$job"
     $HEAVY orbit-deploy -- bash -c "$job" || rc=$?
@@ -163,12 +212,12 @@ deploy_steps() {
         fail_tail 'STEPS 1-10' "$rc"
         exit "$rc"
     fi
-    ROOTED=$(sed -n 's/^ROOT-OWNED //p' "$LOG" | tail -1)
+    ROOTED=$(sed -n 's/^@@ROOT-OWNED //p' "$LOG" | tail -1)
     if [ "${ROOTED:-none}" != 0 ]; then
         say "STEPS 1-10 ran but the root-owned count came back '${ROOTED:-none}', not 0. Read $LOG before anything else."
         exit 1
     fi
-    RAN=$(sed -n 's/^STEP \([0-9.]*\) RAN.*/\1/p' "$LOG" | tr '\n' ' ')
+    RAN=$(sed -n 's/^@@STEP \([0-9.]*\) RAN.*/\1/p' "$LOG" | tr '\n' ' ')
     say "STEPS 1-10 ok in one heavy-work job, conditional steps ran: ${RAN:-none}"
 }
 
@@ -246,6 +295,7 @@ main() {
         || refuse "the checkout is not on main, and a deploy fast-forwards main."
     $GIT log --oneline -3
 
+    head_is_present
     resolve
     BEFORE=$($GIT rev-parse --short HEAD)
     refuse_if_dirty

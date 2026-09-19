@@ -208,7 +208,10 @@ ps_says() {
     fi
     printf '%s' "$out" | grep -qF "$2" && ok "$1 $2" || bad "$1 is not $2"
 }
-for s in app horizon scheduler web postgres redis; do ps_says "$s" 'Up'; done
+for s in app scheduler web; do ps_says "$s" 'Up'; done
+# Matched WITH its brackets: `(unhealthy)` contains `healthy`, and `Up 3 days
+# (health: starting)` contains `Up`. Only these three declare a healthcheck.
+for s in horizon postgres redis; do ps_says "$s" '(healthy)'; done
 port=$(printf '%s' "$BASE" | grep -oE ':[0-9]+$' | tr -d ':')
 port=${port:-3085}
 ports=$(dc ps web 2>/dev/null | grep -oE "[^[:space:]]+:$port->8080/tcp")
@@ -269,8 +272,11 @@ else
 fi
 
 step '9. The alert mail nobody is receiving yet'
-mail=$(dc exec -T app tail -n 40 storage/logs/mail.log 2>&1); rc=$?
+mail=$(dc exec -T app sh -c 'if [ -f storage/logs/mail.log ]; then tail -n 40 storage/logs/mail.log; else printf __ABSENT__; fi' 2>&1); rc=$?
 if [ "$rc" -ne 0 ]; then
+    bad 'could not read the app container, so mail.log is unchecked — that is not the same as no mail yet'
+    detail "$mail"
+elif [ "$mail" = '__ABSENT__' ]; then
     ok 'no mail.log yet — the file appears with the first alert'
 elif printf '%s' "$mail" | grep -q 'production\.ERROR'; then
     bad 'mail.log carries a production.ERROR'
@@ -286,7 +292,7 @@ n=$(rooted)
 
 step '11. A policy reaches the browser'
 csp=$(edge_head / | grep -i '^content-security-policy' | tr -d '\r')
-case "$csp" in *"script-src 'self'"*) ok "${csp%%;*}…";;
+case "$csp" in *"script-src 'self'"*) ok "$csp";;
     *) bad "$PUBLIC serves no content-security-policy naming script-src 'self': '$csp'";; esac
 
 step '12. The edge serves what the sidecar serves'

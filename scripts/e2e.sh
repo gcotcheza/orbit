@@ -472,12 +472,16 @@ fi
 
 printf '\n\033[1;32m==> browser gate passed\033[0m\n'
 
-# The banner is not the last word: teardown still runs, so the ledger is written
-# after it and never from the trap.
+# The ledger records the SUITE, and it is written after teardown rather than from a
+# trap: a teardown that fails must not make 156 green tests read as a red gate and
+# send the next deploy back to a re-run it does not need.
 GATE_SUITE_PASSED=1
 trap - EXIT
 trap - ERR
-E2E_STATUS=0
-teardown || E2E_STATUS=$?
-gate_record "$E2E_STATUS"
-exit "$E2E_STATUS"
+TEARDOWN_STATUS=0
+teardown || TEARDOWN_STATUS=$?
+gate_record 0
+if [ "$TEARDOWN_STATUS" -ne 0 ]; then
+    printf '\n\033[1;31m==> the suite passed but teardown failed (exit %s): the sandbox may still be up — scripts/e2e.sh --down\033[0m\n' "$TEARDOWN_STATUS" >&2
+fi
+exit "$TEARDOWN_STATUS"
