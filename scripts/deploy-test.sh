@@ -42,6 +42,8 @@ equals() {
 }
 
 WORK="$(mktemp -d)"
+BREACH_LOG="${WORK}/checkout-helpers.argv"
+: >"${BREACH_LOG}"
 trap 'rm -rf "${WORK}"' EXIT
 
 git_at() { git -C "$ROOT" -c core.hooksPath=/dev/null -c user.name=t -c user.email=t@example.invalid "$@"; }
@@ -72,6 +74,8 @@ shift
 [ "$1" = '--' ] && shift
 exec "$@"
 SH
+    # FAKE_HEALTHCHECKED is which services docker checks at all; FAKE_HEALTHY_AFTER is
+    # how many `ps` calls each answers `health: starting` before it turns healthy.
     cat >"${BIN}/compose" <<'SH'
 #!/bin/sh
 printf '%s\n' "$*" >> "${FAKE_LOG_DIR}/compose.argv"
@@ -80,8 +84,28 @@ if [ -n "${FAKE_COMPOSE_FAIL:-}" ]; then
         *"${FAKE_COMPOSE_FAIL}"*) printf 'compose: %s failed\n' "${FAKE_COMPOSE_FAIL}" >&2; exit 1 ;;
     esac
 fi
+health_of() {
+    case " ${FAKE_HEALTHCHECKED} " in
+        *" $1 "*) ;;
+        *) return 0 ;;
+    esac
+    case " ${FAKE_UNHEALTHY} " in *" $1 "*) printf ' (unhealthy)'; return 0 ;; esac
+    seen=$(( $(cat "${FAKE_LOG_DIR}/health.$1" 2>/dev/null || echo 0) + 1 ))
+    printf '%s' "${seen}" > "${FAKE_LOG_DIR}/health.$1"
+    if [ "${seen}" -gt "${FAKE_HEALTHY_AFTER}" ]; then printf ' (healthy)'; else printf ' (health: starting)'; fi
+}
 case "$*" in
+    'ps -q '*) printf 'cid-%s\n' "${*##* }" ;;
+    'ps '*) printf 'NAME STATUS\norbit-%s-1 Up 2 seconds%s\n' "${*##* }" "$(health_of "${*##* }")" ;;
     *ps*) printf 'NAME STATUS\norbit-app-1 Up 2 hours\n' ;;
+esac
+exit 0
+SH
+    cat >"${BIN}/docker" <<'SH'
+#!/bin/sh
+printf '%s\n' "$*" >> "${FAKE_LOG_DIR}/docker.argv"
+case "$1" in
+    inspect) printf 'exit 1: horizon:status said inactive\n' ;;
 esac
 exit 0
 SH
@@ -139,20 +163,47 @@ write_checkout() {
     # Like the real checkout: public/build is the build's OUTPUT and .gitignore holds
     # it, which is why the front-end pathspec needs no exclusion for it.
     printf '/public/build\n' >"${ROOT}/.gitignore"
+    # A deployed checkout carries helpers of its own. These behave exactly like the
+    # pair beside deploy.sh, so reaching one costs nothing but the recorded breach.
     cat >"${ROOT}/scripts/docs-only.sh" <<'SH'
 #!/bin/sh
+printf 'docs-only %s\n' "$*" >> "${FAKE_BREACH_LOG}"
 printf 'fake classifier: rc=%s for %s\n' "${FAKE_CLASSIFY_RC}" "$1"
 exit "${FAKE_CLASSIFY_RC}"
 SH
     cat >"${ROOT}/scripts/verify.sh" <<'SH'
 #!/bin/sh
+printf 'verify %s\n' "$*" >> "${FAKE_BREACH_LOG}"
 printf '%s\n' "$*" >> "${FAKE_LOG_DIR}/verify.argv"
+printf 'ORBIT_DIR=%s\n' "${ORBIT_DIR:-unset}" >> "${FAKE_LOG_DIR}/verify.env"
 case "$*" in
     *--before*) exit "${FAKE_BASELINE_RC:-0}" ;;
 esac
 exit "${FAKE_VERIFY_RC:-0}"
 SH
     chmod 0755 "${ROOT}/scripts/docs-only.sh" "${ROOT}/scripts/verify.sh"
+}
+
+# deploy.sh runs from here, reads these, and must never read the checkout's pair:
+# a first landing runs from a clone and the checkout has neither file yet.
+write_own_helpers() {
+    ln -s "${DEPLOY_SH}" "${CASE}/scripts/deploy.sh"
+    ln -s "$(dirname -- "${DEPLOY_SH}")/lib" "${CASE}/scripts/lib"
+    cat >"${CASE}/scripts/docs-only.sh" <<'SH'
+#!/bin/sh
+printf 'fake classifier: rc=%s for %s\n' "${FAKE_CLASSIFY_RC}" "$1"
+exit "${FAKE_CLASSIFY_RC}"
+SH
+    cat >"${CASE}/scripts/verify.sh" <<'SH'
+#!/bin/sh
+printf '%s\n' "$*" >> "${FAKE_LOG_DIR}/verify.argv"
+printf 'ORBIT_DIR=%s\n' "${ORBIT_DIR:-unset}" >> "${FAKE_LOG_DIR}/verify.env"
+case "$*" in
+    *--before*) exit "${FAKE_BASELINE_RC:-0}" ;;
+esac
+exit "${FAKE_VERIFY_RC:-0}"
+SH
+    chmod 0755 "${CASE}/scripts/docs-only.sh" "${CASE}/scripts/verify.sh"
 }
 
 # <name> [moved...]: a checkout on L, origin/main on the merge M of the pull
@@ -165,8 +216,10 @@ fixture() {
     LOGS="${CASE}/logs"
     shift
     mkdir -p "${ROOT}/scripts" "${ROOT}/app" "${ROOT}/docker/app" "${ROOT}/deploy/nginx" \
-        "${ROOT}/resources/js" "${ROOT}/public/icons" "${ROOT}/public/build" "${BIN}" "${LOGS}"
+        "${ROOT}/resources/js" "${ROOT}/public/icons" "${ROOT}/public/build" \
+        "${CASE}/scripts" "${BIN}" "${LOGS}"
     : >"${LEDGER}"
+    write_own_helpers
 
     git init -q -b main "${ROOT}"
     write_checkout
@@ -234,17 +287,24 @@ run_deploy() {
         FAKE_BASELINE_RC="${BASELINE_RC:-0}" \
         FAKE_VERIFY_RC="${VERIFY_RC:-0}" \
         FAKE_HEAVY_PREJOB="${HEAVY_PREJOB:-}" \
+        FAKE_BREACH_LOG="${BREACH_LOG}" \
+        FAKE_HEALTHCHECKED="${HEALTHCHECKED:-horizon}" \
+        FAKE_HEALTHY_AFTER="${HEALTHY_AFTER:-0}" \
+        FAKE_UNHEALTHY="${UNHEALTHY:-}" \
         DEPLOY_ROOT="${ROOT}" \
         DEPLOY_GIT="git -C ${ROOT}" \
         DEPLOY_GH="${BIN}/gh" \
         DEPLOY_GH_REPO=gcotcheza/orbit \
         DEPLOY_HEAVY="${BIN}/heavy-work" \
         DEPLOY_COMPOSE="${BIN}/compose" \
+        DEPLOY_DOCKER="${BIN}/docker" \
+        DEPLOY_HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-2}" \
+        DEPLOY_HEALTH_INTERVAL="${HEALTH_INTERVAL:-1}" \
         DEPLOY_LEDGER="${LEDGER}" \
         DEPLOY_LOG_DIR="${LOGS}" \
         ORBIT_PUBLIC='https://orbit.test' \
         ORBIT_BASE='http://127.0.0.1:3085' \
-        bash "${DEPLOY_SH}" "$@" 2>&1)"
+        bash "${CASE}/scripts/deploy.sh" "$@" 2>&1)"
     CLASSIFY_RC=''
     COMPOSE_FAIL=''
     CURL_CODE=''
@@ -254,6 +314,11 @@ run_deploy() {
     BASELINE_RC=''
     VERIFY_RC=''
     HEAVY_PREJOB=''
+    HEALTHCHECKED=''
+    HEALTHY_AFTER=''
+    UNHEALTHY=''
+    HEALTH_TIMEOUT=''
+    HEALTH_INTERVAL=''
 }
 
 logged() {
@@ -271,6 +336,11 @@ ROOT_OWNED_FROM=''
 BASELINE_RC=''
 VERIFY_RC=''
 HEAVY_PREJOB=''
+HEALTHCHECKED=''
+HEALTHY_AFTER=''
+UNHEALTHY=''
+HEALTH_TIMEOUT=''
+HEALTH_INTERVAL=''
 
 # --- 1. the arguments ---------------------------------------------------------
 fixture usage
@@ -437,6 +507,8 @@ contains 'the baseline is taken before anything moves' "$(logged verify.argv)" '
 contains 'an unmoved front end verifies with --backend-only' "$(logged verify.argv)" '--backend-only'
 equals 'and the baseline comes before the verification' \
     "$(logged verify.argv | tr '\n' '|')" '--before|--backend-only|'
+equals 'and each call names the checkout being deployed, not the battery default' \
+    "$(logged verify.env | sort -u)" "ORBIT_DIR=${ROOT}"
 
 # --- 7. each moved file turns its own step on --------------------------------
 fixture moved-composer composer
@@ -680,6 +752,77 @@ if printf '%s' "${DIRTY_LINE}" | grep -qE "^${LIVE_SHA}-dirty e2e [0-9-]+T[0-9:]
     pass "a dirty tree records <sha>-dirty: ${DIRTY_LINE}"
 else
     fail "a dirty tree does not record <sha>-dirty: ${DIRTY_LINE}"
+fi
+
+# --- 13. a restart is not readiness ------------------------------------------
+fixture health-immediate
+run_deploy "${PR_NUMBER}"
+contains 'a container already healthy is waited on for no time at all' "${OUT}" \
+    'HEALTH horizon healthy 0s after the restart'
+contains 'and the battery still runs' "$(logged verify.argv)" '--backend-only'
+contains 'and the deploy finishes' "${OUT}" 'DONE #'
+
+fixture health-slow
+HEALTHY_AFTER=2
+HEALTH_TIMEOUT=9
+run_deploy "${PR_NUMBER}"
+contains 'a container that reports healthy late is waited for, not failed' "${OUT}" \
+    'HEALTH horizon healthy 1s after the restart'
+contains 'and the battery runs once it is healthy' "$(logged verify.argv)" '--backend-only'
+contains 'and a slow healthcheck still finishes the deploy' "${OUT}" 'DONE #'
+
+fixture health-never
+HEALTHY_AFTER=999
+HEALTH_TIMEOUT=2
+run_deploy "${PR_NUMBER}"
+contains 'a container that never reports healthy stops before the battery' "${OUT}" \
+    'HEALTH TIMEOUT: horizon is (health: starting) 2s after its restart'
+contains 'and the timeout says the release is landed and serving' "${OUT}" \
+    'THE RELEASE IS LANDED AND SERVING and this is NOT a rollback'
+contains 'and it prints the last healthchecks the container itself recorded' "${OUT}" \
+    'exit 1: horizon:status said inactive'
+absent 'and it never sends the operator to the rollback block' "${OUT}" 'rollback block'
+absent 'the battery is not run against a stack that is still starting' "$(logged verify.argv)" '--backend-only'
+absent 'and a deploy that stopped there never says DONE' "${OUT}" 'DONE #'
+
+fixture health-unreadable
+COMPOSE_FAIL='ps horizon'
+run_deploy "${PR_NUMBER}"
+contains 'docker refusing to say is not the same as no healthcheck' "${OUT}" 'HEALTH UNKNOWN'
+absent 'and a docker that will not answer is never read as nothing to wait for' "${OUT}" \
+    'HEALTH nothing to wait for'
+absent 'and the battery is not run on a stack nothing could read' "$(logged verify.argv)" '--backend-only'
+absent 'and a deploy that could not read docker never says DONE' "${OUT}" 'DONE #'
+
+fixture health-unhealthy
+UNHEALTHY=horizon
+HEALTH_TIMEOUT=9
+run_deploy "${PR_NUMBER}"
+contains 'a container that is definitively unhealthy is not polled to the timeout' "${OUT}" \
+    'HEALTH UNHEALTHY: horizon is (unhealthy) 0s after its restart'
+contains 'and it says the release is landed and serving' "${OUT}" \
+    'THE RELEASE IS LANDED AND SERVING and this is NOT a rollback'
+absent 'and the battery is not run against it' "$(logged verify.argv)" '--backend-only'
+
+fixture health-none
+HEALTHCHECKED=none
+run_deploy "${PR_NUMBER}"
+contains 'the set waited for is what docker reports, not a list in the script' "${OUT}" \
+    'HEALTH nothing to wait for'
+contains 'and a stack docker never checks still deploys' "${OUT}" 'DONE #'
+
+fixture health-elsewhere
+HEALTHCHECKED='app web'
+run_deploy "${PR_NUMBER}"
+contains 'a healthcheck on another service moves the wait onto it' "${OUT}" 'HEALTH app web healthy'
+absent 'and horizon is not waited for where docker does not check it' "${OUT}" 'HEALTH app horizon'
+
+# --- 14. the helpers deploy.sh reads -----------------------------------------
+HELPER_RULE='a helper is read from the script directory, never from the checkout being deployed'
+if [ -s "${BREACH_LOG}" ]; then
+    fail "${HELPER_RULE} — the script cannot land itself:"$'\n'"$(cat "${BREACH_LOG}")"
+else
+    pass "${HELPER_RULE}"
 fi
 
 if [ "${fails}" -eq 0 ]; then

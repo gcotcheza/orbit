@@ -24,6 +24,33 @@ final class DeployVerificationTest extends TestCase
 
     private const AUTHENTICATED = '/\$\{?AUTHED\b/';
 
+    /** Both scripts carry this literal; nothing else makes them agree. */
+    private const RESTARTED = "/^RESTARTED='([^']*)'\$/m";
+
+    #[Test]
+    public function the_deploy_and_the_battery_name_the_same_restarted_services(): void
+    {
+        $lists = [];
+
+        foreach (self::BATTERY as $script) {
+            $this->assertSame(
+                1,
+                preg_match(self::RESTARTED, $this->read($script), $found),
+                "{$script} no longer names the services the deploy restarts."
+            );
+
+            $lists[$script] = $found[1];
+        }
+
+        $this->assertSame(
+            $lists[self::BATTERY[0]],
+            $lists[self::BATTERY[1]],
+            'The deploy restarts one set of services and the battery proves another ('
+            .implode(' vs ', $lists).'). A fifth service added to one and not the other is a '
+            .'container left on the previous release with every check green.'
+        );
+    }
+
     #[Test]
     public function the_post_deploy_battery_makes_no_authenticated_write(): void
     {
