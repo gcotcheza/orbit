@@ -17,6 +17,7 @@ final class GateRunnersTest extends TestCase
         'overlay',
         'gitleaks',
         'pint',
+        'the deploy script',
         'composer advisories',
         'deptrac',
         'phpstan',
@@ -49,10 +50,11 @@ final class GateRunnersTest extends TestCase
         $commands = $this->fencedCommands('.claude/commands/deploy.md');
 
         $this->assertMatchesRegularExpression(
-            '/^\s*bash .*scripts\/check\.sh overlay\s*$/m',
+            '/^[^#]*\bbash scripts\/check\.sh overlay\s*$/m',
             $commands,
-            'The deploy runbook no longer runs the gate script. Pre-flight step 4 is the only '
-            .'run the merge commit ever gets, and a mention in a comment is not a run.'
+            'The deploy runbook no longer names a run of the gate. It is what an operator does '
+            .'when the ledger holds no green for the merged head, and a mention in prose is not a '
+            .'command anyone can copy.'
         );
 
         foreach (self::RESTATED as $restated) {

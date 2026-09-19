@@ -15,7 +15,8 @@ final class DeployVerificationTest extends TestCase
 {
     private const RUNBOOK = '.claude/commands/deploy.md';
 
-    private const VERIFICATION = 'Post-deploy verification';
+    /** The battery is code now; the runbook keeps only the block a person runs by hand. */
+    private const BATTERY = ['scripts/verify.sh', 'scripts/deploy.sh'];
 
     /** curl names a method two ways, and a body with no method named is a POST regardless. */
     private const WRITES = '/(?:-X|--request)\s*(?:POST|PUT|PATCH|DELETE)\b'
@@ -26,20 +27,31 @@ final class DeployVerificationTest extends TestCase
     #[Test]
     public function the_post_deploy_battery_makes_no_authenticated_write(): void
     {
-        foreach ($this->curlCommands($this->section(self::VERIFICATION)) as $command) {
-            if (preg_match(self::WRITES, $command) !== 1) {
-                continue;
-            }
+        $scanned = 0;
 
-            $this->assertDoesNotMatchRegularExpression(
-                self::AUTHENTICATED,
-                $command,
-                'A command in the post-deploy battery signs a write with the logged-in session. '
-                ."The section tells its reader no check changes application data, and that promise\n"
-                ."is what gets it run top to bottom against production:\n  {$command}\n"
-                .'Writes belong under "## Authenticated writes", outside the numbered list.'
-            );
+        foreach (self::BATTERY as $script) {
+            foreach ($this->shellCurls($script) as $command) {
+                $scanned++;
+
+                if (preg_match(self::WRITES, $command) !== 1) {
+                    continue;
+                }
+
+                $this->assertDoesNotMatchRegularExpression(
+                    self::AUTHENTICATED,
+                    $command,
+                    "{$script} signs a write with the logged-in session. The deploy runs this "
+                    ."battery unattended, on production, and repeats it on the next deploy:\n  {$command}\n"
+                    .'Writes belong under "## Authenticated writes" in the runbook, which a person runs.'
+                );
+            }
         }
+
+        $this->assertGreaterThan(
+            0,
+            $scanned,
+            'No curl was scanned in '.implode(' or ', self::BATTERY).', so this test vets nothing.'
+        );
     }
 
     #[Test]
@@ -86,6 +98,21 @@ final class DeployVerificationTest extends TestCase
         return $found;
     }
 
+    /**
+     * Every curl in a shell script, one per logical line: a `\`-continued command is
+     * one command, and the flags on its later lines are part of it.
+     *
+     * @return list<string>
+     */
+    private function shellCurls(string $relative): array
+    {
+        $joined = preg_replace('/\\\\\n\s*/', ' ', $this->read($relative)) ?? '';
+
+        preg_match_all('/curl\b[^\n]*/', $joined, $found);
+
+        return array_map(trim(...), $found[0]);
+    }
+
     /** @return list<string> */
     private function curlCommands(string $markdown): array
     {
@@ -96,17 +123,6 @@ final class DeployVerificationTest extends TestCase
         preg_match_all('/^\s*curl .*$/m', $joined, $found);
 
         return array_map(trim(...), $found[0]);
-    }
-
-    private function section(string $title): string
-    {
-        $pattern = '/^## '.preg_quote($title, '/').'\b.*?$(.*?)(?=^## |\z)/ms';
-
-        if (preg_match($pattern, $this->read(self::RUNBOOK), $found) !== 1) {
-            $this->fail("The deploy runbook has no '## {$title}' section to read.");
-        }
-
-        return $found[1];
     }
 
     private function read(string $relative): string
