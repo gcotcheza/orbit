@@ -153,21 +153,18 @@ wt=/srv/sessions/orbit/worktrees/feat-thing
 cd "$wt"
 mkdir -p vendor node_modules public/build bootstrap/cache storage
 chown -R 115:119 vendor node_modules public/build bootstrap/cache storage
-docker run --rm -u 115:119 -v "$wt":/var/www/html -w /var/www/html \
-    orbit/app:latest composer install --no-interaction --no-progress
-docker run --rm -u 115:119 -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
-    -v "$wt":/var/www/html -w /var/www/html node:24-alpine npm ci --no-audit --fund=false
-chmod -R go-w vendor node_modules
 heavy-work orbit-e2e-thing -- bash scripts/e2e.sh
+chmod -R go-w vendor node_modules
 ```
 
-No `.env` is needed for any of it — the script writes its own `.env.e2e`. A
-present `public/build/manifest.json` makes it skip `vite build`
-(`scripts/e2e.sh:360-364`), so empty `public/build/` after a front-end edit or
-the browser will drive the previous bundle and agree with itself. Everything
-after `--` reaches `playwright test` unchanged (`scripts/e2e.sh:86`, `:430`),
-which is how one spec, `--project=tablet`, or a re-recording
-`--update-snapshots=changed` gets through.
+The `chmod` is last on purpose: until the script has run there is nothing in
+those two directories to tighten. No `.env` is needed for any of it — the
+script writes its own `.env.e2e`. A present `public/build/manifest.json` makes
+it skip `vite build` (`scripts/e2e.sh:360-364`), so empty `public/build/` after
+a front-end edit or the browser will drive the previous bundle and agree with
+itself. Everything after `--` reaches `playwright test` unchanged
+(`scripts/e2e.sh:86`, `:430`), which is how one spec, `--project=tablet`, or a
+re-recording `--update-snapshots=changed` gets through.
 
 Eight green checks have never seen a screen — [`docs/E2E.md`](E2E.md)
 explains what that costs and what this harness found.
