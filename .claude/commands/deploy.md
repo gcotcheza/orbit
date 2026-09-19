@@ -26,6 +26,12 @@ worktree rather than the shared clone — detaching that clone is a trap for who
 ```bash
 git -C /srv/sessions/orbit/repo fetch origin
 git -C /srv/sessions/orbit/repo worktree add /srv/worker-scratch/orbit-land-pr<N> <merge-sha>
+```
+
+Both paths are root-owned, so this is root's own git and not `git-as`, whose deploy key is read-only and whose user cannot
+write either of them. Then run that copy against the served checkout:
+
+```bash
 DEPLOY_ROOT=/var/www/orbit bash /srv/worker-scratch/orbit-land-pr<N>/scripts/deploy.sh <N>
 ```
 
