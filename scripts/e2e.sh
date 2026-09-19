@@ -42,10 +42,31 @@
 #   --            everything after it goes to `playwright test`, e.g.
 #                 `scripts/e2e.sh -- specs/globe.spec.js --headed`
 # =============================================================================
-set -euo pipefail
+set -Eeuo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
+
+# Vendored from gcotcheza/engineering-standards and not edited here:
+# tests/Unit/Standards/DeployLibDriftTest.php recomputes each file's own hash.
+# shellcheck source=scripts/lib/deploy/ledger.sh
+. "${ROOT}/scripts/lib/deploy/ledger.sh"
+
+# Filtered until the flags and the pre-flight say otherwise, so a run that dies
+# in its own arguments or on a box it cannot use records nothing at all.
+GATE_FILTERED=1
+
+# The ledger is written from this shell, after teardown. An EXIT trap would read
+# teardown's $? instead of the suite's. docs/DECISIONS.md
+gate_record() {
+    [ "${GATE_RECORDED:-0}" -eq 0 ] || return 0
+    GATE_RECORDED=1
+    if [ "$GATE_FILTERED" -eq 1 ]; then
+        printf 'gate-ledger: a partial or filtered run records nothing; scripts/deploy.sh wants a full scripts/e2e.sh\n' >&2
+        return 0
+    fi
+    gate_ledger_record e2e "$1" "${ORBIT_GATE_LOG:--}"
+}
 
 # Pinned, and it has to be: the browsers live in the IMAGE and the driver that
 # speaks to them lives in package.json. Playwright refuses to run a driver
@@ -89,6 +110,13 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+
+# The whole gate, or nothing is recorded: --keep leaves the stack up, --down runs
+# no suite, and a playwright filter is a subset of it.
+GATE_WHOLE=0
+if [ "$KEEP" -eq 0 ] && [ "$DOWN_ONLY" -eq 0 ] && [ "${#PW_ARGS[@]}" -eq 0 ]; then
+    GATE_WHOLE=1
+fi
 
 # -----------------------------------------------------------------------------
 # .env.e2e — the sandbox's whole identity
@@ -396,6 +424,8 @@ mkdir -p e2e/artifacts e2e/baselines
 chown -R "${APP_UID}:${APP_GID}" e2e 2>/dev/null || true
 
 trap teardown EXIT
+trap 'gate_record "$?"' ERR
+[ "$GATE_WHOLE" -eq 0 ] || GATE_FILTERED=0
 
 # -----------------------------------------------------------------------------
 # The stack
@@ -461,3 +491,17 @@ if [ "$PW_STATUS" -ne 0 ]; then
 fi
 
 printf '\n\033[1;32m==> browser gate passed\033[0m\n'
+
+# The ledger records the SUITE, and it is written after teardown rather than from a
+# trap: a teardown that fails must not make 156 green tests read as a red gate and
+# send the next deploy back to a re-run it does not need.
+GATE_SUITE_PASSED=1
+trap - EXIT
+trap - ERR
+TEARDOWN_STATUS=0
+teardown || TEARDOWN_STATUS=$?
+gate_record 0
+if [ "$TEARDOWN_STATUS" -ne 0 ]; then
+    printf '\n\033[1;31m==> the suite passed but teardown failed (exit %s): the sandbox may still be up — scripts/e2e.sh --down\033[0m\n' "$TEARDOWN_STATUS" >&2
+fi
+exit "$TEARDOWN_STATUS"

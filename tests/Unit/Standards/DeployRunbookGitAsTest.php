@@ -18,16 +18,23 @@ final class DeployRunbookGitAsTest extends TestCase
 
     private const SCRIPT = 'scripts/docs-only.sh';
 
+    private const DEPLOY = 'scripts/deploy.sh';
+
+    private const VERIFY = 'scripts/verify.sh';
+
     private const SEAM = 'git-as orbit -C /var/www/orbit';
 
-    /** Measured on the runbook this test landed with: 15 lines carry the seam. */
-    private const SEAM_LINES = 15;
+    /**
+     * Measured on the runbook that stopped restating the deploy: the two rollback lines
+     * are the only git a person still types. The rest moved into scripts/deploy.sh.
+     */
+    private const SEAM_LINES = 2;
 
     /**
      * `.claude/` is carved out because the orbit session's Claude Code runtime
      * writes root-owned files there; docs/DECISIONS.md says until when.
      */
-    private const PROOF = "find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*'";
+    private const CARVE_OUT = '#-not -path [\'"](?:\$ROOT|\$APP_DIR|/var/www/orbit)/\.claude/\*[\'"]#';
 
     /** The value is a command WITH FLAGS; recording it proves $GIT still splits. */
     private const SEAM_FLAG = '--as=orbit';
@@ -288,39 +295,34 @@ final class DeployRunbookGitAsTest extends TestCase
     }
 
     #[Test]
-    public function the_runbook_hands_the_classifier_the_same_git(): void
+    public function the_deploy_script_hands_the_classifier_the_same_git(): void
     {
-        $this->assertMatchesRegularExpression(
-            "/^export DOCS_ONLY_GIT='".preg_quote(self::SEAM, '/')."'$/m",
-            $this->read(self::RUNBOOK),
-            'The runbook fetches and merges through git-as but would leave the classifier on '
+        $this->assertStringContainsString(
+            'DOCS_ONLY_GIT="$GIT"',
+            $this->read(self::DEPLOY),
+            'The script fetches and merges through git-as but would leave the classifier on '
             ."root's git, which cannot read that checkout at all. The seam needs its caller."
         );
     }
 
     #[Test]
-    public function the_runbook_hands_the_gate_the_same_git(): void
+    public function the_runbook_gates_in_a_worktree_outside_the_served_tree(): void
     {
-        $exported = "export CI_GIT='".self::SEAM."'";
-        $unexported = [];
         $calls = 0;
+        $inside = [];
 
         foreach ($this->fencedBlocks() as $block) {
-            $seen = false;
+            $joined = implode("\n", $block);
 
             foreach ($block as $number => $line) {
-                if (str_contains($line, $exported)) {
-                    $seen = true;
-                }
-
-                if (! str_contains($line, '/var/www/orbit/scripts/check.sh')) {
+                if (! str_contains($line, 'scripts/check.sh') && ! str_contains($line, 'scripts/e2e.sh')) {
                     continue;
                 }
 
                 $calls++;
 
-                if (! $seen) {
-                    $unexported[] = "{$number}: ".trim($line);
+                if (str_contains($joined, '/var/www/orbit')) {
+                    $inside[] = "{$number}: ".trim($line);
                 }
             }
         }
@@ -328,14 +330,22 @@ final class DeployRunbookGitAsTest extends TestCase
         $this->assertGreaterThan(
             0,
             $calls,
-            'No fenced block runs the gate against /var/www/orbit, so this test guards nothing.'
+            'No fenced block in the runbook runs a gate, so this test guards nothing — and a head '
+            .'that is not in the ledger has nowhere to be gated.'
         );
         $this->assertSame(
             [],
-            $unexported,
-            "The gate's secrets step lists the deployed checkout with git, and root's git refuses "
-            ."it. Without CI_GIT, earlier in the same block, the run stops in its first step:\n"
-            .implode("\n", $unexported)
+            $inside,
+            "A gate runs against /var/www/orbit, which is bind-mounted into app, horizon and\n"
+            ."scheduler: its overlay writes bootstrap/cache and its browser half drives the served\n"
+            ."bundle. The gate belongs to a worktree cut from the root-owned clone:\n"
+            .implode("\n", $inside)
+        );
+        $this->assertMatchesRegularExpression(
+            '#^git -C /srv/sessions/orbit/repo worktree add /srv/worker-scratch/\S+#m',
+            implode("\n", $this->fencedLines()),
+            'The recipe has to say where the worktree comes from. A worktree of the served '
+            .'checkout is orbit-owned and root git cannot read it, so the clone is named.'
         );
     }
 
@@ -345,18 +355,14 @@ final class DeployRunbookGitAsTest extends TestCase
         $narrow = 0;
         $blunt = [];
 
-        foreach ($this->fencedLines() as $number => $line) {
-            if (! str_contains($line, 'find /var/www/orbit -user root')) {
-                continue;
-            }
-
-            if (str_contains($line, self::PROOF)) {
+        foreach ($this->ownershipLines() as $where => $line) {
+            if (preg_match(self::CARVE_OUT, $line) === 1) {
                 $narrow++;
 
                 continue;
             }
 
-            $blunt[] = "{$number}: ".trim($line);
+            $blunt[] = $where.': '.trim($line);
         }
 
         $this->assertSame(
@@ -371,9 +377,52 @@ final class DeployRunbookGitAsTest extends TestCase
         $this->assertGreaterThanOrEqual(
             5,
             $narrow,
-            'The runbook proves its ownership claim in five places (the landing block, the '
-            .'landing check, deploy step 2, the post-deploy battery and the rollback). Fewer '
-            .'means a proof was dropped, and the count is what stops this passing on prose.'
+            'The claim is proved in five places: the landing, the job before it builds, the job '
+            .'after it restarts, the verification and the rollback. Fewer means a proof was '
+            .'dropped, and the count is what stops this passing on prose.'
+        );
+    }
+
+    #[Test]
+    public function no_call_site_in_the_deploy_scripts_is_left_on_plain_git(): void
+    {
+        $this->assertStringContainsString(
+            'GIT=${DEPLOY_GIT:-git-as orbit -C $ROOT}',
+            $this->read(self::DEPLOY),
+            "The default has to be git-as: root's git is refused by /var/www/orbit, so a deploy "
+            .'run without DEPLOY_GIT would stop on "dubious ownership" at its first git call.'
+        );
+
+        $bare = [];
+        $seamed = 0;
+
+        foreach ([self::DEPLOY, self::VERIFY] as $relative) {
+            foreach (explode("\n", $this->read($relative)) as $index => $line) {
+                $code = (string) preg_replace('/(^|\s)#.*$/', '', $line);
+
+                if (str_contains($code, 'GIT=${DEPLOY_GIT:-')) {
+                    continue;
+                }
+
+                $seamed += (int) preg_match_all('/\$GIT\s/', $code);
+
+                if (preg_match('/(^|[|&;]\s*|\$\(|<\(|\bexec\s+)git\s/', $code) === 1) {
+                    $bare[] = $relative.':'.($index + 1).': '.trim($line);
+                }
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $bare,
+            "A call site in the deploy scripts is on plain `git`, which /var/www/orbit refuses:\n"
+            .implode("\n", $bare)
+        );
+        $this->assertGreaterThanOrEqual(
+            10,
+            $seamed,
+            'The deploy reads and moves the checkout with git in a dozen places. A handful means '
+            .'this test is clearing a script that no longer touches the repository.'
         );
     }
 
@@ -469,6 +518,33 @@ final class DeployRunbookGitAsTest extends TestCase
         return $blocks;
     }
 
+    /**
+     * Every line that counts root-owned paths, wherever it is written: the runbook's
+     * fenced commands and both deploy scripts.
+     *
+     * @return array<string, string>
+     */
+    private function ownershipLines(): array
+    {
+        $found = [];
+
+        foreach ($this->fencedLines() as $number => $line) {
+            if (str_contains($line, '-user root')) {
+                $found[self::RUNBOOK.':'.$number] = $line;
+            }
+        }
+
+        foreach ([self::DEPLOY, self::VERIFY] as $relative) {
+            foreach (explode("\n", $this->read($relative)) as $index => $line) {
+                if (str_contains($line, '-user root')) {
+                    $found[$relative.':'.($index + 1)] = $line;
+                }
+            }
+        }
+
+        return $found;
+    }
+
     /** @return array<int, string> */
     private function fencedLines(): array
     {
@@ -498,7 +574,9 @@ final class DeployRunbookGitAsTest extends TestCase
         $root = dirname(__DIR__, 3);
         $pages = [];
 
-        foreach ([...(glob($root.'/docs/*.md') ?: []), $root.'/scripts/e2e.sh'] as $path) {
+        $also = ['/scripts/e2e.sh', '/scripts/deploy.sh', '/scripts/verify.sh'];
+
+        foreach ([...(glob($root.'/docs/*.md') ?: []), ...array_map(static fn (string $p): string => $root.$p, $also)] as $path) {
             $relative = substr($path, strlen($root) + 1);
 
             $this->assertFileExists($path, "{$relative} is missing.");

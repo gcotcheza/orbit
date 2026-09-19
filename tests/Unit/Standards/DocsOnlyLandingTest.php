@@ -16,7 +16,7 @@ final class DocsOnlyLandingTest extends TestCase
 {
     private const SCRIPT = 'scripts/docs-only.sh';
 
-    private const RUNBOOK = '.claude/commands/deploy.md';
+    private const DEPLOY = 'scripts/deploy.sh';
 
     /** @param  list<string>  $paths */
     #[Test]
@@ -74,135 +74,101 @@ final class DocsOnlyLandingTest extends TestCase
     }
 
     #[Test]
-    public function the_runbook_decides_before_it_deploys(): void
+    public function the_deploy_script_decides_before_it_gates_or_builds(): void
     {
-        $runbook = $this->read(self::RUNBOOK);
+        $script = $this->read(self::DEPLOY);
 
-        $landing = strpos($runbook, "\n## Docs-only landing");
-        $deploy = strpos($runbook, "\n## Deploy steps");
-
-        $this->assertIsInt($landing, 'The deploy runbook has no "## Docs-only landing" section.');
-        $this->assertIsInt($deploy, 'The deploy runbook has no "## Deploy steps" section.');
-        $this->assertLessThan(
-            $deploy,
-            $landing,
-            'The landing section must be read before the deploy steps, or it is read after the '
-            .'gate it exists to skip has already run.'
+        $this->assertStringContainsString(
+            'DOCS_ONLY_GIT="$GIT" "$ROOT/scripts/docs-only.sh" "$MERGE_SHA"',
+            $script,
+            'scripts/deploy.sh no longer asks the classifier what the merge changes, so every '
+            .'documentation merge would take the full deploy path — a gate, a build and four '
+            .'restarts for a Markdown file.'
         );
 
-        preg_match_all('/^[ \t]*```[a-z]*$(.*?)^[ \t]*```$/ms', $runbook, $fences);
+        $at = [];
 
-        $this->assertMatchesRegularExpression(
-            '/^\s*(?:cd \S+ && )?\S*scripts\/docs-only\.sh \S+\s*$/m',
-            implode("\n", $fences[1]),
-            'The runbook describes the docs-only decision without running the script that makes '
-            .'it. A file list read by a person is exactly what this replaces.'
+        foreach (['classify', 'gate_or_recipe', 'baseline', 'deploy_steps'] as $call) {
+            $found = strpos($script, "\n    {$call}\n");
+
+            $this->assertIsInt($found, "main() no longer calls {$call}, so its order cannot be read.");
+
+            $at[$call] = $found;
+        }
+
+        $ordered = $at;
+        asort($ordered);
+
+        $this->assertSame(
+            array_keys($at),
+            array_keys($ordered),
+            'The classifier must be asked before the ledger is read and before anything is built: '
+            .'a docs-only merge lands and stops, so a gate on it is a repeat and a build is a '
+            .'rebuild of what is already on disk.'
         );
     }
 
     #[Test]
     public function the_landing_merges_the_sha_it_classified(): void
     {
-        $commands = $this->landingCommands();
+        $land = $this->body('land');
 
         $this->assertStringContainsString(
-            'git-as orbit -C /var/www/orbit merge --ff-only "$sha"',
-            $commands,
-            'The landing section no longer runs the merge it classified as the user that owns '
-            .'the checkout. Classifying and merging share one fenced block because each block '
-            .'runs in a fresh shell: split them and $sha is empty by the time merge sees it, so '
-            .'the landing merges nothing.'
+            '$GIT merge --ff-only "$MERGE_SHA"',
+            $land,
+            'The landing no longer fast-forwards the sha it classified. What gets classified has '
+            .'to be what gets landed: a fetch of its own could land a merge pushed in between, '
+            .'unclassified and ungated.'
         );
 
         $this->assertDoesNotMatchRegularExpression(
-            '/\bgit(?:-as \S+)? (?:-C \S+ )?pull\b/',
-            $commands,
-            'The landing section pulls. A pull fetches again, so it can land a commit newer '
-            .'than the one docs-only.sh classified — untested code, through the path that '
-            .'exists precisely because nothing needed testing. Naming `git pull` in prose is '
-            .'fine; only the fenced blocks are read here. The git-as arm is there because every '
-            .'git here now carries it; without it the guard reads a wrapped pull as prose.'
+            '/\$GIT\s+pull\b/',
+            $land,
+            'The landing pulls. A pull fetches again, so it can land a commit newer than the one '
+            .'docs-only.sh classified — untested code, through the path that exists precisely '
+            .'because nothing needed testing.'
         );
     }
 
     #[Test]
-    public function the_landing_block_proves_its_ownership_last_and_shows_both_outcomes(): void
+    public function the_landing_proves_its_ownership_and_shows_both_outcomes(): void
     {
-        $block = $this->landingBlock();
+        $land = $this->body('land');
 
-        $lines = array_values(array_filter(
-            explode("\n", trim($block)),
-            static fn (string $line): bool => trim($line) !== ''
-        ));
-
-        $this->assertSame(
-            "find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l",
-            trim((string) end($lines)),
-            'Every git in this block runs as orbit through git-as, so it leaves nothing '
-            .'root-owned. That count is the proof, and it has to be the last line to run on every '
-            .'exit path — including a refused fast-forward. The .claude/ carve-out is not '
-            .'decoration: the orbit session runs Claude Code with /var/www/orbit as its working '
-            .'directory and leaves root-owned runtime files there, excluded from git and never '
-            .'deployed, and counting them would make a clean tree read as a repair due.'
+        $this->assertStringContainsString(
+            'rooted=$(rooted_count)',
+            $land,
+            'Every git in the landing runs as orbit through git-as, so it leaves nothing '
+            .'root-owned — and that count is the proof. Without it the claim is prose.'
         );
         $this->assertStringNotContainsString(
             'chown',
-            $block,
-            'The chown here only ever repaired root git, which this block no longer runs. One '
-            .'that repairs nothing hides the day something starts needing repair again.'
-        );
-        $this->assertStringContainsString(
-            'landed $sha',
-            $block,
-            'The success outcome must be visible in the block itself, not only described in prose.'
+            $land,
+            'A chown here only ever repaired root git, which the landing no longer runs. One that '
+            .'repairs nothing hides the day something starts needing repair again.'
         );
         $this->assertStringContainsString(
             'NOT LANDED',
-            $block,
-            'A refused fast-forward must stay visible — silently falling through to the proof '
-            .'line reads as a landing that happened when the checkout never advanced.'
+            $land,
+            'A refused fast-forward must say so: falling through to the proof line reads as a '
+            .'landing that happened when the checkout never advanced.'
+        );
+        $this->assertStringContainsString(
+            'LANDED docs-only',
+            $land,
+            'The success outcome is one line naming the sha, the head, both status codes and the '
+            .'ownership count — it is what a reader checks the landing against.'
         );
     }
 
-    /** The one fenced block that classifies and lands. */
-    private function landingBlock(): string
+    /** A shell function's body, from its opening line to the closing brace in column 1. */
+    private function body(string $name): string
     {
-        preg_match_all(
-            '/^[ \t]*```[a-z]*$(.*?)^[ \t]*```$/ms',
-            $this->read(self::RUNBOOK),
-            $fences
-        );
-
-        foreach ($fences[1] as $fence) {
-            if (str_contains($fence, 'scripts/docs-only.sh')) {
-                return $fence;
-            }
+        if (preg_match('/^'.preg_quote($name, '/').'\(\) \{$(.*?)^\}$/ms', $this->read(self::DEPLOY), $found) !== 1) {
+            $this->fail("scripts/deploy.sh has no {$name}() to read.");
         }
 
-        $this->fail('No fenced block in the runbook invokes scripts/docs-only.sh.');
-    }
-
-    /** The fenced blocks between the landing heading and the deploy steps, not the prose. */
-    private function landingCommands(): string
-    {
-        $runbook = $this->read(self::RUNBOOK);
-
-        $from = strpos($runbook, "\n## Docs-only landing");
-        $to = strpos($runbook, "\n## Deploy steps");
-
-        $this->assertIsInt($from, 'The deploy runbook has no "## Docs-only landing" section.');
-        $this->assertIsInt($to, 'The deploy runbook has no "## Deploy steps" section.');
-        $this->assertGreaterThan($from, $to, 'The landing section runs past the deploy steps.');
-
-        preg_match_all(
-            '/^[ \t]*```[a-z]*$(.*?)^[ \t]*```$/ms',
-            substr($runbook, $from, $to - $from),
-            $fences
-        );
-
-        $this->assertNotSame([], $fences[1], 'The landing section has no fenced commands at all.');
-
-        return implode("\n", $fences[1]);
+        return $found[1];
     }
 
     #[Test]

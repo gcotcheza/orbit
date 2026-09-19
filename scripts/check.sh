@@ -1,14 +1,24 @@
 #!/usr/bin/env bash
 # usage: scripts/check.sh dev|overlay
 # Why two runners, and what each may not lose: docs/DECISIONS.md, the-gate-is-one-script-two-runners
-set -euo pipefail
+set -Eeuo pipefail
 
 cd "$(dirname "$0")/.."
 here=$(pwd -P)
 
+# Vendored from gcotcheza/engineering-standards and not edited here:
+# tests/Unit/Standards/DeployLibDriftTest.php recomputes each file's own hash.
+# shellcheck source=scripts/lib/deploy/ledger.sh
+. "$here/scripts/lib/deploy/ledger.sh"
+
+# Filtered until the arguments and the stack have been vetted, so a run that
+# dies in its own usage or refuses the box it found records nothing at all.
+GATE_FILTERED=1
+
 # CI_GIT is a COMMAND WITH ARGUMENTS, so $GIT is unquoted on purpose; it carries
 # its own -C, so no call site below adds one. docs/DECISIONS.md, the-gate-scans-for-secrets-over-gits-view-of-the-tree
 GIT=${CI_GIT:-git}
+GATE_LEDGER_GIT="${GIT}"
 
 mode=${1-}
 if [ $# -ne 1 ] || { [ "$mode" != dev ] && [ "$mode" != overlay ]; }; then
@@ -17,14 +27,14 @@ if [ $# -ne 1 ] || { [ "$mode" != dev ] && [ "$mode" != overlay ]; }; then
         printf '  dev      the stack is already up from this directory; the PHP steps\n'
         printf '           run inside it with `docker compose exec`.\n'
         printf '  overlay  one throwaway container per step, with its own vendor/,\n'
-        printf '           bootstrap/cache and node_modules/ bind-overlaid; what the\n'
-        printf '           deploy runbook uses, because the live vendor/ is installed\n'
-        printf '           --no-dev. Run it as root: it chowns its overlay to the uid\n'
-        printf '           the containers use.\n\n'
+        printf '           bootstrap/cache and node_modules/ bind-overlaid; the runner\n'
+        printf '           for a checkout with no stack up, and the one the deploy\n'
+        printf '           script names when a head is not in the gate ledger yet. Run\n'
+        printf '           it as root: it chowns its overlay to the uid the containers use.\n\n'
         printf 'The mode is not guessed, and it is the only argument. Name it.\n'
-        printf 'CI_GIT names the git the secrets step lists the tree with. The deploy\n'
-        printf 'sets it to `git-as orbit -C /var/www/orbit`, because root git cannot\n'
-        printf 'read that checkout at all; unset, it is plain `git`. Its -C, if it\n'
+        printf 'CI_GIT names the git the secrets step lists the tree with. A run inside\n'
+        printf '/var/www/orbit needs `git-as orbit -C /var/www/orbit`, because root git\n'
+        printf 'cannot read that checkout at all; unset, it is plain `git`. Its -C, if it\n'
         printf 'carries one, must be THIS checkout: the list and the copy are paired.\n'
     } >&2
     exit 2
@@ -58,6 +68,8 @@ for id in $(docker compose ps -aq 2>/dev/null || true); do
     exit 2
 done
 
+GATE_FILTERED=0
+
 work=''
 gate=''
 cleanup() {
@@ -65,6 +77,20 @@ cleanup() {
     if [ -n "$gate" ]; then rm -rf "$gate"; fi
 }
 trap cleanup EXIT
+
+# The ledger is written from this shell. An EXIT trap reads teardown's $?, which
+# is how a half-run gate once recorded itself green. docs/DECISIONS.md
+gate_record() {
+    [ "${GATE_RECORDED:-0}" -eq 0 ] || return 0
+    GATE_RECORDED=1
+    if [ "$GATE_FILTERED" -eq 1 ]; then
+        printf 'gate-ledger: a partial or refused run records nothing; scripts/deploy.sh wants a full scripts/check.sh\n' >&2
+        return 0
+    fi
+    gate_ledger_record ci "$1" "${ORBIT_GATE_LOG:--}"
+}
+
+trap 'gate_record "$?"' ERR
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 
@@ -141,6 +167,12 @@ docker run --rm --network none -v "$work/scan:/scan:ro" zricethezav/gitleaks:v8.
 step 'Pint (code style)'
 php_step vendor/bin/pint --test
 
+step 'The deploy script (scripts/deploy-test.sh)'
+# On the host, not in a container, and below the first containerised step:
+# CheckGitSeamTest stubs docker and must stop before this one runs under its PATH.
+"$here/scripts/deploy-test.sh"
+"$here/scripts/verify-test.sh"
+
 step 'Composer advisories'
 # --locked --no-dev: an advisory against phpunit or pint is not on the site.
 php_step composer audit --locked --no-dev --abandoned=report
@@ -165,3 +197,8 @@ step 'PHPUnit'
 php_step php artisan test
 
 printf '\n\033[1;32m==> all checks passed (%s runner)\033[0m\n' "$mode"
+
+# Set in this shell on the one path that reaches it: the ledger records rc 0 only
+# when the suite itself says so.
+GATE_SUITE_PASSED=1
+gate_record 0
