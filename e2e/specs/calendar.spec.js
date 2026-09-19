@@ -394,3 +394,72 @@ test('switching route redraws the month', async ({ page }) => {
         .poll(async () => (await page.locator('.cell--fare .cell__price').allTextContents()).join(','))
         .not.toBe(before.join(','))
 })
+
+/* The sheet's hand-off goes through the same confirmation the route screen
+ * uses (design/README.md "Leaving the app") — over a dialog that is already up. */
+test('a day sheet hand-off asks first, and one Escape closes only the question', async ({ page }) => {
+    // Answered here rather than by the booking site: this suite may reach no
+    // third party (docs/E2E.md).
+    await page.context().route('https://www.aviasales.com/**', (route) =>
+        route.fulfill({ contentType: 'text/html', body: '<title>Aviasales</title>' }),
+    )
+
+    await page.goto('/calendar')
+
+    const cell = page.locator('.cell--fare').first()
+    await expect(cell).toBeVisible()
+    await cell.click()
+
+    const sheet = page.locator('.sheet')
+    await expect(sheet).toBeVisible()
+
+    const booking = sheet.getByRole('link', { name: 'See this fare on Aviasales' })
+    const href = await booking.getAttribute('href')
+
+    await booking.click()
+
+    const leaving = page.locator('.leaving')
+    const stay = leaving.getByRole('button', { name: 'Stay in Orbit' })
+    const onward = leaving.getByRole('link', { name: 'Continue to Aviasales' })
+
+    await expect(leaving).toHaveAttribute('role', 'dialog')
+    await expect(leaving).toHaveAttribute('aria-modal', 'true')
+    await expect(leaving.getByRole('heading', { name: 'You\'re leaving Orbit' })).toBeVisible()
+    await expect(leaving.locator('.leaving__body')).toHaveText(
+        'Aviasales opens in a new tab, so Orbit stays where it is. The price and availability'
+        + ' there are theirs, and can differ from what we recorded this morning.',
+    )
+
+    for (const control of [stay, onward]) {
+        expect((await control.boundingBox()).height).toBeGreaterThanOrEqual(44)
+    }
+
+    for (let press = 0; press < 4; press += 1) {
+        await page.keyboard.press('Tab')
+
+        expect(
+            await page.evaluate(() => document.querySelector('.leaving').contains(document.activeElement)),
+            'Tab escaped the dialog',
+        ).toBe(true)
+    }
+
+    // THE SHEET LISTENS FOR ESCAPE TOO: one press must close the question and
+    // leave the sheet it was asked over standing.
+    await page.keyboard.press('Escape')
+
+    await expect(leaving).toHaveCount(0)
+    await expect(sheet).toBeVisible()
+    await expect(booking).toBeFocused()
+
+    await booking.click()
+    await expect(onward).toHaveAttribute('target', '_blank')
+    await expect(onward).toHaveAttribute('rel', 'noopener')
+    await expect(onward).toHaveAttribute('href', href)
+
+    const [opened] = await Promise.all([page.context().waitForEvent('page'), onward.click()])
+
+    expect(opened.url()).toBe(href)
+
+    await opened.close()
+    await expect(sheet).toBeVisible()
+})

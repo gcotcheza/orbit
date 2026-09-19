@@ -34,6 +34,10 @@
     --line2: #161e2f;
     --track: #26314a;
 
+    /* What a modal lays over the app, the same in both themes: over the light
+       theme's lilac a neutral black scrim reads as a rendering artefact. */
+    --scrim: rgb(20 15 10 / 32%);
+
     /* --- Text ----------------------------------------------------------- */
     --ink: #eef2fc;
     --ink2: #bac6df;
@@ -165,6 +169,8 @@
     --line: #e0e0f4;
     --line2: #eeeef9;
     --track: #e4e4f4;
+
+    --scrim: rgb(20 15 10 / 32%);
 
     --ink: #0d0630;
     --ink2: #473d72;

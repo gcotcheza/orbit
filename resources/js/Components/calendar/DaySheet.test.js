@@ -172,6 +172,12 @@ describe('DaySheet', () => {
         await wrapper.findComponent(RouterLinkStub).trigger('click')
         expect(wrapper.emitted('close')).toBeUndefined()
 
+        // The booking action opened Orbit's own confirmation over the sheet, and
+        // that dialog takes the next Escape for itself (docs/DECISIONS.md:
+        // an-interstitial-sits-on-top-of-the-new-tab-link).
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+        expect(wrapper.emitted('close')).toBeUndefined()
+
         await wrapper.get('.backdrop').trigger('click')
         expect(wrapper.emitted('close')).toHaveLength(1)
 

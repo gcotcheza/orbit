@@ -133,9 +133,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   inset: 0;
   z-index: 20;
 
-  /* Warm rather than neutral black, per the prototype: over the light theme's
-     lilac background a grey scrim reads as a rendering artefact. */
-  background: rgb(20 15 10 / 32%);
+  background: var(--scrim);
   animation: sheet-fade 0.25s ease both;
 }
 
