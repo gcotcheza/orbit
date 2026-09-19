@@ -49,8 +49,10 @@ browser.** Not "assert the component mounted". Look at it.
    database password, and a seeded login (`e2e@orbit.test`) that exists on no
    other box. Gitignored. `--fresh-env` regenerates it.
 2. **Checks the prerequisites** it cannot make: `vendor/`, `node_modules/`,
-   `public/build/`. Each is built only if missing, because this script is meant
-   to be run twenty times an afternoon.
+   `public/build/`. `vendor/` and `node_modules/` are built only if missing,
+   because this script is meant to be run twenty times an afternoon;
+   `public/build/` is rebuilt when it is older than its inputs too — in a
+   served checkout it refuses instead of rebuilding into the live bundle.
 3. **Brings up the `orbit-e2e` stack** on `127.0.0.1:3185` and waits for it to
    be healthy.
 4. **Migrates and seeds** — the account, 3,270 airports, six watched routes, and
@@ -207,7 +209,10 @@ visits Home twice never requests it again, and a helper built on
 ## The console guard
 
 Every spec fails on a dirty console. This is an `auto` fixture in
-`e2e/fixtures.js`, so it applies whether a spec asks for it or not.
+`e2e/fixtures.js`, so it applies whether a spec asks for it or not — with one
+sanctioned exception, `csp.spec.js`, which imports `test` from `@playwright/test`
+rather than the fixture because Chromium logs every policy violation as a console
+error and that spec causes one deliberately.
 
 - **`pageerror`** — an uncaught exception or unhandled rejection. Never
   waivable. A Vue component that throws during render leaves the previous screen
@@ -455,6 +460,7 @@ in.
 | `watchlist.spec.js` | pause → the server agrees on a second page load; a paused route leaves the tour; add/remove; refused input |
 | `rules.spec.js` | the design's sentence → its exact eight chips, in order; removing one re-matches |
 | `pwa.spec.js` | manifest / `sw.js` / `offline` content types and bodies |
+| `csp.spec.js` | the served policy refuses a deliberate inline script, not merely reports it — the one spec outside the console guard, and why |
 | `settings.spec.js` | the "This app" card's Google-checks row — the sandbox is given no SerpAPI key, so the honest note is "Not configured" |
 | `theme.spec.js` | the palette really swaps and survives a reload; both themes of Home photographed |
 | `phone-baselines.spec.js` | every screen, both themes, at `maxDiffPixels: 0` — the phone-regression guard |

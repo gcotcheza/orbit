@@ -8,14 +8,8 @@
     are served to a guest and to the signed-in owner, and GET /api/me is what
     tells the client which of the two it is.
 
-    NO INLINE SCRIPT ANYWHERE IN THIS FILE. deploy/nginx/flights-ghiecode.conf
-    ships `script-src 'self'` (Content-Security-Policy-Report-Only today, to be
-    promoted), and the usual anti-flash trick — a two-line inline script that
-    reads the stored theme before first paint — is exactly what that directive
-    blocks. The cost is that a user who chose the LIGHT theme may see one frame
-    of the dark background while the module bundle boots; the fix, if it ever
-    matters, is to mirror the choice into a cookie this template can read, not
-    to punch a hole in the CSP.
+    NO INLINE SCRIPT ANYWHERE IN THIS FILE. docker/web/nginx.conf serves
+    `script-src 'self'`, which refuses one — the anti-flash theme trick included.
 --}}
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
