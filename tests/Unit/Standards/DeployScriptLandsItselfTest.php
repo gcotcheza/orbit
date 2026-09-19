@@ -22,6 +22,28 @@ final class DeployScriptLandsItselfTest extends TestCase
     private const BATTERY = 'verify.sh';
 
     #[Test]
+    public function no_helper_is_addressed_through_the_checkout_being_deployed(): void
+    {
+        $offenders = [];
+
+        foreach ($this->lines() as $number => $line) {
+            if (str_contains($line, '"$ROOT/scripts/')) {
+                $offenders[] = $number.': '.trim($line);
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "scripts/deploy.sh runs something out of the checkout it is deploying:\n"
+            .implode("\n", $offenders)."\n"
+            .'A deploy carries this script and its helpers in the same merge, so that checkout has '
+            .'neither file until the merge lands: the run exits 127 and the deploy is finished by '
+            .'hand. It happened on 2026-09-19 with PR #89.'
+        );
+    }
+
+    #[Test]
     public function every_helper_is_resolved_from_the_script_directory(): void
     {
         foreach (self::HELPERS as $helper) {
@@ -39,10 +61,7 @@ final class DeployScriptLandsItselfTest extends TestCase
                     '"$SCRIPT_DIR/'.$helper.'"',
                     $line,
                     "scripts/deploy.sh:{$number} addresses {$helper} through somewhere other than the "
-                    ."directory the script is being read from:\n{$line}\n"
-                    .'A deploy carries this script and its helpers in the same merge, so the checkout '
-                    .'being deployed has neither file until that merge lands: the run exits 127 and the '
-                    .'deploy is finished by hand. It happened on 2026-09-19 with PR #89.'
+                    ."directory the script is being read from:\n{$line}"
                 );
             }
         }
@@ -107,7 +126,8 @@ final class DeployScriptLandsItselfTest extends TestCase
     }
 
     /**
-     * Invocations, not mentions: a comment naming a helper is prose, not a call site.
+     * Call sites, not mentions: the script quotes every path it runs, and a helper
+     * named inside a sentence the script prints is prose.
      *
      * @return array<int, string>
      */
@@ -116,9 +136,7 @@ final class DeployScriptLandsItselfTest extends TestCase
         $calls = [];
 
         foreach ($this->lines() as $number => $line) {
-            $code = (string) preg_replace('/(^|\s)#.*$/', '', $line);
-
-            if (str_contains($code, $helper)) {
+            if (str_contains($line, '/'.$helper.'"')) {
                 $calls[$number] = trim($line);
             }
         }
