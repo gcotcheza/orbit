@@ -287,6 +287,7 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
     for (const link of [book, compare]) {
         await expect(link).toHaveAttribute('target', '_blank')
         await expect(link).toHaveAttribute('rel', 'noopener')
+        await expect(link).toHaveAccessibleName(/\(opens in a new tab\)$/)
     }
 
     /* One expectation line, and the old "we don't sell tickets" is gone. */

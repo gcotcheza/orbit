@@ -326,3 +326,19 @@ body {
         scroll-behavior: auto !important;
     }
 }
+
+/* Clipped, out of flow, and ANCHORED: with `auto` insets it keeps its static
+   position and is measured against the page (docs/DECISIONS.md). */
+.sr-only {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

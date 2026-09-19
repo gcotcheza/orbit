@@ -5,6 +5,7 @@
  */
 import { computed } from 'vue'
 import Chevron from '@/Components/Chevron.vue'
+import NewTabLink from '@/Components/NewTabLink.vue'
 import { departureLabel, euro, seenIfOld } from '@/lib/format'
 
 const props = defineProps({
@@ -36,9 +37,6 @@ function meta(fare, seen) {
   return parts.join(' · ')
 }
 
-// How BookingCta.vue opens Aviasales; a return row leaves the app the same way.
-const OPENS_AVIASALES = { target: '_blank', rel: 'noopener' }
-
 function toRow({ band, fare }) {
   const named = {
     key: band.nights.join('-'),
@@ -56,8 +54,8 @@ function toRow({ band, fare }) {
 
   return {
     ...named,
-    tag: 'a',
-    attrs: { href: fare.booking.aviasales, ...OPENS_AVIASALES },
+    tag: NewTabLink,
+    attrs: { href: fare.booking.aviasales },
     fare: {
       price: `from ${euro(fare.current)}`,
       comparison: comparison(fare),
