@@ -22,11 +22,12 @@ const site = computed(() => {
   return NAMED_SITES[host] ?? (host || 'the booking site')
 })
 
-const sentence = computed(
-  () =>
-    `${site.value} opens in a new tab, so Orbit stays where it is. The price and availability` +
-    ' there are theirs, and can differ from what we recorded this morning.',
-)
+const sentence = computed(() => {
+  const named = site.value.replace(/^./, (first) => first.toUpperCase())
+
+  return `${named} opens in a new tab, so Orbit stays where it is. The price and availability`
+    + ' there are theirs, and can differ from what we recorded this morning.'
+})
 
 function stops() {
   return [...panel.value.querySelectorAll('a[href], button')]

@@ -423,13 +423,8 @@ test.describe('the keyboard in the frame', () => {
         return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) }
     })
 
-    /*
-     * END TO END ONLY. `Home` is the screen App.vue keeps alive, so leaving it deactivates the
-     * dialog rather than unmounting it; the release that matters there is asserted directly in
-     * LeavingOrbitDialog.test.js, which is the test that goes red without it. Measured on this
-     * path the panel's own re-render already takes the dialog down, so this one stays green
-     * either way — it is the guard that the keyboard is free, not the proof of the release.
-     */
+    // Red when `release()` stops removing the listener; dropping only the
+    // onDeactivated call is masked here by the pane's own re-render.
     test('leaving a cached screen with the question open leaves the keyboard free', async ({ page }) => {
         await page.goto('/calendar')
         await expect(page.locator('.cell--fare').first()).toBeVisible()

@@ -76,12 +76,22 @@ describe('the leaving confirmation', () => {
         // The third party nobody has added yet is the point of the fallback.
         ['https://www.kiwi.com/en/search/AMS/OPO', 'kiwi.com'],
         ['https://flights.example.org/AMS-OPO', 'flights.example.org'],
-        // No hostname at all would otherwise read "Continue to " and stop.
-        ['mailto:fares@example.org', 'the booking site'],
     ])('reads %s as %s', (href, site) => {
         dialog(href)
 
         expect(onward().textContent).toBe(`Continue to ${site}`)
+    })
+
+    // A hostname-less href would otherwise read "Continue to " and stop, and
+    // open the sentence in lower case.
+    it('falls back to the booking site, sentence-cased where it opens the sentence', () => {
+        const panel = dialog('mailto:fares@example.org')
+
+        expect(onward().textContent).toBe('Continue to the booking site')
+        expect(panel.querySelector('.leaving__body').textContent).toBe(
+            'The booking site opens in a new tab, so Orbit stays where it is. The price and availability'
+            + ' there are theirs, and can differ from what we recorded this morning.',
+        )
     })
 
     it('hands the destination on unedited, in a new tab, keeping the referrer', () => {
