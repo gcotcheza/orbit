@@ -357,8 +357,16 @@ if [ ! -f node_modules/.package-lock.json ]; then
         npm ci --no-audit --fund=false
 fi
 
+vite_build_reason=''
 if [ ! -f public/build/manifest.json ]; then
-    step 'vite build'
+    vite_build_reason='no bundle'
+elif [ -n "$(find resources package-lock.json vite.config.js -newer public/build/manifest.json -print -quit)" ]; then
+    # -newer needs the manifest to exist; the branch above already guarantees that here.
+    vite_build_reason='bundle older than its inputs'
+fi
+
+if [ -n "$vite_build_reason" ]; then
+    step "vite build (${vite_build_reason})"
     docker run --rm -u "${APP_UID}:${APP_GID}" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
         -v "$ROOT":/var/www/html -w /var/www/html node:24-alpine \
         npm run build
