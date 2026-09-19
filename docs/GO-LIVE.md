@@ -364,16 +364,10 @@ after, written down so none of it becomes a surprise.
 - [ ] **A browser has never seen this app.** Step (c)'s checklist is the first
       time. Until it is done, every visual claim in this repo is a claim about
       code, not about pixels — the globe especially.
-- [ ] **CSP is `Report-Only` and must stay that way until there is evidence.**
-      Promote it to `Content-Security-Policy` in
-      `/etc/nginx/sites-available/flights-ghiecode` only after a full globe tour,
-      a rule creation and an alert have each been done with the console open and
-      produced no violation. Enforcing a wrong policy here does not degrade this
-      app, it **blanks** it: a blocked entry chunk is a white page behind a 200
-      with nothing in any server log. Two clauses are expected to argue —
-      `img-src 'self'` (the globe textures are vendored now, so this should be
-      clean) and `'unsafe-inline'` in `style-src` (Vue writes inline styles; a
-      nonce is a bigger change than that file).
+- [x] **CSP is enforcing, and lives on the app's own nginx.** Promoted on
+      2026-08-25 (the full browser suite green under it, every spec
+      console-clean); moved onto the app's own nginx 2026-09-19, with a browser
+      test that proves an inline script is refused. `docs/DECISIONS.md`.
 
 **Real work still to build**
 
