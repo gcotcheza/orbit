@@ -274,8 +274,6 @@ describe('the two-column wrappers', () => {
     })
 })
 
-// The pane beside the globe is deliberately a short detail, so the section belongs to the route's
-// own screen and to no pane (design/README.md §2, docs/DESKTOP-LAYOUT-PLAN.md).
 describe('the return trips section', () => {
     const RETURNS = [
         {
@@ -318,9 +316,8 @@ describe('the return trips section', () => {
         ])
     })
 
-    // The pane beside the globe is a short detail by design: four more rows there are four
-    // fewer for the globe (docs/DESKTOP-LAYOUT-PLAN.md).
-    it('leaves the section off a panel inside a pane', async () => {
+    // A pane draws the same panel the route's own screen draws: same five groups, same rows.
+    it('draws the section inside a pane too', async () => {
         get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75, { returns: RETURNS }))
 
         const wrapper = mount(RouteDetailPanel, {
@@ -329,8 +326,17 @@ describe('the return trips section', () => {
         })
         await flushPromises()
 
-        expect(wrapper.find('.ret').exists()).toBe(false)
+        expect(wrapper.findAll('.ret__row')).toHaveLength(4)
+        expect(wrapper.get('.ret__price').text()).toBe('from €112')
         expect(wrapper.get('.price__value').text()).toBe('€75')
+
+        expect(wrapper.findAll('.detail__group').map((group) => group.classes()[1])).toEqual([
+            'detail__group--summary',
+            'detail__group--returns',
+            'detail__group--chart',
+            'detail__group--advice',
+            'detail__group--booking',
+        ])
     })
 
     // An older build, or a route answered before this field existed: the rest of the screen
