@@ -21,6 +21,7 @@ const FARE = {
     mayBeGone: false,
     sampleCount: 7,
     booking: { aviasales: 'https://www.aviasales.com/search/AMS1110OPO13101?marker=123456' },
+    verdict: { label: 'Good price — book', short: 'Good', tone: 'good' },
 }
 
 /** A second priced band, so "one link per fare" is a count and not a coincidence. */
@@ -92,6 +93,49 @@ describe('a band with a fare in it', () => {
 
         expect(wrapper.get('.ret__gone').text()).toBe('Seen 6 days ago — may be gone')
         expect(wrapper.get('.ret__meta').text()).toBe('Sun, Oct 11 · 2 nights')
+    })
+})
+
+// The server's opinion of this band, in the watchlist's own pill — the tone is the only
+// thing it switches on (design/README.md §2, docs/API.md `returns[].fare.verdict`).
+describe('the verdict on a row', () => {
+    it('draws the pill in the left column, in the tone the server sent', () => {
+        const row = rows(section([band('A long weekend', [2, 3], FARE)]))[0]
+        const pill = row.get('.pill')
+
+        expect(pill.text()).toBe('Good')
+        expect(pill.attributes('data-tone')).toBe('good')
+        expect(pill.attributes('data-size')).toBe('sm')
+
+        // Under the nights range, not beside the price: a row without one must not grow.
+        expect(row.element.firstElementChild.contains(pill.element)).toBe(true)
+    })
+
+    // R5/R9: below `min_samples` there is no usual price, so there is nothing to judge.
+    it('draws no pill on a band the server would not judge', () => {
+        const wrapper = section([band('A fortnight', [13, 15], { ...FARE, usual: null, pctBelow: null, verdict: null })])
+
+        expect(wrapper.find('.pill').exists()).toBe(false)
+        expect(wrapper.get('.ret__vs').text()).toBe('No usual price yet')
+    })
+
+    it('draws no pill on a band with nothing in it', () => {
+        expect(section([band('Three to four weeks', [21, 28])]).find('.pill').exists()).toBe(false)
+    })
+
+    // A ghost is not scored, so the two pills can never share a row.
+    it('leaves a may-be-gone row its warning pill and no verdict', () => {
+        const wrapper = section([
+            band('A fortnight', [13, 15], {
+                ...FARE,
+                foundAt: '2026-10-05T06:12:07+02:00',
+                mayBeGone: true,
+                verdict: null,
+            }),
+        ])
+
+        expect(wrapper.get('.ret__gone').text()).toBe('Seen 6 days ago — may be gone')
+        expect(wrapper.find('.pill').exists()).toBe(false)
     })
 })
 
