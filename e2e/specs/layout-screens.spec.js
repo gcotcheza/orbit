@@ -423,6 +423,46 @@ test.describe('the keyboard in the frame', () => {
         return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) }
     })
 
+    // Red when `release()` stops removing the listener; dropping only the
+    // onDeactivated call is masked here by the pane's own re-render.
+    test('leaving a cached screen with the question open leaves the keyboard free', async ({ page }) => {
+        await page.goto('/calendar')
+        await expect(page.locator('.cell--fare').first()).toBeVisible()
+
+        // Through the rail, not `goto` — a fresh document would take the cache with it.
+        await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Orbit', exact: true }).click()
+        await waitForGlobe(page)
+
+        const booking = page.locator('.home__panel').getByRole('link', { name: /see this fare on aviasales/i })
+
+        await booking.click()
+        await expect(page.locator('.leaving')).toBeVisible()
+
+        await page.goBack()
+        await expect(page.locator('.cell--fare').first()).toBeVisible()
+
+        const probe = await page.evaluate(() => {
+            const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+
+            document.body.dispatchEvent(event)
+
+            return { leaving: document.querySelectorAll('.leaving').length, swallowed: event.defaultPrevented }
+        })
+
+        expect(probe, 'the dialog is still holding the keyboard').toEqual({ leaving: 0, swallowed: false })
+
+        // Tab still moves the focus somewhere real.
+        await page.keyboard.press('Tab')
+        expect(await page.evaluate(() => document.activeElement.tagName)).not.toBe('BODY')
+
+        // And Escape still belongs to whatever is actually on screen.
+        await page.locator('.cell--fare').first().click()
+        await expect(page.locator('.sheet')).toBeVisible()
+
+        await page.keyboard.press('Escape')
+        await expect(page.locator('.sheet')).toHaveCount(0)
+    })
+
     test('draws a ring on the rail and on the master rows', async ({ page }) => {
         await page.goto('/')
         await waitForGlobe(page)

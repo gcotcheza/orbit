@@ -455,8 +455,8 @@ in.
 | `auth.setup.js` | signs in once and saves the session for everything else |
 | `login.spec.js` | wrong password → an error on the form; right password → the globe; the login baseline |
 | `globe.spec.js` | the earth actually draws; the caption and card agree; a rail chip flies; the KeepAlive survives a tab switch |
-| `detail.spec.js` | card → detail hand-off; price, gauge sweep, chart path, Skyscanner deep-link shape; an unknown code |
-| `calendar.spec.js` | >20 priced cells with *different* heat colours; a day opens its sheet; a route chip redraws the month |
+| `detail.spec.js` | card → detail hand-off; price, gauge sweep, chart path, Skyscanner deep-link shape; an unknown code; the leaving dialog — its sentence, its keyboard, and the second tab it really opens |
+| `calendar.spec.js` | >20 priced cells with *different* heat colours; a day opens its sheet; a route chip redraws the month; the leaving dialog over that sheet, and one Escape closing only the question |
 | `watchlist.spec.js` | pause → the server agrees on a second page load; a paused route leaves the tour; add/remove; refused input |
 | `rules.spec.js` | the design's sentence → its exact eight chips, in order; removing one re-matches |
 | `pwa.spec.js` | manifest / `sw.js` / `offline` content types and bodies |
@@ -465,7 +465,7 @@ in.
 | `theme.spec.js` | the palette really swaps and survives a reload; both themes of Home photographed |
 | `phone-baselines.spec.js` | every screen, both themes, at `maxDiffPixels: 0` — the phone-regression guard |
 | `layout-smoke.spec.js` | tablet and desktop only: the icon rail replaces the tab bar, nothing scrolls sideways, and the landing page's master pane, `?route=` selection and globe height |
-| `layout-screens.spec.js` | tablet and desktop only: the calendar, the watch list, search, the new-rule screen and alerts inside the frame, the landing detail's two columns, and the keyboard — the roving tab stop on the master rows, the focus ring, and the focus a swapped pane hands over |
+| `layout-screens.spec.js` | tablet and desktop only: the calendar, the watch list, search, the new-rule screen and alerts inside the frame, the landing detail's two columns, and the keyboard — the roving tab stop on the master rows, the focus ring, the focus a swapped pane hands over, and the keyboard left free by a Back out of the kept-alive screen |
 | `wide-baselines.spec.js` | tablet and desktop only: every screen, both themes, at `maxDiffPixels: 0` — the frame's own regression guard |
 | `baseline-support.js` | not a spec: the themes, the theme seed, the detail mask list, the screenshot call and the premise assertions that both baseline specs share |
 
@@ -607,6 +607,22 @@ Run one of them on its own with the `--` pass-through:
 ```bash
 scripts/e2e.sh -- --project=desktop
 ```
+
+### The suite reaches no third party
+
+Every outward link in this app points at a booking site, and no spec may follow
+one. A run has to be repeatable, must not depend on somebody else's uptime, and
+must never send Orbit's affiliate marker somewhere it would be counted — a gate
+that spends money or records a click is not a gate. So an outward destination is
+asserted by READING the `href` the app rendered, never by navigating to it.
+
+Where a test genuinely has to prove a second tab opens — the leaving dialog's
+Continue control is the one — the third party is answered locally with
+`page.context().route()`, and the claim is that the opened tab's URL is byte for
+byte the href the page itself carried. That proves the hand-off with nothing
+leaving the box. The stub belongs in the test that needs it rather than in
+`fixtures.js`: a suite-wide one would quietly cover a spec that began navigating
+outward by accident.
 
 ### A spec that writes must clean up, and prove that it did
 
