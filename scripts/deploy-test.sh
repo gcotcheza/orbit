@@ -89,6 +89,7 @@ health_of() {
         *" $1 "*) ;;
         *) return 0 ;;
     esac
+    case " ${FAKE_UNHEALTHY} " in *" $1 "*) printf ' (unhealthy)'; return 0 ;; esac
     seen=$(( $(cat "${FAKE_LOG_DIR}/health.$1" 2>/dev/null || echo 0) + 1 ))
     printf '%s' "${seen}" > "${FAKE_LOG_DIR}/health.$1"
     if [ "${seen}" -gt "${FAKE_HEALTHY_AFTER}" ]; then printf ' (healthy)'; else printf ' (health: starting)'; fi
@@ -289,6 +290,7 @@ run_deploy() {
         FAKE_BREACH_LOG="${BREACH_LOG}" \
         FAKE_HEALTHCHECKED="${HEALTHCHECKED:-horizon}" \
         FAKE_HEALTHY_AFTER="${HEALTHY_AFTER:-0}" \
+        FAKE_UNHEALTHY="${UNHEALTHY:-}" \
         DEPLOY_ROOT="${ROOT}" \
         DEPLOY_GIT="git -C ${ROOT}" \
         DEPLOY_GH="${BIN}/gh" \
@@ -314,6 +316,7 @@ run_deploy() {
     HEAVY_PREJOB=''
     HEALTHCHECKED=''
     HEALTHY_AFTER=''
+    UNHEALTHY=''
     HEALTH_TIMEOUT=''
     HEALTH_INTERVAL=''
 }
@@ -335,6 +338,7 @@ VERIFY_RC=''
 HEAVY_PREJOB=''
 HEALTHCHECKED=''
 HEALTHY_AFTER=''
+UNHEALTHY=''
 HEALTH_TIMEOUT=''
 HEALTH_INTERVAL=''
 
@@ -780,6 +784,25 @@ contains 'and it prints the last healthchecks the container itself recorded' "${
 absent 'and it never sends the operator to the rollback block' "${OUT}" 'rollback block'
 absent 'the battery is not run against a stack that is still starting' "$(logged verify.argv)" '--backend-only'
 absent 'and a deploy that stopped there never says DONE' "${OUT}" 'DONE #'
+
+fixture health-unreadable
+COMPOSE_FAIL='ps horizon'
+run_deploy "${PR_NUMBER}"
+contains 'docker refusing to say is not the same as no healthcheck' "${OUT}" 'HEALTH UNKNOWN'
+absent 'and a docker that will not answer is never read as nothing to wait for' "${OUT}" \
+    'HEALTH nothing to wait for'
+absent 'and the battery is not run on a stack nothing could read' "$(logged verify.argv)" '--backend-only'
+absent 'and a deploy that could not read docker never says DONE' "${OUT}" 'DONE #'
+
+fixture health-unhealthy
+UNHEALTHY=horizon
+HEALTH_TIMEOUT=9
+run_deploy "${PR_NUMBER}"
+contains 'a container that is definitively unhealthy is not polled to the timeout' "${OUT}" \
+    'HEALTH UNHEALTHY: horizon is (unhealthy) 0s after its restart'
+contains 'and it says the release is landed and serving' "${OUT}" \
+    'THE RELEASE IS LANDED AND SERVING and this is NOT a rollback'
+absent 'and the battery is not run against it' "$(logged verify.argv)" '--backend-only'
 
 fixture health-none
 HEALTHCHECKED=none

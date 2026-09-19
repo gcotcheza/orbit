@@ -27,7 +27,7 @@ final class DeployScriptLandsItselfTest extends TestCase
         $offenders = [];
 
         foreach ($this->lines() as $number => $line) {
-            if (str_contains($line, '"$ROOT/scripts/')) {
+            if (preg_match('/\$\{?ROOT\}?\/scripts\//', $line) === 1) {
                 $offenders[] = $number.': '.trim($line);
             }
         }

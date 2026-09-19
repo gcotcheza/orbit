@@ -19,13 +19,17 @@ means. The first deploy of all is `docs/GO-LIVE.md` and is not repeated here.
    goes through `git-as`, and every container already runs as `115:119`.
 4. **One deploy a day, and this is that one.** Ghie's rule, not a technical limit.
 
-**The first landing of the script itself** is the one deploy `/var/www/orbit` cannot run, because the script and its helpers
-arrive with the merge that needs them. Run it from the clone instead; it reads its helpers from beside itself and the checkout
-to deploy from `DEPLOY_ROOT`:
+**The first landing of the script itself** is the one deploy `/var/www/orbit` cannot run: the script and its helpers arrive
+with the merge that needs them, so that checkout has neither file until it has landed. Run the merge commit's own copy, from a
+worktree rather than the shared clone — detaching that clone is a trap for whoever opens it next:
 
 ```bash
-DEPLOY_ROOT=/var/www/<app> bash <clone>/scripts/deploy.sh <PR#>
+git -C /srv/sessions/orbit/repo fetch origin
+git -C /srv/sessions/orbit/repo worktree add /srv/worker-scratch/orbit-land-pr<N> <merge-sha>
+DEPLOY_ROOT=/var/www/orbit bash /srv/worker-scratch/orbit-land-pr<N>/scripts/deploy.sh <N>
 ```
+
+The worktree is **at the merge commit** because a tree still on the old main runs the OLD script, which is the bug this recipe exists for.
 
 ## The one command
 

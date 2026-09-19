@@ -3,12 +3,13 @@
 #
 #   scripts/deploy.sh <PR#> [--gated-by-hand]
 #
-# Run as root from /var/www/orbit. Every git goes through git-as, the moving
+# Run as root, from /var/www/orbit or from a clone with DEPLOY_ROOT naming the
+# checkout. Every git goes through git-as, the moving
 # half goes through ONE heavy-work job, and every phase prints one line here
 # while the full output goes to $DEPLOY_LOG_DIR/<utc>-pr<N>.log.
 #
-# The job fast-forwards the checkout this file is read from, so the body lives
-# in main() and bash has the whole script before the disk moves.
+# When this is the checkout's own copy the job fast-forwards the file bash is
+# reading, so the body lives in main() and bash has it all before the disk moves.
 set -u
 
 # The helpers are this script's own, not the deployed checkout's: a first landing
@@ -228,9 +229,14 @@ deploy_steps() {
     say "STEPS 1-10 ok in one heavy-work job, conditional steps ran: ${RAN:-none}"
 }
 
-# A status carrying one of the three is a service docker healthchecks; a bare `Up`
-# is one it does not, and asking docker beats a list that drifts.
-health_of() { $COMPOSE ps "$1" 2>&1 | grep -oE '\(healthy\)|\(unhealthy\)|\(health: starting\)' | tail -1; }
+# A status carrying one of the three is a service docker healthchecks and a bare
+# `Up` is one it does not; a `ps` that FAILED is neither. docs/DECISIONS.md
+health_of() {
+    local out
+    out=$($COMPOSE ps "$1") || return 1
+    printf '%s' "$out" | grep -oE '\(healthy\)|\(unhealthy\)|\(health: starting\)' | tail -1
+    return 0
+}
 
 # `ps` says a container is not healthy yet; only its own checks say why.
 health_log() {
@@ -241,12 +247,31 @@ health_log() {
 {{end}}' "$id" 2>&1 | grep -v '^[[:space:]]*$' | tail -3 | sed 's/^/  /'
 }
 
+# The release is on disk and serving, so only the waiting failed and undoing it
+# would be the destructive answer to a question nobody asked. docs/DECISIONS.md
+health_failed() {
+    local log
+    say "HEALTH $1: $2 is $3 ${4}s after its restart, so the battery was not run. THE RELEASE IS LANDED AND SERVING and this is NOT a rollback."
+    log=$(health_log "$2")
+    [ -n "$log" ] && say "Its last healthchecks:"$'\n'"$log"
+    say "Watch it with '$COMPOSE ps $2'; when it reports healthy, run scripts/verify.sh against $ROOT."
+    exit 1
+}
+
+# Docker not answering is not an answer, and reading it as one is how a stack
+# that never reported healthy gets verified anyway. docs/DECISIONS.md
+ps_refused() {
+    say "HEALTH UNKNOWN: docker would not say what $1 is, so the battery was not run and no restarted container has been proved healthy. THE RELEASE IS LANDED AND SERVING and this is NOT a rollback. The failure docker printed is in $LOG."
+    exit 1
+}
+
 # A restart leaves a healthchecked container at `health: starting` until its first
 # check answers, and the battery is right to refuse that. docs/DECISIONS.md
 await_health() {
-    local s state waited=0 watched='' pending
+    local s state waited=0 watched='' pending waiting
     for s in $RESTARTED; do
-        [ -n "$(health_of "$s")" ] && watched="$watched $s"
+        state=$(health_of "$s") || ps_refused "$s"
+        [ -n "$state" ] && watched="$watched $s"
     done
     watched=${watched# }
     if [ -z "$watched" ]; then
@@ -255,18 +280,19 @@ await_health() {
     fi
     while :; do
         pending=''
+        waiting=''
         for s in $watched; do
-            [ "$(health_of "$s")" = '(healthy)' ] || pending="$pending $s"
+            state=$(health_of "$s") || ps_refused "$s"
+            [ "$state" = '(healthy)' ] && continue
+            [ "$state" = '(unhealthy)' ] && health_failed UNHEALTHY "$s" "$state" "$waited"
+            pending="$pending $s"
+            waiting="$waiting$s $state"$'\n'
         done
         [ -n "$pending" ] || break
         if [ "$waited" -ge "$HEALTH_TIMEOUT" ]; then
-            for s in $pending; do
-                state=$(health_of "$s")
-                say "HEALTH TIMEOUT: $s is ${state:-unreadable} ${waited}s after its restart, so the battery was not run. THE RELEASE IS LANDED AND SERVING and this is NOT a rollback. Its last healthchecks:"
-                say "$(health_log "$s")"
-            done
-            say "Watch them with '$COMPOSE ps${pending}'; when they report healthy, run scripts/verify.sh against $ROOT."
-            exit 1
+            while read -r s state; do
+                health_failed TIMEOUT "$s" "$state" "$waited"
+            done <<<"$waiting"
         fi
         sleep "$HEALTH_INTERVAL"
         waited=$((waited + HEALTH_INTERVAL))
@@ -368,6 +394,7 @@ main() {
 }
 
 main "$@"
-# The last byte bash reads: the job fast-forwards the file it is reading.
+# The last byte bash reads: when this is the checkout's own copy, the job
+# fast-forwards the file it is reading.
 # shellcheck disable=SC2317
 exit

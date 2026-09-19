@@ -109,6 +109,12 @@ mutant 'the restart leaves horizon on old code' deploy.sh \
 mutant 'the battery is run before the containers report healthy' deploy.sh \
     '/^    await_health$/d' \
     'a container that never reports healthy stops before the battery'
+mutant 'a ps that failed reads as a service with no healthcheck' deploy.sh \
+    's#out=\$(\$COMPOSE ps "\$1") || return 1#out=$($COMPOSE ps "$1" 2>\&1)#' \
+    'docker refusing to say is not the same as no healthcheck'
+mutant 'the classifier is addressed through the checkout being deployed' deploy.sh \
+    's#"\$SCRIPT_DIR/docs-only.sh"#"$ROOT/scripts/docs-only.sh"#' \
+    'a helper is read from the script directory, never from the checkout being deployed'
 mutant 'the migration never runs' deploy.sh \
     '/php artisan migrate --force/d' \
     'migrate is the first command the job asks of compose when no lockfile moved'
