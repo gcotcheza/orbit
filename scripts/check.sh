@@ -49,24 +49,58 @@ if [ -n "$seam_dir" ] && [ "$(realpath -- "$seam_dir" 2>/dev/null)" != "$here" ]
     exit 2
 fi
 
-# Refuses to gate a stack brought up from another directory: on the VPS a bare
-# `docker compose` from a worktree resolves to production (`name: orbit`).
-for id in $(docker compose ps -aq 2>/dev/null || true); do
-    from=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$id" 2>/dev/null || true)
-    if [ -z "$from" ]; then continue; fi
-    from=$(readlink -f -- "$from" 2>/dev/null || printf '%s' "$from")
-    if [ "$from" = "$here" ]; then continue; fi
-    project=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$id" 2>/dev/null || true)
+# 124 is GNU timeout on the host, 143 is BusyBox timeout in the test container.
+docker_answer() {
+    case $1 in
+        124 | 143) printf 'timed out' ;;
+        *) printf 'exited %s' "$1" ;;
+    esac
+}
+
+# Refuses a stack brought up from another directory, because a bare `docker compose`
+# here resolves to production; not the browser gate's guard: docs/DECISIONS.md.
+stack_is_foreign() {
+    local ids id from project rc
+    foreign_reason=''
+
+    rc=0
+    ids=$(timeout 10 docker compose ps -aq 2>/dev/null) || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        foreign_reason="docker did not list this project's containers ($(docker_answer "$rc"))"
+        return 0
+    fi
+
+    for id in $ids; do
+        rc=0
+        from=$(timeout 10 docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$id" 2>/dev/null) || rc=$?
+        if [ "$rc" -ne 0 ]; then
+            foreign_reason="docker did not say where container $id was started from ($(docker_answer "$rc"))"
+            return 0
+        fi
+        if [ -z "$from" ]; then
+            foreign_reason="container $id carries no working-directory label, so where it was started from cannot be told"
+            return 0
+        fi
+        from=$(readlink -f -- "$from" 2>/dev/null || printf '%s' "$from")
+        if [ "$from" = "$here" ]; then continue; fi
+        project=$(timeout 10 docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$id" 2>/dev/null || true)
+        foreign_reason="compose project ${project:-?} has a container started from $from, not from $here"
+        return 0
+    done
+
+    return 1
+}
+
+if stack_is_foreign; then
     {
-        printf 'check.sh: compose project %s has a container started from\n' "${project:-?}"
-        printf '  %s, not from %s.\n' "$from" "$here"
+        printf 'check.sh: %s.\n' "$foreign_reason"
         printf 'Refusing to run the gate against it. Bring a sandbox stack up from THIS directory\n'
         printf 'and name it on the same command line (web is left out: it publishes 127.0.0.1:3085):\n'
         printf '  COMPOSE_PROJECT_NAME=orbit-<name> docker compose up -d postgres redis app\n'
         printf '  COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh %s\n' "$mode"
     } >&2
     exit 2
-done
+fi
 
 GATE_FILTERED=0
 
