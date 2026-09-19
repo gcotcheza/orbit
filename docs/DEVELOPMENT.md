@@ -80,9 +80,11 @@ merged — this project has no baseline for new debt to hide in.
 
 It takes the runner as its one argument, and will not guess: `dev` uses the
 stack you already have up, `overlay` gives every step a throwaway container with
-its own `vendor/`, `bootstrap/cache` and `node_modules/`, and is what the deploy
-runbook runs against production, whose `vendor/` is `--no-dev`. Same nine
-checks, same order, either way.
+its own `vendor/`, `bootstrap/cache` and `node_modules/`, and is the one to use
+in a tree with no stack up — including the worktree a merged head is gated in
+when the ledger holds no green for it. Same checks, same order, either way.
+**A green run appends its own line to the gate ledger**, which is what
+`scripts/deploy.sh` reads instead of re-running the gate on the box.
 
 ```bash
 docker compose up -d
@@ -116,9 +118,9 @@ here.
 A worktree made the way this page shows needs no seam: it is root-owned, root's
 git owns it, and the gate's secrets step — the one check that reads the tree
 with git rather than through a container — runs against it unaided. `CI_GIT`
-exists for the deploy, which runs the same gate against `/var/www/orbit`, where
-root's git is refused before it can list anything; `scripts/check.sh` with no
-argument prints what the variable is for and what its `-C` has to name.
+exists for a run inside `/var/www/orbit`, where root's git is refused before it
+can list anything; the deploy no longer makes one, and `scripts/check.sh` with
+no argument prints what the variable is for and what its `-C` has to name.
 
 **The compose-project trap.** `docker-compose.yml` pins `name: orbit` and
 publishes `127.0.0.1:3085`; the browser sandbox pins `orbit-e2e` on
@@ -141,8 +143,8 @@ scripts/e2e.sh --keep -- --grep "heat map"    # one test, stack left up
 
 **From a root-owned worktree it needs five paths handed over first.** The
 overlay gate above leaves none of them behind, and this script installs
-`vendor/` and `node_modules/` into the checkout rather than over it
-(`scripts/e2e.sh:348-350`, `:353-358`), as one-off containers running `115:119`.
+`vendor/` and `node_modules/` into the checkout rather than over it, as one-off
+containers running `115:119`.
 It cannot do that in a root-owned tree until those directories exist and are
 theirs — a `115:119` container cannot create one (`mkdir: Permission denied`) —
 and the single refusal it carries (`:340-347`) is about a checkout that is being
@@ -171,12 +173,15 @@ explains what that costs and what this harness found.
 
 ## Deploy
 
-The runbook is [`.claude/commands/deploy.md`](../.claude/commands/deploy.md), and
-it is the authority: pull, gate, `composer install --no-dev`, build assets,
-migrate, seed, **restart the long-lived containers** (they boot the code once —
-a deploy that skips this looks entirely successful and serves the old app), then
-the post-deploy checks. Going live from scratch, including the host nginx vhost
-and the owner-key decisions, is [`docs/GO-LIVE.md`](GO-LIVE.md).
+`scripts/deploy.sh <PR#>` **is** the deploy: it resolves the merged pull request,
+reads the gate ledger, and runs the whole moving half in one `heavy-work` job —
+fast-forward, `composer install --no-dev` and the asset build only when their
+inputs moved, migrate, `build:retain`, `view:clear`, the drain and **the four
+restarts** (the containers boot the code once, so a deploy that stops before
+them looks entirely successful and serves the old app). `scripts/verify.sh` is
+the post-deploy battery. [`.claude/commands/deploy.md`](../.claude/commands/deploy.md)
+is what is left for a person to decide; going live from scratch, including the
+host nginx vhost and the owner-key decisions, is [`docs/GO-LIVE.md`](GO-LIVE.md).
 
 ## Where the rest is written down
 
