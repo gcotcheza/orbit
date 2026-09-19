@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Carbon\CarbonImmutable;
+use App\Domain\Pricing\PricePoint;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -34,6 +35,11 @@ final class ReturnObservation extends Model
     public function route(): BelongsTo
     {
         return $this->belongsTo(Route::class);
+    }
+
+    public function toPricePoint(): PricePoint
+    {
+        return new PricePoint($this->observed_on->toDateTimeImmutable(), $this->price_cents);
     }
 
     /**

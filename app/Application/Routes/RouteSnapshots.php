@@ -11,6 +11,7 @@ use App\Domain\Pricing\DatedFare;
 use App\Domain\Pricing\DealScorer;
 use App\Domain\Pricing\PriceHistory;
 use Illuminate\Support\Facades\Date;
+use App\Application\Pricing\TrackingDays;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -84,13 +85,7 @@ final readonly class RouteSnapshots
             /** @var string|null $first */
             $first = $firstSeen->get($route->id);
 
-            /*
-             * BOTH ENDS PARSED IN THE OWNER'S TIMEZONE or the difference comes back with a
-             * fraction; inclusive, and computed before the score, which now depends on it.
-             */
-            $trackingDays = $first === null
-                ? 0
-                : (int) Date::parse($first, $timezone)->startOfDay()->diffInDays($today) + 1;
+            $trackingDays = TrackingDays::inclusive($first, $timezone, $today);
 
             $snapshots[$route->id] = new RouteSnapshot(
                 route: $route,

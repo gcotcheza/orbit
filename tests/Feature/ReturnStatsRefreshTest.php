@@ -13,6 +13,9 @@ use App\Models\WatchlistItem;
 use App\Jobs\RefreshReturnBands;
 use Tests\Concerns\RunsCommands;
 use App\Models\ReturnObservation;
+use Illuminate\Support\Facades\DB;
+use Tests\Support\RecordingLogger;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
@@ -25,6 +28,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 final class ReturnStatsRefreshTest extends TestCase
 {
     use RefreshDatabase, RunsCommands;
+
+    /** 2026-09-03 plus `orbit.returns.stats.far_horizon_days`, written out. */
+    private const HORIZON = '2027-03-03';
 
     protected function setUp(): void
     {
@@ -240,6 +246,99 @@ final class ReturnStatsRefreshTest extends TestCase
         );
     }
 
+    /** R10 — far fares numerous and dear enough to be moving a band's usual price. */
+    #[Test]
+    public function a_band_its_far_horizon_fares_are_skewing_is_counted_and_warned_about(): void
+    {
+        $route = $this->watchedRoute();
+        $logger = $this->recordLog();
+
+        $this->seedNearAndFar($route, farCount: 10, farCents: 13000);
+
+        $this->refresh($route);
+
+        $stats = ReturnStats::query()->sole();
+
+        $this->assertSame(16, $stats->sample_count, 'Sixteen in-band fares, the boundary one included.');
+        $this->assertSame(10, $stats->far_count, 'A departure exactly on the horizon is a NEAR one.');
+        $this->assertSame(13000, $stats->far_median_cents);
+
+        $warnings = $logger->warnings();
+
+        $this->assertCount(1, $warnings, 'One line per skewed band, and this route has one.');
+        $this->assertSame('Far-horizon fares are skewing a round-trip band', $warnings[0]['message']);
+        $this->assertSame([
+            'route'             => 'AMS-LIS',
+            'band'              => '6–8',
+            'far_count'         => 10,
+            'far_median_cents'  => 13000,
+            'near_median_cents' => 10000,
+            'window_days'       => 334,
+        ], $warnings[0]['context']);
+    }
+
+    /** R10 — the tripwire is a threshold, and nine fares do not reach it. */
+    #[Test]
+    public function nine_far_horizon_fares_are_stored_and_said_nothing_about(): void
+    {
+        $route = $this->watchedRoute();
+        $logger = $this->recordLog();
+
+        $this->seedNearAndFar($route, farCount: 9, farCents: 13000);
+
+        $this->refresh($route);
+
+        $stats = ReturnStats::query()->sole();
+
+        $this->assertSame(9, $stats->far_count);
+        $this->assertSame(13000, $stats->far_median_cents, 'Counted either way — measuring is not warning.');
+        $this->assertSame([], $logger->warnings());
+    }
+
+    /** R10 — nothing beyond the horizon is the ordinary state, and it is stored as one. */
+    #[Test]
+    public function a_band_with_nothing_beyond_the_horizon_stores_a_zero_and_no_median(): void
+    {
+        $route = $this->watchedRoute();
+        $logger = $this->recordLog();
+
+        foreach ([10000, 20000, 30000, 40000, 50000, 60000] as $index => $cents) {
+            $this->seedFare($route, Date::parse('2026-09-10')->addDays($index)->toDateString(), nights: 7, cents: $cents);
+        }
+
+        $this->refresh($route);
+
+        $stats = ReturnStats::query()->sole();
+
+        $this->assertSame(0, $stats->far_count);
+        $this->assertNull($stats->far_median_cents);
+        $this->assertSame([], $logger->warnings());
+    }
+
+    /** The morning refresh has no verdict to draw, so it loads no history to draw one from. */
+    #[Test]
+    public function the_refresh_never_reads_the_history_table_it_writes(): void
+    {
+        $route = $this->watchedRoute();
+
+        foreach ([10000, 20000, 30000, 40000, 50000, 60000] as $index => $cents) {
+            $this->seedFare($route, Date::parse('2026-09-10')->addDays($index)->toDateString(), nights: 7, cents: $cents);
+        }
+
+        DB::enableQueryLog();
+        $this->refresh($route);
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $reads = array_values(array_filter($queries, static function (array $query): bool {
+            $sql = strtolower((string) $query['query']);
+
+            return str_starts_with(ltrim($sql), 'select') && str_contains($sql, 'return_price_history');
+        }));
+
+        $this->assertSame([], $reads, 'A refresh that scores nothing has no reason to read its own history.');
+    }
+
     #[Test]
     public function the_command_fans_the_watchlist_out_and_includes_paused_routes(): void
     {
@@ -275,6 +374,30 @@ final class ReturnStatsRefreshTest extends TestCase
             (int) config('orbit.returns.window_days'),
             (int) config('orbit.returns.stats.window_days'),
         );
+    }
+
+    private function recordLog(): RecordingLogger
+    {
+        $logger = new RecordingLogger;
+
+        Log::swap($logger);
+
+        return $logger;
+    }
+
+    /** Five near fares and a far block beyond `far_horizon_days`, all in the 6-8 band. */
+    private function seedNearAndFar(Route $route, int $farCount, int $farCents): void
+    {
+        foreach (range(0, 4) as $index) {
+            $this->seedFare($route, Date::parse('2026-09-10')->addDays($index)->toDateString(), nights: 7, cents: 10000);
+        }
+
+        /* Exactly `far_horizon_days` out: the boundary, which belongs to the near side. */
+        $this->seedFare($route, self::HORIZON, nights: 7, cents: 10000);
+
+        foreach (range(1, $farCount) as $index) {
+            $this->seedFare($route, Date::parse('2027-03-10')->addDays($index)->toDateString(), nights: 7, cents: $farCents);
+        }
     }
 
     private function refresh(Route $route): void
