@@ -13,10 +13,8 @@
     carry the build's content hashes, so this page would break for anybody
     holding a copy from the previous deploy.
 
-    THE STYLE BLOCK IS INLINE and the CSP allows it: deploy/nginx/
-    flights-ghiecode.conf ships `style-src 'self' 'unsafe-inline'` while
-    `script-src` is `'self'` alone. There is no script here and there must not
-    be one.
+    THE STYLE BLOCK IS INLINE and `style-src 'self' 'unsafe-inline'` in
+    docker/web/nginx.conf allows it; `script-src 'self'` refuses a script here.
 
     THE COLOURS ARE design/README.md's dark theme, written out rather than
     pulled from resources/css/app.css for the reason above. They are six
