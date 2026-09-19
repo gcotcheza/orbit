@@ -33,13 +33,11 @@ final class DeployVerificationTest extends TestCase
         $lists = [];
 
         foreach (self::BATTERY as $script) {
-            $this->assertSame(
-                1,
-                preg_match(self::RESTARTED, $this->read($script), $found),
-                "{$script} no longer names the services the deploy restarts."
-            );
+            preg_match(self::RESTARTED, $this->read($script), $found);
 
-            $lists[$script] = $found[1];
+            $lists[$script] = $found[1] ?? '';
+
+            $this->assertNotSame('', $lists[$script], "{$script} no longer names the services the deploy restarts.");
         }
 
         $this->assertSame(
