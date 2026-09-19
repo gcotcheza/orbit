@@ -4,6 +4,7 @@
  * not a router.push button; day-1 routes say what they actually know (docs/BUSINESS-LOGIC.md §36).
  */
 import { computed } from 'vue'
+import Chevron from '@/Components/Chevron.vue'
 import PriceSparkline from '@/Components/PriceSparkline.vue'
 import VerdictPill from '@/Components/VerdictPill.vue'
 import { departureLabel, euro, usualPriceLabel } from '@/lib/format'
@@ -62,9 +63,7 @@ const trackingNote = computed(() => {
       <div class="spotlight__trend">
         <PriceSparkline :values="route.sparkline" :tone="route.verdict.tone" />
 
-        <svg width="17" height="17" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <path d="M6 4l5 5-5 5" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <Chevron :size="17" />
       </div>
     </div>
   </RouterLink>
