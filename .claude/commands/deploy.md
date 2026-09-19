@@ -1,722 +1,104 @@
 # Deploy Orbit
 
-**Project:** Orbit (Laravel 13 + Vue 3 SPA, PHP 8.5, Postgres 18, Redis)
-**Directory:** `/var/www/orbit`
-**URL:** https://flights.ghiecode.io
-**Remote:** git@github.com:gcotcheza/orbit.git
-**Branch:** main
-**Linux user:** `orbit` (uid 115, gid 119)
-**Compose project:** `orbit` (top-level `name: orbit` in `docker-compose.yml`) — plain `docker-compose.yml`, no `-f` needed
-**Upstream:** the stack's nginx sidecar, published on **127.0.0.1:3085 only**
+**Project:** Orbit (Laravel 13 + Vue 3 SPA, PHP 8.5, Postgres 18, Redis, Horizon)
+**Directory:** `/var/www/orbit` · **URL:** https://flights.ghiecode.io · **Remote:** git@github.com:gcotcheza/orbit.git
+**Compose project:** `orbit` (top-level `name: orbit`) · **Linux user:** `orbit` (115:119) · **Upstream:** the stack's nginx
+sidecar, published on **127.0.0.1:3085 only**
 
-## How this is wired (read once before deploying)
+`scripts/deploy.sh` **is** this runbook. Every command the old procedure typed by hand lives inside it, in the same order, and
+`scripts/deploy-test.sh` is what holds it there. What is left here is what a person still decides and what each printed line
+means. The first deploy of all is `docs/GO-LIVE.md` and is not repeated here.
 
-- **Six services.** `app` (php-fpm), `horizon` (queue worker), `scheduler`
-  (`schedule:work`), `web` (nginx sidecar, the only published port), `postgres`,
-  `redis`. A seventh, `assets`, is `profiles: ['build']` — a task, not a service,
-  so it is deliberately absent from `docker compose ps`.
-- **Every container already runs as `115:119`**, which *is* the `orbit` host user.
-  So `docker compose exec -T app php artisan …` writes files the app can read
-  back. There is no `-u` flag anywhere in this runbook and none is wanted.
-- **⚠ The containers boot the code once.** php-fpm, Horizon and `schedule:work`
-  are long-lived processes holding an opcache and a booted framework. New code on
-  disk changes nothing until they are told. This is why step 9 exists and is not
-  optional — a deploy that skips it looks completely successful and serves the
-  old app.
-- **⚠ Every git here runs as `orbit`, never as root.** `git-as` is the fleet
-  wrapper that drops to the account owning the tree it is handed, and it is not
-  optional: root's git refuses this checkout with
-  `fatal: detected dubious ownership`, so a root-run deploy stops at its first
-  git call. Before that check existed it was worse — root's git succeeded and
-  left root-owned objects in the worktree *and in `.git`* for the next `orbit`
-  git to fail on. Nothing chowns any more; step 2 counts instead.
-- **The host nginx vhost is a separate file.** `/etc/nginx/sites-available/flights-ghiecode`
-  is what nginx reads; `deploy/nginx/flights-ghiecode.conf` in this repo is the
-  reviewable copy. Editing the repo copy deploys nothing. See `docs/GO-LIVE.md`.
-- **⚠ The SPA catch-all answers 200 for every unclaimed path.**
-  `routes/web.php` ends in `Route::get('/{any?}')` with a negative lookahead of
-  only `api|up|horizon`, so `/sw.js`, `/manifest.webmanifest` and
-  `/definitely-not-a-route` all return **200 `text/html`** — the shell. A status
-  code alone therefore proves nothing about those paths. **Assert
-  `Content-Type`**, which is what post-deploy check 4 does.
-- **⚠ `SESSION_SECURE_COOKIE=true` breaks naive curl cookie replay.** Both cookies
-  are `Secure`, so over the loopback's plain HTTP curl will not even **store**
-  them: `-c jar` writes a file of comments and no rows. `-c`/`-b` therefore
-  authenticate nothing, silently, and the 401 you get means "curl dropped the
-  cookie" rather than "the app is broken". The cookies have to be lifted off
-  `Set-Cookie` and sent back as an explicit `Cookie:` header — post-deploy check 3
-  does it.
+## Before you run it
 
-## Pre-flight checks
+1. **Ghie merged the pull request.** Nobody else merges, and only a merged pull request deploys.
+2. **The ledger holds a green `ci` and a green `e2e` for the merged head.** Both gates append their own line to
+   `/var/lib/fleet/gate-ledger` from the clone that ran them, so they are proved before the merge and **not** re-run here: the
+   merge's tree is identical to the gated head's, which `resolve` checks.
+3. **Run as root**, from the box. Talking to `/var/run/docker.sock` is a group membership `orbit` does not have; every git line
+   goes through `git-as`, and every container already runs as `115:119`.
+4. **One deploy a day, and this is that one.** Ghie's rule, not a technical limit.
 
-After checks 1-3, go to **Docs-only landing** before check 4: a merge that changes
-only documentation is landed there and never reaches the gate.
-
-1. Confirm the branch in `/var/www/orbit` is `main`; if not, warn and stop.
-   ```bash
-   git-as orbit -C /var/www/orbit --no-optional-locks rev-parse --abbrev-ref HEAD   # expect: main
-   ```
-2. Confirm the working tree is clean; if not, warn and ask before continuing.
-   ```bash
-   git-as orbit -C /var/www/orbit --no-optional-locks status --porcelain            # expect: no output
-   ```
-   A `??` under `.claude/` is the orbit session's own Claude Code runtime, whose
-   working directory is this checkout until backlog item 32 moves it out — not a
-   change to the app; anything else is somebody having edited production.
-3. Show the last 3 commits so the user can confirm what is already live.
-   ```bash
-   git-as orbit -C /var/www/orbit --no-optional-locks log --oneline -3
-   ```
-4. **The nine checks must be green on the merge commit being deployed.** From
-   PR3 onwards this is the merge gate (`docs/PLAN.md`), so normally it was green
-   on the branch before merge — but a merge commit is code no run has seen. Run
-   it once here, on `main`, after the pull (deploy step 1).
-
-   **⚠ THE GATE RUNS HERE IN ITS `overlay` MODE, NEVER ITS `dev` MODE.**
-   `scripts/check.sh dev` drives the *live* php-fpm container with
-   `docker compose exec`, and that container's `vendor/` was installed
-   `--no-dev` (deploy step 3) — there is no `vendor/bin/pint`, no
-   `vendor/bin/phpstan` and no phpunit in it. Installing them here to make the
-   dev runner work is the trap: `./` is bind-mounted into `app`, `horizon` and
-   `scheduler`, so a dev `composer install` in this checkout is a dev
-   `composer install` **in production**.
-
-   **`overlay` mode runs every step in a throwaway container with its own
-   vendor tree.** Same image, same uid, same PHP as the site — and nothing it
-   writes is visible to the running containers:
-
-   ```bash
-   export CI_GIT='git-as orbit -C /var/www/orbit'
-   bash /var/www/orbit/scripts/check.sh overlay
-   ```
-
-   It is a script, not a block to paste: `set -euo pipefail` lives inside it and
-   cannot reach your shell, and its `trap` removes the overlay however the run
-   ends — including the failure this runbook calls a stop.
-
-   **Good:** Gitleaks `no leaks found`, Pint `PASS`, `composer audit` and
-   `npm audit` reporting no advisories, deptrac `Violations 0`, PHPStan
-   `[OK] No errors`, ESLint silent, Vitest all green, and PHPUnit ending in
-   `OK`. A failure is a stop, not a note.
-
-   - **⚠ `bootstrap/cache` IS OVERLAID FOR A DIFFERENT AND WORSE REASON THAN
-     `vendor`.** `composer install` fires `@php artisan package:discover` on
-     every run, which writes `bootstrap/cache/packages.php` and `services.php` —
-     the list of service providers the framework loads at boot. Run with dev
-     dependencies present, that list names dev-only providers (Pail, Collision,
-     Larastan's, whatever a package adds next). Those files are in the same
-     bind-mounted checkout, so the **live, `--no-dev`** app would read them on
-     its next boot, try to load a class that is not in its vendor tree, and
-     answer **every request with a 500** — an outage caused by a gate run,
-     minutes after it reported all green. The overlay is what keeps
-     `package:discover`'s output inside the throwaway container.
-   - **⚠ `--no-deps`** so that `run` does not start or restart `postgres` and
-     `redis` behind your back. The suite needs neither: `phpunit.xml` pins
-     sqlite `:memory:` and the array cache/session drivers.
-   - `--rm` and `run` (not `exec`): this is a container that exists for one
-     command. The live `app` container is never entered and never changed.
-   - **⚠ NOT `sudo -u orbit`.** Talking to `/var/run/docker.sock` is a **group
-     membership** — `orbit` is not in the `docker` group and gets
-     `permission denied while trying to connect to the Docker daemon socket`
-     before the first check runs. Run it as root. Nothing it does lands
-     root-owned files in the checkout: the containers it drives are already
-     `user: '115:119'`, which *is* the `orbit` user (see "How this is wired"),
-     so file ownership is handled inside them rather than by the invoking shell.
-     The overlay directory is chowned to the same uid for the same reason, and
-     the one step that reads the checkout with git goes through `CI_GIT`.
-   - **⚠ `CI_GIT` IS NOT OPTIONAL, AND ITS ABSENCE READS LIKE A BROKEN GATE.**
-     The secrets step lists the tree with git — the one check that reads the
-     checkout rather than a container — and root's git refuses this checkout.
-     Without the export the run stops in its first step on
-     `fatal: detected dubious ownership`: a missing environment variable, not a
-     leak and not a broken scanner. The value carries its own `-C`, which names
-     the same directory as the path on the line below it.
-   - **⚠ The PHPUnit step writes into `storage/logs/laravel.log`.** It is the
-     real checkout, bind-mounted, so a test that exercises a logging path leaves
-     `testing.INFO` / `testing.ERROR` lines in production's application log.
-     They are the gate's own noise and not incidents — the environment name in
-     front of the level is how you tell. See post-deploy check 8.
-
-5. **The browser gate is NOT a pre-flight check. It is deploy step 6.**
-
-   `scripts/e2e.sh` used to be listed here, and being listed here is what broke
-   deploy `ab262c4`. It drives a real browser against **the checkout's own
-   `public/build/`**, which at pre-flight time is still the *previous* deploy's
-   bundle — the code has been pulled, the assets have not been rebuilt, and the
-   suite fails on a UI that does not exist yet. A red gate that says nothing
-   about the commit being deployed is worse than no gate: it is fifteen minutes
-   spent looking for a bug in the app.
-
-   It has to run **after the asset build**, so it now lives with the deploy steps
-   as step 6. Nothing else moved.
-
-## Docs-only landing
-
-**A docs-only merge lands; it does not deploy.** After pre-flight checks 1-3,
-ask what the merge commit actually changes. If the answer is documentation and
-nothing else, the code about to run is byte-identical to the code already
-running — a gate on that merge commit is a repeat, not a check, and everything
-below is a rebuild of what is already on disk.
-
-**⚠ ONE BLOCK, AND IT HAS TO STAY ONE BLOCK.** Each fenced block runs in a
-fresh shell; a variable set in one is empty in the next, so splitting this would
-hand `merge --ff-only "$sha"` an empty string.
+## The one command
 
 ```bash
-git-as orbit -C /var/www/orbit fetch origin main
-sha=$(git-as orbit -C /var/www/orbit --no-optional-locks rev-parse FETCH_HEAD)
-# The classifier reads this checkout with git too, so it takes the same seam.
-export DOCS_ONLY_GIT='git-as orbit -C /var/www/orbit'
-cd /var/www/orbit && scripts/docs-only.sh "$sha"
-[ $? -eq 0 ] && { git-as orbit -C /var/www/orbit merge --ff-only "$sha" && echo "landed $sha" || echo "NOT LANDED: fast-forward refused, checkout unchanged"; }
-find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
+cd /var/www/orbit && scripts/deploy.sh <PR#>
 ```
 
-**⚠ CAPTURE THE SHA ONCE AND USE IT TWICE.** What gets classified has to be what
-gets landed. `git pull` fetches again, so a merge pushed to `main` in the seconds
-between the two commands would land unclassified and ungated — which is why the
-block merges `"$sha"` rather than pulling.
+It takes a pull request number and nothing else. One switch exists — `--gated-by-hand` skips the ledger and says so in its own
+line and in `DONE` — and **Orbit does not use it**: the recipe below is never longer than gating properly.
 
-**⚠ THE SCRIPT DECIDES, NOT THE PULL REQUEST'S FILE LIST.** It diffs **this
-checkout's own HEAD** against the merge commit, so a second commit riding inside
-the merge — or a docs merge sitting on top of a code merge that was never
-deployed — comes back as `CODE`. A person reading the PR sees neither of those.
+**A docs-only merge is the same command.** The script asks `scripts/docs-only.sh` what the merge changes; documentation and
+nothing else is fast-forwarded onto the box, proved with one `/up`, one public GET and the ownership count, and stopped there —
+no gate, no build, no restart, because not one running process reads a Markdown file.
 
-**⚠ NOTHING CHOWNS HERE ANY MORE, AND NOTHING NEEDS TO.** Every git above runs
-as `orbit` through `git-as`, the fleet wrapper that runs git as the account
-owning the directory it is handed — so root never reads a tree it does not own,
-and no root-owned object is left behind to repair. The `find` is that claim's
-proof and is the last line of the block, on purpose: it runs on every exit path,
-including the three that merge nothing. It must print `0`. `.claude/` is carved
-out because the orbit session's own Claude Code runtime (working directory
-`/var/www/orbit`) writes root-owned files there — `.claude/scheduled_tasks.lock`
-today — which recur until backlog item 32 moves the session's working directory
-out of the served tree; those files are in `.git/info/exclude` and never deploy.
+## If it says NOT GATED
 
-**⚠ A NON-ZERO COUNT IS A REPAIR THAT IS DUE BEFORE THE NEXT MERGE STEP.** It is
-residue from the root git this replaced, and git running as `orbit` cannot write
-into a root-owned `.git`, so the next fast-forward is what breaks. Repair it by
-hand, and repair only what is wrong — a blanket `chown -R` over the whole tree
-also rewrites `vendor/`, `node_modules/` and `public/build`, which says
-something happened to them that did not:
+The script prints this recipe with the shas filled in. **The gate runs in a worktree cut from the root-owned clone, never in
+`/var/www/orbit`** — that checkout is bind-mounted into three containers, so a gate there installs dev dependencies in
+production (`docs/DECISIONS.md`). An accepted hazard, until it did not have to be.
 
 ```bash
-find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' -exec chown orbit:orbit {} +
-find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l     # must print 0
+git -C /srv/sessions/orbit/repo worktree add /srv/worker-scratch/orbit-gate-pr<N> <the merged head>
+cd /srv/worker-scratch/orbit-gate-pr<N>
+export COMPOSE_PROJECT_NAME=orbit-gate-pr<N>
+heavy-work orbit-gate-pr<N> -- bash scripts/check.sh overlay
+heavy-work orbit-e2e-pr<N> -- bash scripts/e2e.sh
 ```
 
-That pair repairs whatever the count is on the day it is run — 1 on 2026-09-07:
-`.git/index`, from a root `git status` on 2026-09-06.
+Both write their ledger line at the end of a green run; then re-run `scripts/deploy.sh <PR#>`. A head without both greens is
+re-gated, not argued with. `docs/DEVELOPMENT.md` lists the five paths `scripts/e2e.sh` needs handed over in a root-owned worktree.
 
-- **`DOCS-ONLY: <n> file(s)`** (exit 0) → the block printed `landed <sha>` and
-  the merge has already happened. Go to the landing below and verify it.
-  `NOT LANDED` in its place means the fast-forward was refused and the checkout
-  never advanced: stop and report.
-- **`CODE: <path>`**, one line per file (exit 1) → nothing was merged. This is
-  an ordinary deploy: continue to pre-flight check 4. A path git had to quote
-  comes back escaped and with no reason given: an unusual path is code until
-  someone looks.
-- **`NOTHING TO LAND`** (exit 2) → nothing was merged; the merge changes nothing
-  here. Stop.
-- **Refused** (exit 3) → nothing was merged. The sha is not a commit in this
-  checkout, HEAD is not an ancestor of it because something was committed on the
-  box, or `git-as` refused the tree — the stderr above the refusal says which.
-  Stop and report: a landing is a fast-forward or it is not a landing.
-- **Exit 64** → the script was called wrong. Nothing was classified and nothing
-  was merged. Stop.
+## What it prints
 
-**What counts as documentation.** An allowlist, because a denylist ships the
-file nobody thought of: `README*`, `CHANGELOG*`, `LICENSE*`, `docs/**` and
-`design/**` — minus two files that are documentation an agent *acts on* rather
-than reads. `docs/STANDARDS.md` is loaded as agent instructions through
-`.claude/rules/standards.md`, so changing it changes how the next change gets
-built; `docs/GO-LIVE.md` is a procedure, and a procedure that has not been run
-has not been checked. Everything else is code by construction — this runbook,
-`CLAUDE.md`, `scripts/**`, `.env.example`, the lockfiles, `resources/**`,
-`public/**`.
+One line per phase on stdout, the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<N>.log`.
 
-**⚠ THIS RUNBOOK AND `scripts/**` TAKE THE FULL PATH, ALWAYS.** Running the
-procedure is the only test a procedure gets.
+| line | what it means |
+|---|---|
+| `RESOLVED #N head … merge …` | gh says MERGED, the merge commit **is** `origin/main`, and its tree is the tree that was gated |
+| `CLASSIFIED code` / `LANDED docs-only …` | the classifier's answer; a landing ends the run |
+| `GATED … ci and e2e both green` | the ledger was read. `NOT GATED` prints the recipe above and stops |
+| `PRE-FLIGHT load … available …` | the box as it was; it never refuses |
+| `STEP 0 baseline recorded` | the served bundle hash and the four containers' start times, before anything moves |
+| `STEP 1 rollback target <sha>` | the sha to go back to. It is also `was …` in `DONE` |
+| `STEPS 1-10 ok in one heavy-work job` | fetch, fast-forward, migrate, the restarts, and only the steps whose files moved; it names which ran |
+| `VERIFY --backend-only` / `VERIFY full` | `--backend-only` when step 5 did not run, so an unchanged bundle is expected |
+| `HOST VHOST NEEDED, NOT RUN …` | `deploy/nginx` moved, and nginx reads `/etc/nginx/sites-available/flights.ghiecode.io`, which no pull touches. By hand, in this order: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`. Both tests say `syntax is ok`; never reload on a failed second one |
+| `DONE #N live … was … gated … root-owned 0 verify …` | the deploy is finished. `root-owned` must read `0` |
+| `PAPERWORK PR #N deployed …` | backlog, handoff and the fleet-docs page still want a line from you |
+| `REFUSED: …` | nothing moved. `FAILED rc=…` with a 20-line tail means something did — read the log, do not re-run a step |
 
-### The landing
+**⚠ The containers boot the code once**, so a deploy that stops before the restarts looks entirely successful and serves the old
+app. `scripts/verify.sh` proves each of the four restarted from its `StartedAt`; the drain and the horizon-container trap that
+cost months of silent SIGTERMs are in `docs/DECISIONS.md`.
 
-1. **Check the merge landed** — the block above already did it; this is where
-   you prove it.
-   ```bash
-   git-as orbit -C /var/www/orbit --no-optional-locks rev-parse HEAD
-   git-as orbit -C /var/www/orbit --no-optional-locks log --oneline -1
-   ```
-   **Good:** HEAD is exactly the sha the block echoed after `landed`, and the
-   log line is the merge you expected. A HEAD that did not move means the
-   landing did not happen: `--ff-only` refuses anything but a fast-forward
-   rather than writing a merge commit on the box. Stop and read the output
-   again.
+## What stays human
 
-2. **Check nothing is root-owned** — the block's last line already counted;
-   this is where you read the number.
-   ```bash
-   find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
-   ```
-   **Good:** `0`. Anything else is the repair above, and it is due before the
-   next merge step rather than at leisure.
-
-3. **Prove the site is still serving** — a plain GET and a look at the stack,
-   nothing that writes.
-   ```bash
-   curl -s -o /dev/null -w '%{http_code}\n' https://flights.ghiecode.io/
-   docker compose ps
-   ```
-   **Good:** `200`, and all six services `Up`.
-
-**Then stop.** No gate, no migration, no asset build, no browser gate, no
-`retain`, no `view:clear`, no restart — because not one running process reads a
-Markdown file, so there is nothing new for any of them to boot.
-
-**And that last sentence is checked, within limits worth knowing.**
-`tests/Unit/Standards/DocsAreNotServedTest.php` scans the shipped trees and the
-infrastructure files for a string literal shaped like a documentation path and
-fails the gate on one. That is a heuristic, not a proof: it reads literals, so a
-path built at runtime, assembled from pieces, or reached through a glob would go
-unseen. It is strong enough to catch the change that would quietly make this
-whole section unsafe, and it is why a documentation change is treated as not
-being an app change — but it is evidence, not a guarantee.
-
-## Deploy steps
-
-If any step fails, **stop and report** — do not continue to the next one.
-
-```bash
-cd /var/www/orbit
-```
-
-**⚠ THE ORDER IS ABOUT ONE WINDOW: PULL → MIGRATE.** The checkout is
-bind-mounted into `app`, `horizon` and `scheduler`, so `git pull` puts the new
-code on disk *in the running containers* immediately. The long-lived processes
-keep serving the old code from opcache (which is why step 9 exists) — but
-anything that boots the framework fresh in that window runs **new code against
-an unmigrated database**: every `artisan` the scheduler spawns, every Horizon
-worker that recycles after its job limit, every `php artisan` a person types.
-A missing-column exception on the fare poll is what that looks like.
-
-So the window is kept to the length of one `migrate`, and everything slow — the
-asset build especially, which is an `npm ci` and a Vite build and takes minutes
-— happens **after** the schema and the code agree. That is the only reason the
-build is not step 3 any more.
-
-1. **Pull latest code**
-   ```bash
-   git-as orbit -C /var/www/orbit pull origin main
-   git-as orbit -C /var/www/orbit --no-optional-locks log --oneline -1
-   ```
-   **Good:** a fast-forward, and the log line is the merge commit you expected.
-   If it is not a fast-forward, stop: something was committed on the box.
-
-2. **Prove nothing is root-owned** — the pull above ran as `orbit`, so this
-   counts rather than repairs.
-   ```bash
-   find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
-   ```
-   **Good:** `0`. A non-zero count is a repair due before the next merge step,
-   and the landing section says how to make it narrowly.
-
-3. **Composer dependencies — ONLY if `composer.lock` moved**
-   ```bash
-   git-as orbit -C /var/www/orbit --no-optional-locks diff --name-only HEAD@{1} HEAD -- composer.lock   # empty? skip
-   docker compose exec -T app composer install --no-dev --optimize-autoloader --no-interaction
-   ```
-   **Good:** `Nothing to install, update or remove` (if you ran it anyway) or a
-   package list ending in `Generating optimized autoload files`.
-   `--no-dev` keeps phpunit, larastan, mockery and friends out of the production
-   classmap. It also means **`php artisan test` and `vendor/bin/pint` do not work
-   in the `app` container** — by design, and the reason pre-flight step 4 runs the
-   gate in a throwaway container with its own vendor tree.
-   - **⚠ BEFORE the migration, not after.** A migration is code too: if the
-     commit being deployed adds one that reaches for a class from a package the
-     lockfile just introduced, running it against the old vendor tree is a fatal
-     halfway through a schema change.
-
-4. **Run migrations**
-   ```bash
-   docker compose exec -T app php artisan migrate --force
-   ```
-   **Good:** either `Nothing to migrate` or a list of migrations each ending
-   `DONE`. `--force` is required: `APP_ENV=production` makes migrate refuse to
-   run interactively-unconfirmed.
-   - **⚠ THIS CLOSES THE WINDOW OPENED BY THE PULL** — see the note above the
-     steps. It is deliberately the first slow-ish thing after the code lands and
-     is deliberately ahead of the asset build: a schema that is minutes behind
-     the code on disk is minutes of a scheduler running new queries against an
-     old database.
-
-5. **Build the front-end assets**
-   ```bash
-   docker compose --profile build run --rm assets
-   ```
-   **Good:** `npm ci` then `vite build`, ending in a table of chunks written to
-   `public/build/`, and the container exits 0.
-   `--profile build` is required — `assets` is a task and is not running, so
-   `exec` cannot reach it and `run --rm` is the verb.
-
-6. **`scripts/e2e.sh` — the browser gate. Optional, strongly recommended.**
-   ```bash
-   cd /var/www/orbit && ./scripts/e2e.sh
-   ```
-   **Good:** the `orbit-e2e` stack comes up, migrates, seeds, runs the browser
-   suite and tears itself down, ending in a green `==> browser gate passed`.
-   About 90 seconds after the first run.
-
-   - **⚠ HERE, AND NOT IN THE PRE-FLIGHT, WHICH IS WHERE IT USED TO BE.** It
-     serves the app out of the checkout's own `public/build/`, and it only builds
-     one **if there is none** — so run before step 5 it tests the code that was
-     just pulled through the bundle that was already there. Deploy `ab262c4` is
-     that mistake: a red suite, a green app, and the difference was a stale
-     JavaScript bundle. After step 5 the directory holds the build for the commit
-     being deployed, which is the only thing worth driving a browser at.
-   - **⚠ And BEFORE step 9's restart**, which is the other half of the sandwich.
-     The whole point of a gate is that there is still something to stop.
-
-   **What it adds over pre-flight step 4, and why it is worth the time.** Not one
-   of `check.sh`'s nine checks has ever seen a screen — Vitest runs the front end
-   in jsdom, which has no layout engine and no rasteriser. All nine are green on
-   an app whose globe renders as a black circle and whose calendar renders 31
-   identical grey squares. This drives a real Chromium (WebGL on SwiftShader)
-   through the eight journeys and fails on any uncaught exception. `docs/E2E.md`
-   is the full description.
-
-   **Why it is optional.** It pulls a ~2 GB Playwright image the first time it
-   runs, and this box's disk is shared with six other apps. On a box that has it
-   cached there is no reason to skip it.
-
-   - **⚠ Also root, not `sudo -u orbit`** — same docker.sock reason as pre-flight
-     step 4.
-   - **It cannot touch the live stack.** Different compose project (`orbit-e2e`),
-     different port (`127.0.0.1:3185`, never 3085), its own generated `.env.e2e`
-     and its own volumes. It is safe to run **while the site is up**, which is
-     how it is meant to be run.
-   - It leaves nothing behind: `down -v` at the end, always. `--keep` if you want
-     to look at the sandbox afterwards; `scripts/e2e.sh --down` then tears it down.
-   - **⚠ It runs off the live checkout's `vendor/`, `node_modules/` and
-     `public/build/`** — so on this box it uses the `--no-dev` vendor tree, which
-     is all it needs (it drives the app through a browser and runs no PHP
-     tooling). It does **not** need the gate overlay from pre-flight step 4.
-     It installs `node_modules/` and the bundle if they are missing, but it
-     **refuses to install `vendor/` here** and tells you to run step 3 instead:
-     its install carries dev dependencies, and doing that in this checkout is the
-     outage pre-flight step 4 exists to prevent.
-   - **⚠ A run is good when every line has a tick.** It used to carry three
-     `test.fail()` markers — rendering defects written down as tests that passed
-     while the bug was there, printing a `✘` in a green run. All three are fixed
-     (the follow-ups PR), the markers are gone, and **a `✘` now means a
-     failure.** The last line is still the thing to read: `==> browser gate
-     passed`.
-   - **⚠ NO COUNT IS WRITTEN DOWN HERE ON PURPOSE.** This said "runs 32 browser
-     tests" for several months during which the number was 32 exactly once. A
-     figure in a runbook that nothing checks is a figure that rots, and the only
-     honest reading of "it ran 29" is then a shrug. The last line is the check.
-
-7. **Prune old builds**
-   ```bash
-   docker compose exec -T app php artisan build:retain
-   ```
-   **Good:** a `keeping …` line naming up to three build versions, and a count of
-   deleted files.
-   - **⚠ "Up to three" is literal.** Retention keeps the newest three
-     *snapshots*, and there are only as many snapshots as there have been runs:
-     the first deploy after this command exists reports one, the second two. A
-     `keeping` line naming fewer than three builds on an early deploy is the
-     command working, not a build that went missing.
-   - **⚠ AFTER the asset build, never before.** It snapshots *the build that is
-     currently on disk* — running it first would record the previous build and
-     then prune the one you just made.
-   - **⚠ Not optional.** `vite.config.js` sets `emptyOutDir: false` so a build
-     *adds* chunks rather than replacing the directory (which is what keeps a page
-     open across a deploy alive when it fires a lazy import). Nothing else removes
-     them, so skipping this is a disk that fills up.
-   - **⚠ FIRST RUN ONLY — it prunes everything predating its ledger.** Retention
-     is "keep the newest N snapshots, keep the union of the files they name,
-     delete every other file in `assets/`". Before the first run there are no
-     snapshots, so the first run's ledger names exactly one build — the one you
-     just built — and **every chunk from every earlier build is deleted**. Run it
-     for the first time only *after* the first post-merge asset build, and accept
-     that any page held open across that one deploy will fail its next lazy
-     import. Every subsequent run is boring.
-   - It also runs daily at 03:10 from `routes/console.php`, so a forgotten step
-     here is a day of extra chunks rather than a full disk.
-
-8. **Clear compiled views**
-   ```bash
-   docker compose exec -T app php artisan view:clear
-   ```
-   **Good:** `INFO  Compiled views cleared.`
-   Blade compiles to `storage/framework/views/` keyed by source path, not by
-   content hash, so a changed `app.blade.php` can otherwise keep serving the old
-   compiled file.
-
-9. **Restart the long-lived processes** — the step that actually ships the code
-   ```bash
-   docker compose exec -T horizon php artisan horizon:terminate
-   docker compose restart app horizon scheduler web
-   ```
-   **Good:** `INFO  Sending TERM signal to processes.` followed by a
-   `Process: 1 … DONE` line; then `restart` prints four `Restarting`/`Started`
-   lines.
-   - **`horizon:terminate` FIRST, and it is not redundant with `restart`.** It
-     asks the workers to finish the job in hand and then exit, so an in-flight
-     fare poll or alert send completes instead of being killed mid-transaction.
-     `restart` alone would SIGTERM them. `stop_grace_period: 60s` on the horizon
-     service is what gives that drain time to happen.
-   - **⚠ IN THE `horizon` CONTAINER, NOT IN `app` — and this runbook said `app`
-     for its first several deploys.** Horizon's master supervisor registers
-     itself in redis under `gethostname()`, and every container has a hostname
-     of its own. Run from `app`, the command looks for a master named after the
-     app container, finds none, and exits **0** with
-     `INFO  No processes to terminate.` — a green line, a successful step, and
-     no drain whatsoever. Measured on this box, both halves in one sitting:
-
-     | where | output |
-     | --- | --- |
-     | `exec -T app php artisan horizon:terminate` | `INFO No processes to terminate.` (rc 0) |
-     | `exec -T horizon php artisan horizon:terminate` | `INFO Sending TERM signal to processes.` `Process: 1 … DONE` |
-
-     So until this line changed, **every deploy SIGTERM'd the workers mid-job**
-     via `restart` and the graceful drain had never once been in effect. Reading
-     the output is the check: `No processes to terminate.` means you are in the
-     wrong container.
-   - **`web` is in the list** because the nginx sidecar reads
-     `docker/web/nginx.conf` only at start — the `/globe/` and `/build/` cache
-     locations live there, and a config change is invisible until the sidecar
-     restarts.
-   - `postgres` and `redis` are **not** in the list and must not be: nothing about
-     a code deploy changes them, and bouncing redis makes every container holding
-     a connection answer `NOAUTH` until it reconnects.
-
-## Post-deploy verification
-
-**No check below changes application data**, and each is safe to repeat. Two
-carry a cost that is not a change: check 3's `POST /login` really does log in and
-is rate-limited 5/min, and its plumbing probe is a `POST` the app refuses at auth.
-The one authenticated write the runbook documents is in *Authenticated writes*
-after this section, deliberately outside the numbered list.
-
-Before go-live the vhost is not enabled, so these go at the loopback with an
-explicit `Host:` header — **without it the sidecar answers `400`**, which is a
-correct answer to a hostless request and not a fault.
-
-```bash
-H='Host: flights.ghiecode.io'
-B='http://127.0.0.1:3085'
-# After go-live, drop -H and use B='https://flights.ghiecode.io'.
-```
-
-1. **The shell loads.**
-   ```bash
-   curl -s -o /dev/null -w '%{http_code}\n' -H "$H" "$B/"          # expect 200
-   curl -s -H "$H" "$B/" | grep -oE 'build/assets/app-[A-Za-z0-9_-]+\.js'
-   ```
-   **Good:** `200`, and an `app-<hash>.js` whose hash **changed** if step 5 rebuilt
-   anything. An unchanged hash after a front-end change means the build did not
-   land.
-
-2. **The health endpoint.**
-   ```bash
-   curl -s -H "$H" "$B/up" | grep -c 'Application up'              # expect 1
-   ```
-   **Good:** `1`. **Check the body, not the status** — `/up` is excluded from the
-   SPA catch-all, so if this ever returns the shell instead (`id="app"`), routing
-   itself is wrong rather than the app being down.
-
-3. **One authenticated API call.**
-
-   **⚠ `-c`/`-b` DO NOT WORK HERE, and they fail silently.**
-   `SESSION_SECURE_COOKIE=true` marks both cookies `Secure`, and over plain
-   loopback HTTP curl will not even **store** them — `-c jar` writes a file
-   containing nothing but comments, and every later `-b jar` sends no cookie at
-   all. The result is a 401 that means "curl dropped the cookie", not "the app
-   rejected you". Rewriting the jar's Secure column does not help either: there is
-   no row in it to rewrite.
-
-   **The cookies have to come off the response headers and go back as an explicit
-   `Cookie:` header**, bypassing curl's cookie engine entirely. This is PR #4's
-   flow, reproduced with the mechanism that works:
-
-   ```bash
-   # 1. CSRF + session cookies, read straight out of Set-Cookie. Expect 204.
-   HDR=$(mktemp)
-   curl -s -D "$HDR" -o /dev/null -H "$H" "$B/sanctum/csrf-cookie"
-   COOKIE=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$HDR")
-
-   # The header value must be the URL-DECODED cookie: Laravel decrypts it, and
-   # the base64 padding arrives as %3D.
-   XSRF=$(printf '%s' "$COOKIE" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
-          | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
-   ```
-
-   **Check the plumbing before spending a login attempt** — this proves the
-   session and CSRF token are accepted, and it costs nothing because the request
-   is refused at auth and can change no data:
-
-   ```bash
-   curl -s -o /dev/null -w '%{http_code}\n' -X POST -H "$H" \
-        -H "Cookie: $COOKIE" -H "X-XSRF-TOKEN: $XSRF" -H 'Accept: application/json' "$B/api/watchlist"
-   # Good: 401  — CSRF passed, auth refused. (Drop the X-XSRF-TOKEN header and
-   #              the same call is 419, which is how you know 401 meant something.)
-   ```
-
-   Then the real thing:
-
-   ```bash
-   # 2. Log in. Laravel REGENERATES the session id on login, so the response
-   #    carries a new orbit-session — capture it or step 3 is still a guest.
-   OUT=$(mktemp)
-   curl -s -D "$OUT" -H "$H" -H "Cookie: $COOKIE" -H "X-XSRF-TOKEN: $XSRF" \
-        -H 'Accept: application/json' -H 'Content-Type: application/json' \
-        -d '{"email":"<SEED_USER_EMAIL from the box .env>","password":"…"}' \
-        -w '\n%{http_code}\n' "$B/login"
-   AUTHED=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$OUT")
-
-   # 3. The authenticated read.
-   curl -s -H "$H" -H "Cookie: ${AUTHED:-$COOKIE}" -H 'Accept: application/json' \
-        -w '\n%{http_code}\n' "$B/api/me"
-   rm -f "$HDR" "$OUT"
-   ```
-
-   **Good:** `204`, then `200` with `{"data":{"id":1,"name":"Ghie",…}}`, then `200`
-   with keys `email, id, name`.
-   **⚠ `POST /login` is throttled 5/min on `email|ip`** and the throttle runs
-   before validation, so a fumbled password costs a slot. It recovers in a minute.
-   A write needs more than this login gives you, and it is not part of this
-   battery: see *Authenticated writes*.
-
-   **Cheaper smoke, if the password is not to hand** — still proves the auth stack
-   and the JSON error renderer are wired, and needs no cookies at all:
-   ```bash
-   curl -s -H "$H" -H 'Accept: application/json' -w '\n%{http_code}\n' "$B/api/me"
-   ```
-   **Good:** `401` and `{"message":"Unauthenticated."}` — **not** a redirect and
-   **not** HTML. (An HTML body here would mean the JSON-rendering rule in
-   `bootstrap/app.php` stopped applying under `/api/`.)
-
-4. **The PWA surface — once PR #10 (`feat/pwa`) is merged.**
-   ```bash
-   curl -sI -H "$H" "$B/manifest.webmanifest" | grep -i content-type   # application/manifest+json
-   curl -sI -H "$H" "$B/sw.js"                | grep -i content-type   # application/javascript; charset=utf-8
-   ```
-   **⚠ Status code is worthless here and this is the trap.** Both paths return
-   **200 `text/html`** today, *before* the PWA is merged, because the SPA
-   catch-all swallows them. `text/html` on either of these means the route is not
-   registered — the shell is answering. Assert the `Content-Type`.
-   ```bash
-   curl -s -H "$H" "$B/sw.js" | grep -oE "PRECACHE|app-[A-Za-z0-9_-]+\.js" | sort -u
-   ```
-   **Good:** the service worker names the **current** `app-<hash>.js` — the same
-   hash step 1 printed. A stale hash here means `build:retain` or the build ran in
-   the wrong order.
-
-5. **Static asset caching.**
-   ```bash
-   curl -sI -H "$H" "$B/build/assets/app-<hash>.js" | grep -i cache-control
-   ```
-   **Good:** `public, max-age=31536000, immutable` (hashed filenames).
-   `/globe/` and `/icons/` are `public, max-age=604800` — a week, not immutable,
-   because those filenames carry no content hash.
-
-6. **The stack itself.**
-   ```bash
-   docker compose ps
-   ```
-   **Good:** `app`, `horizon`, `scheduler`, `web`, `postgres`, `redis` all `Up`;
-   `horizon`, `postgres` and `redis` additionally `(healthy)`. **`assets` is
-   absent and that is correct** — it is `profiles: ['build']`, a task. `web` is the
-   only one with a published port, and it reads `127.0.0.1:3085->8080/tcp`. If it
-   reads `0.0.0.0:3085`, stop: the stack is exposed to the internet.
-
-7. **The queue is alive and empty of failures.**
-   ```bash
-   docker compose exec -T app php artisan horizon:status
-   docker compose exec -T app php artisan queue:failed
-   ```
-   **Good:** `Horizon is running.` and `No failed jobs found.`
-   `horizon:status` is the check that step 9's `horizon:terminate` was followed by
-   a supervisor that actually came back — a terminate whose container did not
-   restart leaves a silent queue, and nothing else in this battery would notice.
-
-8. **Nothing threw during the deploy.**
-   ```bash
-   docker compose exec -T app tail -n 40 storage/logs/laravel.log
-   ```
-   **Good:** no `production.ERROR` / `production.CRITICAL` newer than the
-   restart.
-   - **⚠ `testing.*` LINES ARE THE GATE'S OWN NOISE.** Pre-flight step 4 runs
-     PHPUnit against this checkout, bind-mounted, so any test that exercises a
-     logging path writes into *production's* application log with `testing` as
-     the environment. `testing.ERROR` next to a passing gate is a test asserting
-     that something fails, not an incident. The environment name in front of the
-     level is the only thing that separates them; grep for `production.` if the
-     tail is busy.
-
-9. **The alert mail nobody is receiving yet.**
-   ```bash
-   docker compose exec -T app tail -n 40 storage/logs/mail.log
-   ```
-   **Good:** either nothing (no alert fired since the last look) or whole MIME
-   messages, each headed `production.DEBUG: Symfony\Component\Mime\Email`.
-
-   Until ghiecode.io is verified as a sending domain in Resend, `MAIL_MAILER=log`
-   and **this file is where every alert this app decides to send ends up**. That
-   is the deliberate stage that lets the firing rules be judged against real
-   fares before anybody's phone lights up — and it is worth reading after a
-   deploy that touched alerting.
-   - **⚠ IT NEEDS `MAIL_LOG_CHANNEL=mail` IN `.env`,** which `.env` on this box
-     does not have until somebody adds it: the line is in `.env.example` (which
-     is in git) and `.env` (which is not). Add it **before** step 9's restart, so
-     the workers pick it up with everything else. Without it the log mailer falls
-     back to the default channel, whose floor is `LOG_LEVEL=info`, and the
-     transport writes at DEBUG — so every message is rendered and then dropped,
-     silently, which is exactly what was happening before this file mentioned
-     `mail.log` at all. `tests/Feature/MailLogChannelTest.php` holds both halves
-     of that.
-   - The file does not exist until the first mail is written to it; a `No such
-     file` from `tail` on a box that has fired no alerts is not a fault.
-
-10. **Nothing in the checkout is root-owned.**
-    ```bash
-    find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
-    ```
-    **Good:** `0`. Every git above ran as `orbit` through `git-as` and every
-    container step runs as `115:119`, which *is* `orbit`, so there is nothing
-    for a chown to fix. A number here is what would break the next deploy's
-    fast-forward, and finding it now is cheaper than finding it then.
+- **Which pull request**, and whether it is the one Ghie merged.
+- **One look at the site, on a phone** when the release touches anything you tap, against the pull request's "What you'll
+  notice". The script proves the code is live, not that it is right, and nothing in the gate has thumbs.
+- **The host vhost**, when the notice fires; the script never edits `/etc`. And **the paperwork**: backlog, handoff, and the
+  project's page on docs.ghiecode.io.
+- **A surprise in the log** — a migration you did not expect is a conversation, not a deploy step.
 
 ## Authenticated writes — not part of the battery
 
-**⚠ EVERYTHING IN THIS SECTION CHANGES PRODUCTION DATA.** Nothing above it does.
-Prefer not to run any of it: `scripts/e2e.sh` (deploy step 6) drives every one of
-these writes through a real browser, against a sandbox where a mistake costs
-nothing.
+**⚠ EVERYTHING IN THIS SECTION CHANGES PRODUCTION DATA.** Nothing in `scripts/verify.sh` does. Prefer not to run any of it:
+`scripts/e2e.sh` drives every one of these writes through a real browser, against a sandbox where a mistake costs nothing.
 
-**This section continues the verification shell above.** `$H` and `$B` come from
-that section's preamble; `$OUT` and `$AUTHED` come from check 3. From a fresh
-shell, set `$H` and `$B` first and then run check 3 — without them curl fails with
-`(3) URL rejected`, and an expired `$AUTHED` gets you a 401 rather than a write.
-
-**An authenticated write needs the CSRF token lifted again, from the login
-response.** Check 3's `/api/me` is a GET and gets away with the old one; a write
-does not. `Illuminate\Auth\SessionGuard::login()` calls `$session->regenerate()`,
-which mints a **new session id and a new CSRF token**, and the login response
-carries both as fresh `Set-Cookie` headers. Re-using `$XSRF` from before the login
-sends a token belonging to a session that no longer exists, and Laravel answers
-**419** — which reads exactly like "CSRF is broken on this deploy" and is not.
-Take it off `$OUT`, next to `$AUTHED`:
+`$H`, `$B` and `$AUTHED` are the shell `scripts/verify.sh` check 3 mechanises — set `H='Host: flights.ghiecode.io'`,
+`B='http://127.0.0.1:3085'` and lift the cookies the way that check does. **A write needs the CSRF token lifted again, from the
+login response**: `login()` regenerates the session and mints a new token, so the pre-login one answers **419**, which reads
+exactly like "CSRF is broken on this deploy" and is not.
 
 ```bash
 AUTH_XSRF=$(printf '%s' "$AUTHED" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
             | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
 ```
 
-**Pausing a route, and putting it back.** Both halves are written here as one
-block on purpose. A paused route is skipped by the 06:10 poll in silence — no
-alert fires for it and nothing anywhere says so — until somebody notices by eye.
-Do not run the pause without running the restore.
+**Pausing a route, and putting it back.** Both halves are written here as one block on purpose. A paused route is skipped by the
+06:10 poll in silence — no alert fires for it and nothing anywhere says so — until somebody notices by eye. Do not run the
+pause without running the restore.
 
 ```bash
 # PAUSE — AMS-LIS stops being polled from this moment.
@@ -735,44 +117,33 @@ curl -s --connect-timeout 5 --max-time 15 -H "$H" -H "Cookie: $AUTHED" \
      -H 'Accept: application/json' "$B/api/watchlist" \
   | python3 -c 'import sys,json;print([r["active"] for r in json.load(sys.stdin)["data"] if r["code"]=="AMS-LIS"])'
 ```
-**Good:** `200` from each PATCH, and `[True]` from the read. A `419` from a PATCH
-means the token, not the app. Anything other than `[True]` at the end means a
-production route is still paused — put it back before you walk away.
 
-**⚠ A bare `PUT /api/profile/password` is 419, not 401.** It is the obvious "is
-the password endpoint protected?" smoke test and it proves nothing:
-`ValidateCsrfToken` runs **before** `auth` in the `web` group, so a request with
-no cookies at all is refused for having no token and never reaches the guard.
-Only the full lift above — session cookie, then `X-XSRF-TOKEN` from the same
-session — gets far enough for a 401 to mean "unauthenticated". Same trap as the
-`-c`/`-b` one: a refusal that is real, for a reason that is not the one being
-tested.
+**Good:** `200` from each PATCH, and `[True]` from the read. A `419` from a PATCH means the token, not the app. Anything other
+than `[True]` at the end means a production route is still paused — put it back before you walk away.
+
+**⚠ A bare `PUT /api/profile/password` is 419, not 401.** `ValidateCsrfToken` runs before `auth`, so a request with no cookies
+is refused for having no token and never reaches the guard. Only the full lift above makes a 401 mean "unauthenticated".
 
 ## Rollback
 
-The deploy is a merge commit, so what has to reach `main` is a revert of that
-merge. A reset on the box alone is not a rollback: it leaves `main` carrying the
-bad code and the next deploy pulls it straight back.
+The deploy is a merge commit, so what has to reach `main` is a revert of that merge: a reset on the box alone leaves `main`
+carrying the bad code and the next deploy pulls it straight back. **⚠ NOTHING ON THIS BOX CAN PUSH** — `git-as` uses the app's
+read-only deploy key and root's git cannot enter this tree — so the rollback is two separate things.
 
-**⚠ NOTHING ON THIS BOX CAN PUSH.** `git-as` uses the app's deploy key and GitHub
-registered it read-only — on purpose, so a compromised app cannot rewrite its own
-source — so a push from here answers `ERROR: The key you are authenticating with
-has been marked as read only`. Root's git cannot enter this tree at all. The
-rollback is therefore two separate things: the box is put back on disk, and the
-revert is recorded through a pull request from somewhere else.
-
-**On disk — put the checkout back on the sha pre-flight check 3 printed:**
+**On disk — put the checkout back on the sha `DONE` printed as `was`:**
 
 ```bash
 git-as orbit -C /var/www/orbit --no-optional-locks log --oneline -5   # confirm what is live
-git-as orbit -C /var/www/orbit reset --hard <the sha from pre-flight check 3>
+git-as orbit -C /var/www/orbit reset --hard <the sha DONE printed as was>
 find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
 ```
 
-**For the record — the revert PR, from a root-owned private clone, never from
-this tree and never from a worktree of it** (a worktree of this checkout is
-`orbit`-owned too, so `git-as` would push it with the same read-only key, and
-root's git cannot read it at all):
+The count must print `0`. Then **rebuild what the deploy built** — the asset build, `build:retain`, `view:clear`, the drain and
+the four restarts, then `scripts/verify.sh` — because reverting and not restarting leaves the bad build serving. Reverting the
+merge and deploying that is the shorter path whenever there is time for it.
+
+**For the record — the revert PR, from a root-owned private clone, never from this tree nor a worktree of it** (a worktree here
+is `orbit`-owned too, so `git-as` would push it with the same read-only key):
 
 ```bash
 git clone git@github.com:gcotcheza/orbit.git /srv/worker-scratch/orbit-revert
@@ -783,22 +154,9 @@ git push -u origin revert/<sha>
 gh pr create --draft --fill --base main --head revert/<sha>
 ```
 
-Ghie merges it; the next deploy lands it, and the `reset --hard` above is what
-holds until then.
+Ghie merges it; the next deploy lands it, and the `reset --hard` above is what holds until then.
 
-Then **redeploy from step 5** — the revert is only code on disk until the assets
-are rebuilt and the containers are restarted. Reverting and not restarting leaves
-the bad build serving.
-
-**Migrations are not reverted, and mostly do not need to be.** Every migration in
-this repo so far is **additive** — new tables (`deal_rules` arrives with PR #11)
-and new columns, nothing dropped or retyped — so the reverted code simply ignores
-them and the database is compatible with both sides. Do **not** reach for
-`migrate:rollback` as a reflex: dropping a table the reverted code does not read
-buys nothing and loses the rows. Check the migration before assuming, and if a
-future one is destructive it needs its own written-down rollback rather than this
-paragraph.
-
-**Assets survive a rollback on purpose.** `build:retain` keeps the newest three
-builds, so the previous build's chunks are still on disk and a phone holding a
-reference to them still resolves while the revert is deploying.
+**Migrations are not reverted, and so far do not need to be**: every one in this repo is additive, so the reverted code ignores
+the new columns. Check before assuming — a destructive one needs its own written-down rollback. **Assets survive a rollback on
+purpose**: `build:retain` keeps the newest three builds, so a phone holding a reference to the previous one still resolves while
+the revert is deploying.
