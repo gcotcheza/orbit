@@ -111,6 +111,40 @@ final class BrowserGateInstallsTest extends TestCase
         }
     }
 
+    #[Test]
+    public function the_vite_build_rebuilds_when_the_bundle_is_older_than_its_inputs(): void
+    {
+        $block = $this->viteBuildDecision();
+
+        $this->assertStringContainsString(
+            '-newer public/build/manifest.json',
+            $block,
+            'The vite build step must treat the manifest as stale once an input is newer than it, '
+            .'not only when the manifest is absent.'
+        );
+
+        foreach (['resources', 'package-lock.json', 'vite.config.js'] as $input) {
+            $this->assertStringContainsString(
+                $input,
+                $block,
+                "The staleness check must name {$input} as one of the bundle's inputs."
+            );
+        }
+
+        $this->assertStringContainsString(
+            'checkout_is_live',
+            $block,
+            'A stale bundle in a served checkout must refuse to rebuild rather than overwrite '
+            .'the live public/build/ while the site serves it.'
+        );
+
+        $this->assertStringContainsString(
+            'npm run build',
+            $block,
+            'The staleness decision must still reach the build it decided on.'
+        );
+    }
+
     private function guardBody(): string
     {
         return $this->between('/^checkout_is_live\(\) \{$(.*?)^\}$/ms', 'a checkout_is_live function');
@@ -122,6 +156,11 @@ final class BrowserGateInstallsTest extends TestCase
             '/^if \[ ! -f vendor\/autoload\.php \]; then$(.*?)^fi$/ms',
             'a composer-install branch'
         );
+    }
+
+    private function viteBuildDecision(): string
+    {
+        return $this->between('/^vite_build_reason=(.*?npm run build)$/ms', 'a vite-build staleness check');
     }
 
     private function between(string $pattern, string $what): string

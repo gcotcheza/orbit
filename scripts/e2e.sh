@@ -357,8 +357,28 @@ if [ ! -f node_modules/.package-lock.json ]; then
         npm ci --no-audit --fund=false
 fi
 
+vite_build_reason=''
+vite_build_stale=0
 if [ ! -f public/build/manifest.json ]; then
-    step 'vite build'
+    vite_build_reason='no bundle'
+else
+    newer=$(find resources package-lock.json vite.config.js -newer public/build/manifest.json -print -quit) \
+        || fail 'could not compare the bundle with its inputs'
+    if [ -n "$newer" ]; then
+        vite_build_reason='bundle older than its inputs'
+        vite_build_stale=1
+    fi
+fi
+
+if [ -n "$vite_build_reason" ]; then
+    if [ "$vite_build_stale" = 1 ] && checkout_is_live; then
+        fail "public/build/ is older than its inputs, and this checkout must not be rebuilt into:
+    ${live_reason}.
+    A rebuild here would overwrite the live public/build/ while the site serves it — a
+    silent partial front-end deploy. Run the deploy's own asset-build step instead
+    (docker compose --profile build run --rm assets), then re-run this script."
+    fi
+    step "vite build (${vite_build_reason})"
     docker run --rm -u "${APP_UID}:${APP_GID}" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
         -v "$ROOT":/var/www/html -w /var/www/html node:24-alpine \
         npm run build
