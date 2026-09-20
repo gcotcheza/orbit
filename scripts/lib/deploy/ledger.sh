@@ -1,7 +1,8 @@
-# fleet-deploy-lib 2026-09-19 sha256:c095ee77ccab85843412fdd54e6139a52ded990df2a01e8ba71281b5077ef63c
+# fleet-deploy-lib 2026-09-19 sha256:8bf9cf2916bd70d49dd27377673e4f05e97856f6b27635e0eaae3321bb664603
 # shellcheck shell=bash
 # One line per gate run: <sha> <ci|e2e> <utc> <rc> <log>. ci.sh and e2e.sh write it,
-# gated reads it, and a head that is not in it green is refused. GATE_LEDGER_GIT is unquoted on purpose.
+# gated reads it, and the commit GATE_SHA names is refused unless it is in there green.
+# GATE_LEDGER_GIT is unquoted on purpose.
 # The EXIT trap records; sourcing this file discards any inherited GATE_SUITE_PASSED.
 # The gate script sets it itself, in its own shell, right after its suite returns 0.
 
@@ -52,11 +53,11 @@ gated() {
     [ -f "$LEDGER" ] || refuse "no gate ledger at $LEDGER, so no head was ever gated on this box."
     for kind in ci e2e; do
         # Append-only, so the last line for (sha, kind) is the newest and it alone decides.
-        awk -v sha="$HEAD_SHA" -v kind="$kind" \
+        awk -v sha="$GATE_SHA" -v kind="$kind" \
             '$1 == sha && $2 == kind { rc = $4; seen = 1 } END { exit (seen && rc == "0") ? 0 : 1 }' "$LEDGER" \
-            || refuse "the ledger holds no green $kind for ${HEAD_SHA:0:7}: gate that head, then deploy."
+            || refuse "the ledger holds no green $kind for ${GATE_SHA:0:7}: gate that $GATE_WHAT, then deploy."
     done
     # shellcheck disable=SC2034  # the project's finish() prints it
-    GATED=ledger
-    say "GATED ${HEAD_SHA:0:7} ci and e2e both green in $LEDGER"
+    GATED="ledger $GATE_WHAT ${GATE_SHA:0:7}"
+    say "GATED ${GATE_SHA:0:7} ci and e2e both green in $LEDGER"
 }
