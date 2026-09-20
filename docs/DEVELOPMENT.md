@@ -171,7 +171,7 @@ served checkout it refuses the rebuild instead. Everything after `--` reaches
 (`scripts/e2e.sh:112`, `:490`), which is how one spec, `--project=tablet`, or a
 re-recording `--update-snapshots=changed` gets through.
 
-Ten green checks have never seen a screen — [`docs/E2E.md`](E2E.md)
+Ten green checks in the containers have never seen a screen — [`docs/E2E.md`](E2E.md)
 explains what that costs and what this harness found.
 
 ## Deploy

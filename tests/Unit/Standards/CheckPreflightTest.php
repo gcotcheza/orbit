@@ -103,36 +103,27 @@ final class CheckPreflightTest extends TestCase
     {
         $result = $this->runGate($this->prints(self::CONTAINER), $this->prints($this->root()));
 
-        $calls = [];
-
-        foreach ($result['docker'] as $line) {
-            if (str_contains($line, 'shellcheck')) {
-                $calls[] = $line;
-            }
-        }
-
-        $this->assertCount(1, $calls, "The gate must lint the shell exactly once.\n".$result['output']);
+        $call = $this->lintCall($result);
 
         $this->assertStringContainsString(
             self::IMAGE,
-            $calls[0],
+            $call,
             'The lint must run from a version-pinned image; `stable` is a moving tag, and a gate '
-            ."whose linter changes under it proves nothing tomorrow (docs/STANDARDS.md S5).\n".$calls[0]
+            ."whose linter changes under it proves nothing tomorrow (docs/STANDARDS.md S5).\n".$call
         );
         $this->assertStringContainsString(
             '-S warning',
-            $calls[0],
-            "The threshold is a policy, recorded in docs/DECISIONS.md, not a flag to drop.\n".$calls[0]
+            $call,
+            "The threshold is a policy, recorded in docs/DECISIONS.md, not a flag to drop.\n".$call
         );
         $this->assertStringContainsString(
             $this->root().':/mnt:ro',
-            $calls[0],
-            "The linter reads the tree and writes nothing to it, so it mounts it read-only.\n".$calls[0]
+            $call,
+            "The linter reads the tree and writes nothing to it, so it mounts it read-only.\n".$call
         );
 
-        $linted = explode(' ', trim(explode(' -S warning ', $calls[0])[1] ?? ''));
+        $linted = $this->linted($result);
         $onDisk = $this->shellFilesOnDisk();
-        sort($linted);
         sort($onDisk);
 
         $this->assertSame(
@@ -141,6 +132,62 @@ final class CheckPreflightTest extends TestCase
             'The lint must cover every shell file under scripts/, the hooks and the sourced '
             .'libraries included: a lint over a subset cannot see the reads that happen across '
             .'those files, and reports variables as unused that the library it was not given uses.'
+        );
+
+        foreach ($this->shellScriptsByExtension() as $script) {
+            $this->assertContains(
+                $script,
+                $linted,
+                "{$script} is a shell script by its name and the lint did not get it. This check "
+                .'reads the tree by extension alone, on purpose: the list the gate builds and the '
+                .'expectation above it both select by a declaration in the first two lines, so a '
+                .'file that declares nothing would be missing from both and exempt from the lint '
+                .'with the suite still green.'
+            );
+        }
+    }
+
+    #[Test]
+    public function a_script_without_a_declaration_is_linted_rather_than_exempted(): void
+    {
+        $result = $this->runGate($this->prints(self::CONTAINER), $this->prints($this->root()), [
+            'scripts/check.sh',
+            'scripts/lib/deploy/VERSION',
+            'scripts/undeclared.sh',
+        ]);
+
+        $this->assertSame(
+            ['scripts/check.sh', 'scripts/undeclared.sh'],
+            $this->linted($result),
+            'A .sh is linted whether or not it declares a shell — ShellCheck answers an undeclared '
+            .'one with SC2148 at error level, so the gate says so instead of skipping it. A file '
+            .'that is neither named .sh nor declares a shell, like the libraries\' VERSION, is not '
+            .'shell and is not linted.'
+        );
+    }
+
+    #[Test]
+    public function a_project_with_nothing_up_is_the_deploys_own_gate_and_is_not_refused(): void
+    {
+        $result = $this->runGate('', $this->prints($this->root()));
+
+        $this->assertStringNotContainsString(
+            self::REFUSAL,
+            $result['output'],
+            'docker answered, and the answer was that this project has no containers at all. That '
+            .'is the deploy\'s own recipe (.claude/commands/deploy.md: a fresh worktree, '
+            .'COMPOSE_PROJECT_NAME=orbit-gate-pr<N>, the overlay runner, nothing brought up), so '
+            ."refusing an empty list refuses every deploy's gate.\n".$result['output']
+        );
+        $this->assertStringContainsString(
+            self::FIRST_STEP,
+            $result['output'],
+            "An empty list is an answer, so the run must reach its first step.\n".$result['output']
+        );
+        $this->assertSame(
+            1,
+            $result['status'],
+            "The stubbed lint fails this run; a 2 is the guard refusing instead.\n".$result['output']
         );
     }
 
@@ -161,14 +208,18 @@ final class CheckPreflightTest extends TestCase
             'The browser gate has lost the guard that keeps it out of the served checkout.'
         );
 
-        $merged = 'The two guards have been merged. They only look alike (docs/STANDARDS.md C2): '
-            .'scripts/check.sh asks whether the stack it is about to gate was started from this '
-            .'directory, and scripts/e2e.sh asks whether this checkout is the one being served — '
-            .'one reads the project it is running against, the other the project docker-compose.yml '
-            .'pins. Sharing them makes one caller inherit the other question.';
+        $merged = 'Each guard\'s name has turned up in the other script, which is the visible half '
+            .'of merging them; a merge under some third name would walk straight past this test, and '
+            .'what holds the two apart is docs/DECISIONS.md, the-two-stack-guards-are-not-one. They '
+            .'only look alike (docs/STANDARDS.md C2): scripts/check.sh asks whether the stack it is '
+            .'about to gate was started from this directory, scripts/e2e.sh whether this checkout is '
+            .'the one being served. Sharing them makes one caller inherit the other question.';
 
-        $this->assertStringNotContainsString('checkout_is_live', $check, $merged);
-        $this->assertStringNotContainsString('stack_is_foreign', $e2e, $merged);
+        $mention = $merged."\nA pointer to the other guard is allowed in a FULL-LINE comment, which "
+            .'is all this test strips; a trailing # on a line of code fails it.';
+
+        $this->assertStringNotContainsString('checkout_is_live', $check, $mention);
+        $this->assertStringNotContainsString('stack_is_foreign', $e2e, $mention);
 
         foreach ($this->shellFilesOnDisk() as $file) {
             if ($file === self::SCRIPT || $file === 'scripts/e2e.sh') {
@@ -191,15 +242,21 @@ final class CheckPreflightTest extends TestCase
         }
 
         foreach (explode("\n", $found[1]) as $line) {
-            if (preg_match('/\bdocker\s+(?:ps|inspect|volume|compose|run|network)\b/', $line) !== 1) {
+            $code = (string) preg_replace('/(^|\s)#.*$/', '', $line);
+            $code = (string) preg_replace('/"[^"]*"|\'[^\']*\'/', ' ', $code);
+            $calls = (int) preg_match_all('/\bdocker\s+[a-z]/', $code);
+
+            if ($calls === 0) {
                 continue;
             }
 
-            $this->assertMatchesRegularExpression(
-                '/timeout \d+ docker /',
-                $line,
-                'A docker call in the guard has no timeout. A daemon that REFUSES leaves the guard '
-                ."fail-closed, which is correct; a daemon that HANGS hangs the gate:\n  ".trim($line)
+            $this->assertSame(
+                $calls,
+                (int) preg_match_all('/\btimeout\s+\d+\s+docker\s+[a-z]/', $code),
+                'A docker call in the guard has no timeout — this counts every subcommand, not a '
+                .'list of the ones somebody thought of, so a later `docker info` is covered too. A '
+                .'daemon that REFUSES leaves the guard fail-closed, which is correct; a daemon that '
+                ."HANGS hangs the gate:\n  ".trim($line)
             );
         }
     }
@@ -232,21 +289,24 @@ final class CheckPreflightTest extends TestCase
     }
 
     /**
+     * @param  list<string>|null  $listed  what the stubbed git reports under scripts/
      * @return array{status: int, output: string, docker: list<string>, seconds: float}
      */
-    private function runGate(string $listBody, string $inspectBody): array
+    private function runGate(string $listBody, string $inspectBody, ?array $listed = null): array
     {
         $bin = sys_get_temp_dir().'/orbit-check-preflight-'.bin2hex(random_bytes(6));
 
         $this->assertTrue(mkdir($bin, 0o700), "Could not create {$bin}");
 
         $this->writeFakeDocker($bin.'/docker', $bin.'/docker.log', $listBody, $inspectBody);
+        $this->writeFakeGit($bin.'/git', $bin.'/listing', $listed ?? $this->everythingUnderScripts());
 
         $started = microtime(true);
         $result = $this->execute(
             ['bash', $this->root().'/'.self::SCRIPT, 'dev'],
             [
                 'PATH'        => $bin.':'.(getenv('PATH') ?: '/usr/bin:/bin'),
+                'CI_GIT'      => $bin.'/git',
                 'GATE_LEDGER' => $bin.'/ledger',
             ],
             $this->root()
@@ -294,13 +354,107 @@ final class CheckPreflightTest extends TestCase
         chmod($path, 0o700);
     }
 
+    /**
+     * A git that lists what the test asked for and answers the ledger's two questions.
+     *
+     * @param  list<string>  $files
+     */
+    private function writeFakeGit(string $path, string $listing, array $files): void
+    {
+        file_put_contents($listing, $files === [] ? '' : implode("\0", $files)."\0");
+
+        $script = <<<SH
+            #!/bin/sh
+            case "\$*" in
+                *ls-files*) cat '{$listing}' ;;
+                *rev-parse*) printf '%s\\n' 0000000000000000000000000000000000000000 ;;
+                *status*) : ;;
+                *)
+                    printf 'FAKE GIT: unexpected subcommand %s\\n' "\$*" >&2
+                    exit 98
+                    ;;
+            esac
+            SH;
+
+        file_put_contents($path, $script);
+        chmod($path, 0o700);
+    }
+
     private function prints(string $answer): string
     {
         return "printf '%s\\n' '{$answer}'";
     }
 
     /**
-     * Every file under scripts/ that declares a shell, selected the way the gate selects them.
+     * @param  array{status: int, output: string, docker: list<string>, seconds: float}  $result
+     * @return list<string>
+     */
+    private function linted(array $result): array
+    {
+        $files = explode(' ', trim(explode(' -S warning ', $this->lintCall($result))[1] ?? ''));
+
+        sort($files);
+
+        return $files;
+    }
+
+    /**
+     * @param  array{status: int, output: string, docker: list<string>, seconds: float}  $result
+     */
+    private function lintCall(array $result): string
+    {
+        $calls = [];
+
+        foreach ($result['docker'] as $line) {
+            if (str_contains($line, 'shellcheck')) {
+                $calls[] = $line;
+            }
+        }
+
+        $this->assertCount(1, $calls, "The gate must lint the shell exactly once.\n".$result['output']);
+
+        return $calls[0];
+    }
+
+    /**
+     * Every file under scripts/, which is what the stubbed git reports by default.
+     *
+     * @return list<string>
+     */
+    private function everythingUnderScripts(): array
+    {
+        $files = [];
+
+        foreach ($this->treeUnderScripts() as $file) {
+            $files[] = substr($file->getPathname(), strlen($this->root()) + 1);
+        }
+
+        sort($files);
+
+        return $files;
+    }
+
+    /**
+     * Shell scripts by their name alone — no first-two-lines rule, which is the point.
+     *
+     * @return list<string>
+     */
+    private function shellScriptsByExtension(): array
+    {
+        $files = [];
+
+        foreach ($this->everythingUnderScripts() as $file) {
+            if (str_ends_with($file, '.sh')) {
+                $files[] = $file;
+            }
+        }
+
+        return $files;
+    }
+
+    /**
+     * Every file under scripts/ the gate must lint: a .sh, or a shell declared in its first
+     * two lines.
      *
      * @return list<string>
      */
@@ -308,13 +462,12 @@ final class CheckPreflightTest extends TestCase
     {
         $files = [];
 
-        /** @var iterable<string, SplFileInfo> $tree */
-        $tree = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($this->root().'/scripts', FilesystemIterator::SKIP_DOTS)
-        );
+        foreach ($this->treeUnderScripts() as $file) {
+            $path = substr($file->getPathname(), strlen($this->root()) + 1);
 
-        foreach ($tree as $file) {
-            if (! $file->isFile()) {
+            if (str_ends_with($path, '.sh')) {
+                $files[] = $path;
+
                 continue;
             }
 
@@ -325,11 +478,30 @@ final class CheckPreflightTest extends TestCase
             }
 
             if (preg_match('/^#!.*sh|^# shellcheck shell=/m', implode('', array_slice($lines, 0, 2))) === 1) {
-                $files[] = substr($file->getPathname(), strlen($this->root()) + 1);
+                $files[] = $path;
             }
         }
 
         sort($files);
+
+        return $files;
+    }
+
+    /** @return list<SplFileInfo> */
+    private function treeUnderScripts(): array
+    {
+        $files = [];
+
+        /** @var iterable<string, SplFileInfo> $tree */
+        $tree = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($this->root().'/scripts', FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($tree as $file) {
+            if ($file->isFile()) {
+                $files[] = $file;
+            }
+        }
 
         return $files;
     }

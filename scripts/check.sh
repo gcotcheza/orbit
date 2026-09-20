@@ -155,15 +155,16 @@ node_step() {
 }
 
 step 'ShellCheck (shell scripts)'
-# Every file under scripts/ that declares a shell, the sourced libraries included:
-# a lint over a subset reports reads it cannot see. docs/DECISIONS.md, the-gate-lints-shell-at-warning
+# Listed the way the secrets step lists, and for the same reason: an untracked
+# editor backup is not the branch. docs/DECISIONS.md, the-gate-lints-shell-at-warning
 shell_files=()
-while IFS= read -r file; do
+while IFS= read -r -d '' file; do
+    case $file in *.sh) shell_files+=("$file"); continue ;; esac
     if head -2 "$file" | grep -qE '^#!.*sh|^# shellcheck shell='; then shell_files+=("$file"); fi
-done < <(find scripts -type f | sort)
+done < <($GIT ls-files -z --cached -- scripts)
 
 if [ ${#shell_files[@]} -eq 0 ]; then
-    printf 'check.sh: no shell script was found under scripts/, so this step linted nothing.\n' >&2
+    printf 'check.sh: git listed no shell script under scripts/, so this step linted nothing.\n' >&2
     exit 1
 fi
 
