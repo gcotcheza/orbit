@@ -1,4 +1,4 @@
-# fleet-deploy-lib 2026-09-19 sha256:202880d782743bff514ccd358fe0b232e349fad83207094c93ac395a85594b44
+# fleet-deploy-lib 2026-09-19 sha256:55e914fbd6cd98d515e610f8a4d0dba90275fe5180c97d12ce32ffda8755312a
 # shellcheck shell=bash
 # resolve <PR#> proves gh says MERGED and the merge commit IS origin/main, then sets
 # GATE_SHA: the commit whose tree deploys, and so the commit that must be gated.
@@ -50,11 +50,14 @@ resolve() {
     [ "$tip" = "$MERGE_SHA" ] || refuse "main moved since the merge: re-gate."
     if $GIT diff --quiet "$HEAD_SHA" "$MERGE_SHA"; then
         GATE_SHA=$HEAD_SHA
-        GATE_WHAT=head
+        GATE_WHAT='head'
         say "RESOLVED #$PR head ${HEAD_SHA:0:7} merge ${MERGE_SHA:0:7} is origin/main, trees identical"
     else
+        # Read by ledger.sh, which the shell that sources this file also sources.
+        # shellcheck disable=SC2034
         GATE_SHA=$MERGE_SHA
-        GATE_WHAT=merge
+        # shellcheck disable=SC2034
+        GATE_WHAT='merge'
         say "RESOLVED #$PR merge ${MERGE_SHA:0:7} is origin/main and its tree is not head ${HEAD_SHA:0:7}'s, so the merge commit itself is what must be gated"
     fi
 }
