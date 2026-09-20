@@ -1,4 +1,4 @@
-<!-- standards-version: 2026-08-23 · sha256: cf3f649a6e2726d92c7202718596c14d6ebc5f2727e53e0e28f6a3c3c56417ef -->
+<!-- standards-version: 2026-09-20.2 · sha256: 9237374f0304c7f02cb3bb588dfdb99283a0a021877be48f800b3c4857f15358 -->
 # Engineering standards — all projects
 
 One set of rules for every project on this box. Nothing here is new: each rule is
@@ -24,13 +24,13 @@ checked** — because a rule nothing checks is a preference, and preferences dri
 
 **C6. One unit, one job.** Small pieces can be tested without booting the world, and a function that does two things has to be read twice to change one of them. — *checked by:* review; pure logic must be testable without mounting a screen or booting a container.
 
-**C7. Where a project has layers, they only point inward.** The business rules must not depend on the framework, the database or the screen, or they cannot be tested or replaced. — *checked by:* Deptrac (memento), or review where no tool is wired.
+**C7. Where a project has layers, they only point inward.** The business rules must not depend on the framework, the database or the screen, or they cannot be tested or replaced. — *checked by:* a boundary tool (Deptrac, where a project wires one), or review where none is.
 
 **C8. Validation lives at the edge, the rule lives in the domain.** The edge rejects malformed input in one place; the domain refuses invalid states however it was reached — including data read back off disk. — *checked by:* form-request/validator classes at the boundary, plus a test that exercises the domain rule directly.
 
 **C9. Failures are loud by default.** A silently swallowed error becomes wrong data that nobody notices for months. — *checked by:* review; if a failure genuinely must be swallowed (a search index being down must not fail someone's save), it needs a `DECISIONS` entry and a named repair command.
 
-**C10. No dead code.** Unused code is read as if it were live and copied as if it were right. — *checked by:* static analysis + review — and before deleting, check which half is actually dead: the caller can be the mistake.
+**C10. No dead code.** Unused code is read as if it were live and copied as if it were right. — *checked by:* review. Name the tool and know its reach: PHPStan finds unused **private** members only, ESLint's `no-unused-vars` finds unused locals and imports but not an unused export, and an unused *public* method or an orphaned module is seen only where a project has wired the extra tooling (an unused-public extension, a front-end dead-export tool). Credit no analyser with more than it performs. Before deleting, check which half is actually dead: the caller can be the mistake.
 
 **C11. Colours, radii, shadows and spacing are decided in one file.** A value written out 23 times in 17 components cannot be changed and cannot be themed. — *checked by:* the project's tokens file (`tokens.css` / `_variables.scss` / `pixel-kit.css`) plus a test asserting the code and the stylesheet still agree.
 
@@ -63,6 +63,8 @@ checked** — because a rule nothing checks is a preference, and preferences dri
   - `aria-current` on the item that is current, `aria-describedby` where a field carries help or an error;
   - touch targets at least 44px, even when the visible pill is smaller.
 
+**T9. A gate never builds, tags or runs an image tag this project builds for production — the gate's tag is separate and disposable — and a deploy builds the production tag itself, from the merged tree.** Reusing the production tag hands every branch a write to what production is recreated from: a live container once came up carrying extensions only an unmerged branch builds, because a gate run had overwritten `:latest`. — *checked by:* `scripts/gate-image-tags.sh <project-root>` in the gate. That is the first half only: no deploy here proves its running container by image id, so the second half binds by review until one does — `ROLLOUT.md` carries it as open work.
+
 ---
 
 ## Security & privacy
@@ -77,7 +79,9 @@ checked** — because a rule nothing checks is a preference, and preferences dri
 
 **S5. Pin what you depend on.** Reproducible installs are what make a gate's result mean anything tomorrow. — *checked by:* committed lockfiles, a platform pin (`config.platform.php`), `.nvmrc`, and a Playwright driver version matching its image tag.
 
-**S6. Production checkouts are not workspaces.** Several of these trees are bind-mounted into running containers: editing, branching or building there changes the live site instantly. — *checked by:* work in a git worktree or a private clone; the gate scripts refuse to run in a deployed checkout, and that refusal is never worked around.
+**S6. Production checkouts are not workspaces.** Several of these trees are bind-mounted into running containers: editing, branching or building there changes the live site instantly. — *checked by:* work in a git worktree or a private clone; a project's gate either **refuses** to run in a deployed checkout or **isolates its writes** from one (an overlay-mode gate does the second deliberately). Its `CLAUDE.md` must say which of the two it is, in words — a flag name in a command line is not an answer. Whichever it does, that guard is never worked around.
+
+**S7. Nothing is deleted in bulk until its read-only twin has been run and its count read out, and a destructive line handed to someone else to type carries that preview and that count with it — a refusal by a permission layer is never re-routed to a person without them.** In bulk means more than one object chosen by a filter rather than named. A filter that reads as "unused" is not one: `docker volume prune --all` counts a torn-down stack's named volume as dangling, because `compose down` removed the containers that held it. Select what you mean positively — by name, by label — and where the command has no read-only twin, build one: a `SELECT` before the `DELETE`, a `find -print` before the `-delete`. — *checked by:* review of the command pair, and of any handed-over message: the preview command and the number it printed are in it, or the line does not go.
 
 ---
 
@@ -89,7 +93,7 @@ checked** — because a rule nothing checks is a preference, and preferences dri
 
 **W3. Only Ghie merges.** The merge is the moment a change reaches real users, and it triggers the deploy — so it belongs to the person who reviewed it. — *checked by:* nobody else runs `gh pr merge`; a stated intent is not consent.
 
-**W4. PR bodies use these four headings, literally, in ≤150 words of plain language.** The body is for the person deciding to merge, not for the developer who wrote it. — *checked by:* the reviewer, before the PR goes ready:
+**W4. A PR's title is one action — what was done — and its body uses these four headings, literally, in ≤150 words of plain language.** *Added caching for card images*, *Fix the flicker on the scan sheet* — never *The phone never caches card images*: a merge list read months later is a list of what was done, and a title that states the problem makes the reader open the PR to find out whether it was solved. The problem belongs under `## Why`. The body is for the person deciding to merge, not for the developer who wrote it. — *checked by:* the reviewer, before the PR goes ready, who corrects a problem-statement title with `gh pr edit <n> --title`:
   `## What changed` (plain, no file names) · `## Why` (the problem in user terms) · `## What you'll notice` (or "nothing in the app") · `## How it was checked`
   and one closing line: *Technical detail: commits and docs/DECISIONS.md.*
 
