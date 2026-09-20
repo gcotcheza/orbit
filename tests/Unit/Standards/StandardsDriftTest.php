@@ -35,9 +35,10 @@ final class StandardsDriftTest extends TestCase
         [$version] = $this->header();
 
         $this->assertMatchesRegularExpression(
-            '/^\d{4}-\d{2}-\d{2}$/',
+            '/^\d{4}-\d{2}-\d{2}(\.\d+)?$/',
             $version,
-            "docs/STANDARDS.md declares version '{$version}'; it is the canonical VERSION file, a date."
+            "docs/STANDARDS.md declares version '{$version}'; it is the canonical VERSION file: a date, "
+            .'with a serial from the second change of a day.'
         );
     }
 
