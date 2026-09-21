@@ -43,7 +43,7 @@ final class GateImageTagsStepTest extends TestCase
         $overrides = [];
 
         foreach (explode("\n", $script) as $line) {
-            if (preg_match('/^\s*\w*(tag_check|image_tags)\w*=/i', $line) !== 1) {
+            if (preg_match('/(^|[\s;&|])\w*(tag_check|image_tags)\w*=/i', $line) !== 1) {
                 continue;
             }
 
