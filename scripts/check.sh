@@ -224,6 +224,32 @@ step 'The deploy script (scripts/deploy-test.sh)'
 "$here/scripts/deploy-test.sh"
 "$here/scripts/verify-test.sh"
 
+step 'Image tags (T9)'
+# A host step: the canonical clone is on this box and inside no container.
+# docs/DECISIONS.md, the-gate-is-one-script-two-runners
+tag_check=/srv/engineering-standards/scripts/gate-image-tags.sh
+if [ ! -x "$tag_check" ]; then
+    printf 'check.sh: %s is missing or not executable, so nothing read which image\n' "$tag_check" >&2
+    printf '  tags this gate builds. A skipped check is a silent pass.\n' >&2
+    exit 1
+fi
+
+if ! tag_report=$("$tag_check" "$here" 2>&1); then
+    printf '%s\n' "$tag_report" >&2
+    exit 1
+fi
+printf '%s\n' "$tag_report"
+
+# It exits 0 over a root with no compose file, so its status alone is not evidence.
+case "$tag_report" in
+    *'built tags:'*) ;;
+    *)
+        printf 'check.sh: the image-tag check counted no built tags in %s, so it\n' "$here" >&2
+        printf '  examined nothing. That is not a pass.\n' >&2
+        exit 1
+        ;;
+esac
+
 step 'Composer advisories'
 # --locked --no-dev: an advisory against phpunit or pint is not on the site.
 php_step composer audit --locked --no-dev --abandoned=report
