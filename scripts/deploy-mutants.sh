@@ -54,18 +54,18 @@ mutant 'resolve stops comparing the trees' lib/deploy/resolve.sh \
     'an ungated merge builds nothing' \
     'a gated merge commit deploys'
 mutant 'the merge commit is announced as a head' lib/deploy/resolve.sh \
-    's/GATE_WHAT=merge/GATE_WHAT=head/' \
+    "s/GATE_WHAT='merge'/GATE_WHAT='head'/" \
     'and a green head does not deploy a merge the ledger never saw' \
     'and DONE says the merge was the commit that was gated'
 mutant 'the differing-tree line stops naming the merge' lib/deploy/resolve.sh \
     's/so the merge commit itself is what must be gated/so re-gate/' \
     'a merge tree that is not the head tree names the merge as the commit to gate'
 mutant 'gated reads the branch head, not the commit that was gated' lib/deploy/ledger.sh \
-    's/awk -v sha="\$GATE_SHA"/awk -v sha="$HEAD_SHA"/' \
+    's/awk -v sha="\$sha"/awk -v sha="$HEAD_SHA"/' \
     'a gated merge commit deploys' \
     'and the ledger read is the merge commit, not the branch head'
 mutant 'the summary never says which commit was gated' lib/deploy/ledger.sh \
-    's/GATED="ledger \$GATE_WHAT \${GATE_SHA:0:7}"/GATED=ledger/' \
+    's/GATED="ledger \$what \${sha:0:7}"/GATED=ledger/' \
     'and DONE says the merge was the commit that was gated' \
     'and DONE says the head was the commit that was gated'
 mutant 'the recipe sends the operator to the branch head' deploy.sh \
