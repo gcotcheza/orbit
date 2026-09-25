@@ -1,4 +1,4 @@
-# fleet-deploy-lib 2026-09-19 sha256:8bf9cf2916bd70d49dd27377673e4f05e97856f6b27635e0eaae3321bb664603
+# fleet-deploy-lib 2026-09-20 sha256:2cf622905ee7a0b6bf419f2e46bd98f4a0f20d32f5403e3922eed62fd39a3ec9
 # shellcheck shell=bash
 # One line per gate run: <sha> <ci|e2e> <utc> <rc> <log>. ci.sh and e2e.sh write it,
 # gated reads it, and the commit GATE_SHA names is refused unless it is in there green.
@@ -44,20 +44,25 @@ gate_ledger_record() {
 }
 
 gated() {
-    local kind
+    local kind sha what
     if [ "$BY_HAND" -eq 1 ]; then
         GATED='by hand'
         say "GATED BY HAND: the ledger was not read. #$PR deploys on a human's word — transition and rescue only."
         return 0
     fi
+    # Unset is a caller without the matching resolve.sh; set but empty is a resolve that
+    # was skipped or did not finish, and that one is refused rather than read as the head.
+    sha=${GATE_SHA-$HEAD_SHA}
+    what=${GATE_WHAT-head}
+    [ -n "$sha" ] || refuse "GATE_SHA is set but empty: resolve did not finish, and gated cannot guess what deploys."
     [ -f "$LEDGER" ] || refuse "no gate ledger at $LEDGER, so no head was ever gated on this box."
     for kind in ci e2e; do
         # Append-only, so the last line for (sha, kind) is the newest and it alone decides.
-        awk -v sha="$GATE_SHA" -v kind="$kind" \
+        awk -v sha="$sha" -v kind="$kind" \
             '$1 == sha && $2 == kind { rc = $4; seen = 1 } END { exit (seen && rc == "0") ? 0 : 1 }' "$LEDGER" \
-            || refuse "the ledger holds no green $kind for ${GATE_SHA:0:7}: gate that $GATE_WHAT, then deploy."
+            || refuse "the ledger holds no green $kind for ${sha:0:7}: gate that $what, then deploy."
     done
     # shellcheck disable=SC2034  # the project's finish() prints it
-    GATED="ledger $GATE_WHAT ${GATE_SHA:0:7}"
-    say "GATED ${GATE_SHA:0:7} ci and e2e both green in $LEDGER"
+    GATED="ledger $what ${sha:0:7}"
+    say "GATED ${sha:0:7} ci and e2e both green in $LEDGER"
 }
