@@ -9,8 +9,8 @@
 #
 # It never reads /var/www/orbit, never runs docker and never runs gh.
 #
-# MUTANT_INDEX runs one mutation, which is how the workers below are fed; the
-# parent prints their output in list order. docs/DECISIONS.md, the-mutant-harness-is-a-gate-step
+# `--worker <n>` runs mutation n alone and exits 0 only if it was caught; that
+# is how the parent feeds its workers. docs/DECISIONS.md, the-mutant-harness-is-a-gate-step
 # shellcheck disable=SC2016  # every mutation below is sed source, not shell
 set -uo pipefail
 
@@ -18,9 +18,20 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SELF="${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
+HARNESS_TIMEOUT=120
 missed=0
 n=0
-ONLY="${MUTANT_INDEX:-}"
+ran=0
+ONLY=''
+
+if [ $# -gt 0 ]; then
+    if [ "$1" = '--worker' ] && [ $# -eq 2 ] && [ -n "$2" ] && [ -z "${2//[0-9]/}" ]; then
+        ONLY=$2
+    else
+        printf 'usage: %s [--worker <n>]\n' "${0##*/}" >&2
+        exit 2
+    fi
+fi
 
 JOBS=$(nproc)
 JOBS=$((JOBS - 1))
@@ -30,19 +41,36 @@ JOBS=$((JOBS - 1))
 mutant() {
     n=$((n + 1))
     [ "${ONLY}" = "${n}" ] || return 0
+    ran=$((ran + 1))
     run_mutant "$@"
+}
+
+# A check name must end where the harness ends it, or a name another one starts
+# with answers for it. These six are how fail()'s callers end one.
+find_red() {
+    local name=$2 line
+    while IFS= read -r line; do
+        case ${line} in
+            "FAIL ${name}" | "FAIL ${name},"* | "FAIL ${name}:"* | "FAIL ${name} ("* \
+                | "FAIL ${name} — "* | "FAIL ${name} is ["*)
+                printf '%s\n' "${line}"
+                return 0
+                ;;
+        esac
+    done <"$1"
+    return 1
 }
 
 all_red() {
     local log=$1 expect
     shift
     for expect in "$@"; do
-        grep -qF "FAIL ${expect}" "${log}" || return 1
+        find_red "${log}" "${expect}" >/dev/null || return 1
     done
 }
 
 run_mutant() {
-    local name=$1 target=$2 expr=$3 out rc dir red expect harness log pid watcher
+    local name=$1 target=$2 expr=$3 rc dir red expect harness log pid watcher
     shift 3
     dir="${WORK}/${n}"
     mkdir -p "${dir}"
@@ -65,7 +93,8 @@ run_mutant() {
     # setsid: stopping the harness must take the deploy it is running with it,
     # or an orphan writes into a directory this script is already removing.
     TMPDIR="${dir}/tmp" DEPLOY_SH="${dir}/scripts/deploy.sh" VERIFY_SH="${dir}/scripts/verify.sh" \
-        GATE_LEDGER_LIB="${dir}/scripts/lib/deploy/ledger.sh" setsid bash "${harness}" >"${log}" 2>&1 &
+        GATE_LEDGER_LIB="${dir}/scripts/lib/deploy/ledger.sh" \
+        setsid timeout "${HARNESS_TIMEOUT}" bash "${harness}" >"${log}" 2>&1 &
     pid=$!
     (
         while kill -0 "${pid}" 2>/dev/null; do
@@ -78,9 +107,13 @@ run_mutant() {
     rc=$?
     kill "${watcher}" 2>/dev/null
     wait "${watcher}" 2>/dev/null
-    out="$(cat "${log}")"
+    if [ "${rc}" -eq 124 ]; then
+        printf 'BROKEN %s: timed out after %ss\n' "${name}" "${HARNESS_TIMEOUT}"
+        missed=$((missed + 1))
+        return
+    fi
     for expect in "$@"; do
-        red="$(printf '%s\n' "${out}" | grep -F "FAIL ${expect}" | head -1)"
+        red="$(find_red "${log}" "${expect}")"
         if [ "${rc}" -ne 0 ] && [ -n "${red}" ]; then
             printf 'red  %s | %s\n' "${name}" "${red%% — *}"
         else
@@ -300,20 +333,42 @@ mutant 'a green run keeps its baseline' verify.sh \
     's/^    rm -f "\$SNAP" && note/    true \&\& note/' \
     'a green run consumes the baseline'
 
-[ -z "${ONLY}" ] || exit 0
+if [ -n "${ONLY}" ]; then
+    if [ "${ran}" -ne 1 ]; then
+        printf 'BROKEN mutation %s: the list has no such mutation\n' "${ONLY}"
+        exit 1
+    fi
+    exit $((missed > 0))
+fi
 
+if [ "${n}" -eq 0 ]; then
+    printf 'deploy-mutants: the list is empty, so this proved nothing\n' >&2
+    exit 1
+fi
+
+# One worker per mutation, ${JOBS} at a time. The verdict is the worker's exit
+# status: a missing one is a worker that died, and counts as a miss.
 for ((i = 1; i <= n; i++)); do printf '%s\n' "${i}"; done \
-    | xargs -P "${JOBS}" -I{} sh -c 'MUTANT_INDEX="$1" bash "$2" >"$3/$1.out" 2>&1' _ {} "${SELF}" "${WORK}"
+    | xargs -P "${JOBS}" -I{} sh -c '
+        [ -e "$3/$1.rc" ] && exit 1
+        bash "$2" --worker "$1" >"$3/$1.out" 2>&1
+        printf %s "$?" >"$3/$1.rc"
+    ' _ {} "${SELF}" "${WORK}"
+xargs_rc=$?
+if [ "${xargs_rc}" -ne 0 ]; then
+    printf 'deploy-mutants: a worker could not be run (xargs exited %s)\n' "${xargs_rc}" >&2
+    exit 1
+fi
 
 for ((i = 1; i <= n; i++)); do
-    if [ -f "${WORK}/${i}.out" ]; then
-        cat "${WORK}/${i}.out"
-    else
-        printf 'BROKEN mutation %s: its worker produced nothing\n' "${i}"
+    [ -f "${WORK}/${i}.out" ] && cat "${WORK}/${i}.out"
+    if [ ! -s "${WORK}/${i}.rc" ]; then
+        printf 'BROKEN mutation %s: its worker left no verdict\n' "${i}"
+        missed=$((missed + 1))
+    elif [ "$(cat "${WORK}/${i}.rc")" != 0 ]; then
+        missed=$((missed + 1))
     fi
-done >"${WORK}/report"
-cat "${WORK}/report"
-missed=$(grep -cE '^(GREEN|BROKEN)' "${WORK}/report")
+done
 
 if [ "${missed}" -eq 0 ]; then
     printf '\ndeploy-mutants: %s mutation(s), every one caught\n' "${n}"
