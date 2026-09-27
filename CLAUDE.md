@@ -5,8 +5,9 @@ Fleet engineering standards: `docs/STANDARDS.md` (also loaded via
 overrides them and says why.
 
 - **Where work happens.** A git worktree, one per branch, cut from the
-  root-owned clone at `/srv/sessions/orbit/repo`:
-  `git -C /srv/sessions/orbit/repo worktree add /srv/sessions/orbit/worktrees/<name> -b <branch> origin/main`.
+  root-owned clone at `/srv/sessions/orbit/repo` by `scripts/worktree.sh add
+  <branch>`, which refuses any path under `/var/www` and runs:
+  `git -C /srv/sessions/orbit/repo worktree add -b <branch> /srv/sessions/orbit/worktrees/<name> origin/main`.
   `/var/www/orbit` IS production and is bind-mounted into the running
   containers, so editing, branching or building there changes the live site
   immediately; root's git does not enter it at all, and
@@ -17,6 +18,14 @@ overrides them and says why.
   serves the old app.
 - **The gate.** `scripts/check.sh dev` against a stack you brought up; the
   deploy runs `scripts/check.sh overlay`. Browser gate: `scripts/e2e.sh`.
+- **The gate isolates its writes; it does not refuse the live checkout (S6).**
+  In either runner it refuses a compose stack started from any other
+  directory, which keeps a worktree off production's containers. Overlay mode
+  runs every PHP and node step in a throwaway container with its own
+  `vendor/`, `bootstrap/cache` and `node_modules/` laid over the tree, so dev
+  dependencies never reach the live app; it does hand `storage/` to the app's
+  user. Nothing stops the gate inside `/var/www/orbit`, so it is never run
+  there.
 - **Layers.** `app/Domain` is pure PHP and imports no framework;
   `app/Application` holds the use cases and their `Ports/`;
   `app/Infrastructure` implements a port and imports inward, never the

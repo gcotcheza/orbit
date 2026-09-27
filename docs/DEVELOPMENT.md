@@ -13,10 +13,13 @@ not enter it and no worktree is made there; `/var/www/orbit-worktrees/` is
 retired (`docs/DECISIONS.md`: `worktrees-live-outside-the-served-tree`):
 
 ```bash
-git -C /srv/sessions/orbit/repo fetch origin
-git -C /srv/sessions/orbit/repo worktree add \
-    /srv/sessions/orbit/worktrees/feat-thing -b feat/thing origin/main
+scripts/worktree.sh add feat/thing          # list, and remove <branch>, are the others
 ```
+
+It fetches `origin` and runs `git -C /srv/sessions/orbit/repo worktree add -b
+feat/thing /srv/sessions/orbit/worktrees/feat-thing origin/main`, naming the
+clone rather than reading it off its own location, and refuses a clone or a
+target under `/var/www`.
 
 The clone is root-owned and every container here runs as `115:119`, so the tree
 they mount is one they can read and cannot write — and for the overlay runner
@@ -72,16 +75,16 @@ commit until it has one, because the layer that catches *your* live keys cannot
 run without it; and `git commit --no-verify` bypasses the guard, exactly as it
 bypasses the global one — say so in the pull request if you use it.
 
-**The gate.** `scripts/check.sh` runs thirteen checks, three of them on the host,
-stopping at the first failure: ShellCheck (every shell script under `scripts/`,
-at `-S warning`), Gitleaks, Pint, the deploy script's own tests (on the host),
-the image-tag check (on the host, over the compose files, from the canonical
-clone at `/srv/engineering-standards`, so this step runs on this box), the
-deploy mutants (on the host, breaking one deploy guard at a time to prove each
-of those tests can still go red), `composer audit`, deptrac (layers, no
-baseline), PHPStan (level 8, no baseline), `npm audit`, ESLint, Vitest,
-PHPUnit. It must pass before a PR is merged — this project has no baseline for
-new debt to hide in.
+**The gate.** `scripts/check.sh` runs fourteen checks, four of them on the
+host, stopping at the first failure: ShellCheck (every shell script under
+`scripts/`, at `-S warning`), Gitleaks, Pint, the deploy script's own tests (on
+the host), the worktree script's own tests (on the host), the image-tag check
+(on the host, over the compose files, from the canonical clone at
+`/srv/engineering-standards`, so this step runs on this box), the deploy mutants
+(on the host, breaking one deploy guard at a time to prove each of those tests
+can still go red), `composer audit`, deptrac (layers, no baseline), PHPStan
+(level 8, no baseline), `npm audit`, ESLint, Vitest, PHPUnit. It must pass
+before a PR is merged — this project has no baseline for new debt to hide in.
 
 It takes the runner as its one argument, and will not guess: `dev` uses the
 stack you already have up, `overlay` gives every step a throwaway container with
@@ -175,7 +178,7 @@ served checkout it refuses the rebuild instead. Everything after `--` reaches
 (`scripts/e2e.sh:112`, `:490`), which is how one spec, `--project=tablet`, or a
 re-recording `--update-snapshots=changed` gets through.
 
-Thirteen green checks have never seen a screen — [`docs/E2E.md`](E2E.md)
+Fourteen green checks have never seen a screen — [`docs/E2E.md`](E2E.md)
 explains what that costs and what this harness found.
 
 ## Deploy
