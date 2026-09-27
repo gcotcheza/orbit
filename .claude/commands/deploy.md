@@ -75,7 +75,8 @@ One line per phase on stdout, the whole run in `/root/personal-vps-deploys/orbit
 
 | line | what it means |
 |---|---|
-| `RESOLVED #N head … merge …` | gh says MERGED, the merge commit **is** `origin/main`, and which commit must be gated: the merged head when the two trees are identical, the merge commit itself when they are not |
+| `RESOLVED #N head … merge … trees identical` | gh says MERGED and the merge commit **is** `origin/main`. The merge left the head's tree untouched, so the commit that must be gated is the merged **head** |
+| `RESOLVED #N merge … is origin/main and its tree is not head …'s` | the same two proofs, but the merge commit has a tree of its own — the ordinary case once `main` has moved on — so the commit that must be gated is the **merge commit** itself |
 | `CLASSIFIED code` / `LANDED docs-only …` | the classifier's answer; a landing ends the run |
 | `GATED … ci and e2e both green` | the ledger was read, for the sha `RESOLVED` named. `NOT GATED` prints the recipe above and stops |
 | `PRE-FLIGHT load … available …` | the box as it was; it never refuses |
