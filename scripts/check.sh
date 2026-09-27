@@ -224,6 +224,11 @@ step 'The deploy script (scripts/deploy-test.sh)'
 "$here/scripts/deploy-test.sh"
 "$here/scripts/verify-test.sh"
 
+step 'The worktree script (scripts/worktree-test.sh)'
+# A host step for the reason the one above is: shell testing shell, against a
+# throwaway clone with a fake docker and a fake git on its PATH.
+"$here/scripts/worktree-test.sh"
+
 step 'Image tags (T9)'
 # A host step: the canonical clone is on this box and inside no container.
 # docs/DECISIONS.md, the-gate-is-one-script-two-runners
