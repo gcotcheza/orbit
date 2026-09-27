@@ -19,12 +19,13 @@ overrides them and says why.
 - **The gate.** `scripts/check.sh dev` against a stack you brought up; the
   deploy runs `scripts/check.sh overlay`. Browser gate: `scripts/e2e.sh`.
 - **The gate isolates its writes; it does not refuse the live checkout (S6).**
-  Overlay mode runs every step in a throwaway container with its own
+  In either runner it refuses a compose stack started from any other
+  directory, which keeps a worktree off production's containers. Overlay mode
+  runs every PHP and node step in a throwaway container with its own
   `vendor/`, `bootstrap/cache` and `node_modules/` laid over the tree, so dev
   dependencies never reach the live app; it does hand `storage/` to the app's
-  user. Dev mode refuses a stack started from any other directory, which keeps
-  a worktree off production's containers, but nothing stops it inside
-  `/var/www/orbit`, so it is never run there.
+  user. Nothing stops the gate inside `/var/www/orbit`, so it is never run
+  there.
 - **Layers.** `app/Domain` is pure PHP and imports no framework;
   `app/Application` holds the use cases and their `Ports/`;
   `app/Infrastructure` implements a port and imports inward, never the

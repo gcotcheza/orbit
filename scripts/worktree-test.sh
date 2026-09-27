@@ -5,8 +5,13 @@
 #   scripts/worktree-test.sh
 #   cp -r scripts /tmp/o && WORKTREE_SH=/tmp/o/worktree.sh scripts/worktree-test.sh
 #
-# It never reads /var/www, never runs docker and never reaches the network.
+# It never writes to /var/www, never runs docker and never reaches the network.
 set -uo pipefail
+
+if [ "$(id -u)" != 0 ]; then
+    printf 'worktree-test.sh needs root: it builds a root-owned clone and drops to nobody to prove one refusal.\n' >&2
+    exit 1
+fi
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORKTREE_SH="${WORKTREE_SH:-${SCRIPT_DIR}/worktree.sh}"
@@ -48,10 +53,12 @@ export FAKE_DOCKER_LOG="${WORK}/docker.argv"
 export GIT_ARGV_LOG="${WORK}/git.argv"
 export FAKE_DOCKER_PROJECTS=''
 export FAKE_DOCKER_DIR=''
+export FAKE_DOCKER_EXIT=''
 
 cat >"${BIN}/docker" <<'SH'
 #!/bin/sh
 printf '%s\n' "$*" >> "${FAKE_DOCKER_LOG}"
+[ -z "${FAKE_DOCKER_EXIT:-}" ] || exit "${FAKE_DOCKER_EXIT}"
 [ -n "${FAKE_DOCKER_PROJECTS:-}" ] || exit 0
 case "$*" in
     *"working_dir=${FAKE_DOCKER_DIR:-}"*)
@@ -175,6 +182,13 @@ absent 'the script ran no volume command' "$(cat "${FAKE_DOCKER_LOG}")" 'volume'
 absent 'the script ran no prune' "$(cat "${FAKE_DOCKER_LOG}")" 'prune'
 export FAKE_DOCKER_PROJECTS='' FAKE_DOCKER_DIR=''
 
+FAKE_DOCKER_EXIT=124
+run remove feat/My-Thing
+nonzero 'remove when docker does not answer' "${RC}"
+contains 'a timeout reads as unknown, not as no containers' "${OUT}" 'did not answer within 10s'
+exists 'the worktree survives a docker that timed out' "${WT}/feat-my-thing"
+FAKE_DOCKER_EXIT=''
+
 printf 'unsaved\n' >"${WT}/feat-my-thing/scratch.txt"
 run remove feat/My-Thing
 nonzero 'remove over an untracked file' "${RC}"
@@ -189,6 +203,24 @@ missing 'the worktree is gone' "${WT}/feat-my-thing"
 contains 'remove leaves the branch and says so' "${OUT}" "branch -d feat/My-Thing"
 equals 'the branch is still there' \
     "$("${REAL_GIT}" -C "${CLONE}" rev-parse feat/My-Thing 2>/dev/null)" "${ORIGIN_MAIN}"
+
+run remove ///
+nonzero 'remove with a branch name that sanitizes to nothing' "${RC}"
+contains 'it says the name is unusable' "${OUT}" 'sanitizes to nothing'
+
+ln -s "${WT}" "${WORK}/linked-worktrees"
+ORBIT_WORKTREES_ROOT="${WORK}/linked-worktrees"
+run add feat/symlinked
+equals 'add through a symlinked worktree root' "${RC}" 0
+FAKE_DOCKER_DIR="$(readlink -f "${WT}")/feat-symlinked"
+FAKE_DOCKER_PROJECTS='orbit-symlinked'
+run remove feat/symlinked
+nonzero 'remove through a symlinked worktree root' "${RC}"
+contains 'docker was asked about the resolved directory' "${OUT}" \
+    'docker compose -p orbit-symlinked down -v'
+exists 'the symlinked worktree survives' "${WT}/feat-symlinked"
+FAKE_DOCKER_PROJECTS='' FAKE_DOCKER_DIR=''
+ORBIT_WORKTREES_ROOT="${WT}"
 
 if [ -x /usr/bin/setpriv ]; then
     cp "${WORKTREE_SH}" "${WORK}/as-nobody.sh"

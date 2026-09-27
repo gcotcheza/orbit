@@ -30,6 +30,14 @@ served() {
     return 1
 }
 
+# 124 is GNU timeout, 143 a killed docker; neither answer is "no containers".
+docker_answer() {
+    case $1 in
+        124 | 143) printf 'did not answer within 10s' ;;
+        *) printf 'exited %s' "$1" ;;
+    esac
+}
+
 sanitize() {
     printf '%s' "$1" | tr '[:upper:]' '[:lower:]' \
         | sed -e 's/[^a-z0-9_-]\+/-/g' -e 's/^[^a-z0-9]\+//' -e 's/-\+$//'
@@ -86,14 +94,20 @@ case "${CMD}" in
     remove | rm)
         BRANCH=${1-}
         [ -n "${BRANCH}" ] || die 'Usage: scripts/worktree.sh remove <branch>'
-        DIR="${WORKTREES_ROOT}/$(sanitize "${BRANCH}")"
+        NAME=$(sanitize "${BRANCH}")
+        [ -n "${NAME}" ] || die "Branch '${BRANCH}' sanitizes to nothing a directory can be named."
+        DIR="${WORKTREES_ROOT}/${NAME}"
         [ -d "${DIR}" ] || die "No worktree at ${DIR}."
 
-        # compose stamps the directory it was run from on every container it made;
-        # one still up is why a removal half-succeeds.
-        PROJECTS=$(docker ps -a --filter "label=com.docker.compose.project.working_dir=${DIR}" \
-            --format '{{.Label "com.docker.compose.project"}}' | sort -u) \
-            || die "docker could not be asked which containers came up from ${DIR}."
+        # compose stamps the resolved directory it was run from on every container
+        # it made; one still up is why a removal half-succeeds.
+        REAL_DIR=$(readlink -f -- "${DIR}" 2>/dev/null || printf '%s' "${DIR}")
+        PROJECTS=$(timeout 10 docker ps -a \
+            --filter "label=com.docker.compose.project.working_dir=${REAL_DIR}" \
+            --format '{{.Label "com.docker.compose.project"}}' | sort -u) && DOCKER_RC=0 || DOCKER_RC=$?
+        if [ "${DOCKER_RC}" -ne 0 ]; then
+            die "docker $(docker_answer "${DOCKER_RC}"), so which containers came up from ${DIR} is unknown; nothing was removed."
+        fi
         if [ -n "${PROJECTS}" ]; then
             printf 'Containers are still up from %s. Take each stack down yourself, then run this again:\n' "${DIR}" >&2
             while IFS= read -r project; do

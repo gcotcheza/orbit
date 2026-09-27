@@ -78,11 +78,12 @@ bypasses the global one — say so in the pull request if you use it.
 **The gate.** `scripts/check.sh` runs thirteen checks, three of them on the
 host, stopping at the first failure: ShellCheck (every shell script under
 `scripts/`, at `-S warning`), Gitleaks, Pint, the deploy script's own tests (on
-the host), the worktree script's own tests (on the host), the image-tag check (on the host, over the compose files, from the canonical
-clone at `/srv/engineering-standards`, so this step runs on this box),
-`composer audit`, deptrac (layers, no baseline), PHPStan (level 8, no
-baseline), `npm audit`, ESLint, Vitest, PHPUnit. It must pass before a PR is
-merged — this project has no baseline for new debt to hide in.
+the host), the worktree script's own tests (on the host), the image-tag check
+(on the host, over the compose files, from the canonical clone at
+`/srv/engineering-standards`, so this step runs on this box), `composer audit`,
+deptrac (layers, no baseline), PHPStan (level 8, no baseline), `npm audit`,
+ESLint, Vitest, PHPUnit. It must pass before a PR is merged — this project has
+no baseline for new debt to hide in.
 
 It takes the runner as its one argument, and will not guess: `dev` uses the
 stack you already have up, `overlay` gives every step a throwaway container with
