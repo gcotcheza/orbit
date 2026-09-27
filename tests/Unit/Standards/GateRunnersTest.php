@@ -19,6 +19,7 @@ final class GateRunnersTest extends TestCase
         'gitleaks',
         'pint',
         'the deploy script',
+        'the worktree script',
         'image tags',
         'composer advisories',
         'deptrac',
