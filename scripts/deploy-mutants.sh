@@ -8,19 +8,42 @@
 # against scripts/deploy-test.sh, which fakes verify.sh out entirely.
 #
 # It never reads /var/www/orbit, never runs docker and never runs gh.
+#
+# MUTANT_INDEX runs one mutation, which is how the workers below are fed; the
+# parent prints their output in list order. docs/DECISIONS.md, the-mutant-harness-is-a-gate-step
 # shellcheck disable=SC2016  # every mutation below is sed source, not shell
 set -uo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SELF="${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
 missed=0
 n=0
+ONLY="${MUTANT_INDEX:-}"
+
+JOBS=$(nproc)
+JOBS=$((JOBS - 1))
+[ "${JOBS}" -lt 1 ] && JOBS=1
+[ "${JOBS}" -gt 3 ] && JOBS=3
 
 mutant() {
-    local name=$1 target=$2 expr=$3 out rc dir red expect harness
-    shift 3
     n=$((n + 1))
+    [ "${ONLY}" = "${n}" ] || return 0
+    run_mutant "$@"
+}
+
+all_red() {
+    local log=$1 expect
+    shift
+    for expect in "$@"; do
+        grep -qF "FAIL ${expect}" "${log}" || return 1
+    done
+}
+
+run_mutant() {
+    local name=$1 target=$2 expr=$3 out rc dir red expect harness log pid watcher
+    shift 3
     dir="${WORK}/${n}"
     mkdir -p "${dir}"
     cp -r "${SCRIPT_DIR}" "${dir}/scripts"
@@ -34,9 +57,28 @@ mutant() {
     fi
     harness="${dir}/scripts/deploy-test.sh"
     [ "${target}" = 'verify.sh' ] && harness="${dir}/scripts/verify-test.sh"
-    out="$(DEPLOY_SH="${dir}/scripts/deploy.sh" VERIFY_SH="${dir}/scripts/verify.sh" \
-        GATE_LEDGER_LIB="${dir}/scripts/lib/deploy/ledger.sh" bash "${harness}" 2>&1)"
+    # Nothing after the last expected red is read, so the harness is stopped
+    # there; TMPDIR keeps what a stopped one leaves inside this mutant's copy.
+    log="${dir}/harness.out"
+    mkdir -p "${dir}/tmp"
+    : >"${log}"
+    # setsid: stopping the harness must take the deploy it is running with it,
+    # or an orphan writes into a directory this script is already removing.
+    TMPDIR="${dir}/tmp" DEPLOY_SH="${dir}/scripts/deploy.sh" VERIFY_SH="${dir}/scripts/verify.sh" \
+        GATE_LEDGER_LIB="${dir}/scripts/lib/deploy/ledger.sh" setsid bash "${harness}" >"${log}" 2>&1 &
+    pid=$!
+    (
+        while kill -0 "${pid}" 2>/dev/null; do
+            all_red "${log}" "$@" && { kill -- -"${pid}" 2>/dev/null; break; }
+            sleep 0.3
+        done
+    ) &
+    watcher=$!
+    wait "${pid}"
     rc=$?
+    kill "${watcher}" 2>/dev/null
+    wait "${watcher}" 2>/dev/null
+    out="$(cat "${log}")"
     for expect in "$@"; do
         red="$(printf '%s\n' "${out}" | grep -F "FAIL ${expect}" | head -1)"
         if [ "${rc}" -ne 0 ] && [ -n "${red}" ]; then
@@ -257,6 +299,21 @@ mutant 'the battery always exits 0' verify.sh \
 mutant 'a green run keeps its baseline' verify.sh \
     's/^    rm -f "\$SNAP" && note/    true \&\& note/' \
     'a green run consumes the baseline'
+
+[ -z "${ONLY}" ] || exit 0
+
+for ((i = 1; i <= n; i++)); do printf '%s\n' "${i}"; done \
+    | xargs -P "${JOBS}" -I{} sh -c 'MUTANT_INDEX="$1" bash "$2" >"$3/$1.out" 2>&1' _ {} "${SELF}" "${WORK}"
+
+for ((i = 1; i <= n; i++)); do
+    if [ -f "${WORK}/${i}.out" ]; then
+        cat "${WORK}/${i}.out"
+    else
+        printf 'BROKEN mutation %s: its worker produced nothing\n' "${i}"
+    fi
+done >"${WORK}/report"
+cat "${WORK}/report"
+missed=$(grep -cE '^(GREEN|BROKEN)' "${WORK}/report")
 
 if [ "${missed}" -eq 0 ]; then
     printf '\ndeploy-mutants: %s mutation(s), every one caught\n' "${n}"
