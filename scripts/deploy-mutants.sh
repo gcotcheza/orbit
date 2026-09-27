@@ -25,6 +25,13 @@ mutant() {
     mkdir -p "${dir}"
     cp -r "${SCRIPT_DIR}" "${dir}/scripts"
     sed -i "${expr}" "${dir}/scripts/${target}" || { printf 'BROKEN %s: sed failed\n' "${name}"; missed=$((missed + 1)); return; }
+    # A sed that matched nothing leaves the guard intact, so the harness passes
+    # while testing nothing. docs/DECISIONS.md, the-mutant-harness-is-a-gate-step
+    if cmp -s "${SCRIPT_DIR}/${target}" "${dir}/scripts/${target}"; then
+        printf 'BROKEN %s: the mutation changed nothing in %s\n' "${name}" "${target}"
+        missed=$((missed + 1))
+        return
+    fi
     harness="${dir}/scripts/deploy-test.sh"
     [ "${target}" = 'verify.sh' ] && harness="${dir}/scripts/verify-test.sh"
     out="$(DEPLOY_SH="${dir}/scripts/deploy.sh" VERIFY_SH="${dir}/scripts/verify.sh" \

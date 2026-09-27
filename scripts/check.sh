@@ -250,6 +250,11 @@ case "$tag_report" in
         ;;
 esac
 
+step 'Deploy mutants (scripts/deploy-mutants.sh)'
+# A host step, like the harness it breaks: every guard in deploy-test.sh must go
+# red once, and a mutation that changed no file counts as missed.
+"$here/scripts/deploy-mutants.sh"
+
 step 'Composer advisories'
 # --locked --no-dev: an advisory against phpunit or pint is not on the site.
 php_step composer audit --locked --no-dev --abandoned=report
