@@ -21,6 +21,7 @@ final class GateRunnersTest extends TestCase
         'the deploy script',
         'the worktree script',
         'image tags',
+        'deploy mutants',
         'composer advisories',
         'deptrac',
         'phpstan',

@@ -208,13 +208,35 @@ SH
 
 # <name> [moved...]: a checkout on L, origin/main on the merge M of the pull
 # request head H. Each `moved` word adds one file to the release.
+# Cases asking for the same `moved` words get the same tree, so it is built once
+# and copied: 36 of the 51 ask for none. docs/DECISIONS.md, the-mutant-harness-is-a-gate-step
 fixture() {
-    CASE="${WORK}/$1"
+    local name=$1 key template
+    shift
+    key=${*:-plain}
+    key=${key// /-}
+    template="${WORK}/.template/${key}"
+    [ -d "${template}" ] || build_fixture "${template}" "$@"
+
+    CASE="${WORK}/${name}"
     ROOT="${CASE}/root"
     BIN="${CASE}/bin"
     LEDGER="${CASE}/ledger"
     LOGS="${CASE}/logs"
+    cp -a "${template}/case" "${CASE}"
+    . "${template}/shas"
+    git_at config remote.origin.url "${CASE}/origin.git"
+}
+
+build_fixture() {
+    local template=$1
     shift
+    mkdir -p "${template}"
+    CASE="${template}/case"
+    ROOT="${CASE}/root"
+    BIN="${CASE}/bin"
+    LEDGER="${CASE}/ledger"
+    LOGS="${CASE}/logs"
     mkdir -p "${ROOT}/scripts" "${ROOT}/app" "${ROOT}/docker/app" "${ROOT}/deploy/nginx" \
         "${ROOT}/resources/js" "${ROOT}/public/icons" "${ROOT}/public/build" \
         "${CASE}/scripts" "${BIN}" "${LOGS}"
@@ -265,12 +287,20 @@ fixture() {
     git_at remote add origin "${CASE}/origin.git"
     git_at reset -q --hard "${LIVE_SHA}"
     git_at fetch -q origin
+    # Every copy of this template lives somewhere else, so neither repository
+    # keeps a URL: the case that copies it writes the one it needs.
+    git_at config --unset remote.origin.url
+    git -C "${CASE}/origin.git" config --unset remote.origin.url
+    rm -f "${ROOT}/.git/FETCH_HEAD"
 
     printf '{"headRefOid":"%s","mergeCommit":{"oid":"%s"},"state":"MERGED"}\n' \
         "${HEAD_SHA}" "${MERGE_SHA}" >"${CASE}/gh.json"
     printf '%s ci 2026-09-19T06:00:00Z 0 -\n%s e2e 2026-09-19T06:30:00Z 0 -\n' \
         "${HEAD_SHA}" "${HEAD_SHA}" >"${LEDGER}"
     write_fakes
+
+    printf 'LIVE_SHA=%s\nHEAD_SHA=%s\nMERGE_SHA=%s\nMERGE_SHORT=%s\n' \
+        "${LIVE_SHA}" "${HEAD_SHA}" "${MERGE_SHA}" "${MERGE_SHORT}" >"${template}/shas"
 }
 
 run_deploy() {
