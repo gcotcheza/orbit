@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace Tests\Unit\Standards;
 
 /**
- * The plumbing three of these tests share: start a gate script under a pinned
- * environment, read what its fakes recorded, and clean up. The fakes stay in
- * each test, because each one answers a different question and IS the test
- * (docs/STANDARDS.md C2).
+ * The plumbing three of these tests share; their fakes stay in each test (C2).
+ * docs/DECISIONS.md, the-image-tag-step-is-proved-by-running-it
  */
 trait RunsGateScripts
 {
@@ -21,12 +19,16 @@ trait RunsGateScripts
     {
         $pipes = [];
 
+        // Pinned ahead of the inherited environment: a suite started from a shell that
+        // exports one of these would hand the run under test a caller's value.
+        $pinned = ['ORBIT_GATE_LOG' => '-', 'GATE_SUITE_PASSED' => '', 'GATE_RECORDED' => ''];
+
         $process = proc_open(
             $command,
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $cwd,
-            $environment + array_map('strval', getenv()),
+            $environment + $pinned + array_map('strval', getenv()),
         );
 
         if ($process === false) {

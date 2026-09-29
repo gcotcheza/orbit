@@ -9,13 +9,8 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
- * T9's check is a fleet script the gate calls by its one canonical path, and it
- * exits 0 having read nothing when it finds no compose file (docs/STANDARDS.md T9).
- *
- * Half of this file reads scripts/check.sh and half runs it. Reading alone clears a
- * step wrapped in `if false; then … fi`: every assertion below about the text stays
- * true of a step that never executes. docs/DECISIONS.md,
- * the-image-tag-step-is-proved-by-running-it.
+ * Half of this file reads scripts/check.sh and half runs it, in both runners.
+ * docs/DECISIONS.md, the-image-tag-step-is-proved-by-running-it
  */
 final class GateImageTagsStepTest extends TestCase
 {
@@ -31,6 +26,11 @@ final class GateImageTagsStepTest extends TestCase
     /** The host steps around this one, stubbed so a run is milliseconds. */
     private const HOST_STEPS = ['deploy-test.sh', 'verify-test.sh', 'worktree-test.sh', 'deploy-mutants.sh'];
 
+    /** Neutralised in the copy: both reach outside the throwaway root. */
+    private const CLEARS_THE_BOX = 'rm -rf /var/tmp/orbit-gate.*';
+
+    private const HANDS_OVER = 'chown -R 115:119';
+
     private const OK_REPORT = <<<'REPORT'
         gate-image-tags: %s
           gate files:       docker-compose.ci.yml, docker-compose.e2e.yml
@@ -43,6 +43,12 @@ final class GateImageTagsStepTest extends TestCase
     private const REFUSAL_REPORT = <<<'REPORT'
         gate-image-tags: %s
         refused %s: orbit/app:latest is built by the gate and run in production
+        REPORT;
+
+    /** gate-image-tags.sh:41-42 — this one is stderr and rc 2, not a report at all. */
+    private const NO_COMPOSE_REPORT = <<<'REPORT'
+        gate-image-tags: %s
+        gate-image-tags: no compose file beside this root — nothing was examined, so %s is refused, not passed (T9)
         REPORT;
 
     #[Test]
@@ -92,6 +98,37 @@ final class GateImageTagsStepTest extends TestCase
     }
 
     #[Test]
+    public function the_step_belongs_to_neither_runner_and_sits_under_no_condition(): void
+    {
+        $script = $this->read('scripts/check.sh');
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/\bmode\b/',
+            $this->withoutComments($this->stepSlice($script)),
+            'The step reads the runner. `if [ "$mode" = dev ]; then … fi` around it is a step the '
+            .'deploy never runs — it gates with `overlay` — and it is invisible to a harness that '
+            .'only drives one runner. T9 is about the compose files, which both runners share.'
+        );
+
+        $nesting = $this->nesting($script);
+
+        $this->assertSame(
+            0,
+            $nesting['total'],
+            'This scanner no longer balances scripts/check.sh to zero, so it has stopped '
+            .'understanding the file and its verdict below means nothing. Fix the scanner.'
+        );
+
+        $this->assertSame(
+            0,
+            $nesting['atStep'],
+            'The step sits inside a block opened earlier in the script. An `if`, a `case` or a '
+            .'subshell wrapped around it is how the whole step stops running with every assertion '
+            .'about its text still green.'
+        );
+    }
+
+    #[Test]
     public function the_step_fails_unless_the_check_says_what_it_counted(): void
     {
         $script = $this->withoutComments($this->read('scripts/check.sh'));
@@ -110,9 +147,9 @@ final class GateImageTagsStepTest extends TestCase
         $this->assertStringContainsString(
             "*'built tags:'*",
             $guard[1],
-            'gate-image-tags.sh prints "no compose file beside this root" and exits 0 when it is '
-            .'handed a root with nothing to read. The step therefore has to assert on the line '
-            .'the check prints when it has counted, not on the exit status.'
+            'The step asserts on what the check printed, not on its status: gate-image-tags.sh '
+            .'exits 0 over a report that counted nothing worth counting. A report with no '
+            .'"built tags:" line at all is output this step can no longer read, and that is a red.'
         );
 
         $this->assertStringContainsString(
@@ -193,16 +230,17 @@ final class GateImageTagsStepTest extends TestCase
     }
 
     #[Test]
-    public function a_run_hands_this_checkout_to_the_check_and_prints_what_came_back(): void
+    #[DataProvider('bothRunners')]
+    public function a_run_hands_this_checkout_to_the_check_and_prints_what_came_back(string $runner): void
     {
-        $run = $this->runGate(self::OK_REPORT, 0);
+        $run = $this->runGate(self::OK_REPORT, 0, mode: $runner);
 
         $this->assertSame(
             [$run['root']],
             $run['checker'],
             'The check was not run, or was not run over this checkout. Every assertion above about '
             .'the text of the step is equally true of a step wrapped in `if false`, so this is the '
-            ."one that says it executed:\n".$run['output']
+            ."one that says it executed — and it says so for the runner the deploy uses too:\n".$run['output']
         );
 
         $this->assertSame(
@@ -219,10 +257,17 @@ final class GateImageTagsStepTest extends TestCase
         );
     }
 
-    #[Test]
-    public function a_check_that_refuses_stops_the_gate_where_it_stands(): void
+    /** @return array<string, array{string}> */
+    public static function bothRunners(): array
     {
-        $run = $this->runGate(self::REFUSAL_REPORT, 1);
+        return ['the dev runner' => ['dev'], 'the overlay runner the deploy gates with' => ['overlay']];
+    }
+
+    #[Test]
+    #[DataProvider('refusalsThatStopTheGate')]
+    public function a_check_that_refuses_stops_the_gate_where_it_stands(string $report, int $exit, bool $onStderr, string $reason): void
+    {
+        $run = $this->runGate($report, $exit, onStderr: $onStderr);
 
         $this->assertNotSame(
             0,
@@ -244,10 +289,30 @@ final class GateImageTagsStepTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            'is built by the gate and run in production',
+            $reason,
             $run['output'],
-            "What the check refused over is the whole reason to stop; it has to reach the log.\n".$run['output']
+            'What the check refused over is the whole reason to stop, and it is captured with '
+            ."2>&1 so that a refusal it wrote to stderr reaches the log too.\n".$run['output']
         );
+    }
+
+    /** @return array<string, array{string, int, bool, string}> */
+    public static function refusalsThatStopTheGate(): array
+    {
+        return [
+            'a tag the gate builds and production runs' => [
+                self::REFUSAL_REPORT,
+                1,
+                false,
+                'is built by the gate and run in production',
+            ],
+            'a root with no compose file beside it' => [
+                self::NO_COMPOSE_REPORT,
+                2,
+                true,
+                'no compose file beside this root',
+            ],
+        ];
     }
 
     #[Test]
@@ -259,7 +324,7 @@ final class GateImageTagsStepTest extends TestCase
         $this->assertNotSame(
             0,
             $run['status'],
-            "gate-image-tags.sh exits 0 having read nothing, so its status alone is not the gate.\n".$run['output']
+            "gate-image-tags.sh exits 0 over a report like this, so its status alone is not the gate.\n".$run['output']
         );
 
         $this->assertStringContainsString(
@@ -279,10 +344,6 @@ final class GateImageTagsStepTest extends TestCase
     public static function reportsThatExaminedNothing(): array
     {
         return [
-            'no compose file beside the root' => [
-                "gate-image-tags: %s\nno compose file beside this root, so nothing was read\nok %s\n",
-                'counted no built tags in',
-            ],
             'a summary that counted no built tag' => [
                 str_replace(['built tags:       2', 'ok %s: 2 built'], ['built tags:       0', 'ok %s: 0 built'], self::OK_REPORT),
                 'counted 0 built image tag(s) in',
@@ -295,18 +356,12 @@ final class GateImageTagsStepTest extends TestCase
     }
 
     /**
-     * Runs the real scripts/check.sh against a throwaway root, with a fake on PATH for
-     * everything it shells out to and the one absolute path inside it — the canonical
-     * checker, which exists on this box and inside no container — pointed at a
-     * stand-in. That substitution is counted, and the count is what ties this harness
-     * to the line `the_step_runs_the_canonical_script_by_its_literal_path` pins: every
-     * other byte run here is the script that ships. check.sh carries no seam of its
-     * own, on purpose, because one in the script is a skip switch at gate time
-     * (`nothing_lets_the_step_be_pointed_somewhere_else`).
+     * The real scripts/check.sh against a throwaway root, with the paths it must not reach
+     * swapped out and counted. docs/DECISIONS.md, the-image-tag-step-is-proved-by-running-it
      *
      * @return array{status: int, output: string, checker: list<string>, root: string}
      */
-    private function runGate(string $report, int $exit): array
+    private function runGate(string $report, int $exit, bool $onStderr = false, string $mode = 'dev'): array
     {
         $sandbox = sys_get_temp_dir().'/orbit-image-tags-'.bin2hex(random_bytes(6));
         $bin = $sandbox.'/bin';
@@ -315,46 +370,65 @@ final class GateImageTagsStepTest extends TestCase
         $this->assertTrue(mkdir($bin, 0o700, true), "Could not create {$bin}");
         $this->assertTrue(mkdir($root.'/scripts/lib/deploy', 0o700, true), "Could not create {$root}");
 
-        $here = (string) realpath($root);
-        $checker = $bin.'/gate-image-tags';
+        try {
+            $here = (string) realpath($root);
+            $checker = $bin.'/gate-image-tags';
 
-        $this->writeFakeGit($bin.'/git');
-        $this->writeFakeDocker($bin.'/docker');
-        $this->writeFakeChecker($checker, $bin.'/checker.log', sprintf($report, $here, $here), $exit);
+            $this->writeFakeGit($bin.'/git');
+            $this->writeFakeDocker($bin.'/docker');
+            $this->writeFakeChecker($checker, $bin.'/checker.log', sprintf($report, $here, $here), $exit, $onStderr);
 
-        $script = str_replace(self::CHECKER, $checker, $this->read('scripts/check.sh'), $replaced);
+            $script = $this->read('scripts/check.sh');
+            $script = $this->swap(
+                $script,
+                self::CHECKER,
+                $checker,
+                1,
+                'The canonical checker path is no longer in scripts/check.sh exactly once, so this '
+                .'harness is not running the step it says it is running.'
+            );
+            $script = $this->swap(
+                $script,
+                self::CLEARS_THE_BOX,
+                ':',
+                1,
+                "The overlay runner's first act clears every /var/tmp/orbit-gate.* on this box, a "
+                ."real gate's included. It is neutralised here by name, so it has to be there by "
+                .'that name.'
+            );
+            $script = $this->swap(
+                $script,
+                self::HANDS_OVER,
+                ':',
+                2,
+                'The overlay runner hands its overlay and this checkout\'s storage/ to the app '
+                .'user. Both are neutralised here; a third one would run for real, as whatever '
+                .'user the suite happens to be.'
+            );
 
-        $this->assertSame(
-            1,
-            $replaced,
-            'The canonical checker path is no longer in scripts/check.sh exactly once, so this '
-            .'harness is not running the step it says it is running.'
-        );
+            file_put_contents($root.'/scripts/check.sh', $script);
+            file_put_contents($root.'/scripts/lib/deploy/ledger.sh', $this->read('scripts/lib/deploy/ledger.sh'));
+            file_put_contents($root.'/composer.json', "{}\n");
 
-        file_put_contents($root.'/scripts/check.sh', $script);
-        file_put_contents($root.'/scripts/lib/deploy/ledger.sh', $this->read('scripts/lib/deploy/ledger.sh'));
-        file_put_contents($root.'/composer.json', "{}\n");
+            foreach (self::HOST_STEPS as $step) {
+                file_put_contents($root.'/scripts/'.$step, "#!/bin/sh\nexit 0\n");
+                chmod($root.'/scripts/'.$step, 0o700);
+            }
 
-        foreach (self::HOST_STEPS as $step) {
-            file_put_contents($root.'/scripts/'.$step, "#!/bin/sh\nexit 0\n");
-            chmod($root.'/scripts/'.$step, 0o700);
+            $result = $this->execute(
+                ['bash', $root.'/scripts/check.sh', $mode],
+                [
+                    'PATH'        => $bin.':'.(getenv('PATH') ?: '/usr/bin:/bin'),
+                    'CI_GIT'      => $bin.'/git',
+                    'GATE_LEDGER' => $sandbox.'/ledger',
+                ],
+                $root
+            );
+
+            $calls = $this->readLog($bin.'/checker.log');
+        } finally {
+            $this->remove($sandbox);
         }
-
-        // `dev` on purpose: the overlay runner's first act is `rm -rf
-        // /var/tmp/orbit-gate.*`, which is a real directory on the box.
-        $result = $this->execute(
-            ['bash', $root.'/scripts/check.sh', 'dev'],
-            [
-                'PATH'        => $bin.':'.(getenv('PATH') ?: '/usr/bin:/bin'),
-                'CI_GIT'      => $bin.'/git',
-                'GATE_LEDGER' => $sandbox.'/ledger',
-            ],
-            $root
-        );
-
-        $calls = $this->readLog($bin.'/checker.log');
-
-        $this->remove($sandbox);
 
         return [
             'status'  => $result['status'],
@@ -362,6 +436,15 @@ final class GateImageTagsStepTest extends TestCase
             'checker' => $calls,
             'root'    => $here,
         ];
+    }
+
+    private function swap(string $script, string $find, string $replace, int $expected, string $why): string
+    {
+        $swapped = str_replace($find, $replace, $script, $count);
+
+        $this->assertSame($expected, $count, $why);
+
+        return $swapped;
     }
 
     /** A git that lists the two files the steps ahead of this one lint and copy. */
@@ -393,12 +476,14 @@ final class GateImageTagsStepTest extends TestCase
     }
 
     /** The stand-in check: it records the root it was handed, then answers as asked. */
-    private function writeFakeChecker(string $path, string $log, string $report, int $exit): void
+    private function writeFakeChecker(string $path, string $log, string $report, int $exit, bool $onStderr): void
     {
+        $stream = $onStderr ? ' >&2' : '';
+
         $script = <<<SH
             #!/bin/sh
             printf '%s\\n' "\$*" >> '{$log}'
-            cat <<'REPORT'
+            cat <<'REPORT'{$stream}
             {$report}
             REPORT
             exit {$exit}
@@ -406,6 +491,67 @@ final class GateImageTagsStepTest extends TestCase
 
         file_put_contents($path, $script);
         chmod($path, 0o700);
+    }
+
+    /** The step's own lines: from its banner to the next one. */
+    private function stepSlice(string $script): string
+    {
+        $lines = explode("\n", $script);
+        $slice = [];
+
+        foreach ($lines as $line) {
+            if ($slice !== [] && preg_match("/^step '/", $line) === 1) {
+                return implode("\n", $slice);
+            }
+
+            if ($slice !== [] || str_contains($line, "step '".self::STEP."'")) {
+                $slice[] = $line;
+            }
+        }
+
+        $this->assertNotSame([], $slice, "scripts/check.sh has no step '".self::STEP."' any more.");
+
+        return implode("\n", $slice);
+    }
+
+    /**
+     * Block depth at the step's banner, and `total` as the scanner's own self-check.
+     * docs/DECISIONS.md, the-image-tag-step-is-proved-by-running-it
+     *
+     * @return array{total: int, atStep: int|null}
+     */
+    private function nesting(string $script): array
+    {
+        $depth = 0;
+        $atStep = null;
+
+        foreach (explode("\n", $script) as $line) {
+            $code = (string) preg_replace('/(^|\s)#.*$/', '', $line);
+
+            if (trim($code) === '') {
+                continue;
+            }
+
+            if (str_contains($code, "step '".self::STEP."'")) {
+                $atStep = $depth;
+            }
+
+            $bare = (string) preg_replace('/"[^"]*"|\'[^\']*\'/', ' ', $code);
+            $trimmed = trim($bare);
+
+            $open = preg_match_all('/(?:^|[\s;&|(])(?:if|case)\b/', $bare)
+                + preg_match_all('/(?:^|[\s;])do(?:$|[\s;])/', $bare)
+                + (int) (preg_match('/^\S.*\(\)\s*\{$/', $trimmed) === 1)
+                + (int) ($trimmed === '{' || $trimmed === '(');
+
+            $close = preg_match_all('/(?:^|[\s;&|])(?:fi|esac)(?:$|[\s;&|)])/', $bare)
+                + preg_match_all('/(?:^|[\s;])done(?:$|[\s;<&|)])/', $bare)
+                + (int) (preg_match('/^[})]/', $trimmed) === 1);
+
+            $depth += $open - $close;
+        }
+
+        return ['total' => $depth, 'atStep' => $atStep];
     }
 
     private function withoutComments(string $script): string
