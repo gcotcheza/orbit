@@ -255,6 +255,18 @@ case "$tag_report" in
         ;;
 esac
 
+# The count line is read, not the "unresolved and not judged" phrase: that phrase
+# is printed only on an ok line that counted a built tag. docs/DECISIONS.md
+unresolved=$(printf '%s\n' "$tag_report" \
+    | sed -n 's/^ *images: *[0-9][0-9]* resolved, *\([0-9][0-9]*\) unresolved.*/\1/p')
+if [ "$unresolved" != 0 ]; then
+    printf 'check.sh: the image-tag check left %s image value(s) unjudged in %s,\n' \
+        "${unresolved:-an unreadable number of}" "$here" >&2
+    printf '  or stopped printing the count line this reads. An unjudged value is where a gate\n' >&2
+    printf '  tag aimed at production sits unseen; the report above names its file and line.\n' >&2
+    exit 1
+fi
+
 step 'Deploy mutants (scripts/deploy-mutants.sh)'
 # A host step, like the harness it breaks: every guard in deploy-test.sh must go
 # red once, and a mutation that changed no file counts as missed.

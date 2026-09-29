@@ -92,6 +92,41 @@ final class GateImageTagsStepTest extends TestCase
         );
     }
 
+    #[Test]
+    public function the_step_fails_unless_every_image_value_was_judged(): void
+    {
+        $script = $this->withoutComments($this->read('scripts/check.sh'));
+
+        $this->assertStringContainsString(
+            'resolved, *\([0-9][0-9]*\) unresolved',
+            $script,
+            'The step must read the "images: N resolved, M unresolved" count line. The check '
+            .'appends "unresolved and not judged" only to an ok line that counted a built tag, so '
+            .'a step pinned to that phrase alone reads nothing when no built tag was counted.'
+        );
+
+        if (preg_match('/^if \[ "\$unresolved" != 0 \]; then$(.*?)^fi$/ms', $script, $guard) !== 1) {
+            $this->fail(
+                'Nothing refuses an unresolved image value. gate-image-tags.sh prints how many '
+                .'values it could not resolve and still exits 0, so an unjudged value — exactly '
+                .'where a gate tag aimed at production would sit — passes this gate unseen.'
+            );
+        }
+
+        $this->assertStringContainsString(
+            'exit 1',
+            $guard[1],
+            'A value the check could not judge has to stop the gate, not print itself into a log.'
+        );
+
+        $this->assertStringNotContainsString(
+            '-eq',
+            $guard[0],
+            'The comparison is a string one on purpose: an empty capture means the count line is '
+            .'gone, and `[ "" -eq 0 ]` errors where `!= 0` refuses.'
+        );
+    }
+
     private function withoutComments(string $script): string
     {
         return implode("\n", preg_grep('/^\s*#/', explode("\n", $script), PREG_GREP_INVERT) ?: []);
