@@ -61,6 +61,15 @@ final class CiGateImageIsNotProductionsTest extends TestCase
         $export = (string) $found[0][0];
         $exported = (int) $found[0][1];
 
+        $this->assertSame(
+            1,
+            preg_match_all('/\bCOMPOSE_FILE=/', $code),
+            self::GATE.' assigns COMPOSE_FILE more than once. The last assignment before a call is '
+            .'the one compose reads, so a second one — a narrowing, a reset, a `-f` written as an '
+            ."environment variable — takes the overlay away from every step after it:\n  "
+            .trim($export)
+        );
+
         foreach ([self::PRODUCTION, self::OVERLAY] as $file) {
             $this->assertStringContainsString(
                 $file,
@@ -106,6 +115,25 @@ final class CiGateImageIsNotProductionsTest extends TestCase
         }
     }
 
+    #[Test]
+    public function the_overlay_runner_builds_the_tag_it_then_runs(): void
+    {
+        $code = $this->commandsIn(self::GATE);
+
+        if (preg_match('/^if \[ "\$mode" = overlay \]; then$(.*?)^fi$/ms', $code, $branch) !== 1) {
+            $this->fail(self::GATE.' has no overlay-only branch where this test reads it.');
+        }
+
+        $this->assertStringContainsString(
+            'docker compose build app',
+            $branch[1],
+            'The overlay runner does not build its own image. Compose builds a MISSING image and '
+            .'never a stale one, so a tag of its own without a build of its own leaves every step '
+            .'running whatever the box holds under that name — which is how a gate goes green '
+            .'against code it never ran.'
+        );
+    }
+
     /** @return list<string> */
     private function images(string $relative): array
     {
@@ -113,7 +141,7 @@ final class CiGateImageIsNotProductionsTest extends TestCase
 
         $this->assertNotSame([], $found[1], "{$relative} names no images.");
 
-        return $found[1];
+        return array_map($this->unquote(...), $found[1]);
     }
 
     /** @return list<string> */
@@ -122,7 +150,7 @@ final class CiGateImageIsNotProductionsTest extends TestCase
         $building = [];
 
         foreach ($this->services($relative) as $service => $body) {
-            if (preg_match('/^\s{4}build:/m', $body) === 1) {
+            if (preg_match('/^\s+build\s*:/m', $body) === 1) {
                 $building[] = $service;
             }
         }
@@ -145,7 +173,7 @@ final class CiGateImageIsNotProductionsTest extends TestCase
             $this->fail("{$relative}'s `{$service}` service names no image, so its build is untagged.");
         }
 
-        return $found[1];
+        return $this->unquote($found[1]);
     }
 
     /** @return array<string, string> service name => its body */
@@ -168,6 +196,18 @@ final class CiGateImageIsNotProductionsTest extends TestCase
         }
 
         return $services;
+    }
+
+    /** A compose value may be quoted; 'orbit/app:ci' and orbit/app:ci are one tag. */
+    private function unquote(string $value): string
+    {
+        foreach (['\'', '"'] as $quote) {
+            if (str_starts_with($value, $quote) && str_ends_with($value, $quote)) {
+                return substr($value, 1, -1);
+            }
+        }
+
+        return $value;
     }
 
     private function lineAt(string $code, int $offset): string

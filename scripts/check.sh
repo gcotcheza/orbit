@@ -100,7 +100,7 @@ if stack_is_foreign; then
         printf 'check.sh: %s.\n' "$foreign_reason"
         printf 'Refusing to run the gate against it. Bring a sandbox stack up from THIS directory\n'
         printf 'and name it on the same command line (web is left out: it publishes 127.0.0.1:3085):\n'
-        printf '  COMPOSE_PROJECT_NAME=orbit-<name> docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres redis app\n'
+        printf '  COMPOSE_PROJECT_NAME=orbit-<name> docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build postgres redis app\n'
         printf '  COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh %s\n' "$mode"
     } >&2
     exit 2
@@ -186,6 +186,9 @@ if [ "$mode" = overlay ]; then
     # storage/ is the app's own writable directory, not a build product, so it is
     # handed over rather than overlaid. docs/DECISIONS.md, worktrees-live-outside-the-served-tree
     chown -R 115:119 "$here/storage"
+    # Unconditionally: compose builds a MISSING image and never a stale one, so
+    # without this every step below runs whatever the box holds. docs/DECISIONS.md
+    docker compose build app
     php_step composer install --no-interaction --no-progress
 fi
 

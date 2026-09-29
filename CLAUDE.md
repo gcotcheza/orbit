@@ -45,7 +45,7 @@ overrides them and says why.
   network *and volumes*, and its three PHP services name `orbit/app:latest` —
   which compose rebuilds, under that name, the moment the image is missing.
   Name a sandbox *and* the gate's overlay on the same command line:
-  `COMPOSE_PROJECT_NAME=orbit-<name> docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres redis app`.
+  `COMPOSE_PROJECT_NAME=orbit-<name> docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build postgres redis app`.
   `docker-compose.ci.yml` overrides the tag and nothing else, and
   `scripts/check.sh` sets both files for itself.
 
