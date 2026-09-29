@@ -22,7 +22,8 @@ final class DocsAreNotServedTest extends TestCase
 
     /** Not a tree: the files that build and wire the image, which can serve a path too. */
     private const INFRASTRUCTURE = [
-        'docker-compose.yml', 'docker-compose.e2e.yml', 'vite.config.js', 'composer.json',
+        'docker-compose.yml', 'docker-compose.ci.yml', 'docker-compose.e2e.yml', 'vite.config.js',
+        'composer.json',
     ];
 
     private const SOURCE = '/(\.(php|js|ts|mjs|json|vue|css|txt|htaccess|conf|ini|yml)$|^Dockerfile)/';

@@ -6,6 +6,10 @@ set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 here=$(pwd -P)
 
+# Both files on every `docker compose` below: a run builds a missing image, and
+# docker-compose.yml alone names production's tag. docs/DECISIONS.md
+export COMPOSE_FILE="$here/docker-compose.yml:$here/docker-compose.ci.yml"
+
 # Vendored from gcotcheza/engineering-standards and not edited here:
 # tests/Unit/Standards/DeployLibDriftTest.php recomputes each file's own hash.
 # shellcheck source=scripts/lib/deploy/ledger.sh
@@ -96,7 +100,7 @@ if stack_is_foreign; then
         printf 'check.sh: %s.\n' "$foreign_reason"
         printf 'Refusing to run the gate against it. Bring a sandbox stack up from THIS directory\n'
         printf 'and name it on the same command line (web is left out: it publishes 127.0.0.1:3085):\n'
-        printf '  COMPOSE_PROJECT_NAME=orbit-<name> docker compose up -d postgres redis app\n'
+        printf '  COMPOSE_PROJECT_NAME=orbit-<name> docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres redis app\n'
         printf '  COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh %s\n' "$mode"
     } >&2
     exit 2

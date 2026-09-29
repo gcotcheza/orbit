@@ -1,0 +1,12 @@
+# The code gate reads this over docker-compose.yml, whose three PHP services
+# name the tag production boots. docs/DECISIONS.md, the-ci-gate-builds-its-own-image-tag
+
+services:
+  app:
+    image: orbit/app:ci
+
+  horizon:
+    image: orbit/app:ci
+
+  scheduler:
+    image: orbit/app:ci
