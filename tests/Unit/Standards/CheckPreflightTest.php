@@ -21,7 +21,7 @@ final class CheckPreflightTest extends TestCase
 
     private const CONTAINER = 'c0ffee1234';
 
-    private const RECIPE = 'COMPOSE_PROJECT_NAME=orbit-<name> docker compose up -d postgres redis app';
+    private const RECIPE = 'COMPOSE_PROJECT_NAME=orbit-<name> docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build postgres redis app';
 
     private const REFUSAL = 'Refusing to run the gate against it.';
 

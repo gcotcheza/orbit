@@ -95,13 +95,24 @@ commit the deploy named instead, is gated in when the ledger holds no green for 
 `scripts/deploy.sh` reads instead of re-running the gate on the box.
 
 ```bash
-docker compose up -d
+export COMPOSE_PROJECT_NAME=orbit-<name>
+docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
 ./scripts/check.sh dev
 ```
 
+**Both files, every time, and `--build`.** `docker-compose.ci.yml` overrides one
+thing — `orbit/app:ci` in place of the `orbit/app:latest` that
+`docker-compose.yml`'s three PHP services boot — and compose builds a missing
+image under the name the file gives it, so a stack brought up without the
+overlay is what rebuilds production's tag (`docs/DECISIONS.md`:
+`the-ci-gate-builds-its-own-image-tag`). It never rebuilds a *stale* one, which
+is why the `dev` recipe carries `--build` and the overlay runner builds `app`
+itself on every run. `scripts/check.sh` sets both files for itself, whichever
+runner it is given.
+
 On the server, a worktree must use a sandbox project brought up from that
 same directory and named on the same command line —
-`COMPOSE_PROJECT_NAME=orbit-<name> docker compose up -d postgres redis app`,
+`COMPOSE_PROJECT_NAME=orbit-<name> docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build postgres redis app`,
 then `COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh dev` (`web` is
 left out because it publishes `127.0.0.1:3085`, which production owns); the gate
 refuses to run against a stack started from another directory.
