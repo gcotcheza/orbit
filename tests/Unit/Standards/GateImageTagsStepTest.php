@@ -6,14 +6,44 @@ namespace Tests\Unit\Standards;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * T9's check is a fleet script the gate calls by its one canonical path, and it
  * exits 0 having read nothing when it finds no compose file (docs/STANDARDS.md T9).
+ *
+ * Half of this file reads scripts/check.sh and half runs it. Reading alone clears a
+ * step wrapped in `if false; then … fi`: every assertion below about the text stays
+ * true of a step that never executes. docs/DECISIONS.md,
+ * the-image-tag-step-is-proved-by-running-it.
  */
 final class GateImageTagsStepTest extends TestCase
 {
+    use RunsGateScripts;
+
     private const CHECKER = '/srv/engineering-standards/scripts/gate-image-tags.sh';
+
+    private const STEP = 'Image tags (T9)';
+
+    /** The banner that may not appear once the step has refused. */
+    private const NEXT_STEP = 'Deploy mutants (scripts/deploy-mutants.sh)';
+
+    /** The host steps around this one, stubbed so a run is milliseconds. */
+    private const HOST_STEPS = ['deploy-test.sh', 'verify-test.sh', 'worktree-test.sh', 'deploy-mutants.sh'];
+
+    private const OK_REPORT = <<<'REPORT'
+        gate-image-tags: %s
+          gate files:       docker-compose.ci.yml, docker-compose.e2e.yml
+          production files: docker-compose.yml
+          images:           14 resolved, 0 unresolved
+          built tags:       2
+        ok %s: 2 built image tag(s), none shared between the gate and production
+        REPORT;
+
+    private const REFUSAL_REPORT = <<<'REPORT'
+        gate-image-tags: %s
+        refused %s: orbit/app:latest is built by the gate and run in production
+        REPORT;
 
     #[Test]
     public function the_step_runs_the_canonical_script_by_its_literal_path(): void
@@ -162,21 +192,224 @@ final class GateImageTagsStepTest extends TestCase
         );
     }
 
+    #[Test]
+    public function a_run_hands_this_checkout_to_the_check_and_prints_what_came_back(): void
+    {
+        $run = $this->runGate(self::OK_REPORT, 0);
+
+        $this->assertSame(
+            [$run['root']],
+            $run['checker'],
+            'The check was not run, or was not run over this checkout. Every assertion above about '
+            .'the text of the step is equally true of a step wrapped in `if false`, so this is the '
+            ."one that says it executed:\n".$run['output']
+        );
+
+        $this->assertSame(
+            0,
+            $run['status'],
+            "A check that counted a built tag and left nothing unjudged must let the gate on.\n".$run['output']
+        );
+
+        $this->assertStringContainsString(
+            'built tags:       2',
+            $run['output'],
+            'The report goes to the operator on the way past. A step that reads it silently leaves '
+            .'nobody the file and line on the day it is not a pass.'
+        );
+    }
+
+    #[Test]
+    public function a_check_that_refuses_stops_the_gate_where_it_stands(): void
+    {
+        $run = $this->runGate(self::REFUSAL_REPORT, 1);
+
+        $this->assertNotSame(
+            0,
+            $run['status'],
+            "A refused image-tag check has to fail the gate.\n".$run['output']
+        );
+
+        $this->assertStringContainsString(
+            self::STEP,
+            $run['output'],
+            "The run never reached the step at all.\n".$run['output']
+        );
+
+        $this->assertStringNotContainsString(
+            self::NEXT_STEP,
+            $run['output'],
+            'The gate carried on past a refusal, which is what `( … ) || true` around this step '
+            ."buys and what a status nobody reads costs.\n".$run['output']
+        );
+
+        $this->assertStringContainsString(
+            'is built by the gate and run in production',
+            $run['output'],
+            "What the check refused over is the whole reason to stop; it has to reach the log.\n".$run['output']
+        );
+    }
+
+    #[Test]
+    #[DataProvider('reportsThatExaminedNothing')]
+    public function a_check_that_examined_nothing_stops_the_gate_where_it_stands(string $report, string $refusal): void
+    {
+        $run = $this->runGate($report, 0);
+
+        $this->assertNotSame(
+            0,
+            $run['status'],
+            "gate-image-tags.sh exits 0 having read nothing, so its status alone is not the gate.\n".$run['output']
+        );
+
+        $this->assertStringContainsString(
+            $refusal,
+            $run['output'],
+            "The refusal has to name what was read, or a silent pass reads like a pass.\n".$run['output']
+        );
+
+        $this->assertStringNotContainsString(
+            self::NEXT_STEP,
+            $run['output'],
+            "A step that examined nothing may not hand the gate on.\n".$run['output']
+        );
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function reportsThatExaminedNothing(): array
+    {
+        return [
+            'no compose file beside the root' => [
+                "gate-image-tags: %s\nno compose file beside this root, so nothing was read\nok %s\n",
+                'counted no built tags in',
+            ],
+            'a summary that counted no built tag' => [
+                str_replace(['built tags:       2', 'ok %s: 2 built'], ['built tags:       0', 'ok %s: 0 built'], self::OK_REPORT),
+                'counted 0 built image tag(s) in',
+            ],
+            'an image value it could not judge' => [
+                str_replace('14 resolved, 0 unresolved', '13 resolved, 1 unresolved', self::OK_REPORT),
+                'left 1 image value(s) unjudged in',
+            ],
+        ];
+    }
+
+    /**
+     * Runs the real scripts/check.sh against a throwaway root, with a fake on PATH for
+     * everything it shells out to and the one absolute path inside it — the canonical
+     * checker, which exists on this box and inside no container — pointed at a
+     * stand-in. That substitution is counted, and the count is what ties this harness
+     * to the line `the_step_runs_the_canonical_script_by_its_literal_path` pins: every
+     * other byte run here is the script that ships. check.sh carries no seam of its
+     * own, on purpose, because one in the script is a skip switch at gate time
+     * (`nothing_lets_the_step_be_pointed_somewhere_else`).
+     *
+     * @return array{status: int, output: string, checker: list<string>, root: string}
+     */
+    private function runGate(string $report, int $exit): array
+    {
+        $sandbox = sys_get_temp_dir().'/orbit-image-tags-'.bin2hex(random_bytes(6));
+        $bin = $sandbox.'/bin';
+        $root = $sandbox.'/root';
+
+        $this->assertTrue(mkdir($bin, 0o700, true), "Could not create {$bin}");
+        $this->assertTrue(mkdir($root.'/scripts/lib/deploy', 0o700, true), "Could not create {$root}");
+
+        $here = (string) realpath($root);
+        $checker = $bin.'/gate-image-tags';
+
+        $this->writeFakeGit($bin.'/git');
+        $this->writeFakeDocker($bin.'/docker');
+        $this->writeFakeChecker($checker, $bin.'/checker.log', sprintf($report, $here, $here), $exit);
+
+        $script = str_replace(self::CHECKER, $checker, $this->read('scripts/check.sh'), $replaced);
+
+        $this->assertSame(
+            1,
+            $replaced,
+            'The canonical checker path is no longer in scripts/check.sh exactly once, so this '
+            .'harness is not running the step it says it is running.'
+        );
+
+        file_put_contents($root.'/scripts/check.sh', $script);
+        file_put_contents($root.'/scripts/lib/deploy/ledger.sh', $this->read('scripts/lib/deploy/ledger.sh'));
+        file_put_contents($root.'/composer.json', "{}\n");
+
+        foreach (self::HOST_STEPS as $step) {
+            file_put_contents($root.'/scripts/'.$step, "#!/bin/sh\nexit 0\n");
+            chmod($root.'/scripts/'.$step, 0o700);
+        }
+
+        // `dev` on purpose: the overlay runner's first act is `rm -rf
+        // /var/tmp/orbit-gate.*`, which is a real directory on the box.
+        $result = $this->execute(
+            ['bash', $root.'/scripts/check.sh', 'dev'],
+            [
+                'PATH'        => $bin.':'.(getenv('PATH') ?: '/usr/bin:/bin'),
+                'CI_GIT'      => $bin.'/git',
+                'GATE_LEDGER' => $sandbox.'/ledger',
+            ],
+            $root
+        );
+
+        $calls = $this->readLog($bin.'/checker.log');
+
+        $this->remove($sandbox);
+
+        return [
+            'status'  => $result['status'],
+            'output'  => $result['output'],
+            'checker' => $calls,
+            'root'    => $here,
+        ];
+    }
+
+    /** A git that lists the two files the steps ahead of this one lint and copy. */
+    private function writeFakeGit(string $path): void
+    {
+        $script = <<<'SH'
+            #!/bin/sh
+            case "$*" in
+                *'-- scripts') printf 'scripts/check.sh\0' ;;
+                *ls-files*)    printf 'composer.json\0scripts/check.sh\0' ;;
+                *rev-parse*)   printf '%s\n' 0000000000000000000000000000000000000000 ;;
+                *status*)      : ;;
+                *)
+                    printf 'FAKE GIT: unexpected subcommand %s\n' "$*" >&2
+                    exit 98
+                    ;;
+            esac
+            SH;
+
+        file_put_contents($path, $script);
+        chmod($path, 0o700);
+    }
+
+    /** A docker that answers every call: the step under test is a host step. */
+    private function writeFakeDocker(string $path): void
+    {
+        file_put_contents($path, "#!/bin/sh\nexit 0\n");
+        chmod($path, 0o700);
+    }
+
+    /** The stand-in check: it records the root it was handed, then answers as asked. */
+    private function writeFakeChecker(string $path, string $log, string $report, int $exit): void
+    {
+        $script = <<<SH
+            #!/bin/sh
+            printf '%s\\n' "\$*" >> '{$log}'
+            cat <<'REPORT'
+            {$report}
+            REPORT
+            exit {$exit}
+            SH;
+
+        file_put_contents($path, $script);
+        chmod($path, 0o700);
+    }
+
     private function withoutComments(string $script): string
     {
         return implode("\n", preg_grep('/^\s*#/', explode("\n", $script), PREG_GREP_INVERT) ?: []);
-    }
-
-    private function read(string $relative): string
-    {
-        $path = __DIR__.'/../../../'.$relative;
-
-        $this->assertFileExists($path, "{$relative} is missing.");
-
-        $contents = file_get_contents($path);
-
-        $this->assertIsString($contents, "{$relative} could not be read.");
-
-        return $contents;
     }
 }
