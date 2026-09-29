@@ -93,6 +93,41 @@ final class GateImageTagsStepTest extends TestCase
     }
 
     #[Test]
+    public function the_step_fails_unless_a_built_tag_was_counted(): void
+    {
+        $script = $this->withoutComments($this->read('scripts/check.sh'));
+
+        $this->assertStringContainsString(
+            'built tags: *\([0-9][0-9]*\)',
+            $script,
+            'The step must read the number on the "built tags:" line. That line is printed even '
+            .'when the count is zero, so asserting the words appear says only that the report '
+            .'reached its summary — which it always does.'
+        );
+
+        if (preg_match('/^if ! printf [^\n]*\$built[^\n]*\n(.*?)^fi$/ms', $script, $guard) !== 1) {
+            $this->fail(
+                'Nothing refuses a built-tag count of zero. This repository builds an app image '
+                .'on both the gate and the production side, so a zero means the check read some '
+                .'other tree, and its exit code then says nothing about T9.'
+            );
+        }
+
+        $this->assertStringContainsString(
+            'exit 1',
+            $guard[1],
+            'A count of zero, or one this step cannot read, has to stop the gate.'
+        );
+
+        $this->assertStringContainsString(
+            "grep -qE '^[0-9]+\$'",
+            $guard[0],
+            'The count is proved to be a number before it is compared, because an empty capture '
+            .'means the line is gone and `[ "" -eq 0 ]` errors where a refusal is wanted.'
+        );
+    }
+
+    #[Test]
     public function the_step_fails_unless_every_image_value_was_judged(): void
     {
         $script = $this->withoutComments($this->read('scripts/check.sh'));

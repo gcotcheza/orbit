@@ -255,6 +255,17 @@ case "$tag_report" in
         ;;
 esac
 
+# `built tags:` is printed even when it counts none, and this repository builds an
+# app image on both sides, so the number is read too. docs/DECISIONS.md
+built=$(printf '%s\n' "$tag_report" | sed -n 's/^ *built tags: *\([0-9][0-9]*\).*/\1/p')
+if ! printf '%s' "$built" | grep -qE '^[0-9]+$' || [ "$built" -eq 0 ]; then
+    printf 'check.sh: the image-tag check counted %s built image tag(s) in %s,\n' \
+        "${built:-no}" "$here" >&2
+    printf '  and this repository builds one on both sides. A zero or an unreadable count means\n' >&2
+    printf '  it read something other than this tree, so its exit code says nothing about T9.\n' >&2
+    exit 1
+fi
+
 # The count line is read, not the "unresolved and not judged" phrase: that phrase
 # is printed only on an ok line that counted a built tag. docs/DECISIONS.md
 unresolved=$(printf '%s\n' "$tag_report" \
