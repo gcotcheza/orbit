@@ -15,6 +15,8 @@ use PHPUnit\Framework\Attributes\Test;
  */
 final class CheckGitSeamTest extends TestCase
 {
+    use RunsGateScripts;
+
     private const SCRIPT = 'scripts/check.sh';
 
     /** The value is a command WITH FLAGS; recording it proves $GIT still splits. */
@@ -82,7 +84,7 @@ final class CheckGitSeamTest extends TestCase
             'The refusal comes before the listing: nothing may be scanned against the wrong tree.'
         );
 
-        $matching = $this->runScript(seamDirectory: dirname(__DIR__, 3));
+        $matching = $this->runScript(seamDirectory: $this->root());
 
         $this->assertSame(
             1,
@@ -100,9 +102,9 @@ final class CheckGitSeamTest extends TestCase
     public function the_usage_names_the_seam(): void
     {
         $result = $this->execute(
-            ['bash', dirname(__DIR__, 3).'/'.self::SCRIPT],
+            ['bash', $this->root().'/'.self::SCRIPT],
             ['PATH' => (string) (getenv('PATH') ?: '/usr/bin:/bin')],
-            dirname(__DIR__, 3)
+            $this->root()
         );
 
         $this->assertSame(2, $result['status'], 'A mode-less call still has to print the usage and stop.');
@@ -162,7 +164,7 @@ final class CheckGitSeamTest extends TestCase
      */
     private function runScript(bool $seam = true, ?string $seamDirectory = null): array
     {
-        $root = dirname(__DIR__, 3);
+        $root = $this->root();
         $bin = sys_get_temp_dir().'/orbit-check-seam-'.bin2hex(random_bytes(6));
 
         $this->assertTrue(mkdir($bin, 0o700), "Could not create {$bin}");
@@ -238,82 +240,5 @@ final class CheckGitSeamTest extends TestCase
 
         file_put_contents($path, $script);
         chmod($path, 0o700);
-    }
-
-    /** @return list<string> */
-    private function readLog(string $path): array
-    {
-        if (! is_file($path)) {
-            return [];
-        }
-
-        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-
-        return $lines === false ? [] : $lines;
-    }
-
-    /**
-     * @param  list<string>  $command
-     * @param  array<string, string>  $environment
-     * @return array{status: int, output: string}
-     */
-    private function execute(array $command, array $environment, string $cwd): array
-    {
-        $pipes = [];
-
-        $process = proc_open(
-            $command,
-            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-            $cwd,
-            $environment + array_map('strval', getenv()),
-        );
-
-        if ($process === false) {
-            $this->fail('Could not start '.implode(' ', $command));
-        }
-
-        fclose($pipes[0]);
-
-        $output = (string) stream_get_contents($pipes[1]).(string) stream_get_contents($pipes[2]);
-
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-
-        return ['status' => proc_close($process), 'output' => $output];
-    }
-
-    private function remove(string $path): void
-    {
-        if (is_file($path) || is_link($path)) {
-            unlink($path);
-
-            return;
-        }
-
-        if (! is_dir($path)) {
-            return;
-        }
-
-        foreach (scandir($path) ?: [] as $entry) {
-            if ($entry !== '.' && $entry !== '..') {
-                $this->remove($path.'/'.$entry);
-            }
-        }
-
-        rmdir($path);
-    }
-
-    private function read(string $relative): string
-    {
-        $path = dirname(__DIR__, 3).'/'.$relative;
-
-        $this->assertFileExists($path, "{$relative} is missing.");
-
-        $contents = file_get_contents($path);
-
-        $this->assertIsString($contents, "{$relative} could not be read.");
-
-        return $contents;
     }
 }
