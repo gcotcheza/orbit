@@ -122,9 +122,8 @@ final class StandardsCanonicalTest extends TestCase
     }
 
     /**
-     * The script with its one canonical literal pointed at a throwaway clone, over a
-     * throwaway checkout. The replacement is counted, so the literal cannot move
-     * without this harness saying so. docs/DECISIONS.md
+     * The script with its one canonical literal pointed at a throwaway clone, counted
+     * so the literal cannot move without this harness saying so. docs/DECISIONS.md
      *
      * @return array{status: int, output: string}
      */
