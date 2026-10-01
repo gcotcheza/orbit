@@ -20,6 +20,7 @@ final class GateRunnersTest extends TestCase
         'pint',
         'the deploy script',
         'the worktree script',
+        'standards version',
         'image tags',
         'deploy mutants',
         'composer advisories',

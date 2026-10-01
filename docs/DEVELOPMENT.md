@@ -70,15 +70,19 @@ built to be a superset of it and is worth installing only for as long as it
 stays one. A clone where nobody runs the installer is not unguarded: it keeps
 the global hook.
 
-Two costs, stated rather than discovered: a checkout with no `.env` cannot
+One cost, stated rather than discovered: a checkout with no `.env` cannot
 commit until it has one, because the layer that catches *your* live keys cannot
-run without it; and `git commit --no-verify` bypasses the guard, exactly as it
-bypasses the global one — say so in the pull request if you use it.
+run without it. There is no second one to weigh against it, because there is no
+override: S1 leaves the guard none, and a commit it refuses is reported with the
+key it named and then fixed, never stood up some other way.
 
-**The gate.** `scripts/check.sh` runs fourteen checks, four of them on the
+**The gate.** `scripts/check.sh` runs fifteen checks, five of them on the
 host, stopping at the first failure: ShellCheck (every shell script under
 `scripts/`, at `-S warning`), Gitleaks, Pint, the deploy script's own tests (on
-the host), the worktree script's own tests (on the host), the image-tag check
+the host), the worktree script's own tests (on the host), the standards-version
+check (on the host, against the canonical clone's `VERSION` and
+`ENGINEERING-STANDARDS.md`, and the only check here that can see the vendored
+copy go stale), the image-tag check
 (on the host, over the compose files, from the canonical clone at
 `/srv/engineering-standards`, so this step runs on this box), the deploy mutants
 (on the host, breaking one deploy guard at a time to prove each of those tests

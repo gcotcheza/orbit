@@ -246,7 +246,7 @@ build_fixture() {
     git init -q -b main "${ROOT}"
     write_checkout
     git_at add -A
-    git_at commit -q --no-verify -m base
+    git_at commit -q -m base
     LIVE_SHA="$(git_at rev-parse HEAD)"
 
     git_at checkout -q -b pr
@@ -268,7 +268,7 @@ build_fixture() {
         esac
     done
     git_at add -A
-    git_at commit -q --no-verify -m feature
+    git_at commit -q -m feature
     HEAD_SHA="$(git_at rev-parse HEAD)"
 
     git_at checkout -q main
@@ -276,9 +276,9 @@ build_fixture() {
         git_at merge -q --no-ff --no-commit pr >/dev/null 2>&1
         printf 'smuggled\n' >"${ROOT}/app/smuggled.txt"
         git_at add -A
-        git_at commit -q --no-verify -m merge
+        git_at commit -q -m merge
     else
-        git_at merge -q --no-ff --no-verify -m merge pr
+        git_at merge -q --no-ff -m merge pr
     fi
     MERGE_SHA="$(git_at rev-parse HEAD)"
     MERGE_SHORT="$(git_at rev-parse --short HEAD)"
@@ -391,7 +391,7 @@ contains 'an unmerged PR is refused' "${OUT}" \
 
 fixture main-moved
 git_at checkout -q -b later "${MERGE_SHA}"
-git_at commit -q --no-verify --allow-empty -m later
+git_at commit -q --allow-empty -m later
 git_at push -q origin later:main
 git_at checkout -q main
 run_deploy "${PR_NUMBER}"
@@ -707,7 +707,7 @@ absent 'and it never says DONE' "${OUT}" 'DONE #90'
 # --- 10. the job lands the merge that was gated, never what main became -------
 fixture checkout-ahead
 git_at merge -q --ff-only "${MERGE_SHA}"
-git_at commit -q --no-verify --allow-empty -m 'committed on the box'
+git_at commit -q --allow-empty -m 'committed on the box'
 run_deploy "${PR_NUMBER}"
 contains 'a checkout ahead of the gated merge fails the job' "${OUT}" 'STEPS 1-10 FAILED'
 contains 'and says HEAD is not the resolved merge' "${OUT}" 'is not the resolved merge'
@@ -717,7 +717,7 @@ fixture main-moves-late
 git_at checkout -q -b later "${MERGE_SHA}"
 printf 'late\n' >"${ROOT}/app/late.txt"
 git_at add -A
-git_at commit -q --no-verify -m late
+git_at commit -q -m late
 LATE_SHA="$(git_at rev-parse HEAD)"
 git_at checkout -q main
 git_at push -q origin later:refs/heads/later

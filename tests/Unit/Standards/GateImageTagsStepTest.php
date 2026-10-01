@@ -24,7 +24,7 @@ final class GateImageTagsStepTest extends TestCase
     private const NEXT_STEP = 'Deploy mutants (scripts/deploy-mutants.sh)';
 
     /** The host steps around this one, stubbed so a run is milliseconds. */
-    private const HOST_STEPS = ['deploy-test.sh', 'verify-test.sh', 'worktree-test.sh', 'deploy-mutants.sh'];
+    private const HOST_STEPS = ['deploy-test.sh', 'verify-test.sh', 'worktree-test.sh', 'standards-drift.sh', 'deploy-mutants.sh'];
 
     /** Neutralised in the copy: both reach outside the throwaway root. */
     private const CLEARS_THE_BOX = 'rm -rf /var/tmp/orbit-gate.*';
