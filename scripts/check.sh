@@ -307,8 +307,8 @@ step 'PHPStan (static analysis, level 8)'
 php_step vendor/bin/phpstan analyse --no-progress --memory-limit=512M
 
 step 'npm advisories'
-# No --omit=dev: vite builds the shipped bundle out of node_modules, so a dev
-# dependency's advisory can be on the site. docs/DECISIONS.md
+# The dev half is audited too: vite builds the shipped bundle out of node_modules,
+# so a dev dependency's advisory can be on the site. docs/DECISIONS.md
 node_step 'npm audit --audit-level=high'
 
 step 'ESLint (front end)'

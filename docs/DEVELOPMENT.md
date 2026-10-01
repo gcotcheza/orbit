@@ -82,9 +82,9 @@ host, stopping at the first failure: ShellCheck (every shell script under
 the host), the worktree script's own tests (on the host), the standards-version
 check (on the host, against the canonical clone's `VERSION` and
 `ENGINEERING-STANDARDS.md`, and the only check here that can see the vendored
-copy go stale), the image-tag check
-(on the host, over the compose files, from the canonical clone at
-`/srv/engineering-standards`, so this step runs on this box), the deploy mutants
+copy go stale), the image-tag check (on the host, over the compose files, from
+the canonical clone at `/srv/engineering-standards`, so this step runs on this
+box), the deploy mutants
 (on the host, breaking one deploy guard at a time to prove each of those tests
 can still go red), `composer audit`, deptrac (layers, no baseline), PHPStan
 (level 8, no baseline), `npm audit`, ESLint, Vitest, PHPUnit. It must pass
