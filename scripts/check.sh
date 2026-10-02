@@ -110,9 +110,18 @@ GATE_FILTERED=0
 
 work=''
 gate=''
+# Docker creates a missing bind target as root; only those, and only empty. docs/DECISIONS.md, the-overlay-gate-removes-the-mount-points-it-caused
+absent_mounts=()
+for dir in vendor bootstrap/cache node_modules; do
+    if [ "$mode" = overlay ] && [ ! -e "$here/$dir" ]; then absent_mounts+=("$dir"); fi
+done
 cleanup() {
     if [ -n "$work" ]; then rm -rf "$work"; fi
     if [ -n "$gate" ]; then rm -rf "$gate"; fi
+    for dir in "${absent_mounts[@]}"; do
+        [ -d "$here/$dir" ] || continue
+        rmdir -- "$here/$dir" 2>/dev/null || printf 'check.sh: left %s in place: absent when the gate started, and it could not rmdir it\n' "$here/$dir" >&2
+    done
 }
 trap cleanup EXIT
 

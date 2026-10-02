@@ -313,9 +313,12 @@ mutant 'an unread StartedAt reaches date -d' verify.sh \
 mutant 'the log window is not applied' verify.sh \
     's/substr(\$0,2,19) > s/1/' \
     'a production.ERROR older than the restart is not this deploy'
-mutant 'an unchanged bundle is never a failure' verify.sh \
-    "s/elif \[ \"\\\$backend_only\" = 'yes' \]; then/elif true; then/" \
-    'an unchanged bundle with no --backend-only fails the deploy'
+mutant 'the served bundle is never matched to the build' verify.sh \
+    's/elif \[ "\$b" != "\$built" \]; then/elif false; then/' \
+    'a served bundle that is not the one on disk fails the deploy'
+mutant 'a manifest older than the baseline passes' verify.sh \
+    's/elif \[ "\$built_at" -lt "\$recorded_at" \]; then/elif false; then/' \
+    'a manifest older than the baseline fails full mode'
 mutant 'an unreachable container reads as no mail yet' verify.sh \
     "s/bad 'could not read the app container, so mail.log is unchecked — that is not the same as no mail yet'/ok 'no mail.log yet'/" \
     'a container that cannot be reached fails check 9' \
