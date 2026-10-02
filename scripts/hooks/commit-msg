@@ -3,7 +3,7 @@
 # runs that one: docs/DECISIONS.md, the-local-hooks-chain-to-the-fleet-hooks-they-replace
 set -uo pipefail
 
-fleet=$(git config --system --get core.hooksPath 2>/dev/null) || fleet=
+fleet=$(git config --system --type=path --get core.hooksPath 2>/dev/null) || fleet=
 if [ -n "$fleet" ] && [ -x "$fleet/commit-msg" ]; then
     exec "$fleet/commit-msg" "$@"
 fi

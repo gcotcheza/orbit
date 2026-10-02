@@ -23,7 +23,7 @@ if [ "$common" != "$here/.git" ]; then
     exit 1
 fi
 
-fleet=$(git config --system --get core.hooksPath || true)
+fleet=$(git config --system --type=path --get core.hooksPath || true)
 
 git config core.hooksPath scripts/hooks
 

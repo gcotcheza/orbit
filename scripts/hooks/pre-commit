@@ -5,6 +5,7 @@ set -uo pipefail
 
 # C locale and no NULs for the whole scan: --text puts binary bytes in the patch,
 # which awk and grep refuse or mangle where the locale is a UTF-8 one.
+caller_lc_all=${LC_ALL-} caller_lc_all_set=${LC_ALL+1}
 export LC_ALL=C
 
 if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
@@ -141,8 +142,9 @@ if [ $fail -ne 0 ]; then
 fi
 
 # docs/DECISIONS.md, the-local-hooks-chain-to-the-fleet-hooks-they-replace
-fleet=$(git config --system --get core.hooksPath 2>/dev/null) || fleet=
+fleet=$(git config --system --type=path --get core.hooksPath 2>/dev/null) || fleet=
 if [ -n "$fleet" ] && [ -x "$fleet/pre-commit" ]; then
+    if [ -n "$caller_lc_all_set" ]; then export LC_ALL=$caller_lc_all; else unset LC_ALL; fi
     exec "$fleet/pre-commit" "$@"
 fi
 printf 'pre-commit: no fleet pre-commit at %s, so only this repository'\''s guard ran.\n' "${fleet:-(no system core.hooksPath)}" >&2

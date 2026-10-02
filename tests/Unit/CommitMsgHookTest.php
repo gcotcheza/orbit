@@ -94,6 +94,20 @@ final class CommitMsgHookTest extends TestCase
     }
 
     #[Test]
+    public function with_no_system_hooks_path_at_all_it_passes_and_says_so(): void
+    {
+        unlink($this->sandbox.'/fleetdir');
+
+        $result = $this->runHook('.git/COMMIT_EDITMSG');
+
+        $this->assertSame(0, $result['status'], $result['output']);
+        $this->assertStringContainsString(
+            'no fleet commit-msg at (no system core.hooksPath), so nothing checked this message.',
+            $result['output']
+        );
+    }
+
+    #[Test]
     public function the_hook_is_executable_because_git_silently_skips_one_that_is_not(): void
     {
         $this->assertTrue(is_executable($this->hook()));

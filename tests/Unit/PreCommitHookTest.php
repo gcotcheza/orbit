@@ -355,6 +355,25 @@ final class PreCommitHookTest extends TestCase
     }
 
     #[Test]
+    public function the_fleet_hook_runs_in_the_callers_locale_not_the_c_locale_this_scan_needs(): void
+    {
+        $this->plantEnv($this->sandbox);
+        $this->plantDiff('README.md', 'An ordinary line.');
+
+        foreach (['unset' => null, 'en_US.UTF-8' => 'en_US.UTF-8'] as $expected => $callers) {
+            $result = $this->runHook(environment: $callers === null ? [] : ['LC_ALL' => $callers]);
+
+            $this->assertSame(0, $result['status'], $result['output']);
+            $this->assertSame(
+                $expected."\n",
+                (string) file_get_contents($this->sandbox.'/fleet.lc_all'),
+                'The fleet hook inherited this hook\'s LC_ALL=C instead of the caller\'s locale: '
+                .'it is the fleet\'s guard, and how it reads text is its own decision.'
+            );
+        }
+    }
+
+    #[Test]
     public function a_commit_it_refuses_never_reaches_the_fleet_hook(): void
     {
         $this->plantEnv($this->sandbox);
@@ -413,6 +432,7 @@ final class PreCommitHookTest extends TestCase
             '#!/bin/sh',
             "printf '%s\\n' \"$*\" > '{$this->sandbox}/fleet.args'",
             "cat > '{$this->sandbox}/fleet.stdin'",
+            "printf '%s\\n' \"\${LC_ALL-unset}\" > '{$this->sandbox}/fleet.lc_all'",
             $exit === 0 ? 'exit 0' : "echo 'FLEET PRE-COMMIT REFUSED' >&2; exit {$exit}",
             '',
         ]));
@@ -499,20 +519,22 @@ final class PreCommitHookTest extends TestCase
      */
     /**
      * @param  list<string>  $arguments
+     * @param  array<string, string>  $environment
      * @return array{status: int, output: string}
      */
-    private function runHook(?string $path = null, string $stdin = '', array $arguments = []): array
+    private function runHook(?string $path = null, string $stdin = '', array $arguments = [], array $environment = []): array
     {
         $toplevel = trim((string) file_get_contents($this->sandbox.'/toplevel'));
 
-        return $this->execute([$this->hook(), ...$arguments], $toplevel, $path, $stdin);
+        return $this->execute([$this->hook(), ...$arguments], $toplevel, $path, $stdin, $environment);
     }
 
     /**
      * @param  list<string>  $command
+     * @param  array<string, string>  $environment
      * @return array{status: int, output: string}
      */
-    private function execute(array $command, string $cwd, ?string $path, string $stdin = ''): array
+    private function execute(array $command, string $cwd, ?string $path, string $stdin = '', array $environment = []): array
     {
         $pipes = [];
 
@@ -524,6 +546,7 @@ final class PreCommitHookTest extends TestCase
             [
                 'PATH' => $path ?? $this->sandbox.'/bin:/usr/local/bin:/usr/bin:/bin',
                 'HOME' => $this->sandbox,
+                ...$environment,
             ]
         );
 
