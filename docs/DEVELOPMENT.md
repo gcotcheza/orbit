@@ -162,7 +162,11 @@ interpolation variable, and the command fails instead.
 **The browser gate.** `scripts/e2e.sh` builds, seeds, drives a real Chromium
 over SwiftShader and destroys the stack again — about 90 seconds after the first
 run. Run it **as root** (it needs the docker socket); nothing it writes into the
-checkout is root-owned, because every container runs as `115:119`.
+checkout is root-owned, because every container runs as `115:119`. The browser
+runs on the sandbox's own compose network, never the host's, and reaches the app
+as `http://flights.ghiecode.io:8080` through an alias there; `127.0.0.1:3185` is
+for a person looking at a `--keep` stack. `scripts/e2e-network-test.sh`, run by
+the gate's PHPUnit step, keeps it that way.
 
 ```bash
 scripts/e2e.sh                                # everything
@@ -176,7 +180,7 @@ overlay gate above leaves none of them behind, and this script installs
 containers running `115:119`.
 It cannot do that in a root-owned tree until those directories exist and are
 theirs — a `115:119` container cannot create one (`mkdir: Permission denied`) —
-and the two refusals it carries (`scripts/e2e.sh:378-385`, `:412-418`) are about a checkout
+and the two refusals it carries (`scripts/e2e.sh:383-390`, `:417-423`) are about a checkout
 that is being *served*, not about a worktree. This is the whole of it, run as it stands:
 
 ```bash
@@ -192,11 +196,11 @@ The `chmod` is last on purpose: until the script has run there is nothing in
 those two directories to tighten. No `.env` is needed for any of it — the
 script writes its own `.env.e2e`. The gate reruns `vite build` whenever
 `public/build/manifest.json` is missing or older than `resources/`,
-`package-lock.json` or `vite.config.js` (`scripts/e2e.sh:398-409`), so emptying
+`package-lock.json` or `vite.config.js` (`scripts/e2e.sh:403-414`), so emptying
 `public/build/` by hand after a front-end edit is no longer needed — in a
 served checkout it refuses the rebuild instead. Everything after `--` reaches
 `playwright test` unchanged
-(`scripts/e2e.sh:112`, `:490`), which is how one spec, `--project=tablet`, or a
+(`scripts/e2e.sh:117`, `:502`), which is how one spec, `--project=tablet`, or a
 re-recording `--update-snapshots=changed` gets through.
 
 Fourteen green checks have never seen a screen — [`docs/E2E.md`](E2E.md)
