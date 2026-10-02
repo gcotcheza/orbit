@@ -310,14 +310,14 @@ vhost_notice() {
     say "HOST VHOST NEEDED, NOT RUN (deploy/nginx moved: ${moved% }) — by hand: nginx -t, then systemctl reload nginx"
 }
 
-# The bundle moved if and only if step 5 ran, so the job's own record decides the
-# mode rather than a second reading of the same diff.
+# Step 5 ran or it did not, so the job's own record decides the mode rather than a
+# second reading of the same diff.
 verify() {
     local rc=0
     case " $RAN " in
         *' 5 '*)
             VERIFY_MODE=full
-            say 'VERIFY full: step 5 built the front end, so the bundle must have moved'
+            say 'VERIFY full: step 5 built the front end, so the served bundle must be the one it built'
             ORBIT_DIR="$ROOT" "$SCRIPT_DIR/verify.sh" || rc=$?
             ;;
         *)

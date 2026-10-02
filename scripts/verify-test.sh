@@ -169,6 +169,13 @@ fixture() {
     SNAP="${CASE}/baseline"
     mkdir -p "${ROOT}" "${BIN}"
     write_fakes
+    built_on_disk 'assets/app-aaa111.js'
+}
+
+# What the asset build leaves behind: Vite's manifest, entry keyed by its source.
+built_on_disk() {
+    mkdir -p "${ROOT}/public/build"
+    printf '{"resources/js/app.js": {"file": "%s", "isEntry": true}}\n' "$1" >"${ROOT}/public/build/manifest.json"
 }
 
 run_verify() {
@@ -255,6 +262,7 @@ run_verify
 equals 'a deploy that moved everything it should passes' "${STATUS_RC}" '0'
 contains 'all of it' "${OUT}" 'all post-deploy checks passed'
 contains '1 the bundle moved' "${OUT}" 'bundle moved: build/assets/app-old000.js -> build/assets/app-aaa111.js'
+contains '1 the served bundle is the built one' "${OUT}" 'serves the bundle the build left on disk: build/assets/app-aaa111.js'
 contains '2 the health endpoint body' "${OUT}" '/up says Application up'
 contains '3 the csrf cookie was lifted' "${OUT}" 'an XSRF-TOKEN was lifted'
 contains '3 the session and token are accepted' "${OUT}" 'refused at auth'
@@ -279,9 +287,31 @@ equals 'a green run consumes the baseline' "$([ -f "${SNAP}" ] && echo present |
 fixture bundle-unchanged-full
 baseline_for 'build/assets/app-aaa111.js'
 run_verify
-equals 'an unchanged bundle with no --backend-only fails the deploy' "${STATUS_RC}" '1'
-contains 'and says the build did not land' "${OUT}" 'the front-end build did not land'
+equals 'a rebuild that produced the same bundle passes in full mode' "${STATUS_RC}" '0'
+contains 'and says the served bundle is the built one' "${OUT}" 'serves the bundle the build left on disk: build/assets/app-aaa111.js'
+contains 'and that the rebuild changed nothing' "${OUT}" 'the rebuild produced the same bundle'
+
+fixture bundle-served-is-not-built
+baseline_for 'build/assets/app-aaa111.js'
+built_on_disk 'assets/app-bbb222.js'
+run_verify
+equals 'a served bundle that is not the one on disk fails the deploy' "${STATUS_RC}" '1'
+contains 'and names both' "${OUT}" "the shell serves 'build/assets/app-aaa111.js' but the build on disk is build/assets/app-bbb222.js"
 equals 'and a failed run keeps the baseline for the next look' "$([ -f "${SNAP}" ] && echo present || echo gone)" 'present'
+
+fixture bundle-no-manifest
+baseline_for 'build/assets/app-old000.js'
+rm -f "${ROOT}/public/build/manifest.json"
+run_verify
+equals 'full mode with no build manifest fails' "${STATUS_RC}" '1'
+contains 'and says what it could not read' "${OUT}" 'names no resources/js/app.js entry'
+
+fixture bundle-not-built-backend
+baseline_for 'build/assets/app-aaa111.js'
+built_on_disk 'assets/app-bbb222.js'
+run_verify --backend-only
+equals '--backend-only never reads the build on disk' "${STATUS_RC}" '0'
+absent 'and says nothing about it' "${OUT}" 'the build on disk'
 
 fixture bundle-unchanged-backend
 baseline_for 'build/assets/app-aaa111.js'

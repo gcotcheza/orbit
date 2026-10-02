@@ -42,6 +42,10 @@ edge()  { curl -s "${timeouts[@]}" "$PUBLIC$1"; }
 edge_head() { curl -sI "${timeouts[@]}" "$PUBLIC$1"; }
 
 bundle()      { get / | grep -oE 'build/assets/app-[A-Za-z0-9_-]+\.js' | head -1; }
+built_bundle() {
+    python3 -c 'import json,sys;print("build/"+json.load(open(sys.argv[1]))["resources/js/app.js"]["file"])' \
+        "$APP_DIR/public/build/manifest.json" 2>/dev/null
+}
 edge_bundle() { edge / | grep -oE 'build/assets/app-[A-Za-z0-9_-]+\.js' | head -1; }
 
 started_at() { docker inspect -f '{{.State.StartedAt}}' "$(dc ps -q "$1" 2>/dev/null)" 2>/dev/null; }
@@ -94,7 +98,7 @@ fi
 
 snap_field() { [ "$snap_state" = 'fresh' ] && sed -n "s/^$1=//p" "$SNAP" | head -1; }
 
-step '1. The shell loads, and the bundle moved'
+step '1. The shell loads, and serves the bundle on disk'
 case "$snap_state" in
     corrupt) bad "the baseline in $SNAP has no readable timestamp — it is corrupt, not old; delete it and run --before"
              snap_state=absent ;;
@@ -104,6 +108,17 @@ esac
 c=$(code /); b=$(bundle)
 [ "$c" = '200' ] && ok 'GET / -> 200' || bad "GET / -> $c, expected 200"
 [ -n "$b" ] && ok "bundle $b" || bad 'no app-<hash>.js in the shell'
+# Full mode proves the served bundle is the build's, not that it changed: docs/DECISIONS.md, verify-full-matches-the-served-bundle-to-the-build
+if [ "$backend_only" = 'no' ]; then
+    built=$(built_bundle)
+    if [ -z "$built" ]; then
+        bad "$APP_DIR/public/build/manifest.json names no resources/js/app.js entry, so the served bundle cannot be matched to the build"
+    elif [ "$b" != "$built" ]; then
+        bad "the shell serves '$b' but the build on disk is $built — the front-end build is not what is served"
+    else
+        ok "serves the bundle the build left on disk: $built"
+    fi
+fi
 was=$(snap_field bundle)
 if [ "$snap_state" != 'fresh' ]; then
     note "no usable baseline, so 'the bundle moved' cannot be judged — run --before next deploy"
@@ -122,7 +137,7 @@ else
     elif [ "$backend_only" = 'yes' ]; then
         note "bundle unchanged since --before ($was) — expected, --backend-only was passed"
     else
-        bad "bundle unchanged since --before ($was) — the front-end build did not land; pass --backend-only if that is deliberate"
+        note "bundle unchanged since --before ($was) — the rebuild produced the same bundle"
     fi
 fi
 
