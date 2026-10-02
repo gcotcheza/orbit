@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Standards;
 
-use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 /**
  * The gate's guard-diff lint step. The fleet's linter lives on the box and in no
