@@ -62,19 +62,18 @@ secret-shaped value in this checkout's `.env` — resolved through the shared gi
 dir, so it still works from a worktree. It names the key and the file, never the
 value.
 
-**It replaces guards rather than adding one.** This box sets `core.hooksPath` in
-*system* scope — `/etc/gitconfig`, pointing at `/usr/local/lib/fleet-githooks` —
-so every commit in every repository, by every user, already runs the fleet
+**It replaces the fleet hooks, so it runs them.** This box sets `core.hooksPath`
+in *system* scope — `/etc/gitconfig`, pointing at `/usr/local/lib/fleet-githooks`
+— so every commit in every repository, by every user, already runs the fleet
 `pre-commit` (gitleaks over the staged *blobs* through `git cat-file`, this
 repository's own `.env` values, and a personal-identifier layer) and the fleet
 `commit-msg`. `core.hooksPath` names a directory, not a file, so installing this
-one switches **both** off. What this hook adds is nine patterns of its own and
-gitleaks' own finding lines; what it drops is the blob scan, the HEAD-blob
-subtraction that keeps a committed fixture committable, the fleet-owned
-`allow.toml`, the control-character path check and the identifier layer. It is a
-trade rather than an upgrade, and chaining the two is a backlog line
-(`docs/DECISIONS.md`). A clone where nobody runs the installer is not unguarded:
-it keeps the fleet hooks, which are the stricter default today.
+one switches **both** off — which is why each hook here ends by handing over to
+its namesake in whatever directory system scope names: `pre-commit` after its own
+nine patterns pass, `commit-msg` at once. The fleet hook's refusal is the
+commit's refusal. Where system scope names no such hook, the commit goes ahead
+with one line on stderr saying nothing else ran (`docs/DECISIONS.md`,
+`the-local-hooks-chain-to-the-fleet-hooks-they-replace`).
 
 One cost, stated rather than discovered: a checkout with no `.env` cannot
 commit until it has one, because the layer that catches *your* live keys cannot
@@ -82,9 +81,10 @@ run without it. There is no second one to weigh against it, because there is no
 override: S1 leaves the guard none, and a commit it refuses is reported with the
 key it named and then fixed, never stood up some other way.
 
-**The gate.** `scripts/check.sh` runs fifteen checks, five of them on the
+**The gate.** `scripts/check.sh` runs sixteen checks, six of them on the
 host, stopping at the first failure: ShellCheck (every shell script under
-`scripts/`, at `-S warning`), Gitleaks, Pint, the deploy script's own tests (on
+`scripts/`, at `-S warning`), Gitleaks, Pint, the guard-diff lint (on the host,
+the fleet's `fleet-lint-guard-diff` over `scripts/`), the deploy script's own tests (on
 the host), the worktree script's own tests (on the host), the standards-version
 check (on the host, against the canonical clone's `VERSION` and
 `ENGINEERING-STANDARDS.md`, and the only check here that can see the vendored
@@ -162,7 +162,11 @@ interpolation variable, and the command fails instead.
 **The browser gate.** `scripts/e2e.sh` builds, seeds, drives a real Chromium
 over SwiftShader and destroys the stack again — about 90 seconds after the first
 run. Run it **as root** (it needs the docker socket); nothing it writes into the
-checkout is root-owned, because every container runs as `115:119`.
+checkout is root-owned, because every container runs as `115:119`. The browser
+runs on the sandbox's own compose network, never the host's, and reaches the app
+as `http://flights.ghiecode.io:8080` through an alias there; `127.0.0.1:3185` is
+for a person looking at a `--keep` stack. `scripts/e2e-network-test.sh`, run by
+the gate's PHPUnit step, keeps it that way.
 
 ```bash
 scripts/e2e.sh                                # everything
@@ -176,7 +180,7 @@ overlay gate above leaves none of them behind, and this script installs
 containers running `115:119`.
 It cannot do that in a root-owned tree until those directories exist and are
 theirs — a `115:119` container cannot create one (`mkdir: Permission denied`) —
-and the two refusals it carries (`scripts/e2e.sh:378-385`, `:412-418`) are about a checkout
+and the two refusals it carries (`scripts/e2e.sh:383-390`, `:417-423`) are about a checkout
 that is being *served*, not about a worktree. This is the whole of it, run as it stands:
 
 ```bash
@@ -192,11 +196,11 @@ The `chmod` is last on purpose: until the script has run there is nothing in
 those two directories to tighten. No `.env` is needed for any of it — the
 script writes its own `.env.e2e`. The gate reruns `vite build` whenever
 `public/build/manifest.json` is missing or older than `resources/`,
-`package-lock.json` or `vite.config.js` (`scripts/e2e.sh:398-409`), so emptying
+`package-lock.json` or `vite.config.js` (`scripts/e2e.sh:403-414`), so emptying
 `public/build/` by hand after a front-end edit is no longer needed — in a
 served checkout it refuses the rebuild instead. Everything after `--` reaches
 `playwright test` unchanged
-(`scripts/e2e.sh:112`, `:490`), which is how one spec, `--project=tablet`, or a
+(`scripts/e2e.sh:117`, `:502`), which is how one spec, `--project=tablet`, or a
 re-recording `--update-snapshots=changed` gets through.
 
 Fourteen green checks have never seen a screen — [`docs/E2E.md`](E2E.md)

@@ -55,13 +55,14 @@ browser.** Not "assert the component mounted". Look at it.
    if missing, because this script is meant to be run twenty times an afternoon;
    `public/build/` is rebuilt when it is older than its inputs too — in a
    served checkout it refuses instead of rebuilding into the live bundle.
-3. **Brings up the `orbit-e2e` stack** on `127.0.0.1:3185` and waits for it to
-   be healthy.
+3. **Brings up the `orbit-e2e` stack** on its own bridge network, published on
+   `127.0.0.1:3185` for a person to look at, and waits for it to be healthy.
 4. **Migrates and seeds** — the account, 3,270 airports, six watched routes, and
    sixty mornings of price history replayed through the ordinary poller
    (`FakeHistorySeeder`). This is why the charts have curves and the calendar
    has colours.
-5. **Runs Playwright** inside the official image, on the host network.
+5. **Runs Playwright** inside the official image, on the sandbox's own network —
+   never the host's (see "The hostname").
 6. **`down -v`** — containers, network and the in-RAM database, gone. `--keep`
    skips this and leaves the app up on 3185 for poking at by hand;
    `scripts/e2e.sh --down` tears it down afterwards.
@@ -130,22 +131,20 @@ than the thing it stands in for stops predicting it.
 
 ---
 
-## The hostname trick
+## The hostname
 
-The browser is bent, not the app.
+The network is bent, not the app.
 
 `bootstrap/app.php` trusts exactly one host, `^flights\.ghiecode\.io$`, and
 answers **400** to anything else. That is correct production behaviour and it is
 also the thing that makes a browser pointed at `127.0.0.1` untestable.
 
-The harness does not add `localhost` to the allowlist. Instead Chromium is
-launched with
-
-```
---host-resolver-rules=MAP flights.ghiecode.io 127.0.0.1
-```
-
-and the base URL is `http://flights.ghiecode.io:3185`. Symfony's trusted-host
+The harness does not add `localhost` to the allowlist. Instead the browser
+container joins the sandbox's own compose network — found by its compose
+project label, and the run refuses unless docker names exactly one — where the
+web sidecar carries the network alias `flights.ghiecode.io`. The base URL is
+`http://flights.ghiecode.io:8080`, the sidecar's own listen port, and `APP_URL`
+and `SANCTUM_STATEFUL_DOMAINS` carry the same origin. Symfony's trusted-host
 check runs against `getHost()`, which strips the port, so the allowlist matches
 as written. **No application code changed for this** — `bootstrap/app.php`,
 `config/orbit.php` and the Sanctum configuration are exercised exactly as
@@ -154,15 +153,25 @@ ever tested by a variant of itself is a list nobody has tested.
 
 Two more pieces make it hold:
 
-- **`docker run --add-host flights.ghiecode.io:127.0.0.1`.** Playwright's
-  `request` fixture is a *Node* HTTP client, not the browser, so the Chromium
-  flag does not apply to it — `pwa.spec.js` would resolve the name through real
-  DNS. `/etc/hosts` covers that path.
-- **The port is the backstop.** Even if both mappings failed, `flights.ghiecode.io:3185`
-  reaches nothing: production is `:443` behind Cloudflare, the origin publishes
-  `127.0.0.1:3085` on loopback only, and 3185 is not one of the ports Cloudflare
-  proxies. A mis-resolution is a connection refused, never a test that quietly
-  ran against the live site.
+- **One resolver for everything.** Docker's embedded DNS answers the alias for
+  Chromium and for Playwright's `request` fixture alike — the latter is a *Node*
+  HTTP client that a Chromium flag never reached — so `pwa.spec.js` needs no
+  `/etc/hosts` entry.
+- **The resolution is checked, not assumed.** Without the alias the name falls
+  through to public DNS and Cloudflare's address for the live site, and 8080 is
+  a port Cloudflare proxies. So before the browser starts, the run asks the app
+  container — on the same network — what `flights.ghiecode.io` resolves to, and
+  refuses unless it is the web container's own address there.
+
+**Why not the host network.** The browser used to run with `--network host`,
+reaching `127.0.0.1:3185` through a `--host-resolver-rules` mapping. In the host
+namespace Chromium sees every veth this box adds or removes and aborts the
+navigation in flight with `net::ERR_NETWORK_CHANGED` — any other stack's
+container restarting was enough. `scripts/e2e-network-test.sh` (run by
+`BrowserGateNetworkTest` in the PHPUnit step) fails if host networking, an
+`--add-host` or a resolver rule comes back, if the one-network refusal is lost,
+or if the suite's port and `APP_URL`'s drift apart. docs/DECISIONS.md,
+`the-browser-gate-runs-on-the-sandbox-bridge`.
 
 ---
 
@@ -426,7 +435,7 @@ Import it from `e2e/fixtures.js`.
 
 **The guard is `ORBIT_E2E`, not `APP_ENV`.** The sandbox deliberately runs as
 `APP_ENV=production` so that the trusted-host list is exercised for real (see
-"The hostname trick"), so an `APP_ENV` check would switch the freeze off in the
+"The hostname"), so an `APP_ENV` check would switch the freeze off in the
 one place it is wanted. `ORBIT_E2E` is already the required compose variable
 that keeps `docker-compose.e2e.yml` off the live `.env`, and production's `.env`
 carries neither it nor `E2E_FIXED_NOW` — two independent locks.

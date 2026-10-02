@@ -4,10 +4,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-if [ ! -x scripts/hooks/pre-commit ]; then
-    printf 'install-hooks: scripts/hooks/pre-commit is missing or not executable.\n' >&2
-    exit 1
-fi
+for hook in pre-commit commit-msg; do
+    if [ ! -x "scripts/hooks/$hook" ]; then
+        printf 'install-hooks: scripts/hooks/%s is missing or not executable.\n' "$hook" >&2
+        exit 1
+    fi
+done
 
 common=$(git rev-parse --git-common-dir)
 common=$(cd "$common" && pwd -P)
@@ -21,13 +23,14 @@ if [ "$common" != "$here/.git" ]; then
     exit 1
 fi
 
-global=$(git config --global --get core.hooksPath || true)
+fleet=$(git config --system --type=path --get core.hooksPath || true)
 
 git config core.hooksPath scripts/hooks
 
 printf 'core.hooksPath = %s\n' "$(git config --local --get core.hooksPath)"
 
-if [ -n "$global" ]; then
-    printf 'This overrides the global guard at %s, which no longer runs here.\n' "$global"
-    printf 'scripts/hooks/pre-commit is a superset of it.\n'
+if [ -n "$fleet" ]; then
+    printf 'scripts/hooks hands each commit on to the fleet hooks in %s.\n' "$fleet"
+else
+    printf 'No system core.hooksPath is set, so these hooks have no fleet hook to hand over to.\n'
 fi

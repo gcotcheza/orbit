@@ -21,8 +21,8 @@ export function screenPath(name) {
     return new URL(`./screens/${name}.png`, ARTIFACTS).pathname
 }
 
-// The production hostname, on purpose — the browser is bent, not the app
-// (docs/E2E.md "The hostname trick").
-export const HOST = 'flights.ghiecode.io'
-export const PORT = 3185
+// Production's own hostname, answered by a compose alias on the sandbox's
+// network, so the trusted-host check runs for real (docs/E2E.md "The hostname").
+const HOST = 'flights.ghiecode.io'
+const PORT = 8080
 export const BASE_URL = `http://${HOST}:${PORT}`

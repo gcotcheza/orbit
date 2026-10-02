@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Usage: git runs this per commit; scripts/install-hooks.sh arms it. It always runs
-# (S1); what it trades against the fleet hooks it replaces: docs/DECISIONS.md.
+# (S1), then hands over to the fleet pre-commit it replaces: docs/DECISIONS.md.
 set -uo pipefail
 
 # C locale and no NULs for the whole scan: --text puts binary bytes in the patch,
 # which awk and grep refuse or mangle where the locale is a UTF-8 one.
+caller_lc_all=${LC_ALL-} caller_lc_all_set=${LC_ALL+1}
 export LC_ALL=C
 
 if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
@@ -135,5 +136,16 @@ if [ ${#hits[@]} -gt 0 ]; then
     fail=1
 fi
 
-[ $fail -eq 0 ] || printf 'Unstage it and put the value in .env. There is no override: report what this named (S1).\n' >&2
-exit $fail
+if [ $fail -ne 0 ]; then
+    printf 'Unstage it and put the value in .env. There is no override: report what this named (S1).\n' >&2
+    exit 1
+fi
+
+# docs/DECISIONS.md, the-local-hooks-chain-to-the-fleet-hooks-they-replace
+fleet=$(git config --system --type=path --get core.hooksPath 2>/dev/null) || fleet=
+if [ -n "$fleet" ] && [ -x "$fleet/pre-commit" ]; then
+    if [ -n "$caller_lc_all_set" ]; then export LC_ALL=$caller_lc_all; else unset LC_ALL; fi
+    exec "$fleet/pre-commit" "$@"
+fi
+printf 'pre-commit: no fleet pre-commit at %s, so only this repository'\''s guard ran.\n' "${fleet:-(no system core.hooksPath)}" >&2
+exit 0

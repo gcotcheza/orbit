@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Usage: git runs this per commit message. It replaces the fleet commit-msg, so it
+# runs that one: docs/DECISIONS.md, the-local-hooks-chain-to-the-fleet-hooks-they-replace
+set -uo pipefail
+
+fleet=$(git config --system --type=path --get core.hooksPath 2>/dev/null) || fleet=
+if [ -n "$fleet" ] && [ -x "$fleet/commit-msg" ]; then
+    exec "$fleet/commit-msg" "$@"
+fi
+printf 'commit-msg: no fleet commit-msg at %s, so nothing checked this message.\n' "${fleet:-(no system core.hooksPath)}" >&2
+exit 0
