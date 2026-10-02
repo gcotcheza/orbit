@@ -209,7 +209,12 @@ mt=$(head_ /manifest.webmanifest | grep -i '^content-type' | tr -d '\r')
 st=$(head_ /sw.js | grep -i '^content-type' | tr -d '\r')
 case "$mt" in *application/manifest+json*) ok "manifest $mt";; *) bad "manifest content-type is '$mt' — text/html means the SPA catch-all is answering";; esac
 case "$st" in *application/javascript*)    ok "sw.js $st";;    *) bad "sw.js content-type is '$st' — text/html means the SPA catch-all is answering";; esac
-if [ -n "$b" ] && get /sw.js | grep -qF "${b##*/}"; then
+sw=$(get /sw.js) || sw=''
+# Once, right after the restarts: docs/DECISIONS.md, verify-check-4-fetches-the-service-worker-twice
+[ -n "$sw" ] || { sleep 2; sw=$(get /sw.js) || sw=''; }
+if [ -z "$sw" ]; then
+    bad 'the service worker could not be fetched — empty or failed twice, 2s apart — so whether it names the live bundle is unknown'
+elif [ -n "$b" ] && printf '%s' "$sw" | grep -qF "${b##*/}"; then
     ok "the service worker precaches ${b##*/}"
 else
     bad "the service worker does not name the live bundle '$b' — the build ran in the wrong order"

@@ -109,7 +109,11 @@ case "$url" in
     */up) body='Application up' ;;
     */sw.js)
         headers='content-type: application/javascript; charset=utf-8'
-        body="const PRECACHE = [\"/${FAKE_SW_BUNDLE:-$bundle}\"];" ;;
+        body="const PRECACHE = [\"/${FAKE_SW_BUNDLE:-$bundle}\"];"
+        if [ "$head_only" = 0 ]; then
+            echo get >> "${FAKE_LOG_DIR}/sw.gets"
+            [ "$(wc -l < "${FAKE_LOG_DIR}/sw.gets")" -gt "${FAKE_SW_EMPTY:-0}" ] || body=''
+        fi ;;
     */manifest.webmanifest) headers='content-type: application/manifest+json' ;;
     */build/assets/*.js) headers="cache-control: ${FAKE_ASSET_CC:-public, max-age=31536000, immutable}" ;;
     */sanctum/csrf-cookie)
@@ -148,6 +152,10 @@ if [ "$code_only" = 1 ]; then printf '%s' "$code"; exit 0; fi
 [ -n "$body" ] && printf '%s\n' "$body"
 [ "$nl_code" = 1 ] && printf '\n%s' "$code"
 exit 0
+SH
+    cat >"${BIN}/sleep" <<'SH'
+#!/bin/sh
+printf '%s\n' "$*" >> "${FAKE_LOG_DIR}/sleep.argv"
 SH
     cat >"${BIN}/find" <<'SH'
 #!/bin/sh
@@ -188,6 +196,7 @@ run_verify() {
         FAKE_BUNDLE_LOOP="${BUNDLE_LOOP:-build/assets/app-aaa111.js}" \
         FAKE_BUNDLE_EDGE="${BUNDLE_EDGE:-}" \
         FAKE_SW_BUNDLE="${SW_BUNDLE:-}" \
+        FAKE_SW_EMPTY="${SW_EMPTY:-0}" \
         FAKE_ASSET_CC="${ASSET_CC:-}" \
         FAKE_SHELL_HEADERS="${SHELL_HEADERS:-}" \
         FAKE_CSRF_CODE="${CSRF_CODE:-204}" \
@@ -211,13 +220,13 @@ run_verify() {
         ORBIT_SNAPSHOT="${SNAP}" \
         bash "${VERIFY_SH}" "$@" 2>&1)"
     STATUS_RC=$?
-    STARTED=''; STATUS=''; WEB_PORTS=''; BUNDLE_LOOP=''; BUNDLE_EDGE=''; SW_BUNDLE=''
+    STARTED=''; STATUS=''; WEB_PORTS=''; BUNDLE_LOOP=''; BUNDLE_EDGE=''; SW_BUNDLE=''; SW_EMPTY=''
     ASSET_CC=''; SHELL_HEADERS=''; CSRF_CODE=''; LOGIN_CODE=''; PROBE_CODE=''
     ME_AUTHED_CODE=''; ME_GUEST_CODE=''; PASSWORD_RC=''; HORIZON=''; HORIZON_RC=''
     FAILED=''; MAIL=''; MAIL_RC=''; APP_LOG=''; APP_LOG_RC=''; ROOT_OWNED=''
 }
 
-STARTED=''; STATUS=''; WEB_PORTS=''; BUNDLE_LOOP=''; BUNDLE_EDGE=''; SW_BUNDLE=''
+STARTED=''; STATUS=''; WEB_PORTS=''; BUNDLE_LOOP=''; BUNDLE_EDGE=''; SW_BUNDLE=''; SW_EMPTY=''
 ASSET_CC=''; SHELL_HEADERS=''; CSRF_CODE=''; LOGIN_CODE=''; PROBE_CODE=''
 ME_AUTHED_CODE=''; ME_GUEST_CODE=''; PASSWORD_RC=''; HORIZON=''; HORIZON_RC=''
 FAILED=''; MAIL=''; MAIL_RC=''; APP_LOG=''; APP_LOG_RC=''; ROOT_OWNED=''
@@ -521,6 +530,32 @@ SW_BUNDLE='build/assets/app-old000.js'
 run_verify
 equals 'a service worker precaching the previous bundle fails' "${STATUS_RC}" '1'
 contains 'and says what that means' "${OUT}" 'the build ran in the wrong order'
+
+fixture sw-empty-once
+baseline_for 'build/assets/app-old000.js'
+SW_EMPTY=1
+run_verify
+equals 'a service worker that came back empty once is fetched again and passes' "${STATUS_RC}" '0'
+contains 'and the second fetch is what precaches the bundle' "${OUT}" 'precaches app-aaa111.js'
+equals 'and it waited 2s between the two' "$(cat "${CASE}/sleep.argv" 2>/dev/null)" '2'
+
+fixture sw-empty-twice
+baseline_for 'build/assets/app-old000.js'
+SW_EMPTY=2
+run_verify
+equals 'a service worker empty on both fetches fails' "${STATUS_RC}" '1'
+contains 'and says it could not be fetched' "${OUT}" 'the service worker could not be fetched'
+absent 'not that the build ran in the wrong order' "${OUT}" 'the build ran in the wrong order'
+equals 'and it asked exactly twice' "$(wc -l < "${CASE}/sw.gets")" '2'
+
+fixture sw-without-the-name
+baseline_for 'build/assets/app-old000.js'
+SW_BUNDLE='nothing-named-here'
+run_verify
+equals 'a service worker body without the bundle name fails' "${STATUS_RC}" '1'
+contains 'with the wrong-order sentence' "${OUT}" "does not name the live bundle 'build/assets/app-aaa111.js' — the build ran in the wrong order"
+absent 'and not the fetch sentence' "${OUT}" 'could not be fetched'
+equals 'and a body that came back is not fetched twice' "$(wc -l < "${CASE}/sw.gets")" '1'
 
 fixture no-policy
 baseline_for 'build/assets/app-old000.js'

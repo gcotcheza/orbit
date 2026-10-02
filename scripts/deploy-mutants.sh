@@ -326,6 +326,9 @@ mutant 'an unreachable container reads as no mail yet' verify.sh \
 mutant 'any policy header will do' verify.sh \
     "s/case \"\\\$csp\" in \*\"script-src 'self'\"\*)/case \"\\\$csp\" in *)/" \
     'a shell served with no policy fails'
+mutant 'an empty service worker is never fetched again' verify.sh \
+    '/^\[ -n "\$sw" \] || { sleep 2;/d' \
+    'a service worker that came back empty once is fetched again and passes'
 mutant 'the edge is never compared' verify.sh \
     's/elif \[ "\$eb" = "\$b" \]; then/elif true; then/' \
     'an edge holding the previous release fails'
