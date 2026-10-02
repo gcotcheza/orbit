@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Usage: git runs this per commit; scripts/install-hooks.sh arms it. Bypass:
-# git commit --no-verify. Why it must be a superset: docs/DECISIONS.md.
+# Usage: git runs this per commit; scripts/install-hooks.sh arms it. It always runs
+# (S1); what it trades against the fleet hooks it replaces: docs/DECISIONS.md.
 set -uo pipefail
+
+# C locale and no NULs for the whole scan: --text puts binary bytes in the patch,
+# which awk and grep refuse or mangle where the locale is a UTF-8 one.
+export LC_ALL=C
 
 if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
     printf 'pre-commit: needs bash 4 or newer; refusing rather than half-checking.\n' >&2
@@ -32,7 +36,9 @@ ENV_KEY='(_(KEY|SECRET|TOKEN|PASSWORD|PASS|PWD|CREDENTIALS|CREDENTIAL|SALT|SIGNA
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || root=$PWD
 
-if ! staged=$(git diff --cached --no-color --diff-filter=ACMRT --unified=0 2>/dev/null); then
+# --no-ext-diff --no-textconv --text: a diff driver, a textconv filter or a path
+# git calls binary all hand this guard a patch with no staged lines in it.
+if ! staged=$(git diff --cached --no-ext-diff --no-textconv --text --no-color --diff-filter=ACMRT --unified=0 2>/dev/null | tr -d '\0'); then
     printf 'pre-commit: cannot read the staged changes; refusing the commit.\n' >&2
     exit 1
 fi
@@ -129,5 +135,5 @@ if [ ${#hits[@]} -gt 0 ]; then
     fail=1
 fi
 
-[ $fail -eq 0 ] || printf 'Unstage it and put the value in .env. Deliberate override: git commit --no-verify.\n' >&2
+[ $fail -eq 0 ] || printf 'Unstage it and put the value in .env. There is no override: report what this named (S1).\n' >&2
 exit $fail

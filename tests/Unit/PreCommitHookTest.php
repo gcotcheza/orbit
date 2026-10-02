@@ -236,6 +236,46 @@ final class PreCommitHookTest extends TestCase
     }
 
     #[Test]
+    public function it_says_nothing_at_all_about_a_staged_binary(): void
+    {
+        $this->plantEnv($this->sandbox);
+        $this->plantDiff('public/pixel.png', "\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\1\0\0\0\1\x08\x02\0");
+
+        $result = $this->runHook();
+
+        $this->assertSame(0, $result['status'], $result['output']);
+        $this->assertSame(
+            '',
+            $result['output'],
+            'A staged binary made the guard talk: --text puts those bytes in the patch, so the NULs '
+            .'come out before the substitution sees them and the scan runs in the C locale. A warning '
+            ."printed inside a SUCCESSFUL commit is what teaches people to stop reading this hook.\n"
+            .$result['output']
+        );
+    }
+
+    #[Test]
+    public function it_reads_the_patch_text_a_repository_cannot_dress_up(): void
+    {
+        $this->plantEnv($this->sandbox);
+        $this->plantDiff('config/orbit.php', "<?php return ['token' => '".self::TOKEN."'];");
+        $this->plantDiffDriver();
+
+        $result = $this->runHook();
+
+        $this->assertNotSame(
+            0,
+            $result['status'],
+            'The repository answered for its own diff — diff.external, a textconv attribute or a '
+            .'path git calls binary all do it — and the hook read that instead of the staged patch. '
+            .'No added lines, no hits, and a live .env value committed with the guard silent and '
+            ."exiting 0 exactly as it does on a clean tree.\n".$result['output']
+        );
+        $this->assertStringContainsString('TRAVELPAYOUTS_TOKEN found in config/orbit.php', $result['output']);
+        $this->assertStringNotContainsString(self::TOKEN, $result['output']);
+    }
+
+    #[Test]
     public function it_blocks_from_a_real_linked_worktree(): void
     {
         $git = trim((string) shell_exec('command -v git 2>/dev/null'));
@@ -309,6 +349,32 @@ final class PreCommitHookTest extends TestCase
     private function hook(): string
     {
         return dirname(__DIR__, 2).'/scripts/hooks/pre-commit';
+    }
+
+    /**
+     * A git whose `diff --cached` answers with a diff driver's output unless the call
+     * turns drivers off, which is what a repository with one configured does.
+     */
+    private function plantDiffDriver(): void
+    {
+        $stub = $this->sandbox.'/bin/git';
+
+        file_put_contents($stub, implode("\n", [
+            '#!/bin/sh',
+            'case "$1 $2" in',
+            "  'rev-parse --show-toplevel') cat '{$this->sandbox}/toplevel' ;;",
+            "  'rev-parse --git-common-dir') exit 1 ;;",
+            "  'diff --cached')",
+            '    for want in --no-ext-diff --no-textconv --text; do',
+            '      case " $* " in *" $want "*) ;; *) printf \'the driver said nothing\\n\'; exit 0 ;; esac',
+            '    done',
+            "    cat '{$this->sandbox}/staged.diff' ;;",
+            '  *) exit 1 ;;',
+            'esac',
+            '',
+        ]));
+
+        chmod($stub, 0755);
     }
 
     private function plantEnv(string $directory): void
