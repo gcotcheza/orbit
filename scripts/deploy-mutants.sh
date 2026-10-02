@@ -316,6 +316,9 @@ mutant 'the log window is not applied' verify.sh \
 mutant 'the served bundle is never matched to the build' verify.sh \
     's/elif \[ "\$b" != "\$built" \]; then/elif false; then/' \
     'a served bundle that is not the one on disk fails the deploy'
+mutant 'a manifest older than the baseline passes' verify.sh \
+    's/elif \[ "\$built_at" -lt "\$recorded_at" \]; then/elif false; then/' \
+    'a manifest older than the baseline fails full mode'
 mutant 'an unreachable container reads as no mail yet' verify.sh \
     "s/bad 'could not read the app container, so mail.log is unchecked — that is not the same as no mail yet'/ok 'no mail.log yet'/" \
     'a container that cannot be reached fails check 9' \

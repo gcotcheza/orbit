@@ -62,7 +62,7 @@ final class GateMountPointsTest extends TestCase
         $this->assertSame(1, $run['status'], $run['output']);
         $this->assertTrue($run['after']['vendor/autoload.php'], 'rmdir only: what was written into it is never deleted.');
         $this->assertStringContainsString(
-            'check.sh: left '.$run['root'].'/vendor in place: absent when the gate started, and not empty now',
+            'check.sh: left '.$run['root'].'/vendor in place: absent when the gate started, and it could not rmdir it',
             $run['output']
         );
     }

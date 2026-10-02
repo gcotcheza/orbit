@@ -118,6 +118,17 @@ if [ "$backend_only" = 'no' ]; then
     else
         ok "serves the bundle the build left on disk: $built"
     fi
+    recorded_at=$(snap_field recorded)
+    if [ -n "$recorded_at" ] && [ -n "$built" ]; then
+        built_at=$(stat -c %Y "$APP_DIR/public/build/manifest.json" 2>/dev/null)
+        if [ -z "$built_at" ]; then
+            bad "could not read the build manifest's modification time, so the build is not proved newer than the baseline"
+        elif [ "$built_at" -lt "$recorded_at" ]; then
+            bad "the build manifest was written $(date -u -d "@$built_at" '+%F %T') UTC, before the baseline at $(date -u -d "@$recorded_at" '+%F %T') UTC — step 5 did not rewrite it"
+        else
+            ok 'the build manifest was written after the baseline'
+        fi
+    fi
 fi
 was=$(snap_field bundle)
 if [ "$snap_state" != 'fresh' ]; then

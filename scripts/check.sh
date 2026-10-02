@@ -120,7 +120,7 @@ cleanup() {
     if [ -n "$gate" ]; then rm -rf "$gate"; fi
     for dir in "${absent_mounts[@]}"; do
         [ -d "$here/$dir" ] || continue
-        rmdir -- "$here/$dir" 2>/dev/null || printf 'check.sh: left %s in place: absent when the gate started, and not empty now\n' "$here/$dir" >&2
+        rmdir -- "$here/$dir" 2>/dev/null || printf 'check.sh: left %s in place: absent when the gate started, and it could not rmdir it\n' "$here/$dir" >&2
     done
 }
 trap cleanup EXIT

@@ -228,7 +228,10 @@ baseline_for() {
     STARTED="${STARTED_OLD}"
     BUNDLE_LOOP="$1"
     run_verify --before
+    built_at "$(sed -n 's/^recorded=//p' "${SNAP}")"
 }
+
+built_at() { touch -c -d "@$1" "${ROOT}/public/build/manifest.json"; }
 
 # --- 1. the baseline round trip -----------------------------------------------
 fixture baseline
@@ -290,6 +293,7 @@ run_verify
 equals 'a rebuild that produced the same bundle passes in full mode' "${STATUS_RC}" '0'
 contains 'and says the served bundle is the built one' "${OUT}" 'serves the bundle the build left on disk: build/assets/app-aaa111.js'
 contains 'and that the rebuild changed nothing' "${OUT}" 'the rebuild produced the same bundle'
+contains 'and that the build is newer than the baseline' "${OUT}" 'the build manifest was written after the baseline'
 
 fixture bundle-served-is-not-built
 baseline_for 'build/assets/app-aaa111.js'
@@ -298,6 +302,13 @@ run_verify
 equals 'a served bundle that is not the one on disk fails the deploy' "${STATUS_RC}" '1'
 contains 'and names both' "${OUT}" "the shell serves 'build/assets/app-aaa111.js' but the build on disk is build/assets/app-bbb222.js"
 equals 'and a failed run keeps the baseline for the next look' "$([ -f "${SNAP}" ] && echo present || echo gone)" 'present'
+
+fixture bundle-built-before-baseline
+baseline_for 'build/assets/app-aaa111.js'
+built_at "$((NOW - 7200))"
+run_verify
+equals 'a manifest older than the baseline fails full mode' "${STATUS_RC}" '1'
+contains 'and names both times' "${OUT}" 'before the baseline at'
 
 fixture bundle-no-manifest
 baseline_for 'build/assets/app-old000.js'
