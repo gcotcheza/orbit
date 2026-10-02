@@ -236,6 +236,25 @@ final class PreCommitHookTest extends TestCase
     }
 
     #[Test]
+    public function it_says_nothing_at_all_about_a_staged_binary(): void
+    {
+        $this->plantEnv($this->sandbox);
+        $this->plantDiff('public/pixel.png', "\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\1\0\0\0\1\x08\x02\0");
+
+        $result = $this->runHook();
+
+        $this->assertSame(0, $result['status'], $result['output']);
+        $this->assertSame(
+            '',
+            $result['output'],
+            'A staged binary made the guard talk: --text puts those bytes in the patch, so the NULs '
+            .'come out before the substitution sees them and the scan runs in the C locale. A warning '
+            ."printed inside a SUCCESSFUL commit is what teaches people to stop reading this hook.\n"
+            .$result['output']
+        );
+    }
+
+    #[Test]
     public function it_reads_the_patch_text_a_repository_cannot_dress_up(): void
     {
         $this->plantEnv($this->sandbox);
