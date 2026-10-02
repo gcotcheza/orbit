@@ -21,7 +21,8 @@
 #   3. `up -d --wait` the orbit-e2e stack on 127.0.0.1:3185
 #   4. migrate, then seed — including the 60-day fake price backfill, so the
 #      charts and the calendar have something to draw
-#   5. run Playwright inside the official image, on the host network
+#   5. run Playwright inside the official image, on the sandbox's own bridge
+#      network — never the host's; docs/DECISIONS.md says why
 #   6. `down -v`: containers, network and the in-RAM database, gone
 #
 # ⚠ RUN IT AS ROOT (or as a user in the `docker` group), NOT as `sudo -u orbit`.
@@ -76,11 +77,15 @@ gate_record() {
 PLAYWRIGHT_VERSION='1.62.1'
 PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
 
-# The hostname the app answers to, resolved to the loopback inside Chromium.
-# docs/E2E.md explains why the browser is made to believe in the production
-# hostname rather than the app being made to accept `localhost`.
+# The hostname the app answers to — production's own name, not `localhost`. On the
+# sandbox's network it is an alias on the web container (docs/E2E.md).
 E2E_HOST='flights.ghiecode.io'
+
+# E2E_APP_PORT is what the browser connects to, the web sidecar's own listen port.
+# E2E_PORT is the loopback publication, which only a person uses.
+E2E_APP_PORT='8080'
 E2E_PORT='3185'
+E2E_PROJECT='orbit-e2e'
 
 # THE INSTANT THE WHOLE SANDBOX RUNS AT, app and browser alike. Changing it invalidates
 # every committed baseline — see docs/E2E.md "A frozen clock".
@@ -93,7 +98,7 @@ APP_GID='119'
 # boot, and this stack rebuilds its own image (docker-compose.e2e.yml).
 APP_IMAGE='orbit/app:e2e'
 
-COMPOSE=(docker compose -p orbit-e2e -f docker-compose.e2e.yml --env-file .env.e2e)
+COMPOSE=(docker compose -p "$E2E_PROJECT" -f docker-compose.e2e.yml --env-file .env.e2e)
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 note() { printf '    %s\n' "$1"; }
@@ -164,7 +169,7 @@ APP_NAME=Orbit
 APP_ENV=production
 APP_KEY=${app_key}
 APP_DEBUG=false
-APP_URL=http://${E2E_HOST}:${E2E_PORT}
+APP_URL=http://${E2E_HOST}:${E2E_APP_PORT}
 
 ORBIT_TIMEZONE=Europe/Amsterdam
 
@@ -218,11 +223,11 @@ SESSION_SECURE_COOKIE=false
 SESSION_SAME_SITE=lax
 
 # Both spellings: Sanctum matches the Origin/Referer host INCLUDING the port,
-# and the browser sends \`${E2E_HOST}:${E2E_PORT}\`. It costs nothing here — the
+# and the browser sends \`${E2E_HOST}:${E2E_APP_PORT}\`. It costs nothing here — the
 # endpoints the SPA calls are in the \`web\` group, where the session is
 # unconditional (routes/web.php) — but a list that is wrong for a reason nobody
 # wrote down is a list that wastes an afternoon the day it starts mattering.
-SANCTUM_STATEFUL_DOMAINS=${E2E_HOST}:${E2E_PORT},${E2E_HOST}
+SANCTUM_STATEFUL_DOMAINS=${E2E_HOST}:${E2E_APP_PORT},${E2E_HOST}
 
 BROADCAST_CONNECTION=log
 FILESYSTEM_DISK=local
@@ -440,7 +445,7 @@ trap 'gate_record "$?"' ERR
 # -----------------------------------------------------------------------------
 # The stack
 # -----------------------------------------------------------------------------
-step "Starting the sandbox (project orbit-e2e, 127.0.0.1:${E2E_PORT})"
+step "Starting the sandbox (project ${E2E_PROJECT}, 127.0.0.1:${E2E_PORT})"
 "${COMPOSE[@]}" up -d --wait
 
 step 'Migrating'
@@ -457,12 +462,8 @@ step 'Seeding (account, routes, 60 days of fake fares)'
 # -----------------------------------------------------------------------------
 # The browser
 # -----------------------------------------------------------------------------
-# --network host: the app is published on 127.0.0.1 only, so the container has
-#   to be ON the host's loopback to reach it. It is also what makes
-#   `MAP flights.ghiecode.io 127.0.0.1` (e2e/playwright.config.js) resolve to
-#   this stack rather than to the container's own empty loopback.
-# --add-host: belt and braces for anything in the image that resolves through
-#   getaddrinfo rather than through Chromium's own resolver.
+# --network: the sandbox's own, never the host's, where any container restart on
+#   this box aborts a navigation — docs/DECISIONS.md.
 # --shm-size: Chromium's default 64 MB /dev/shm is not enough for a WebGL page
 #   and the failure is a renderer that dies mid-test with no useful message.
 # --memory: OOM PREVENTION, per the fleet E2E standard. THIS is the container the
@@ -473,11 +474,22 @@ step 'Seeding (account, routes, 60 days of fake fares)'
 #   and takes the kernel's OOM killer to whatever else is running, the live site
 #   included. Capped, the kernel kills the run instead of its neighbours.
 # -u 115:119: artifacts land owned by the host `orbit` user, not by root.
+E2E_NETWORK="$(docker network ls --filter "label=com.docker.compose.project=${E2E_PROJECT}" --format '{{.Name}}')"
+[ "$(printf '%s' "$E2E_NETWORK" | grep -c .)" -eq 1 ] \
+    || fail "docker names ${E2E_PROJECT} exactly one network or the browser joins the wrong one; it answered: ${E2E_NETWORK:-nothing}"
+
+# Unanswered on this network, the name falls through to public DNS and the live
+# site's Cloudflare address: the alias has to be what answers it.
+WEB_ADDRESS="$(docker inspect --format "{{ (index .NetworkSettings.Networks \"${E2E_NETWORK}\").IPAddress }}" "$("${COMPOSE[@]}" ps -q web)" || true)"
+RESOLVED="$("${COMPOSE[@]}" exec -T app getent hosts "$E2E_HOST" | awk '{ print $1; exit }' || true)"
+[ -n "$WEB_ADDRESS" ] && [ "$RESOLVED" = "$WEB_ADDRESS" ] \
+    || fail "${E2E_HOST} resolves to ${RESOLVED:-nothing} on ${E2E_NETWORK}, not to the web container (${WEB_ADDRESS:-no address})"
+
 step 'Running Playwright'
+note "browser network ${E2E_NETWORK}, app at http://${E2E_HOST}:${E2E_APP_PORT} (${RESOLVED})"
 set +e
 docker run --rm \
-    --network host \
-    --add-host "${E2E_HOST}:127.0.0.1" \
+    --network "$E2E_NETWORK" \
     --shm-size=512m \
     --memory=2g \
     -u "${APP_UID}:${APP_GID}" \

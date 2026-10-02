@@ -38,6 +38,8 @@
 #     job is a test that fails on a slow afternoon; running the job in the
 #     request makes the assertion the button's own. The scheduler has nothing
 #     to do in a stack that lives for ninety seconds.
+#   - NO BROWSER SERVICE. scripts/e2e.sh runs the official Playwright image and
+#     joins it to the network below, where the 2 GB memory cap is its own.
 #   - NO assets service. The bundle is built once, before the stack comes up —
 #     see scripts/e2e.sh. Building inside the stack would put a task with no
 #     port in a file whose whole purpose is one port.
@@ -103,14 +105,19 @@ services:
     # HARDCODED, exactly as production hardcodes 3085 and for the same reason:
     # the loopback binding is the security boundary, and a boundary that can be
     # moved by editing an env file is one that can be moved by accident. 3185
-    # is the sandbox's own port and belongs to nothing else on this box.
+    # is the sandbox's own port and belongs to nothing else on this box. The
+    # browser is on this stack's network and asks for 8080 instead.
     ports:
       - '127.0.0.1:3185:8080'
     volumes:
       - './:/var/www/html:ro'
       - './docker/web/nginx.conf:/etc/nginx/nginx.conf:ro'
     networks:
-      - orbit-e2e
+      orbit-e2e:
+        # PRODUCTION'S OWN HOSTNAME, answered on this network, so the browser
+        # container reaches the real trusted-host check — scripts/e2e.sh.
+        aliases:
+          - 'flights.ghiecode.io'
     depends_on:
       - app
     healthcheck:

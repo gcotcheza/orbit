@@ -1,7 +1,7 @@
 // Driven by scripts/e2e.sh. `webServer` is deliberately absent: the thing
 // under test is a compose stack, a shell script's job (docs/E2E.md).
 import { defineConfig } from '@playwright/test'
-import { BASE_URL, HOST, STORAGE_STATE } from './paths.js'
+import { BASE_URL, STORAGE_STATE } from './paths.js'
 
 export default defineConfig({
     testDir: './specs',
@@ -58,10 +58,6 @@ export default defineConfig({
 
         launchOptions: {
             args: [
-                // The hostname trick — no application code change needed
-                // (docs/E2E.md "The hostname trick").
-                `--host-resolver-rules=MAP ${HOST} 127.0.0.1`,
-
                 // WebGL without a GPU: required from Chrome 137 onwards
                 // (docs/E2E.md "SwiftShader, and what may therefore be asserted").
                 '--use-angle=swiftshader',
