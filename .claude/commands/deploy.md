@@ -88,7 +88,15 @@ One line per phase on stdout, the whole run in `/root/personal-vps-deploys/orbit
 | `HOST VHOST NEEDED, NOT RUN …` | `deploy/nginx` moved, and nginx reads `/etc/nginx/sites-available/flights.ghiecode.io`, which no pull touches. By hand, in this order: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`. Both tests say `syntax is ok`; never reload on a failed second one |
 | `DONE #N live … was … gated … root-owned 0 verify …` | the deploy is finished. `gated` says what was read and for which commit — `ledger head <sha>`, `ledger merge <sha>` or `by hand`. `root-owned` must read `0` |
 | `PAPERWORK PR #N deployed …` | backlog, handoff and the fleet-docs page still want a line from you |
-| `REFUSED: …` | nothing moved. `FAILED rc=…` with a 20-line tail means something did — read the log, do not re-run a step. A `FAILED` at `VERIFY` leaves no `DONE` row naming the sha, so once a read-only `scripts/verify.sh` re-run is green, the health check's live-tripwire needs `vps-health-check.sh --accept-tripwire orbit` once — only when `HEAD` = `origin/main` and only the sha moved |
+| `REFUSED: …` | nothing moved. `FAILED rc=…` with a 20-line tail means something did — read the log, do not re-run a step. A `FAILED` at `VERIFY` is the one exception: see below |
+
+**After a `FAILED` at `VERIFY`** no `DONE` row names the sha, so the health check's live-tripwire fires. Check first, in this order:
+
+1. The only `orbit` live-tripwire line is `HEAD is <sha>, and no deploy log … names it`. Any `changed outside a deploy`, `hooks … changed` or `HEAD moved from` line is something else: stop and investigate.
+2. `HEAD` = `origin/main` in `/var/www/orbit` (`git-as orbit -C /var/www/orbit rev-parse HEAD origin/main`).
+3. Re-run `scripts/verify.sh` read-only. Green → accept once with `vps-health-check.sh --accept-tripwire orbit`. Red → roll back as the script prints.
+
+An accept re-baselines everything the tripwire watches — hooks and `.git` config too, not only the sha — which is why steps 1 and 2 come first. There is no mode that writes `DONE` after the fact.
 
 **⚠ The containers boot the code once**, so a deploy that stops before the restarts looks entirely successful and serves the old
 app. `scripts/verify.sh` proves each of the four restarted from its `StartedAt`; the drain and the horizon-container trap that

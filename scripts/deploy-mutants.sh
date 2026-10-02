@@ -329,6 +329,18 @@ mutant 'any policy header will do' verify.sh \
 mutant 'an empty service worker is never fetched again' verify.sh \
     '/^\[ -n "\$sw" \] || { sleep 2;/d' \
     'a service worker that came back empty once is fetched again and passes'
+mutant 'a failed service-worker fetch keeps its partial body' verify.sh \
+    "s/^sw=\\\$(getf \/sw.js) || sw=''\$/sw=\$(getf \/sw.js)/" \
+    'a service worker cut off mid-body once is fetched again and passes'
+mutant 'a 5xx service worker counts as fetched' verify.sh \
+    's/^getf() { curl -sf /getf() { curl -s /' \
+    'a service worker answering 502 once is fetched again and passes'
+mutant 'check 4 matches through a pipe again' verify.sh \
+    's/^elif \[ -n "\$b" \] \&\& \[\[ \$sw == \*"\${b##\*\/}"\* \]\]; then$/elif [ -n "$b" ] \&\& get \/sw.js | grep -qF "${b##*\/}"; then/' \
+    'a service worker still streaming after its name appears passes'
+mutant 'the mail check matches through a pipe again' verify.sh \
+    's/^elif grep -q \(.production..ERROR.\) <<<"\$mail"; then$/elif printf "%s" "$mail" | grep -q \1; then/' \
+    'a production.ERROR with more mail.log behind it still fails'
 mutant 'the edge is never compared' verify.sh \
     's/elif \[ "\$eb" = "\$b" \]; then/elif true; then/' \
     'an edge holding the previous release fails'

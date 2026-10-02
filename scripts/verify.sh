@@ -35,6 +35,7 @@ detail() { printf '%s\n' "$1" | sed 's/^/         | /'; }
 timeouts=(--max-time 15 --connect-timeout 5)
 dc()   { (cd "$APP_DIR" && docker compose "$@"); }
 get()  { curl -s "${timeouts[@]}" -H "Host: $HOST" "$BASE$1"; }
+getf() { curl -sf "${timeouts[@]}" -H "Host: $HOST" "$BASE$1"; }
 head_() { curl -sI "${timeouts[@]}" -H "Host: $HOST" "$BASE$1"; }
 code() { curl -s -o /dev/null -w '%{http_code}' "${timeouts[@]}" -H "Host: $HOST" "$BASE$1"; }
 jget() { curl -s "${timeouts[@]}" -H "Host: $HOST" -H 'Accept: application/json' -w '\n%{http_code}' "$BASE$1"; }
@@ -137,7 +138,7 @@ if [ "$snap_state" != 'fresh' ]; then
 elif [ -z "$was" ]; then
     note 'the baseline records no bundle, so "the bundle moved" cannot be judged'
     unjudged=$((unjudged + 1))
-elif ! printf '%s' "$was" | grep -qE '^build/assets/app-[A-Za-z0-9_-]+\.js$'; then
+elif ! grep -qE '^build/assets/app-[A-Za-z0-9_-]+\.js$' <<<"$was"; then
     bad "the baseline's bundle '$was' is malformed, so it is not compared — delete $SNAP and run --before"
 else
     snap_used=yes
@@ -179,7 +180,7 @@ seed_email=$(dc exec -T app sh -c 'sed -n "s/^SEED_USER_EMAIL=//p" .env | head -
 if [ -z "$seed_email" ] || ! dc exec -T app sh -c '[ -n "$(sed -n "s/^SEED_USER_PASSWORD=//p" .env | head -1)" ]' 2>/dev/null; then
     note 'no seeded password in .env, so the login is not spent; the guest smoke below is the runbook fallback'
     guest=$(jget /api/me)
-    if [ "$(printf '%s' "$guest" | tail -1)" = '401' ] && printf '%s' "$guest" | grep -q 'Unauthenticated.'; then
+    if [ "$(printf '%s' "$guest" | tail -1)" = '401' ] && grep -q 'Unauthenticated.' <<<"$guest"; then
         ok '/api/me 401 {"message":"Unauthenticated."} — JSON, not a redirect and not HTML'
     else
         bad "/api/me answered: $(printf '%s' "$guest" | tr '\n' ' ' | cut -c1-90)"
@@ -197,7 +198,7 @@ else
     [ "$login" = '200' ] && ok 'POST /login -> 200' || bad "POST /login -> $login"
     me=$(curl -s "${timeouts[@]}" -H "Host: $HOST" -H "Cookie: ${AUTHED:-$COOKIE}" \
         -H 'Accept: application/json' -w '\n%{http_code}' "$BASE/api/me")
-    if [ "$(printf '%s' "$me" | tail -1)" = '200' ] && printf '%s' "$me" | grep -q '"email"'; then
+    if [ "$(printf '%s' "$me" | tail -1)" = '200' ] && grep -q '"email"' <<<"$me"; then
         ok '/api/me 200 with the signed-in account'
     else
         bad "/api/me answered $(printf '%s' "$me" | tail -1) to the signed-in session"
@@ -209,12 +210,12 @@ mt=$(head_ /manifest.webmanifest | grep -i '^content-type' | tr -d '\r')
 st=$(head_ /sw.js | grep -i '^content-type' | tr -d '\r')
 case "$mt" in *application/manifest+json*) ok "manifest $mt";; *) bad "manifest content-type is '$mt' — text/html means the SPA catch-all is answering";; esac
 case "$st" in *application/javascript*)    ok "sw.js $st";;    *) bad "sw.js content-type is '$st' — text/html means the SPA catch-all is answering";; esac
-sw=$(get /sw.js) || sw=''
-# Once, right after the restarts: docs/DECISIONS.md, verify-check-4-fetches-the-service-worker-twice
-[ -n "$sw" ] || { sleep 2; sw=$(get /sw.js) || sw=''; }
+sw=$(getf /sw.js) || sw=''
+# Once, for an empty or failed fetch: docs/DECISIONS.md, verify-matches-without-a-pipe
+[ -n "$sw" ] || { sleep 2; sw=$(getf /sw.js) || sw=''; }
 if [ -z "$sw" ]; then
     bad 'the service worker could not be fetched — empty or failed twice, 2s apart — so whether it names the live bundle is unknown'
-elif [ -n "$b" ] && printf '%s' "$sw" | grep -qF "${b##*/}"; then
+elif [ -n "$b" ] && [[ $sw == *"${b##*/}"* ]]; then
     ok "the service worker precaches ${b##*/}"
 else
     bad "the service worker does not name the live bundle '$b' — the build ran in the wrong order"
@@ -237,7 +238,7 @@ ps_says() {
         detail "$out"
         return
     fi
-    printf '%s' "$out" | grep -qF "$2" && ok "$1 $2" || bad "$1 is not $2"
+    [[ $out == *"$2"* ]] && ok "$1 $2" || bad "$1 is not $2"
 }
 for s in app scheduler web; do ps_says "$s" 'Up'; done
 # Matched WITH its brackets: `(unhealthy)` contains `healthy`, and `Up 3 days
@@ -272,7 +273,7 @@ hs=$(dc exec -T app php artisan horizon:status 2>&1); rc=$?
 if [ "$rc" -ne 0 ]; then
     bad 'horizon:status could not run, so the supervisor is unchecked'
     detail "$hs"
-elif printf '%s' "$hs" | grep -q 'Horizon is running'; then
+elif grep -q 'Horizon is running' <<<"$hs"; then
     ok 'Horizon is running'
 else
     bad "horizon:status said: $(printf '%s' "$hs" | tr '\n' ' ' | cut -c1-90)"
@@ -281,7 +282,7 @@ qf=$(dc exec -T app php artisan queue:failed 2>&1); rc=$?
 if [ "$rc" -ne 0 ]; then
     bad 'queue:failed could not run, so failed jobs are unchecked'
     detail "$qf"
-elif printf '%s' "$qf" | grep -q 'No failed jobs'; then
+elif grep -q 'No failed jobs' <<<"$qf"; then
     ok 'no failed jobs'
 else
     bad 'there are failed jobs'
@@ -309,7 +310,7 @@ if [ "$rc" -ne 0 ]; then
     detail "$mail"
 elif [ "$mail" = '__ABSENT__' ]; then
     ok 'no mail.log yet — the file appears with the first alert'
-elif printf '%s' "$mail" | grep -q 'production\.ERROR'; then
+elif grep -q 'production\.ERROR' <<<"$mail"; then
     bad 'mail.log carries a production.ERROR'
     detail "$mail"
 else

@@ -81,6 +81,7 @@ case "$*" in
             echo 'Error response from daemon: container is not running' >&2
             exit "${FAKE_MAIL_RC}"
         fi
+        if [ -n "${FAKE_MAIL_FILE:-}" ]; then cat "${FAKE_MAIL_FILE}"; exit 0; fi
         printf '%s' "${FAKE_MAIL:-__ABSENT__}" ;;
     *laravel.log*) printf '%s\n' "${FAKE_APP_LOG:-}"; exit "${FAKE_APP_LOG_RC:-0}" ;;
 esac
@@ -98,6 +99,8 @@ done
 head_only=0; code_only=0; nl_code=0; side=edge
 case " $* " in *' -sI '*) head_only=1 ;; esac
 case "$*" in *'-o /dev/null'*) code_only=1 ;; esac
+fail_flag=0
+case " $* " in *' -sf '*) fail_flag=1 ;; esac
 case "$*" in *'\n%{http_code}'*) nl_code=1 ;; esac
 case "$*" in *'Host: '*) side=loop ;; esac
 
@@ -112,7 +115,24 @@ case "$url" in
         body="const PRECACHE = [\"/${FAKE_SW_BUNDLE:-$bundle}\"];"
         if [ "$head_only" = 0 ]; then
             echo get >> "${FAKE_LOG_DIR}/sw.gets"
-            [ "$(wc -l < "${FAKE_LOG_DIR}/sw.gets")" -gt "${FAKE_SW_EMPTY:-0}" ] || body=''
+            if [ "$(wc -l < "${FAKE_LOG_DIR}/sw.gets")" -le "${FAKE_SW_BAD:-0}" ]; then
+                case "${FAKE_SW_HOW:-empty}" in
+                    empty) body='' ;;
+                    partial) printf 'const PRE'; exit 28 ;;
+                    502) code=502; body='<html><body>502 Bad Gateway</body></html>' ;;
+                esac
+            elif [ "${FAKE_SW_STREAM:-0}" = 1 ]; then
+                # Like curl: the name first, then more, and 23 once the reader has gone.
+                trap '' PIPE
+                printf '%s\n' "$body" || exit 23
+                "${FAKE_REAL_SLEEP}" 0.5
+                i=0
+                while [ "$i" -lt 2000 ]; do
+                    printf '%s\n' "// precache padding line $i" || exit 23
+                    i=$((i + 1))
+                done
+                exit 0
+            fi
         fi ;;
     */manifest.webmanifest) headers='content-type: application/manifest+json' ;;
     */build/assets/*.js) headers="cache-control: ${FAKE_ASSET_CC:-public, max-age=31536000, immutable}" ;;
@@ -143,6 +163,7 @@ esac
 if [ -n "$dfile" ]; then
     { printf 'HTTP/1.1 %s\n' "$code"; [ -n "$headers" ] && printf '%s\n' "$headers"; } >"$dfile"
 fi
+if [ "$fail_flag" = 1 ] && [ "$code" -ge 400 ]; then exit 22; fi
 if [ "$head_only" = 1 ]; then
     printf 'HTTP/1.1 %s\r\n' "$code"
     [ -n "$headers" ] && printf '%s\r\n' "$headers"
@@ -196,7 +217,11 @@ run_verify() {
         FAKE_BUNDLE_LOOP="${BUNDLE_LOOP:-build/assets/app-aaa111.js}" \
         FAKE_BUNDLE_EDGE="${BUNDLE_EDGE:-}" \
         FAKE_SW_BUNDLE="${SW_BUNDLE:-}" \
-        FAKE_SW_EMPTY="${SW_EMPTY:-0}" \
+        FAKE_SW_BAD="${SW_BAD:-0}" \
+        FAKE_SW_HOW="${SW_HOW:-empty}" \
+        FAKE_SW_STREAM="${SW_STREAM:-0}" \
+        FAKE_REAL_SLEEP="$(command -v sleep)" \
+        FAKE_MAIL_FILE="${MAIL_FILE:-}" \
         FAKE_ASSET_CC="${ASSET_CC:-}" \
         FAKE_SHELL_HEADERS="${SHELL_HEADERS:-}" \
         FAKE_CSRF_CODE="${CSRF_CODE:-204}" \
@@ -220,13 +245,13 @@ run_verify() {
         ORBIT_SNAPSHOT="${SNAP}" \
         bash "${VERIFY_SH}" "$@" 2>&1)"
     STATUS_RC=$?
-    STARTED=''; STATUS=''; WEB_PORTS=''; BUNDLE_LOOP=''; BUNDLE_EDGE=''; SW_BUNDLE=''; SW_EMPTY=''
+    STARTED=''; STATUS=''; WEB_PORTS=''; BUNDLE_LOOP=''; BUNDLE_EDGE=''; SW_BUNDLE=''; SW_BAD=''; SW_HOW=''; SW_STREAM=''; MAIL_FILE=''
     ASSET_CC=''; SHELL_HEADERS=''; CSRF_CODE=''; LOGIN_CODE=''; PROBE_CODE=''
     ME_AUTHED_CODE=''; ME_GUEST_CODE=''; PASSWORD_RC=''; HORIZON=''; HORIZON_RC=''
     FAILED=''; MAIL=''; MAIL_RC=''; APP_LOG=''; APP_LOG_RC=''; ROOT_OWNED=''
 }
 
-STARTED=''; STATUS=''; WEB_PORTS=''; BUNDLE_LOOP=''; BUNDLE_EDGE=''; SW_BUNDLE=''; SW_EMPTY=''
+STARTED=''; STATUS=''; WEB_PORTS=''; BUNDLE_LOOP=''; BUNDLE_EDGE=''; SW_BUNDLE=''; SW_BAD=''; SW_HOW=''; SW_STREAM=''; MAIL_FILE=''
 ASSET_CC=''; SHELL_HEADERS=''; CSRF_CODE=''; LOGIN_CODE=''; PROBE_CODE=''
 ME_AUTHED_CODE=''; ME_GUEST_CODE=''; PASSWORD_RC=''; HORIZON=''; HORIZON_RC=''
 FAILED=''; MAIL=''; MAIL_RC=''; APP_LOG=''; APP_LOG_RC=''; ROOT_OWNED=''
@@ -516,6 +541,18 @@ run_verify
 equals 'a production.ERROR in mail.log fails' "${STATUS_RC}" '1'
 contains 'and is quoted' "${OUT}" 'mail.log carries a production.ERROR'
 
+fixture mail-error-mid-stream
+baseline_for 'build/assets/app-old000.js'
+MAIL_FILE="${CASE}/mail.log"
+{
+    for i in $(seq 1 60); do printf '[2026-09-19 06:00:00] production.DEBUG: filler line %04d padding padding padding\n' "$i"; done
+    printf '[2026-09-19 06:10:00] production.ERROR: transport failed\n'
+    for i in $(seq 1 12000); do printf '[2026-09-19 06:20:00] production.DEBUG: filler line %05d padding padding padding\n' "$i"; done
+} >"${MAIL_FILE}"
+run_verify
+equals 'a production.ERROR with more mail.log behind it still fails' "${STATUS_RC}" '1'
+contains 'and is quoted as an ERROR' "${OUT}" 'mail.log carries a production.ERROR'
+
 # --- 10. the remaining checks ------------------------------------------------
 fixture asset-not-immutable
 baseline_for 'build/assets/app-old000.js'
@@ -533,7 +570,7 @@ contains 'and says what that means' "${OUT}" 'the build ran in the wrong order'
 
 fixture sw-empty-once
 baseline_for 'build/assets/app-old000.js'
-SW_EMPTY=1
+SW_BAD=1
 run_verify
 equals 'a service worker that came back empty once is fetched again and passes' "${STATUS_RC}" '0'
 contains 'and the second fetch is what precaches the bundle' "${OUT}" 'precaches app-aaa111.js'
@@ -541,12 +578,35 @@ equals 'and it waited 2s between the two' "$(cat "${CASE}/sleep.argv" 2>/dev/nul
 
 fixture sw-empty-twice
 baseline_for 'build/assets/app-old000.js'
-SW_EMPTY=2
+SW_BAD=2
 run_verify
 equals 'a service worker empty on both fetches fails' "${STATUS_RC}" '1'
 contains 'and says it could not be fetched' "${OUT}" 'the service worker could not be fetched'
 absent 'not that the build ran in the wrong order' "${OUT}" 'the build ran in the wrong order'
 equals 'and it asked exactly twice' "$(wc -l < "${CASE}/sw.gets")" '2'
+
+fixture sw-partial-then-whole
+baseline_for 'build/assets/app-old000.js'
+SW_BAD=1
+SW_HOW=partial
+run_verify
+equals 'a service worker cut off mid-body once is fetched again and passes' "${STATUS_RC}" '0'
+equals 'and the cut-off body was not judged' "$(wc -l < "${CASE}/sw.gets")" '2'
+
+fixture sw-502-then-200
+baseline_for 'build/assets/app-old000.js'
+SW_BAD=1
+SW_HOW=502
+run_verify
+equals 'a service worker answering 502 once is fetched again and passes' "${STATUS_RC}" '0'
+equals 'and the 502 page was not judged' "$(wc -l < "${CASE}/sw.gets")" '2'
+
+fixture sw-reader-leaves-early
+baseline_for 'build/assets/app-old000.js'
+SW_STREAM=1
+run_verify
+equals 'a service worker still streaming after its name appears passes' "${STATUS_RC}" '0'
+contains 'and it is the match that passes it' "${OUT}" 'precaches app-aaa111.js'
 
 fixture sw-without-the-name
 baseline_for 'build/assets/app-old000.js'
