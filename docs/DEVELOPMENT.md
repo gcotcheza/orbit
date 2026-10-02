@@ -62,13 +62,19 @@ secret-shaped value in this checkout's `.env` — resolved through the shared gi
 dir, so it still works from a worktree. It names the key and the file, never the
 value.
 
-**It replaces a guard rather than adding one.** This box sets a *global*
-`core.hooksPath` (`/root/.githooks`) that already runs gitleaks and the same
-`.env` check on every commit in every repository. Git's precedence means a local
-`core.hooksPath` switches that off completely, so `scripts/hooks/pre-commit` is
-built to be a superset of it and is worth installing only for as long as it
-stays one. A clone where nobody runs the installer is not unguarded: it keeps
-the global hook.
+**It replaces guards rather than adding one.** This box sets `core.hooksPath` in
+*system* scope — `/etc/gitconfig`, pointing at `/usr/local/lib/fleet-githooks` —
+so every commit in every repository, by every user, already runs the fleet
+`pre-commit` (gitleaks over the staged *blobs* through `git cat-file`, this
+repository's own `.env` values, and a personal-identifier layer) and the fleet
+`commit-msg`. `core.hooksPath` names a directory, not a file, so installing this
+one switches **both** off. What this hook adds is nine patterns of its own and
+gitleaks' own finding lines; what it drops is the blob scan, the HEAD-blob
+subtraction that keeps a committed fixture committable, the fleet-owned
+`allow.toml`, the control-character path check and the identifier layer. It is a
+trade rather than an upgrade, and chaining the two is a backlog line
+(`docs/DECISIONS.md`). A clone where nobody runs the installer is not unguarded:
+it keeps the fleet hooks, which are the stricter default today.
 
 One cost, stated rather than discovered: a checkout with no `.env` cannot
 commit until it has one, because the layer that catches *your* live keys cannot

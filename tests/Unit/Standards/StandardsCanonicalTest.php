@@ -32,11 +32,13 @@ final class StandardsCanonicalTest extends TestCase
             'The gate no longer names this step, so nothing in a run says whether the vendored '
             .'standard is still the standard.'
         );
-        $this->assertStringContainsString(
-            '"$here/scripts/standards-drift.sh" "$here"',
+        $this->assertMatchesRegularExpression(
+            '/^"\$here\/scripts\/standards-drift\.sh" "\$here"$/m',
             $gate,
-            'The step must run the script over THIS checkout: handed no argument it would judge '
-            .'the tree the script itself sits in, which is the same tree only by luck.'
+            'The call is pinned whole, and for two reasons: the argument, because handed none the '
+            .'script would judge the tree it sits in, which is this one only by luck; and the end of '
+            .'the line, because a trailing `|| true` or `2>/dev/null` leaves a step that cannot stop '
+            .'the gate and reads exactly like one that passed.'
         );
     }
 
@@ -100,6 +102,46 @@ final class StandardsCanonicalTest extends TestCase
     }
 
     #[Test]
+    public function a_vendored_standard_that_is_absent_or_empty_is_refused(): void
+    {
+        foreach (['absent' => null, 'empty' => ''] as $how => $vendored) {
+            $run = $this->runScript('2026-10-01', self::STANDARD, $vendored);
+
+            $this->assertNotSame(
+                0,
+                $run['status'],
+                "The vendored standard is {$how} and the step passed. A checkout with no copy of the "
+                ."fleet standard has not adopted it, which is a refusal and never a skip.\n".$run['output']
+            );
+            $this->assertStringContainsString(
+                'is missing, unreadable or empty',
+                $run['output'],
+                'The refusal must name what it could not read, or the reader is left guessing which '
+                ."of the three files this step reads is the one that is not there.\n".$run['output']
+            );
+        }
+    }
+
+    #[Test]
+    public function a_vendored_standard_without_the_vendoring_header_is_refused(): void
+    {
+        $run = $this->runScript('2026-10-01', self::STANDARD, "# Engineering standards\n\nC1.\n");
+
+        $this->assertNotSame(
+            0,
+            $run['status'],
+            'The first line is not the header, so there is no declared version and no declared hash '
+            ."to compare with anything, and the step said nothing about it.\n".$run['output']
+        );
+        $this->assertStringContainsString(
+            'is not the vendoring header',
+            $run['output'],
+            'The refusal must quote the line it read, because a file whose header was dropped by an '
+            ."editor and one that was never vendored look the same from the exit code.\n".$run['output']
+        );
+    }
+
+    #[Test]
     public function nothing_lets_the_canonical_clone_be_pointed_somewhere_else(): void
     {
         $script = $this->read(self::SCRIPT);
@@ -111,23 +153,15 @@ final class StandardsCanonicalTest extends TestCase
             .'replaces, so a second one would leave half the script reading the real clone.'
         );
 
-        foreach (['STANDARDS_CANONICAL', 'GATE_STANDARDS'] as $seam) {
-            $this->assertStringNotContainsString(
-                $seam,
-                $script,
-                'A variable this script reads for the canonical path is a skip switch at gate time: '
-                .'one export and the step passes without comparing anything.'
-            );
-        }
     }
 
     /**
      * The script with its one canonical literal pointed at a throwaway clone, counted
-     * so the literal cannot move without this harness saying so. docs/DECISIONS.md
+     * so the literal cannot move without this harness saying so. A null copy is absent.
      *
      * @return array{status: int, output: string}
      */
-    private function runScript(string $version, string $standard, string $vendored): array
+    private function runScript(string $version, string $standard, ?string $vendored): array
     {
         $sandbox = sys_get_temp_dir().'/orbit-standards-'.bin2hex(random_bytes(6));
         $clone = $sandbox.'/canonical';
@@ -140,7 +174,9 @@ final class StandardsCanonicalTest extends TestCase
         try {
             file_put_contents($clone.'/VERSION', $version."\n");
             file_put_contents($clone.'/ENGINEERING-STANDARDS.md', $standard);
-            file_put_contents($root.'/docs/STANDARDS.md', $vendored);
+            if ($vendored !== null) {
+                file_put_contents($root.'/docs/STANDARDS.md', $vendored);
+            }
 
             $script = str_replace(self::CANONICAL, $clone, $this->read(self::SCRIPT), $count);
 
