@@ -39,9 +39,16 @@ final class BrowserGateNetworkTest extends TestCase
                 'nothing in the gate puts the browser on the host network',
             ],
             'the one-network refusal deleted' => [
-                '[ "$(printf \'%s\' "$E2E_NETWORK" | grep -c .)" -eq 1 ] \\',
+                '[ "$(printf \'%s\' "$E2E_NETWORK" | grep -c .)" -eq 1 ] \\'."\n"
+                .'    || fail "docker names ${E2E_PROJECT} exactly one network or the browser joins the wrong one; it answered: ${E2E_NETWORK:-nothing}"',
                 '',
                 'anything but exactly one network refuses',
+            ],
+            'the resolution refusal deleted' => [
+                '[ -n "$WEB_ADDRESS" ] && [ "$RESOLVED" = "$WEB_ADDRESS" ] \\'."\n"
+                .'    || fail "${E2E_HOST} resolves to ${RESOLVED:-nothing} on ${E2E_NETWORK}, not to the web container (${WEB_ADDRESS:-no address})"',
+                '',
+                'and the gate refuses unless the name resolves to it',
             ],
         ];
     }
@@ -59,11 +66,13 @@ final class BrowserGateNetworkTest extends TestCase
 
         try {
             file_put_contents($copy, str_replace($line."\n", $mutant."\n", $gate));
+            $syntax = $this->execute(['bash', '-n', $copy], [], $this->root());
             $result = $this->execute(['bash', $this->root().'/'.self::HARNESS], ['E2E_SH' => $copy], $this->root());
         } finally {
             unlink($copy);
         }
 
+        $this->assertSame(0, $syntax['status'], "The mutant is not runnable shell, so it proves nothing:\n".$syntax['output']);
         $this->assertSame(1, $result['status'], self::HARNESS." passed a gate it exists to refuse:\n".$result['output']);
         $this->assertStringContainsString('FAIL '.$check, $result['output']);
     }
