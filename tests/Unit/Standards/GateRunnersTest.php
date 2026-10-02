@@ -18,6 +18,7 @@ final class GateRunnersTest extends TestCase
         'overlay',
         'gitleaks',
         'pint',
+        'guard diff reads',
         'the deploy script',
         'the worktree script',
         'standards version',
