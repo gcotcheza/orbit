@@ -40,6 +40,8 @@ final class PreCommitHookTest extends TestCase
             "  'rev-parse --git-common-dir') [ -f '{$this->sandbox}/commondir' ] || exit 1",
             "     cat '{$this->sandbox}/commondir' ;;",
             "  'diff --cached') cat '{$this->sandbox}/staged.diff' ;;",
+            "  'config --system') [ -f '{$this->sandbox}/fleetdir' ] || exit 1",
+            "     cat '{$this->sandbox}/fleetdir' ;;",
             '  *) exit 1 ;;',
             'esac',
             '',
@@ -48,6 +50,7 @@ final class PreCommitHookTest extends TestCase
         chmod($stub, 0755);
 
         $this->plantGitleaks('', 0);
+        $this->plantFleetHook(0);
 
         foreach (['bash', 'grep', 'sed', 'cut', 'cat'] as $tool) {
             $real = trim((string) shell_exec('command -v '.$tool.' 2>/dev/null'));
@@ -332,6 +335,56 @@ final class PreCommitHookTest extends TestCase
     }
 
     #[Test]
+    public function a_commit_it_passes_is_handed_to_the_fleet_hook_whose_refusal_stands(): void
+    {
+        $this->plantEnv($this->sandbox);
+        $this->plantDiff('README.md', 'An ordinary line.');
+        $this->plantFleetHook(1);
+
+        $result = $this->runHook(stdin: "piped through\n", arguments: ['first', 'second']);
+
+        $this->assertSame(
+            1,
+            $result['status'],
+            'The fleet pre-commit refused and the commit went ahead: this hook replaces it through '
+            ."core.hooksPath, so its refusal has to be this hook's exit status.\n".$result['output']
+        );
+        $this->assertStringContainsString('FLEET PRE-COMMIT REFUSED', $result['output']);
+        $this->assertSame("first second\n", (string) file_get_contents($this->sandbox.'/fleet.args'));
+        $this->assertSame("piped through\n", (string) file_get_contents($this->sandbox.'/fleet.stdin'));
+    }
+
+    #[Test]
+    public function a_commit_it_refuses_never_reaches_the_fleet_hook(): void
+    {
+        $this->plantEnv($this->sandbox);
+        $this->plantDiff('config/orbit.php', "<?php return ['token' => '".self::TOKEN."'];");
+
+        $result = $this->runHook();
+
+        $this->assertSame(1, $result['status'], $result['output']);
+        $this->assertFileDoesNotExist($this->sandbox.'/fleet.args');
+    }
+
+    #[Test]
+    public function with_no_fleet_hook_to_hand_over_to_it_passes_and_says_so(): void
+    {
+        unlink($this->sandbox.'/fleetdir');
+        $this->plantEnv($this->sandbox);
+        $this->plantDiff('README.md', 'An ordinary line.');
+
+        $result = $this->runHook();
+
+        $this->assertSame(0, $result['status'], $result['output']);
+        $this->assertStringContainsString(
+            "no fleet pre-commit at (no system core.hooksPath), so only this repository's guard ran.",
+            $result['output'],
+            'A box with no fleet hook must not block every commit, and must not let one through '
+            ."as if the fleet hook had run either.\n".$result['output']
+        );
+    }
+
+    #[Test]
     public function the_hook_is_executable_because_git_silently_skips_one_that_is_not(): void
     {
         $this->assertTrue(is_executable($this->hook()));
@@ -344,6 +397,27 @@ final class PreCommitHookTest extends TestCase
         file_put_contents($stub, "#!/bin/sh\ncat <<'REPORT'\n".$output."\nREPORT\nexit ".$exit."\n");
 
         chmod($stub, 0755);
+    }
+
+    /** A fleet pre-commit that records its argv and stdin, then exits as told. */
+    private function plantFleetHook(int $exit): void
+    {
+        $fleet = $this->sandbox.'/fleet';
+
+        if (! is_dir($fleet)) {
+            mkdir($fleet, 0755);
+        }
+
+        file_put_contents($this->sandbox.'/fleetdir', $fleet."\n");
+        file_put_contents($fleet.'/pre-commit', implode("\n", [
+            '#!/bin/sh',
+            "printf '%s\\n' \"$*\" > '{$this->sandbox}/fleet.args'",
+            "cat > '{$this->sandbox}/fleet.stdin'",
+            $exit === 0 ? 'exit 0' : "echo 'FLEET PRE-COMMIT REFUSED' >&2; exit {$exit}",
+            '',
+        ]));
+
+        chmod($fleet.'/pre-commit', 0755);
     }
 
     private function hook(): string
@@ -369,6 +443,7 @@ final class PreCommitHookTest extends TestCase
             '      case " $* " in *" $want "*) ;; *) printf \'the driver said nothing\\n\'; exit 0 ;; esac',
             '    done',
             "    cat '{$this->sandbox}/staged.diff' ;;",
+            "  'config --system') cat '{$this->sandbox}/fleetdir' ;;",
             '  *) exit 1 ;;',
             'esac',
             '',
@@ -422,24 +497,28 @@ final class PreCommitHookTest extends TestCase
     /**
      * @return array{status: int, output: string}
      */
-    private function runHook(?string $path = null): array
+    /**
+     * @param  list<string>  $arguments
+     * @return array{status: int, output: string}
+     */
+    private function runHook(?string $path = null, string $stdin = '', array $arguments = []): array
     {
         $toplevel = trim((string) file_get_contents($this->sandbox.'/toplevel'));
 
-        return $this->execute([$this->hook()], $toplevel, $path);
+        return $this->execute([$this->hook(), ...$arguments], $toplevel, $path, $stdin);
     }
 
     /**
      * @param  list<string>  $command
      * @return array{status: int, output: string}
      */
-    private function execute(array $command, string $cwd, ?string $path): array
+    private function execute(array $command, string $cwd, ?string $path, string $stdin = ''): array
     {
         $pipes = [];
 
         $process = proc_open(
             $command,
-            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $cwd,
             [
@@ -451,6 +530,9 @@ final class PreCommitHookTest extends TestCase
         if ($process === false) {
             $this->fail('Could not start '.implode(' ', $command));
         }
+
+        fwrite($pipes[0], $stdin);
+        fclose($pipes[0]);
 
         $output = (string) stream_get_contents($pipes[1]).(string) stream_get_contents($pipes[2]);
 

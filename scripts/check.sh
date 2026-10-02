@@ -225,6 +225,11 @@ docker run --rm --network none -v "$work/scan:/scan:ro" zricethezav/gitleaks:v8.
 step 'Pint (code style)'
 php_step vendor/bin/pint --test
 
+step 'Guard diff reads (scripts/guard-lint.sh)'
+# A host step for the reason the ones below are: the fleet's linter is on this box
+# and in no image. docs/DECISIONS.md, the-gate-lints-every-guards-diff-reads
+"$here/scripts/guard-lint.sh"
+
 step 'The deploy script (scripts/deploy-test.sh)'
 # On the host, not in a container, and below the first containerised step:
 # CheckGitSeamTest stubs docker and must stop before this one runs under its PATH.
