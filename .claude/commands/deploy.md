@@ -122,27 +122,32 @@ which reads exactly like "CSRF is broken on this deploy" and is not. The login s
 minute for the seeded account, and the password is piped, never typed on a command line.
 
 ```bash
+(
 H='Host: flights.ghiecode.io'
 B='http://127.0.0.1:3085'
-HDR=$(mktemp); OUT=$(mktemp)
+HDR=$(mktemp) || exit 1; OUT=$(mktemp) || { rm -f "${HDR:?}"; exit 1; }
 curl -s -D "$HDR" -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -H "$H" "$B/sanctum/csrf-cookie"
 COOKIE=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$HDR")
 XSRF=$(printf '%s' "$COOKIE" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
        | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
 DC="docker compose -f /var/www/orbit/docker-compose.yml"   # production's own project, by name, from any cwd
 EMAIL=$($DC exec -T app sh -c 'sed -n "s/^SEED_USER_EMAIL=//p" .env | head -1' | tr -d '\r')
-$DC exec -T app sh -c 'sed -n "s/^SEED_USER_PASSWORD=//p" .env | head -1' | tr -d '\r' \
+LOGIN=$($DC exec -T app sh -c 'sed -n "s/^SEED_USER_PASSWORD=//p" .env | head -1' | tr -d '\r' \
   | python3 -c 'import json,sys;print(json.dumps({"email":sys.argv[1],"password":sys.stdin.read().strip()}))' "$EMAIL" \
-  | curl -s -D "$OUT" -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -H "$H" \
+  | curl -s -D "$OUT" -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 15 -H "$H" \
          -H "Cookie: $COOKIE" -H "X-XSRF-TOKEN: $XSRF" \
-         -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary @- "$B/login"
+         -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary @- "$B/login")
+printf '%s\n' "$LOGIN"
 AUTHED=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$OUT")
 AUTH_XSRF=$(printf '%s' "$AUTHED" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
             | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
 rm -f "${HDR:?}" "${OUT:?}"
+[ "$LOGIN" = 200 ] || { printf 'login answered %s, not 200: stopping\n' "$LOGIN"; exit 1; }
+)
 ```
 
-**Good:** `204` from the cookie call and `200` from the login.
+**Good:** `204` from the cookie call and `200` from the login. Nothing it sets outlives its `( … )`, so a write
+goes inside its own copy of the lift, as the pause below does.
 
 **Pausing a route, and putting it back.** Both halves are written here as one block on purpose. A paused route is skipped by the
 06:10 poll in silence — no alert fires for it and nothing anywhere says so — until somebody notices by eye. Do not run the
@@ -152,22 +157,24 @@ pause without running the restore.
 (
 H='Host: flights.ghiecode.io'
 B='http://127.0.0.1:3085'
-HDR=$(mktemp); OUT=$(mktemp)
+HDR=$(mktemp) || exit 1; OUT=$(mktemp) || { rm -f "${HDR:?}"; exit 1; }
 curl -s -D "$HDR" -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -H "$H" "$B/sanctum/csrf-cookie"
 COOKIE=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$HDR")
 XSRF=$(printf '%s' "$COOKIE" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
        | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
 DC="docker compose -f /var/www/orbit/docker-compose.yml"   # production's own project, by name, from any cwd
 EMAIL=$($DC exec -T app sh -c 'sed -n "s/^SEED_USER_EMAIL=//p" .env | head -1' | tr -d '\r')
-$DC exec -T app sh -c 'sed -n "s/^SEED_USER_PASSWORD=//p" .env | head -1' | tr -d '\r' \
+LOGIN=$($DC exec -T app sh -c 'sed -n "s/^SEED_USER_PASSWORD=//p" .env | head -1' | tr -d '\r' \
   | python3 -c 'import json,sys;print(json.dumps({"email":sys.argv[1],"password":sys.stdin.read().strip()}))' "$EMAIL" \
-  | curl -s -D "$OUT" -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -H "$H" \
+  | curl -s -D "$OUT" -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 15 -H "$H" \
          -H "Cookie: $COOKIE" -H "X-XSRF-TOKEN: $XSRF" \
-         -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary @- "$B/login"
+         -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary @- "$B/login")
+printf '%s\n' "$LOGIN"
 AUTHED=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$OUT")
 AUTH_XSRF=$(printf '%s' "$AUTHED" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
             | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
 rm -f "${HDR:?}" "${OUT:?}"
+[ "$LOGIN" = 200 ] || { printf 'login answered %s, not 200: stopping\n' "$LOGIN"; exit 1; }
 
 # PAUSE — AMS-LIS stops being polled from this moment.
 curl -s -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -X PATCH -H "$H" \
@@ -192,7 +199,7 @@ the token, not the app. Anything other than `[True]` at the end means a producti
 you walk away.
 
 **⚠ A bare `PUT /api/profile/password` is 419, not 401.** `ValidateCsrfToken` runs before `auth`, so a request with no cookies
-is refused for having no token and never reaches the guard. Only the full lift above makes a 401 mean "unauthenticated".
+is refused for having no token and never reaches the guard. Only a request sent inside a full lift makes a 401 mean "unauthenticated".
 
 ## Rollback
 

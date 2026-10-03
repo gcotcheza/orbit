@@ -175,8 +175,8 @@ final class CheckGitSeamTest extends TestCase
 
         $value = $bin.'/fake-git '.self::SEAM_FLAG.($seamDirectory === null ? '' : ' -C '.$seamDirectory);
 
-        // `dev` on purpose: the overlay runner's first act is `rm -rf
-        // /var/tmp/orbit-gate.*`, which is a real directory on the box.
+        // `dev` on purpose: the overlay runner makes and chowns a real
+        // /var/tmp/orbit-gate.* directory.
         $environment = [
             'PATH'        => $bin.':'.(getenv('PATH') ?: '/usr/bin:/bin'),
             'CI_GIT'      => $seam || $seamDirectory !== null ? $value : '',
