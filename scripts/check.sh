@@ -186,7 +186,12 @@ docker run --rm --network none -v "$here:/mnt:ro" -w /mnt koalaman/shellcheck:v0
 
 if [ "$mode" = overlay ]; then
     step 'Overlay (dev dependencies, outside the live vendor/)'
-    rm -rf /var/tmp/orbit-gate.*
+    # Another gate may be mid-run in one of these. docs/DECISIONS.md, the-overlay-gate-deletes-no-other-runs-scratch
+    others=$(compgen -G '/var/tmp/orbit-gate.*' || true)
+    if [ -n "$others" ]; then
+        printf 'check.sh: %s other /var/tmp/orbit-gate.* found, not removed: another gate may own them; remove by name: %s\n' \
+            "$(wc -l <<<"$others")" "$(paste -sd ' ' <<<"$others")" >&2
+    fi
     # bootstrap/cache is overlaid too: `composer install` runs package:discover,
     # whose provider list would otherwise 500 the live --no-dev app on next boot.
     gate=$(mktemp -d /var/tmp/orbit-gate.XXXXXXXX)

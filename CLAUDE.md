@@ -16,8 +16,9 @@ overrides them and says why.
   `.claude/commands/deploy.md` is run, literally: the long-lived containers
   boot the code once, so an unrestarted deploy looks entirely successful and
   serves the old app.
-- **The gate.** `scripts/check.sh dev` against a stack you brought up; the
-  deploy runs `scripts/check.sh overlay`. Browser gate: `scripts/e2e.sh`.
+- **The gate.** From a worktree, `scripts/check.sh overlay` under its own
+  `COMPOSE_PROJECT_NAME`, then `scripts/e2e.sh`; `dev` execs into a stack already
+  up there. `scripts/deploy.sh` runs no gate: it refuses a head the ledger lacks.
 - **The gate isolates its writes; it does not refuse the live checkout (S6).**
   In either runner it refuses a compose stack started from any other
   directory, which keeps a worktree off production's containers. Overlay mode

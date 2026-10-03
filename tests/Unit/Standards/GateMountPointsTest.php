@@ -15,8 +15,6 @@ final class GateMountPointsTest extends TestCase
 {
     use RunsGateScripts;
 
-    private const CLEARS_THE_BOX = 'rm -rf /var/tmp/orbit-gate.*';
-
     private const HANDS_OVER = 'chown -R 115:119';
 
     #[Test]
@@ -67,6 +65,27 @@ final class GateMountPointsTest extends TestCase
         );
     }
 
+    #[Test]
+    public function another_runs_scratch_survives_the_gate_and_is_named(): void
+    {
+        $foreign = '/var/tmp/orbit-gate.test'.bin2hex(random_bytes(6));
+        $this->assertTrue(mkdir($foreign, 0o700), "Could not plant {$foreign}");
+
+        try {
+            $run = $this->runOverlay(prepare: static function (string $root): void {});
+            $survived = is_dir($foreign);
+        } finally {
+            if (is_dir($foreign)) {
+                rmdir($foreign);
+            }
+        }
+
+        $this->assertSame(1, $run['status'], $run['output']);
+        $this->assertTrue($survived, "The gate deleted {$foreign}, another run's scratch it does not own.\n".$run['output']);
+        $this->assertStringContainsString('not removed: another gate may own them; remove by name', $run['output']);
+        $this->assertStringContainsString($foreign, $run['output'], 'The notice has to name what it left.');
+    }
+
     /**
      * @param  callable(string): void  $prepare
      * @return array{status: int, output: string, root: string, 'docker made vendor': bool, after: array<string, bool>}
@@ -84,9 +103,7 @@ final class GateMountPointsTest extends TestCase
             $here = (string) realpath($root);
 
             $script = $this->read('scripts/check.sh');
-            $script = str_replace(self::CLEARS_THE_BOX, ':', $script, $cleared);
             $script = str_replace(self::HANDS_OVER, ':', $script, $handed);
-            $this->assertSame(1, $cleared, 'The box-wide sweep has to be neutralised here, by name.');
             $this->assertSame(2, $handed, 'Both hand-overs have to be neutralised here, by name.');
 
             file_put_contents($root.'/scripts/check.sh', $script);
