@@ -26,9 +26,7 @@ final class GateImageTagsStepTest extends TestCase
     /** The host steps around this one, stubbed so a run is milliseconds. */
     private const HOST_STEPS = ['guard-lint.sh', 'deploy-test.sh', 'verify-test.sh', 'worktree-test.sh', 'standards-drift.sh', 'deploy-mutants.sh'];
 
-    /** Neutralised in the copy: both reach outside the throwaway root. */
-    private const CLEARS_THE_BOX = 'rm -rf /var/tmp/orbit-gate.*';
-
+    /** Neutralised in the copy: it reaches outside the throwaway root. */
     private const HANDS_OVER = 'chown -R 115:119';
 
     private const OK_REPORT = <<<'REPORT'
@@ -386,15 +384,6 @@ final class GateImageTagsStepTest extends TestCase
                 1,
                 'The canonical checker path is no longer in scripts/check.sh exactly once, so this '
                 .'harness is not running the step it says it is running.'
-            );
-            $script = $this->swap(
-                $script,
-                self::CLEARS_THE_BOX,
-                ':',
-                1,
-                "The overlay runner's first act clears every /var/tmp/orbit-gate.* on this box, a "
-                ."real gate's included. It is neutralised here by name, so it has to be there by "
-                .'that name.'
             );
             $script = $this->swap(
                 $script,

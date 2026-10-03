@@ -160,8 +160,8 @@ step '2. The health endpoint'
 # SESSION_SECURE_COOKIE=true makes curl refuse to STORE either cookie over plain
 # loopback HTTP, so -c/-b authenticate nothing, silently. DECISIONS.md
 step '3. The authenticated read, with the cookies lifted off Set-Cookie'
-HDR=$(mktemp); OUT=$(mktemp)
-trap 'rm -f "$HDR" "$OUT"' EXIT
+HDR=$(mktemp) || exit 1; OUT=$(mktemp) || { rm -f "${HDR:?}"; exit 1; }
+trap 'rm -f "${HDR:?}" "${OUT:?}"' EXIT
 csrf=$(curl -s -D "$HDR" -o /dev/null -w '%{http_code}' "${timeouts[@]}" -H "Host: $HOST" "$BASE/sanctum/csrf-cookie")
 COOKIE=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$HDR")
 XSRF=$(printf '%s' "$COOKIE" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
