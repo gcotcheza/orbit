@@ -125,7 +125,7 @@ minute for the seeded account, and the password is piped, never typed on a comma
 (
 H='Host: flights.ghiecode.io'
 B='http://127.0.0.1:3085'
-HDR=$(mktemp) && OUT=$(mktemp) || exit 1
+HDR=$(mktemp) || exit 1; OUT=$(mktemp) || { rm -f "${HDR:?}"; exit 1; }
 curl -s -D "$HDR" -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -H "$H" "$B/sanctum/csrf-cookie"
 COOKIE=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$HDR")
 XSRF=$(printf '%s' "$COOKIE" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
@@ -157,7 +157,7 @@ pause without running the restore.
 (
 H='Host: flights.ghiecode.io'
 B='http://127.0.0.1:3085'
-HDR=$(mktemp) && OUT=$(mktemp) || exit 1
+HDR=$(mktemp) || exit 1; OUT=$(mktemp) || { rm -f "${HDR:?}"; exit 1; }
 curl -s -D "$HDR" -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -H "$H" "$B/sanctum/csrf-cookie"
 COOKIE=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$HDR")
 XSRF=$(printf '%s' "$COOKIE" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
