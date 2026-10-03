@@ -139,12 +139,10 @@ $DC exec -T app sh -c 'sed -n "s/^SEED_USER_PASSWORD=//p" .env | head -1' | tr -
 AUTHED=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$OUT")
 AUTH_XSRF=$(printf '%s' "$AUTHED" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
             | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
-rm -f "$HDR" "$OUT"
+rm -f "${HDR:?}" "${OUT:?}"
 ```
 
-**Good:** `204` from the cookie call and `200` from the login. The next block needs these four in the shell it is pasted into
-and is wrapped in `( … )` for it: a missing one ends the subshell on its first line, so nothing is sent. A bare `${H:?…}` would
-print and the paste would carry on.
+**Good:** `204` from the cookie call and `200` from the login.
 
 **Pausing a route, and putting it back.** Both halves are written here as one block on purpose. A paused route is skipped by the
 06:10 poll in silence — no alert fires for it and nothing anywhere says so — until somebody notices by eye. Do not run the
@@ -152,8 +150,24 @@ pause without running the restore.
 
 ```bash
 (
-# The lift block above, in this same shell, is what sets these four.
-: "${H:?lift it first}" "${B:?lift it first}" "${AUTHED:?lift it first}" "${AUTH_XSRF:?lift it first}"
+H='Host: flights.ghiecode.io'
+B='http://127.0.0.1:3085'
+HDR=$(mktemp); OUT=$(mktemp)
+curl -s -D "$HDR" -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -H "$H" "$B/sanctum/csrf-cookie"
+COOKIE=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$HDR")
+XSRF=$(printf '%s' "$COOKIE" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
+       | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
+DC="docker compose -f /var/www/orbit/docker-compose.yml"   # production's own project, by name, from any cwd
+EMAIL=$($DC exec -T app sh -c 'sed -n "s/^SEED_USER_EMAIL=//p" .env | head -1' | tr -d '\r')
+$DC exec -T app sh -c 'sed -n "s/^SEED_USER_PASSWORD=//p" .env | head -1' | tr -d '\r' \
+  | python3 -c 'import json,sys;print(json.dumps({"email":sys.argv[1],"password":sys.stdin.read().strip()}))' "$EMAIL" \
+  | curl -s -D "$OUT" -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -H "$H" \
+         -H "Cookie: $COOKIE" -H "X-XSRF-TOKEN: $XSRF" \
+         -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary @- "$B/login"
+AUTHED=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$OUT")
+AUTH_XSRF=$(printf '%s' "$AUTHED" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
+            | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
+rm -f "${HDR:?}" "${OUT:?}"
 
 # PAUSE — AMS-LIS stops being polled from this moment.
 curl -s -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -X PATCH -H "$H" \
@@ -173,8 +187,9 @@ curl -s --connect-timeout 5 --max-time 15 -H "$H" -H "Cookie: $AUTHED" \
 )
 ```
 
-**Good:** `200` from each PATCH, and `[True]` from the read. A `419` from a PATCH means the token, not the app. Anything other
-than `[True]` at the end means a production route is still paused — put it back before you walk away.
+**Good:** `204` and `200` from its own lift, `200` from each PATCH, and `[True]` from the read. A `419` from a PATCH means
+the token, not the app. Anything other than `[True]` at the end means a production route is still paused — put it back before
+you walk away.
 
 **⚠ A bare `PUT /api/profile/password` is 419, not 401.** `ValidateCsrfToken` runs before `auth`, so a request with no cookies
 is refused for having no token and never reaches the guard. Only the full lift above makes a 401 mean "unauthenticated".
