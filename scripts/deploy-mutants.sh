@@ -251,6 +251,14 @@ mutant 'a ps that failed reads as a service with no healthcheck' deploy.sh \
 mutant 'the classifier is addressed through the checkout being deployed' deploy.sh \
     's#"\$SCRIPT_DIR/docs-only.sh"#"$ROOT/scripts/docs-only.sh"#' \
     'a helper is read from the script directory, never from the checkout being deployed'
+mutant 'the classifier moves into the export under a seam' docs-only.sh \
+    's#^\[ -n "\${DOCS_ONLY_GIT:-}" \] || cd #cd #' \
+    'the real classifier run from the export lands a docs-only merge' \
+    'the real classifier run from the export sends a code merge down the full path'
+mutant 'the classifier trusts a seam naming another tree' docs-only.sh \
+    '/^if \[ -n "\$seam_dir" \]/,/^fi$/d' \
+    'a seam naming another tree than the caller stands in exits' \
+    'and the classifier refuses it'
 mutant 'the migration never runs' deploy.sh \
     '/php artisan migrate --force/d' \
     'migrate is the first command the job asks of compose when no lockfile moved'

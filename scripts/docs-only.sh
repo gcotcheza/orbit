@@ -3,7 +3,8 @@
 # Why a docs-only merge lands instead of deploying: docs/DECISIONS.md, a-docs-only-merge-lands-it-does-not-deploy
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+# A seam's caller stands in the checkout it names, which the guard below proves.
+[ -n "${DOCS_ONLY_GIT:-}" ] || cd "$(dirname "$0")/.."
 
 # The deploy runs this as root against a checkout root's git refuses to read.
 # Unquoted on purpose: the value is a command with arguments.
