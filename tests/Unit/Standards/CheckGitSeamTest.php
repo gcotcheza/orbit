@@ -27,7 +27,7 @@ final class CheckGitSeamTest extends TestCase
     /** The shell lint lists its own files through the same seam, one step earlier. */
     private const LINT_LISTING = 'ls-files -z --cached -- scripts';
 
-    /** The vendored ledger names HEAD through the same seam when it records the red. */
+    /** The vendored ledger names HEAD through the same seam when it arms, and again when it records the red. */
     private const RECORDING = 'rev-parse HEAD';
 
     #[Test]
@@ -40,7 +40,7 @@ final class CheckGitSeamTest extends TestCase
         $this->assertStringContainsString('Pint (code style)', $result['output']);
 
         $this->assertSame(
-            [self::LINT_LISTING, self::LISTING, self::RECORDING],
+            [self::RECORDING, self::LINT_LISTING, self::LISTING, self::RECORDING],
             $result['seam'],
             'The secrets step must reach the seam, and it may not add a -C of its own: CI_GIT '
             ."carries the directory, and git-as refuses a second one.\n".$result['output']
@@ -56,7 +56,7 @@ final class CheckGitSeamTest extends TestCase
         $this->assertSame(1, $result['status'], "The stubbed Pint step should stop the run.\n".$result['output']);
         $this->assertSame([], $result['seam'], 'Nothing may reach the seam when CI_GIT is unset.');
         $this->assertSame(
-            [self::LINT_LISTING, self::LISTING, self::RECORDING],
+            [self::RECORDING, self::LINT_LISTING, self::LISTING, self::RECORDING],
             $result['plain'],
             'The default has to stay plain `git`, or every developer checkout needs an environment '
             .'variable to run the gate at all.'
@@ -92,7 +92,7 @@ final class CheckGitSeamTest extends TestCase
             "The runbook's own pair names one tree twice and must pass this guard.\n".$matching['output']
         );
         $this->assertSame(
-            [self::LINT_LISTING, self::LISTING, self::RECORDING],
+            [self::RECORDING, self::LINT_LISTING, self::LISTING, self::RECORDING],
             $matching['seam'],
             'The matching pair still lists through the seam.'
         );

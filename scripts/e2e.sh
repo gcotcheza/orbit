@@ -53,6 +53,8 @@ ROOT="$PWD"
 # tests/Unit/Standards/DeployLibDriftTest.php recomputes each file's own hash.
 # shellcheck source=scripts/lib/deploy/ledger.sh
 . "${ROOT}/scripts/lib/deploy/ledger.sh"
+# The commit this run judges, pinned before any step; the ledger records no other.
+gate_ledger_arm
 
 # Filtered until the flags and the pre-flight say otherwise, so a run that dies
 # in its own arguments or on a box it cannot use records nothing at all.

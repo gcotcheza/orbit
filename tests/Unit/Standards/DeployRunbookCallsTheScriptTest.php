@@ -24,12 +24,39 @@ final class DeployRunbookCallsTheScriptTest extends TestCase
     #[Test]
     public function the_runbook_runs_the_deploy_script(): void
     {
+        $fenced = implode("\n", $this->fences($this->read(self::RUNBOOK)));
+
         $this->assertMatchesRegularExpression(
-            '#^cd /var/www/orbit && scripts/deploy\.sh <PR\#>$#m',
-            implode("\n", $this->fences($this->read(self::RUNBOOK))),
-            'The runbook stopped calling scripts/deploy.sh. That script IS the runbook: a deploy '
-            .'typed out again here is a second copy of it, and the copies drifted for four months '
-            .'the last time this was two documents.'
+            '#^fleet-deploy orbit <PR\#>$#m',
+            $fenced,
+            'The runbook stopped calling scripts/deploy.sh through fleet-deploy. That script IS the '
+            .'runbook: a deploy typed out again here is a second copy of it, and the copies drifted '
+            .'for four months the last time this was two documents.'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '#(^|[\s/])scripts/deploy\.sh\b#m',
+            $fenced,
+            "A fenced block runs scripts/deploy.sh directly. Root runs it only out of fleet-deploy's "
+            .'export, and every other copy refuses: docs/DECISIONS.md, deploys-run-roots-export-never-the-checkout.'
+        );
+    }
+
+    #[Test]
+    public function the_runbook_runs_the_battery_only_out_of_roots_mirror(): void
+    {
+        $fenced = implode("\n", $this->fences($this->read(self::RUNBOOK)));
+
+        $this->assertStringContainsString(
+            'git --git-dir=/var/lib/fleet/deploy-src/orbit.git show main:scripts/verify.sh >"${VDIR:?}/verify.sh" || exit',
+            $fenced,
+            "The runbook lost the block that copies verify.sh out of root's mirror before root runs it."
+        );
+        $this->assertStringContainsString('bash "${VDIR:?}/verify.sh"', $fenced);
+        $this->assertDoesNotMatchRegularExpression(
+            '#(^|[\s/])scripts/verify\.sh\b#m',
+            $fenced,
+            'A fenced block has root run verify.sh out of a tree the orbit user can write: '
+            .'docs/DECISIONS.md, deploys-run-roots-export-never-the-checkout.'
         );
     }
 

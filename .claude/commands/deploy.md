@@ -16,36 +16,26 @@ means. The first deploy of all is `docs/GO-LIVE.md` and is not repeated here.
    own line to `/var/lib/fleet/gate-ledger` from the clone that ran them, so they are proved before the merge and **not**
    re-run here. `RESOLVED` names that commit: the merged head while the merge left its tree untouched, and the merge commit
    itself when the merge has a tree of its own, which is the ordinary case once `main` has moved.
-3. **Run as root**, from the box. Talking to `/var/run/docker.sock` is a group membership `orbit` does not have; every git line
-   goes through `git-as`, and every container already runs as `115:119`.
+3. **Run as root**, from any directory. Talking to `/var/run/docker.sock` is a group membership `orbit` does not have; every git
+   line goes through `git-as` except a read out of root's mirror, `/var/lib/fleet/deploy-src/orbit.git`, and every
+   container already runs as `115:119`.
 4. **One deploy a day, and this is that one.** Ghie's rule, not a technical limit.
-
-**The first landing of the script itself** is the one deploy `/var/www/orbit` cannot run: the script and its helpers arrive
-with the merge that needs them, so that checkout has neither file until it has landed. Run the merge commit's own copy, from a
-worktree rather than the shared clone — detaching that clone is a trap for whoever opens it next:
-
-```bash
-git -C /srv/sessions/orbit/repo fetch origin
-git -C /srv/sessions/orbit/repo worktree add /srv/worker-scratch/orbit-land-pr<N> <merge-sha>
-```
-
-Both paths are root-owned, so this is root's own git and not `git-as`, whose deploy key is read-only and whose user cannot
-write either of them. Then run that copy against the served checkout:
-
-```bash
-DEPLOY_ROOT=/var/www/orbit bash /srv/worker-scratch/orbit-land-pr<N>/scripts/deploy.sh <N>
-```
-
-The worktree is **at the merge commit** because a tree still on the old main runs the OLD script, which is the bug this recipe exists for.
 
 ## The one command
 
 ```bash
-cd /var/www/orbit && scripts/deploy.sh <PR#>
+fleet-deploy orbit <PR#>
 ```
 
-It takes a pull request number and nothing else. One switch exists — `--gated-by-hand` skips the ledger and says so in its own
-line and in `DONE` — and **Orbit does not use it**: the recipe below is never longer than gating properly.
+`fleet-deploy` exports `scripts/` at the merge commit out of root's own mirror, `/var/lib/fleet/deploy-src/orbit.git`, into a
+root 700 directory and runs `scripts/deploy.sh` from there, so a merge that changes the deploy script is deployed by the script
+it ships. **`scripts/deploy.sh` run any other way refuses and names `fleet-deploy`**: from `/var/www/orbit`, or any copy root
+does not own alone, before it reads anything (`REFUSED: … Deploy with: fleet-deploy <app> <PR#>`); from any other copy, when it
+finds `FLEET_DEPLOY_REPO` unset. Never work around either (`docs/DECISIONS.md`, deploys-run-roots-export-never-the-checkout).
+
+It takes a pull request number and nothing else. One switch exists — `fleet-deploy orbit <PR#> --gated-by-hand` reads the ledger
+anyway, prints the verdict it overrides and records `by hand over [<verdict>]` in `DONE` — and **Orbit does not use it**: the
+recipe below is never longer than gating properly.
 
 **A docs-only merge is the same command.** The script asks `scripts/docs-only.sh` what the merge changes; documentation and
 nothing else is fast-forwarded onto the box, proved with one `/up`, one public GET and the ownership count, and stopped there —
@@ -65,7 +55,7 @@ heavy-work orbit-gate-pr<N> -- bash scripts/check.sh overlay
 heavy-work orbit-e2e-pr<N> -- bash scripts/e2e.sh
 ```
 
-Both write their ledger line at the end of a green run; then re-run `scripts/deploy.sh <PR#>`. A commit without both greens
+Both write their ledger line at the end of a green run; then re-run `fleet-deploy orbit <PR#>`. A commit without both greens
 is re-gated, not argued with. Gate the sha the line named and nothing else: gating the branch head when the script asked for
 the merge commit leaves the ledger exactly as empty as it was. `docs/DEVELOPMENT.md` lists the five paths `scripts/e2e.sh` needs handed over in a root-owned worktree.
 
@@ -86,7 +76,7 @@ One line per phase on stdout, the whole run in `/root/personal-vps-deploys/orbit
 | `HEALTH … healthy …` | docker's own healthchecks for the restarted services have all gone green, which is the state the battery's check 6 demands. `HEALTH TIMEOUT` means the release is landed and serving and the battery was **not** run — it names the container and its last healthchecks, and it is not a rollback |
 | `VERIFY --backend-only` / `VERIFY full` | `--backend-only` when step 5 did not run, so an unchanged bundle is expected. `full` when it did: check 1 then demands that the served bundle is the one `public/build/manifest.json` names and that the manifest was written after `STEP 0`'s baseline, so a rebuild that came out byte-identical passes and a build that never rewrote the manifest fails (`verify-full-matches-the-served-bundle-to-the-build` in `docs/DECISIONS.md`) |
 | `HOST VHOST NEEDED, NOT RUN …` | `deploy/nginx` moved, and nginx reads `/etc/nginx/sites-available/flights.ghiecode.io`, which no pull touches. By hand, in this order: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`. Both tests say `syntax is ok`; never reload on a failed second one |
-| `DONE #N live … was … gated … root-owned 0 verify …` | the deploy is finished. `gated` says what was read and for which commit — `ledger head <sha>`, `ledger merge <sha>` or `by hand`. `root-owned` must read `0` |
+| `DONE #N live <full merge sha> was … gated … root-owned 0 verify …` | the deploy is finished, and root's record `/var/lib/fleet/deploy-on-merge/orbit.record` took its `DONE` row first. `gated` says what was read and for which commit — `ledger head <sha>`, `ledger merge <sha>` or `by hand over [<verdict>]`. `root-owned` must read `0` |
 | `PAPERWORK PR #N deployed …` | backlog, handoff and the fleet-docs page still want a line from you |
 | `REFUSED: …` | nothing moved. `FAILED rc=…` with a 20-line tail means something did — read the log, do not re-run a step. A `FAILED` at `VERIFY` is the one exception: see below |
 
@@ -94,7 +84,18 @@ One line per phase on stdout, the whole run in `/root/personal-vps-deploys/orbit
 
 1. The only `orbit` live-tripwire line is `HEAD is <sha>, and no deploy log … names it`. Any `changed outside a deploy`, `hooks … changed` or `HEAD moved from` line is something else: stop and investigate.
 2. `HEAD` = `origin/main` in `/var/www/orbit` (`git-as orbit -C /var/www/orbit rev-parse HEAD origin/main`).
-3. Re-run `scripts/verify.sh` read-only. Green → accept once with `vps-health-check.sh --accept-tripwire orbit`. Red → roll back as the script prints.
+3. Re-run the read-only battery, `verify.sh`, from a root 700 copy out of root's mirror, never from the tree the `orbit` user
+   can write. Green → accept once with `vps-health-check.sh --accept-tripwire orbit`. Red → roll back as the script prints.
+
+```bash
+(
+  set -u
+  VDIR=$(mktemp -d /var/lib/fleet/deploy-src/verify.XXXXXXXX) || exit
+  trap 'rm -rf "${VDIR:?}"' EXIT
+  git --git-dir=/var/lib/fleet/deploy-src/orbit.git show main:scripts/verify.sh >"${VDIR:?}/verify.sh" || exit
+  bash "${VDIR:?}/verify.sh"
+)
+```
 
 An accept re-baselines everything the tripwire watches — hooks and `.git` config too, not only the sha — which is why steps 1 and 2 come first. There is no mode that writes `DONE` after the fact.
 
@@ -216,8 +217,22 @@ git-as orbit -C /var/www/orbit reset --hard "${WAS:?set WAS to the sha DONE prin
   && find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
 ```
 
-The count must print `0`. Then **rebuild what the deploy built** — the asset build, `build:retain`, `view:clear`, the drain and
-the four restarts, then `scripts/verify.sh` — because reverting and not restarting leaves the bad build serving. Reverting the
+The count must print `0`. Then write the rollback into root's record, so the live tripwire reads the sha you reset to. The
+library comes from a root 700 copy out of root's mirror, never from the tree, which refuses:
+
+```bash
+(
+  set -u
+  LIBDIR=$(mktemp -d /var/lib/fleet/deploy-src/rollback.XXXXXXXX) || exit
+  trap 'rm -rf "${LIBDIR:?}"' EXIT
+  git --git-dir=/var/lib/fleet/deploy-src/orbit.git show main:scripts/lib/deploy/summary.sh >"${LIBDIR:?}/summary.sh" || exit
+  SHA=$(git-as orbit -C /var/www/orbit rev-parse --verify HEAD) || exit
+  ROOT=/var/www/orbit bash -c '. "$1/summary.sh" && deploy_record_rollback "$2" runbook' _ "${LIBDIR:?}" "${SHA:?}"
+)
+```
+
+It prints `ROLLBACK <sha> recorded`, or a `REFUSED:` line naming why no row was written. Then **rebuild what the deploy built** — the asset build, `build:retain`, `view:clear`, the drain and
+the four restarts, then the `verify.sh` block under "After a `FAILED` at `VERIFY`" — because reverting and not restarting leaves the bad build serving. Reverting the
 merge and deploying that is the shorter path whenever there is time for it.
 
 **For the record — the revert PR, from a root-owned private clone, never from this tree nor a worktree of it** (a worktree here

@@ -208,7 +208,8 @@ explains what that costs and what this harness found.
 
 ## Deploy
 
-`scripts/deploy.sh <PR#>` **is** the deploy: it resolves the merged pull request,
+`fleet-deploy orbit <PR#>`, run as root, exports `scripts/` at the merge commit out of root's mirror and runs
+`scripts/deploy.sh` from there; run any other way it refuses. That script **is** the deploy: it resolves the merged pull request,
 reads the gate ledger, and runs the whole moving half in one `heavy-work` job —
 fast-forward, `composer install --no-dev` and the asset build only when their
 inputs moved, migrate, `build:retain`, `view:clear`, the drain and **the four
