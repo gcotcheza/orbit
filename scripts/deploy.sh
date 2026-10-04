@@ -9,8 +9,8 @@
 # while the full output goes to $DEPLOY_LOG_DIR/<utc>-pr<N>.log.
 set -u
 
-# The helpers are this script's own, not the deployed checkout's: a first landing
-# runs from a clone, and the checkout has neither file until the merge arrives.
+# The helpers are this script's own, not the deployed checkout's: root runs only
+# fleet-deploy's export, and the checkout's helpers are the app user's to edit.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Vendored from gcotcheza/engineering-standards and not edited here:
@@ -251,7 +251,7 @@ health_failed() {
     say "HEALTH $1: $2 is $3 ${4}s after its restart, so the battery was not run. THE RELEASE IS LANDED AND SERVING and this is NOT a rollback."
     log=$(health_log "$2")
     [ -n "$log" ] && say "Its last healthchecks:"$'\n'"$log"
-    say "Watch it with '$COMPOSE ps $2'; when it reports healthy, run scripts/verify.sh against $ROOT."
+    say "Watch it with '$COMPOSE ps $2'; when it reports healthy, run the runbook's verify.sh block, which reads root's mirror."
     exit 1
 }
 

@@ -402,6 +402,17 @@ if [ "${n}" -eq 0 ]; then
     exit 1
 fi
 
+# One unmutated run builds the fixture repos every mutant's suite then copies: each
+# fixture commit runs the fleet hook. It must pass, or no mutant's red means anything.
+export DEPLOY_TEST_TEMPLATES="${WORK}/templates"
+mkdir -p "${WORK}/unmutated/tmp"
+if ! TMPDIR="${WORK}/unmutated/tmp" DEPLOY_TEST_ROOT="${WORK}/unmutated" \
+    bash "${SCRIPT_DIR}/deploy-test.sh" >"${WORK}/unmutated.out" 2>&1; then
+    tail -20 "${WORK}/unmutated.out" >&2
+    printf 'deploy-mutants: the unmutated suite fails, so no mutant was run\n' >&2
+    exit 1
+fi
+
 # One worker per mutation, ${JOBS} at a time. The verdict is the worker's exit
 # status: a missing one is a worker that died, and counts as a miss.
 for ((i = 1; i <= n; i++)); do printf '%s\n' "${i}"; done \

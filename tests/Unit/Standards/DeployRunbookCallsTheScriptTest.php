@@ -42,6 +42,25 @@ final class DeployRunbookCallsTheScriptTest extends TestCase
     }
 
     #[Test]
+    public function the_runbook_runs_the_battery_only_out_of_roots_mirror(): void
+    {
+        $fenced = implode("\n", $this->fences($this->read(self::RUNBOOK)));
+
+        $this->assertStringContainsString(
+            'git --git-dir=/var/lib/fleet/deploy-src/orbit.git show main:scripts/verify.sh >"${VDIR:?}/verify.sh" || exit',
+            $fenced,
+            "The runbook lost the block that copies verify.sh out of root's mirror before root runs it."
+        );
+        $this->assertStringContainsString('bash "${VDIR:?}/verify.sh"', $fenced);
+        $this->assertDoesNotMatchRegularExpression(
+            '#(^|[\s/])scripts/verify\.sh\b#m',
+            $fenced,
+            'A fenced block has root run verify.sh out of a tree the orbit user can write: '
+            .'docs/DECISIONS.md, deploys-run-roots-export-never-the-checkout.'
+        );
+    }
+
+    #[Test]
     public function the_runbook_does_not_restate_a_single_deploy_step(): void
     {
         $offenders = [];

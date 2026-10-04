@@ -17,7 +17,8 @@ means. The first deploy of all is `docs/GO-LIVE.md` and is not repeated here.
    re-run here. `RESOLVED` names that commit: the merged head while the merge left its tree untouched, and the merge commit
    itself when the merge has a tree of its own, which is the ordinary case once `main` has moved.
 3. **Run as root**, from any directory. Talking to `/var/run/docker.sock` is a group membership `orbit` does not have; every git
-   line goes through `git-as`, and every container already runs as `115:119`.
+   line goes through `git-as` except a read out of root's mirror, `/var/lib/fleet/deploy-src/orbit.git`, and every
+   container already runs as `115:119`.
 4. **One deploy a day, and this is that one.** Ghie's rule, not a technical limit.
 
 ## The one command
@@ -83,7 +84,18 @@ One line per phase on stdout, the whole run in `/root/personal-vps-deploys/orbit
 
 1. The only `orbit` live-tripwire line is `HEAD is <sha>, and no deploy log … names it`. Any `changed outside a deploy`, `hooks … changed` or `HEAD moved from` line is something else: stop and investigate.
 2. `HEAD` = `origin/main` in `/var/www/orbit` (`git-as orbit -C /var/www/orbit rev-parse HEAD origin/main`).
-3. Re-run `scripts/verify.sh` read-only. Green → accept once with `vps-health-check.sh --accept-tripwire orbit`. Red → roll back as the script prints.
+3. Re-run the read-only battery, `verify.sh`, from a root 700 copy out of root's mirror, never from the tree the `orbit` user
+   can write. Green → accept once with `vps-health-check.sh --accept-tripwire orbit`. Red → roll back as the script prints.
+
+```bash
+(
+  set -u
+  VDIR=$(mktemp -d /var/lib/fleet/deploy-src/verify.XXXXXXXX) || exit
+  trap 'rm -rf "${VDIR:?}"' EXIT
+  git --git-dir=/var/lib/fleet/deploy-src/orbit.git show main:scripts/verify.sh >"${VDIR:?}/verify.sh" || exit
+  bash "${VDIR:?}/verify.sh"
+)
+```
 
 An accept re-baselines everything the tripwire watches — hooks and `.git` config too, not only the sha — which is why steps 1 and 2 come first. There is no mode that writes `DONE` after the fact.
 
@@ -220,7 +232,7 @@ library comes from a root 700 copy out of root's mirror, never from the tree, wh
 ```
 
 It prints `ROLLBACK <sha> recorded`, or a `REFUSED:` line naming why no row was written. Then **rebuild what the deploy built** — the asset build, `build:retain`, `view:clear`, the drain and
-the four restarts, then `scripts/verify.sh` — because reverting and not restarting leaves the bad build serving. Reverting the
+the four restarts, then the `verify.sh` block under "After a `FAILED` at `VERIFY`" — because reverting and not restarting leaves the bad build serving. Reverting the
 merge and deploying that is the shorter path whenever there is time for it.
 
 **For the record — the revert PR, from a root-owned private clone, never from this tree nor a worktree of it** (a worktree here

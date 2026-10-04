@@ -7,6 +7,8 @@
 #   cp -r scripts <dir> && DEPLOY_SH=<dir>/deploy.sh scripts/deploy-test.sh
 #                                   same list against a mutated copy (red proofs);
 #                                   GATE_LEDGER_LIB= does the same for the writer
+#                                   DEPLOY_TEST_TEMPLATES=<dir> keeps the fixture repos
+#                                   there, built once for every run that shares it
 #
 # Each case runs a root 700 copy of deploy.sh and lib/ under DEPLOY_TEST_ROOT
 # (default /srv/worker-scratch), because the library refuses any other copy.
@@ -222,8 +224,12 @@ fixture() {
     shift
     key=${*:-plain}
     key=${key// /-}
-    template="${WORK}/.template/${key}"
-    [ -d "${template}" ] || build_fixture "${template}" "$@"
+    template="${DEPLOY_TEST_TEMPLATES:-${WORK}/.template}/${key}"
+    if [ ! -d "${template}" ]; then
+        rm -rf "${template:?}.part"
+        build_fixture "${template}.part" "$@"
+        mv "${template}.part" "${template}"
+    fi
 
     CASE="${WORK}/${name}"
     ROOT="${CASE}/root"
@@ -231,6 +237,9 @@ fixture() {
     LEDGER="${CASE}/ledger"
     LOGS="${CASE}/logs"
     cp -a "${template}/case" "${CASE}"
+    rm -rf "${CASE:?}/scripts"
+    mkdir "${CASE}/scripts"
+    write_own_helpers
     . "${template}/shas"
     git_at config remote.origin.url "${CASE}/origin.git"
 }
