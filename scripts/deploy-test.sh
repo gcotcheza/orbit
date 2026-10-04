@@ -109,13 +109,27 @@ case "$*" in
 esac
 exit 0
 SH
+    # compose.sh's argv reaches this; what follows its fixed prefix goes to the compose fake.
     cat >"${BIN}/docker" <<'SH'
 #!/bin/sh
 printf '%s\n' "$*" >> "${FAKE_LOG_DIR}/docker.argv"
 case "$1" in
     inspect) printf 'exit 1: horizon:status said inactive\n' ;;
+    compose) shift ;;
+    *) exit 0 ;;
 esac
-exit 0
+dir=''
+while :; do
+    case "$1" in
+        --project-directory) dir=$2; shift 2 ;;
+        -p|-f|--env-file) shift 2 ;;
+        *) break ;;
+    esac
+done
+case " $* " in
+    *' config '*) printf '{"name":"orbit","services":{"app":{"image":"orbit/app:latest","build":{"context":"%s","dockerfile":"docker/app/Dockerfile"},"volumes":[{"type":"bind","source":"%s","target":"/var/www/html"}]}}}\n' "${dir}" "${dir}"; exit 0 ;;
+esac
+exec "$(dirname -- "$0")/compose" "$@"
 SH
     cat >"${BIN}/curl" <<'SH'
 #!/bin/sh
@@ -232,7 +246,7 @@ fixture() {
     fi
 
     CASE="${WORK}/${name}"
-    ROOT="${CASE}/root"
+    ROOT="${CASE}/orbit"
     BIN="${CASE}/bin"
     LEDGER="${CASE}/ledger"
     LOGS="${CASE}/logs"
@@ -249,7 +263,7 @@ build_fixture() {
     shift
     mkdir -p "${template}"
     CASE="${template}/case"
-    ROOT="${CASE}/root"
+    ROOT="${CASE}/orbit"
     BIN="${CASE}/bin"
     LEDGER="${CASE}/ledger"
     LOGS="${CASE}/logs"
@@ -314,6 +328,14 @@ build_fixture() {
     git -C "${CASE}/origin.git" config --unset remote.origin.url
     rm -f "${ROOT}/.git/FETCH_HEAD"
 
+    # What fleet-deploy exports beside scripts/ at the merge, and root's env file (packet 320).
+    mkdir -p "${CASE}/compose" "${CASE}/buildcheck"
+    git_at show "${MERGE_SHA}:docker-compose.yml" >"${CASE}/compose/docker-compose.yml"
+    git_at archive "${MERGE_SHA}" docker | tar -x -C "${CASE}/buildcheck"
+    printf '%s\n' "${MERGE_SHA}" >"${CASE}/export-sha"
+    mkdir -m 700 "${CASE}/app-env"
+    ( umask 077; printf 'DB_PASSWORD=fixture\n' >"${CASE}/app-env/orbit.env" )
+
     printf '{"headRefOid":"%s","mergeCommit":{"oid":"%s"},"state":"MERGED"}\n' \
         "${HEAD_SHA}" "${MERGE_SHA}" >"${CASE}/gh.json"
     printf '%s ci 2026-09-19T06:00:00Z 0 -\n%s e2e 2026-09-19T06:30:00Z 0 -\n' \
@@ -349,7 +371,8 @@ run_deploy() {
         FLEET_DEPLOY_MERGE_SHA="${MERGE_SHA}" \
         DEPLOY_RECORD_ROOT="${CASE}/records" \
         DEPLOY_HEAVY="${BIN}/heavy-work" \
-        DEPLOY_COMPOSE="${BIN}/compose" \
+        DEPLOY_APP_ENV_DIR="${CASE}/app-env" \
+        DEPLOY_APP_BINDS_DIR="${CASE}/no-app-binds" \
         DEPLOY_DOCKER="${BIN}/docker" \
         DEPLOY_HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-2}" \
         DEPLOY_HEALTH_INTERVAL="${HEALTH_INTERVAL:-1}" \
@@ -381,7 +404,7 @@ logged() {
 
 log_file() { printf '%s\n' "${OUT}" | sed -n 's/^DONE .* log \(.*\)$/\1/p'; }
 
-recorded() { cat "${CASE}/records/root.record" 2>/dev/null; }
+recorded() { cat "${CASE}/records/orbit.record" 2>/dev/null; }
 
 CLASSIFY_RC=''
 COMPOSE_FAIL=''
@@ -430,6 +453,13 @@ run_deploy "${PR_NUMBER}"
 contains 'no FLEET_DEPLOY_REPO is refused, never read off the checkout' "${OUT}" \
     "REFUSED: FLEET_DEPLOY_REPO is unset: root names the repository, never the checkout's origin. Deploy with: fleet-deploy <app> <PR#>"
 equals 'and it asks gh nothing' "$(logged gh.argv)" ''
+
+fixture export-elsewhere
+printf '%s\n' "${LIVE_SHA}" >"${CASE}/export-sha"
+run_deploy "${PR_NUMBER}"
+contains 'compose files exported at another commit are refused' "${OUT}" \
+    "the compose files were exported at ${LIVE_SHA}, not the merge ${MERGE_SHA} this deploy lands."
+equals 'and docker is asked nothing' "$(logged docker.argv)" ''
 
 # --- 1. the arguments ---------------------------------------------------------
 fixture usage
@@ -614,6 +644,11 @@ contains 'and DONE says the head was the commit that was gated' "${OUT}" \
 contains 'DONE carries the root-owned count and the verify mode' "${OUT}" 'root-owned 0 verify backend-only'
 equals 'the steps are ONE heavy-work job' "$(logged heavy.argv | grep -c '^orbit-deploy -- ')" '1'
 equals 'nothing reached the real git-as wrapper' "$(logged git-as.argv)" ''
+ROOT_ARGV="compose --project-directory ${ROOT} -p orbit -f ${CASE}/compose/docker-compose.yml --env-file ${CASE}/app-env/orbit.env "
+contains "compose runs as root's argv over fleet-deploy's export" "$(logged docker.argv)" \
+    "${ROOT_ARGV}exec -T app php artisan migrate --force"
+equals 'and no compose call goes around it' \
+    "$(logged docker.argv | grep '^compose ' | grep -vcF -- "${ROOT_ARGV}")" '0'
 equals 'migrate is the first command the job asks of compose when no lockfile moved' \
     "$(logged compose.argv | grep -v '^ps$' | head -1)" 'exec -T app php artisan migrate --force'
 contains 'horizon is drained IN the horizon container' "$(logged compose.argv)" \
@@ -729,7 +764,7 @@ ROOT_OWNED=2
 ROOT_OWNED_FROM=2
 run_deploy "${PR_NUMBER}"
 contains 'root-owned paths that appear during the deploy are repaired narrowly' "$(logged find.argv)" \
-    "${ROOT} -user root -not -path ${ROOT}/.claude/* -exec chown orbit:orbit {} +"
+    "-P ${ROOT} -user root -not -path ${ROOT}/.claude/* -exec chown -h orbit:orbit {} +"
 absent 'never with a blanket chown over the tree' "$(logged chown.argv)" "-R orbit:orbit ${ROOT}"
 contains 'and the deploy finishes once the count is 0' "${OUT}" 'root-owned 0 verify'
 
