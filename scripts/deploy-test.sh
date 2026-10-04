@@ -3,16 +3,20 @@
 # both landing paths, every conditional step and the ledger writer, against
 # fakes in a temp directory.
 #
-#   scripts/deploy-test.sh          the whole list
-#   cp -r scripts /tmp/o && DEPLOY_SH=/tmp/o/deploy.sh scripts/deploy-test.sh
+#   scripts/deploy-test.sh          the whole list, as root
+#   cp -r scripts <dir> && DEPLOY_SH=<dir>/deploy.sh scripts/deploy-test.sh
 #                                   same list against a mutated copy (red proofs);
 #                                   GATE_LEDGER_LIB= does the same for the writer
 #
+# Each case runs a root 700 copy of deploy.sh and lib/ under DEPLOY_TEST_ROOT
+# (default /srv/worker-scratch), because the library refuses any other copy.
 # It never reads /var/www/orbit, never runs docker, never runs gh and never runs
 # git-as: every one of those is a fake whose argv is what the assertions read.
 set -uo pipefail
+[ "$(id -u)" -eq 0 ] || { printf 'deploy-test: REFUSED: run as root; the deploy library refuses any copy root does not own alone.\n' >&2; exit 1; }
+umask 022
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 DEPLOY_SH="${DEPLOY_SH:-${SCRIPT_DIR}/deploy.sh}"
 LEDGER_LIB="${GATE_LEDGER_LIB:-${SCRIPT_DIR}/lib/deploy/ledger.sh}"
 CHECK_SH="${CHECK_SH:-${SCRIPT_DIR}/check.sh}"
@@ -41,12 +45,14 @@ equals() {
     if [ "$2" = "$3" ]; then pass "$1 is [$3]"; else fail "$1 is [$2], expected [$3]"; fi
 }
 
-WORK="$(mktemp -d)"
+WORK="$(mktemp -d "${DEPLOY_TEST_ROOT:-/srv/worker-scratch}/orbit-deploy-test.XXXXXXXX")" || exit 1
+trap 'rm -rf "${WORK:?}"' EXIT
 BREACH_LOG="${WORK}/checkout-helpers.argv"
 : >"${BREACH_LOG}"
-trap 'rm -rf "${WORK}"' EXIT
+# Belt and braces: run_deploy names every one of these per case, and nothing falls back to root's.
+export DEPLOY_RECORD_ROOT="${WORK}/no-record" GATE_LEDGER="${WORK}/no-ledger" DEPLOY_LOG_ROOT="${WORK}/no-logs"
 
-git_at() { git -C "$ROOT" -c core.hooksPath=/dev/null -c user.name=t -c user.email=t@example.invalid "$@"; }
+git_at() { git -C "$ROOT" -c user.name=t -c user.email=t@example.invalid "$@"; }
 
 write_fakes() {
     cat >"${BIN}/gh" <<'SH'
@@ -184,11 +190,12 @@ SH
     chmod 0755 "${ROOT}/scripts/docs-only.sh" "${ROOT}/scripts/verify.sh"
 }
 
-# deploy.sh runs from here, reads these, and must never read the checkout's pair:
-# a first landing runs from a clone and the checkout has neither file yet.
+# deploy.sh runs from here and reads these, never the checkout's pair: root runs only
+# fleet-deploy's export, and the checkout's helpers are the app user's to edit.
 write_own_helpers() {
-    ln -s "${DEPLOY_SH}" "${CASE}/scripts/deploy.sh"
-    ln -s "$(dirname -- "${DEPLOY_SH}")/lib" "${CASE}/scripts/lib"
+    cp "${DEPLOY_SH}" "${CASE}/scripts/deploy.sh"
+    cp -r "$(dirname -- "${DEPLOY_SH}")/lib" "${CASE}/scripts/lib"
+    chmod -R go-w "${CASE}/scripts"
     cat >"${CASE}/scripts/docs-only.sh" <<'SH'
 #!/bin/sh
 printf 'fake classifier: rc=%s for %s\n' "${FAKE_CLASSIFY_RC}" "$1"
@@ -324,7 +331,9 @@ run_deploy() {
         DEPLOY_ROOT="${ROOT}" \
         DEPLOY_GIT="git -C ${ROOT}" \
         DEPLOY_GH="${BIN}/gh" \
-        DEPLOY_GH_REPO=gcotcheza/orbit \
+        FLEET_DEPLOY_REPO="${FLEET_REPO-gcotcheza/orbit}" \
+        FLEET_DEPLOY_MERGE_SHA="${MERGE_SHA}" \
+        DEPLOY_RECORD_ROOT="${CASE}/records" \
         DEPLOY_HEAVY="${BIN}/heavy-work" \
         DEPLOY_COMPOSE="${BIN}/compose" \
         DEPLOY_DOCKER="${BIN}/docker" \
@@ -334,7 +343,8 @@ run_deploy() {
         DEPLOY_LOG_DIR="${LOGS}" \
         ORBIT_PUBLIC='https://orbit.test' \
         ORBIT_BASE='http://127.0.0.1:3085' \
-        bash "${CASE}/scripts/deploy.sh" "$@" 2>&1)"
+        bash "${DEPLOY_COPY:-${CASE}/scripts/deploy.sh}" "$@" 2>&1)"
+    unset FLEET_REPO DEPLOY_COPY
     CLASSIFY_RC=''
     COMPOSE_FAIL=''
     CURL_CODE=''
@@ -357,6 +367,8 @@ logged() {
 
 log_file() { printf '%s\n' "${OUT}" | sed -n 's/^DONE .* log \(.*\)$/\1/p'; }
 
+recorded() { cat "${CASE}/records/root.record" 2>/dev/null; }
+
 CLASSIFY_RC=''
 COMPOSE_FAIL=''
 CURL_CODE=''
@@ -372,14 +384,47 @@ UNHEALTHY=''
 HEALTH_TIMEOUT=''
 HEALTH_INTERVAL=''
 
+# --- 0. only root runs it, and only from a copy root alone can write ----------
+OUT="$(runuser -u nobody -- bash -s <"${BASH_SOURCE[0]}" 2>&1)"
+RC=$?
+if [ "${RC}" -eq 1 ] && [ "${OUT}" = 'deploy-test: REFUSED: run as root; the deploy library refuses any copy root does not own alone.' ]; then
+    pass 'a run as anyone but root refuses in one line'
+else
+    fail "a run as anyone but root refuses in one line — it exited ${RC} with:"$'\n'"${OUT}"
+fi
+
+# The old habit, `cd /var/www/orbit && scripts/deploy.sh`: a copy inside the checkout it deploys.
+fixture inside-root
+cp "${CASE}/scripts/deploy.sh" "${ROOT}/scripts/deploy.sh"
+cp -r "${CASE}/scripts/lib" "${ROOT}/scripts/lib"
+DEPLOY_COPY="${ROOT}/scripts/deploy.sh"
+run_deploy "${PR_NUMBER}"
+contains "the checkout's own copy refuses and names fleet-deploy" "${OUT}" \
+    "is at or inside ROOT ${ROOT}, so root does not run it. Deploy with: fleet-deploy <app> <PR#>"
+equals 'and it asks gh nothing' "$(logged gh.argv)" ''
+
+fixture app-owned
+chown -R nobody "${CASE}/scripts"
+run_deploy "${PR_NUMBER}"
+contains 'a copy the app user owns refuses before anything runs' "${OUT}" \
+    "is not owned by root, so root does not run it. Deploy with: fleet-deploy <app> <PR#>"
+equals 'and it asks gh nothing' "$(logged gh.argv)" ''
+
+fixture no-repo
+FLEET_REPO=''
+run_deploy "${PR_NUMBER}"
+contains 'no FLEET_DEPLOY_REPO is refused, never read off the checkout' "${OUT}" \
+    "REFUSED: FLEET_DEPLOY_REPO is unset: root names the repository, never the checkout's origin. Deploy with: fleet-deploy <app> <PR#>"
+equals 'and it asks gh nothing' "$(logged gh.argv)" ''
+
 # --- 1. the arguments ---------------------------------------------------------
 fixture usage
 run_deploy
-contains 'no pull request number is a usage error' "${OUT}" 'usage: scripts/deploy.sh <PR#>'
+contains 'no pull request number is a usage error' "${OUT}" 'usage: fleet-deploy orbit <PR#>'
 run_deploy 90x
-contains 'a pull request number that is not digits is a usage error' "${OUT}" 'usage: scripts/deploy.sh <PR#>'
+contains 'a pull request number that is not digits is a usage error' "${OUT}" 'usage: fleet-deploy orbit <PR#>'
 run_deploy 90 91
-contains 'two pull request numbers deploy neither' "${OUT}" 'usage: scripts/deploy.sh <PR#>'
+contains 'two pull request numbers deploy neither' "${OUT}" 'usage: fleet-deploy orbit <PR#>'
 equals 'a usage error reaches no fake' "$(logged gh.argv)" ''
 
 # --- 2. gh says the pull request is not merged --------------------------------
@@ -405,7 +450,9 @@ run_deploy "${PR_NUMBER}"
 contains 'a merge tree that is not the head tree names the merge as the commit to gate' "${OUT}" \
     "RESOLVED #90 merge ${MERGE_SHA:0:7} is origin/main and its tree is not head ${HEAD_SHA:0:7}'s, so the merge commit itself is what must be gated"
 contains 'and a green head does not deploy a merge the ledger never saw' "${OUT}" \
-    "the ledger holds no green ci for ${MERGE_SHA:0:7}: gate that merge, then deploy."
+    "REFUSED: the ledger holds no green ci for ${MERGE_SHA:0:7} (ci absent, e2e absent)"
+contains 'and the recipe says it is the merge that wants gating' "${OUT}" \
+    "NOT GATED ${MERGE_SHA:0:7}: gate that merge in a worktree"
 contains 'and the recipe names the merge commit' "${OUT}" \
     "worktree add /srv/worker-scratch/orbit-gate-pr90 ${MERGE_SHA}"
 absent 'never the branch head, gating which would change nothing' "${OUT}" \
@@ -417,7 +464,7 @@ fixture trees-differ-gated trees-differ
 printf '%s ci 2026-09-19T07:00:00Z 0 -\n%s e2e 2026-09-19T07:30:00Z 0 -\n' \
     "${MERGE_SHA}" "${MERGE_SHA}" >"${LEDGER}"
 run_deploy "${PR_NUMBER}"
-contains 'a gated merge commit deploys' "${OUT}" "DONE #90 live ${MERGE_SHORT} was"
+contains 'a gated merge commit deploys' "${OUT}" "DONE #90 live ${MERGE_SHA} was"
 contains 'and the ledger read is the merge commit, not the branch head' "${OUT}" \
     "GATED ${MERGE_SHA:0:7} ci and e2e both green"
 contains 'and DONE says the merge was the commit that was gated' "${OUT}" \
@@ -451,7 +498,9 @@ fixture by-hand
 : >"${LEDGER}"
 run_deploy "${PR_NUMBER}" --gated-by-hand
 contains '--gated-by-hand says so out loud' "${OUT}" \
-    "GATED BY HAND: the ledger was not read. #90 deploys on a human's word — transition and rescue only."
+    "GATED BY HAND: #90 deploys on a human's word over the verdict above — transition and rescue only."
+contains 'and prints the verdict it overrides' "${OUT}" "GATE NOT GREEN head ${HEAD_SHA:0:7}: ci absent, e2e absent"
+contains 'and DONE records that verdict' "${OUT}" "gated by hand over [NOT GREEN head ${HEAD_SHA:0:7}: ci absent, e2e absent]"
 absent 'and the recipe is not printed at it' "${OUT}" 'worktree add'
 
 # --- 4. a dirty checkout ------------------------------------------------------
@@ -477,7 +526,8 @@ CLASSIFY_RC=0
 run_deploy "${PR_NUMBER}"
 contains 'a docs-only merge lands' "${OUT}" "LANDED docs-only ${MERGE_SHA:0:7}"
 contains 'the landing proves the site at both ends' "${OUT}" 'up 200 edge 200 root-owned 0'
-contains 'the landing stops with DONE' "${OUT}" "DONE #90 live ${MERGE_SHORT} was"
+contains 'the landing stops with DONE' "${OUT}" "DONE #90 live ${MERGE_SHA} was"
+contains "and the landing writes root's record row with the full merge sha" "$(recorded)" "DONE ${MERGE_SHA} "
 equals 'a landing runs no heavy-work job' "$(logged heavy.argv)" ''
 equals 'a landing runs no baseline and no verification' "$(logged verify.argv)" ''
 equals 'a landing asks docker for nothing but the stack it left alone' "$(logged compose.argv)" 'ps'
@@ -521,14 +571,15 @@ contains 'any other rc is git failing, never a landing' "${OUT}" 'STOP: git itse
 fixture deploy
 run_deploy "${PR_NUMBER}"
 contains 'code takes the full path' "${OUT}" 'CLASSIFIED code: the full deploy path'
-contains 'the deploy finishes' "${OUT}" "DONE #90 live ${MERGE_SHORT} was"
+contains 'the deploy finishes' "${OUT}" "DONE #90 live ${MERGE_SHA} was"
+contains "and root's record holds the full merge sha" "$(recorded)" "DONE ${MERGE_SHA} "
 contains 'the deploy is gated by the ledger' "${OUT}" 'gated ledger'
 contains 'identical trees gate the branch head' "${OUT}" \
     "RESOLVED #90 head ${HEAD_SHA:0:7} merge ${MERGE_SHA:0:7} is origin/main, trees identical"
 contains 'and DONE says the head was the commit that was gated' "${OUT}" \
     "gated ledger head ${HEAD_SHA:0:7}"
 contains 'DONE carries the root-owned count and the verify mode' "${OUT}" 'root-owned 0 verify backend-only'
-equals 'the steps are ONE heavy-work job' "$(logged heavy.argv | grep -c 'orbit-deploy')" '1'
+equals 'the steps are ONE heavy-work job' "$(logged heavy.argv | grep -c '^orbit-deploy -- ')" '1'
 equals 'nothing reached the real git-as wrapper' "$(logged git-as.argv)" ''
 equals 'migrate is the first command the job asks of compose when no lockfile moved' \
     "$(logged compose.argv | grep -v '^ps$' | head -1)" 'exec -T app php artisan migrate --force'
@@ -666,12 +717,21 @@ absent 'and it never says DONE' "${OUT}" 'DONE #90'
 fixture already-deployed
 git_at merge -q --ff-only "${MERGE_SHA}"
 printf 'DONE #90 live %s was 1234567 gated ledger root-owned 0 verify full log x\n' \
+    "${MERGE_SHA}" >"${LOGS}/20261004T000000Z-pr90.log"
+CLASSIFY_RC=2
+run_deploy "${PR_NUMBER}"
+contains 'a full merge sha an earlier log says DONE for is nothing to land' "${OUT}" 'is already deployed'
+absent 'and that is not a refusal' "${OUT}" 'REFUSED'
+equals 'and it builds nothing' "$(logged heavy.argv)" ''
+
+fixture already-deployed-short
+git_at merge -q --ff-only "${MERGE_SHA}"
+printf 'DONE #90 live %s was 1234567 gated ledger root-owned 0 verify full log x\n' \
     "$(git_at rev-parse --short HEAD)" >"${LOGS}/20260918T000000Z-pr90.log"
 CLASSIFY_RC=2
 run_deploy "${PR_NUMBER}"
 contains 'a sha an earlier log says DONE for is nothing to land' "${OUT}" 'is already deployed'
-absent 'and that is not a refusal' "${OUT}" 'REFUSED'
-equals 'and it builds nothing' "$(logged heavy.argv)" ''
+absent 'and a short-sha log from before 2026-10-03 is not a refusal' "${OUT}" 'REFUSED'
 
 fixture head-absent-from-checkout
 sed -i 's/"headRefOid":"[0-9a-f]*"/"headRefOid":"0123456789abcdef0123456789abcdef01234567"/' "${CASE}/gh.json"
@@ -727,7 +787,7 @@ printf '#!/bin/sh\ngit -C "%s" update-ref refs/heads/main %s\n' \
 chmod 0755 "${CASE}/prejob.sh"
 HEAVY_PREJOB="${CASE}/prejob.sh"
 run_deploy "${PR_NUMBER}"
-contains 'main moving under the lock changes nothing' "${OUT}" "DONE #90 live ${MERGE_SHORT} was"
+contains 'main moving under the lock changes nothing' "${OUT}" "DONE #90 live ${MERGE_SHA} was"
 equals 'the job lands the resolved merge' "$(git_at rev-parse HEAD)" "${MERGE_SHA}"
 absent 'the commit that arrived late never reaches the disk' "$(ls "${ROOT}/app")" 'late.txt'
 
@@ -752,6 +812,11 @@ else
     fail 'scripts/e2e.sh records teardown status as the suite result: a down -v that fails then writes a red line for a green suite, last-line-wins makes deploy.sh refuse, and an operator re-runs six minutes of browsers for nothing'
 fi
 for gate in "${CHECK_SH}" "${E2E_SH}"; do
+    if grep -q '^gate_ledger_arm$' "${gate}"; then
+        pass "$(basename "${gate}") arms the ledger"
+    else
+        fail "$(basename "${gate}") never arms the ledger, so every run it makes records nothing and every deploy is refused"
+    fi
     if grep -q '^set -Eeuo pipefail' "${gate}"; then
         pass "$(basename "${gate}") fires its ERR trap from inside a function"
     else
@@ -787,6 +852,7 @@ fixture ledger-writer
 . "${LEDGER_LIB}"
 LEDGER_OUT="${CASE}/written"
 : >"${LEDGER_OUT}"
+GATE_LEDGER_GIT="git -C ${ROOT}" gate_ledger_arm
 GATE_SUITE_PASSED=1 GATE_LEDGER="${LEDGER_OUT}" GATE_LEDGER_GIT="git -C ${ROOT}" \
     gate_ledger_record ci 0 /tmp/ci.log >/dev/null
 CLEAN_LINE="$(tail -1 "${LEDGER_OUT}")"
@@ -801,14 +867,10 @@ GATE_LEDGER="${LEDGER_OUT}" GATE_LEDGER_GIT="git -C ${ROOT}" \
 contains 'rc 0 without the suite saying so is recorded red' "$(tail -1 "${LEDGER_OUT}")" ' ci '
 equals 'and the rc recorded is 1' "$(tail -1 "${LEDGER_OUT}" | awk '{print $4}')" '1'
 printf 'uncommitted\n' >>"${ROOT}/app/base.txt"
-GATE_LEDGER="${LEDGER_OUT}" GATE_LEDGER_GIT="git -C ${ROOT}" \
-    gate_ledger_record e2e 1 /tmp/e2e.log >/dev/null
-DIRTY_LINE="$(tail -1 "${LEDGER_OUT}")"
-if printf '%s' "${DIRTY_LINE}" | grep -qE "^${LIVE_SHA}-dirty e2e [0-9-]+T[0-9:]+Z 1 /tmp/e2e\.log$"; then
-    pass "a dirty tree records <sha>-dirty: ${DIRTY_LINE}"
-else
-    fail "a dirty tree does not record <sha>-dirty: ${DIRTY_LINE}"
-fi
+DIRTY_ERR="$(GATE_LEDGER="${LEDGER_OUT}" GATE_LEDGER_GIT="git -C ${ROOT}" \
+    gate_ledger_record e2e 1 /tmp/e2e.log 2>&1 >/dev/null)"
+equals 'a dirty tree writes no row' "$(wc -l <"${LEDGER_OUT}")" '2'
+contains 'and says to commit first' "${DIRTY_ERR}" 'gate-ledger: dirty tree: no ledger row — commit, then gate the tip'
 
 # --- 13. a restart is not readiness ------------------------------------------
 fixture health-immediate

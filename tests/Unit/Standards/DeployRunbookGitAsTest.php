@@ -24,11 +24,13 @@ final class DeployRunbookGitAsTest extends TestCase
 
     private const SEAM = 'git-as orbit -C /var/www/orbit';
 
+    private const MIRROR = '/var/lib/fleet/deploy-src/orbit.git';
+
     /**
      * Measured on the runbook that stopped restating the deploy: the two rollback lines
-     * are the only git a person still types. The rest moved into scripts/deploy.sh.
+     * and the rollback record's HEAD read are the only git a person still types.
      */
-    private const SEAM_LINES = 2;
+    private const SEAM_LINES = 3;
 
     /**
      * `.claude/` is carved out because the orbit session's Claude Code runtime
@@ -56,7 +58,7 @@ final class DeployRunbookGitAsTest extends TestCase
             foreach ($block as $number => $line) {
                 $scanned++;
 
-                if (preg_match('#(?<![\w./-])git(?!-as\b)\b#', $line) === 1) {
+                if (preg_match('#(?<![\w./-])git(?!-as\b)\b#', $line) === 1 && ! $this->readsRootsMirror($line)) {
                     $offenders[] = "{$number}: ".trim($line);
                 }
             }
@@ -69,6 +71,27 @@ final class DeployRunbookGitAsTest extends TestCase
             "Every git in this runbook runs inside /var/www/orbit, which root's git refuses:\n"
             .implode("\n", $offenders)
         );
+    }
+
+    #[Test]
+    public function only_a_read_out_of_roots_mirror_is_spared_the_root_git_check(): void
+    {
+        $this->assertTrue($this->readsRootsMirror('  git --git-dir='.self::MIRROR.' show main:scripts/lib/deploy/summary.sh >"${LIBDIR:?}/summary.sh" || exit'));
+
+        foreach ([
+            'git --git-dir=/var/www/orbit/.git show main:scripts/lib/deploy/summary.sh >x',
+            'git --git-dir='.self::MIRROR.' fetch origin',
+            'git -C /var/www/orbit show main:scripts/deploy.sh >x',
+            'cd /var/www/orbit && git --git-dir='.self::MIRROR.' show main:scripts/x >y',
+        ] as $line) {
+            $this->assertFalse($this->readsRootsMirror($line), "Spared as a read of root's mirror: {$line}");
+        }
+    }
+
+    /** Root's git on root's own mirror, never in the tree: the one place root reads the library. */
+    private function readsRootsMirror(string $line): bool
+    {
+        return preg_match('#^\s*git --git-dir='.preg_quote(self::MIRROR, '#').' show main:scripts/\S+ >#', $line) === 1;
     }
 
     #[Test]

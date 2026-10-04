@@ -7,7 +7,8 @@
 # A verify.sh mutation is run against scripts/verify-test.sh; everything else
 # against scripts/deploy-test.sh, which fakes verify.sh out entirely.
 #
-# It never reads /var/www/orbit, never runs docker and never runs gh.
+# It never reads /var/www/orbit, never runs docker and never runs gh. It runs as
+# root, because scripts/deploy-test.sh does: every copy lives in a root 700 directory.
 #
 # `--worker <n>` runs mutation n alone and exits 0 only if it was caught; that
 # is how the parent feeds its workers. docs/DECISIONS.md, the-mutant-harness-is-a-gate-step
@@ -16,8 +17,8 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SELF="${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}"
-WORK="$(mktemp -d)"
-trap 'rm -rf "${WORK}"' EXIT
+WORK="$(mktemp -d /srv/worker-scratch/orbit-deploy-mutants.XXXXXXXX)" || exit 1
+trap 'rm -rf "${WORK:?}"' EXIT
 HARNESS_TIMEOUT=120
 missed=0
 n=0
@@ -85,14 +86,14 @@ run_mutant() {
     fi
     harness="${dir}/scripts/deploy-test.sh"
     [ "${target}" = 'verify.sh' ] && harness="${dir}/scripts/verify-test.sh"
-    # Nothing after the last expected red is read, so the harness is stopped
-    # there; TMPDIR keeps what a stopped one leaves inside this mutant's copy.
+    # Nothing after the last expected red is read, so the harness is stopped there;
+    # TMPDIR and DEPLOY_TEST_ROOT keep what a stopped one leaves inside this mutant's copy.
     log="${dir}/harness.out"
     mkdir -p "${dir}/tmp"
     : >"${log}"
     # setsid: stopping the harness must take the deploy it is running with it,
     # or an orphan writes into a directory this script is already removing.
-    TMPDIR="${dir}/tmp" DEPLOY_SH="${dir}/scripts/deploy.sh" VERIFY_SH="${dir}/scripts/verify.sh" \
+    TMPDIR="${dir}/tmp" DEPLOY_TEST_ROOT="${dir}" DEPLOY_SH="${dir}/scripts/deploy.sh" VERIFY_SH="${dir}/scripts/verify.sh" \
         GATE_LEDGER_LIB="${dir}/scripts/lib/deploy/ledger.sh" \
         setsid timeout "${HARNESS_TIMEOUT}" bash "${harness}" >"${log}" 2>&1 &
     pid=$!
@@ -137,7 +138,7 @@ mutant 'resolve stops comparing the trees' lib/deploy/resolve.sh \
     'a gated merge commit deploys'
 mutant 'the merge commit is announced as a head' lib/deploy/resolve.sh \
     "s/GATE_WHAT='merge'/GATE_WHAT='head'/" \
-    'and a green head does not deploy a merge the ledger never saw' \
+    'and the recipe says it is the merge that wants gating' \
     'and DONE says the merge was the commit that was gated'
 mutant 'the differing-tree line stops naming the merge' lib/deploy/resolve.sh \
     's/so the merge commit itself is what must be gated/so re-gate/' \
@@ -158,8 +159,36 @@ mutant 'gated stops reading the ledger' lib/deploy/ledger.sh \
     's/^gated() {/gated() { GATED=ledger; return 0;/' \
     'a missing ledger is refused' 'a head absent from the ledger is refused' 'ci without e2e is refused'
 mutant 'by hand stops saying so' lib/deploy/ledger.sh \
-    's/GATED BY HAND: the ledger was not read./GATED BY HAND./' \
+    's/ over the verdict above — transition/ — transition/' \
     '--gated-by-hand says so out loud'
+mutant 'the suite runs as anyone' deploy-test.sh \
+    '/^\[ "\$(id -u)" -eq 0 \] ||/d' \
+    'a run as anyone but root refuses in one line'
+mutant 'a copy inside the checkout it deploys is run' lib/deploy/summary.sh \
+    '/case "\${d%\/}\/" in/d' \
+    "the checkout's own copy refuses and names fleet-deploy"
+mutant 'a copy the app user owns is run' lib/deploy/summary.sh \
+    '/stat -L -c %u "\$f"/d' \
+    'a copy the app user owns refuses before anything runs'
+mutant 'the repository falls back to nothing' lib/deploy/resolve.sh \
+    '/FLEET_DEPLOY_REPO is unset/d' \
+    'no FLEET_DEPLOY_REPO is refused, never read off the checkout'
+mutant 'finish writes no record row' lib/deploy/summary.sh \
+    's/deploy_record_row DONE "\$1" "\$LOG\$red" || refuse/true || refuse/' \
+    "and the landing writes root's record row with the full merge sha" \
+    "and root's record holds the full merge sha"
+mutant 'the landing finishes on the short head again' deploy.sh \
+    '/^land() {/,/^}/s/finish "\$MERGE_SHA"/finish "$head"/' \
+    'the landing stops with DONE'
+mutant 'the deploy finishes on the short head again' deploy.sh \
+    '/^main() {/,/^}/s/finish "\$MERGE_SHA"/finish "$($GIT rev-parse --short HEAD)"/' \
+    'the deploy finishes'
+mutant 'the check gate never arms the ledger' check.sh \
+    '/^gate_ledger_arm$/d' \
+    'check.sh never arms the ledger'
+mutant 'the browser gate never arms the ledger' e2e.sh \
+    '/^gate_ledger_arm$/d' \
+    'e2e.sh never arms the ledger'
 mutant 'a dirty checkout is allowed' lib/deploy/preflight.sh \
     's/^refuse_if_dirty() {/refuse_if_dirty() { return 0;/' \
     'a dirty checkout is refused'
@@ -292,11 +321,17 @@ mutant 'every sha counts as already deployed' deploy.sh \
     'a checkout already on the merge with no finished deploy is refused, not called nothing to land'
 mutant 'no sha counts as already deployed' deploy.sh \
     's/^finished_log() {/finished_log() { return 1;/' \
+    'a sha an earlier log says DONE for is nothing to land' \
+    'a full merge sha an earlier log says DONE for is nothing to land'
+mutant 'a full-sha DONE is not read' deploy.sh \
+    's/live (\$1|\$2) /live ($2) /' \
+    'a full merge sha an earlier log says DONE for is nothing to land'
+mutant 'a short-sha DONE from an older log is not read' deploy.sh \
+    's/live (\$1|\$2) /live ($1) /' \
     'a sha an earlier log says DONE for is nothing to land'
 mutant 'a head that is not in this checkout is never named' deploy.sh \
     's/^head_is_present() {/head_is_present() { return 0;/' \
-    'a head this checkout never had is named, not blamed on the tree' \
-    'and it is not quietly gated as a merge commit instead'
+    'a head this checkout never had is named, not blamed on the tree'
 
 mutant 'the battery asks a healthchecked service for bare Up' verify.sh \
     "s/for s in horizon postgres redis; do ps_says \"\\\$s\" '(healthy)'; done/for s in horizon postgres redis; do ps_says \"\\\$s\" 'Up'; done/" \

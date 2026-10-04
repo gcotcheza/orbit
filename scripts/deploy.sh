@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
 # Orbit deploy — this script IS the runbook (.claude/commands/deploy.md).
 #
-#   scripts/deploy.sh <PR#> [--gated-by-hand]
+#   fleet-deploy orbit <PR#> [--gated-by-hand]
 #
-# Run as root, from /var/www/orbit or from a clone with DEPLOY_ROOT naming the
-# checkout. Every git goes through git-as, the moving
+# Root runs it only from fleet-deploy's export of scripts/ at the merge commit;
+# the vendored summary.sh refuses any other copy. Every git goes through git-as, the moving
 # half goes through ONE heavy-work job, and every phase prints one line here
 # while the full output goes to $DEPLOY_LOG_DIR/<utc>-pr<N>.log.
-#
-# When this is the checkout's own copy the job fast-forwards the file bash is
-# reading, so the body lives in main() and bash has it all before the disk moves.
 set -u
 
 # The helpers are this script's own, not the deployed checkout's: a first landing
@@ -28,7 +25,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 . "$(dirname "$0")/lib/deploy/preflight.sh"
 
 usage() {
-    printf 'usage: scripts/deploy.sh <PR#> [--gated-by-hand]\n' >&2
+    printf 'usage: fleet-deploy orbit <PR#> [--gated-by-hand]\n' >&2
     exit 64
 }
 
@@ -58,7 +55,7 @@ land() {
     $COMPOSE ps
     say "LANDED docs-only ${MERGE_SHA:0:7}: head $head up $code edge $edge root-owned $rooted — no build, no restart"
     GATED='not read: a docs-only landing runs no code'
-    finish "$head"
+    finish "$MERGE_SHA"
 }
 
 classify() {
@@ -79,7 +76,7 @@ classify() {
 # checkout has never had — a squash or a rebase merge — is a different fact.
 head_is_present() {
     local repo json head
-    repo=${DEPLOY_GH_REPO:-$(gh_repo)} || return 0
+    repo=${FLEET_DEPLOY_REPO:-}
     [ -n "$repo" ] || return 0
     json=$($GH pr view "$PR" -R "$repo" --json headRefOid) || return 0
     head=$(json_value "$json" headRefOid)
@@ -99,20 +96,20 @@ gate_or_recipe() {
         say "  cd $wt"
         say "  COMPOSE_PROJECT_NAME=orbit-gate-pr$PR heavy-work orbit-gate-pr$PR -- bash scripts/check.sh overlay"
         say "  heavy-work orbit-e2e-pr$PR -- bash scripts/e2e.sh"
-        say "  Both append to $LEDGER. Then: scripts/deploy.sh $PR"
+        say "  Both append to $LEDGER. Then: fleet-deploy orbit $PR"
     fi
     gated
 }
 
-# A finished deploy of $1 leaves a DONE line in an earlier log. Its absence is what
-# separates "already deployed" from "an earlier run died after the fast-forward".
+# A finished deploy of $1 (full sha) or $2 (short, logs before deploy-lib 2026-10-03) leaves a DONE
+# line in an earlier log; its absence means an earlier run died after the fast-forward.
 finished_log() {
     local dir file
     dir=$(dirname "$LOG")
     for file in "$dir"/*.log; do
         [ -f "$file" ] || continue
         [ "$file" = "$LOG" ] && continue
-        if grep -qE "^DONE #[0-9]+ live $1 " "$file"; then
+        if grep -qE "^DONE #[0-9]+ live ($1|$2) " "$file"; then
             printf '%s' "$file"
             return 0
         fi
@@ -127,7 +124,7 @@ nothing_to_land() {
         exit 0
     fi
     short=$($GIT rev-parse --short HEAD)
-    if done_in=$(finished_log "$short"); then
+    if done_in=$(finished_log "$MERGE_SHA" "$short"); then
         say "STOP: NOTHING TO LAND — $short is already deployed ($done_in said DONE)."
         exit 0
     fi
@@ -392,11 +389,7 @@ main() {
     vhost_notice
     verify
     EXTRA_DONE="root-owned $ROOTED verify $VERIFY_MODE$VHOST_EXTRA"
-    finish "$($GIT rev-parse --short HEAD)"
+    finish "$MERGE_SHA"
 }
 
 main "$@"
-# The last byte bash reads: when this is the checkout's own copy, the job
-# fast-forwards the file it is reading.
-# shellcheck disable=SC2317
-exit

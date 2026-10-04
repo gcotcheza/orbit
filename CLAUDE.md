@@ -18,7 +18,8 @@ overrides them and says why.
   serves the old app.
 - **The gate.** From a worktree, `scripts/check.sh overlay` under its own
   `COMPOSE_PROJECT_NAME`, then `scripts/e2e.sh`; `dev` execs into a stack already up there.
-  `scripts/deploy.sh` runs no gate: it refuses a head that lacks green ci and e2e rows in the gate ledger.
+  The deploy, `fleet-deploy orbit <PR#>` as root, runs no gate: it refuses a head that lacks green ci and e2e
+  rows in the gate ledger. `scripts/deploy.sh` run any other way refuses; never work around it.
 - **The gate isolates its writes; it does not refuse the live checkout (S6).**
   In either runner it refuses a compose stack started from any other
   directory, which keeps a worktree off production's containers. Overlay mode

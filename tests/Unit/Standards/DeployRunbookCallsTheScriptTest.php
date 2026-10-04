@@ -24,12 +24,20 @@ final class DeployRunbookCallsTheScriptTest extends TestCase
     #[Test]
     public function the_runbook_runs_the_deploy_script(): void
     {
+        $fenced = implode("\n", $this->fences($this->read(self::RUNBOOK)));
+
         $this->assertMatchesRegularExpression(
-            '#^cd /var/www/orbit && scripts/deploy\.sh <PR\#>$#m',
-            implode("\n", $this->fences($this->read(self::RUNBOOK))),
-            'The runbook stopped calling scripts/deploy.sh. That script IS the runbook: a deploy '
-            .'typed out again here is a second copy of it, and the copies drifted for four months '
-            .'the last time this was two documents.'
+            '#^fleet-deploy orbit <PR\#>$#m',
+            $fenced,
+            'The runbook stopped calling scripts/deploy.sh through fleet-deploy. That script IS the '
+            .'runbook: a deploy typed out again here is a second copy of it, and the copies drifted '
+            .'for four months the last time this was two documents.'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '#(^|[\s/])scripts/deploy\.sh\b#m',
+            $fenced,
+            "A fenced block runs scripts/deploy.sh directly. Root runs it only out of fleet-deploy's "
+            .'export, and every other copy refuses: docs/DECISIONS.md, deploys-run-roots-export-never-the-checkout.'
         );
     }
 

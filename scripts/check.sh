@@ -53,6 +53,9 @@ if [ -n "$seam_dir" ] && [ "$(realpath -- "$seam_dir" 2>/dev/null)" != "$here" ]
     exit 2
 fi
 
+# The commit this run judges, pinned before any step; the ledger records no other.
+gate_ledger_arm
+
 # 124 is GNU timeout on the host, 143 is BusyBox timeout in the test container.
 docker_answer() {
     case $1 in
