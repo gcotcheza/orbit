@@ -266,7 +266,12 @@ build_fixture() {
     LIVE_SHA="$(git_at rev-parse HEAD)"
 
     git_at checkout -q -b pr
-    printf 'feature\n' >"${ROOT}/app/feature.txt"
+    if [ "${1:-}" = docs ]; then
+        mkdir -p "${ROOT}/docs"
+        printf 'feature\n' >"${ROOT}/docs/feature.md"
+    else
+        printf 'feature\n' >"${ROOT}/app/feature.txt"
+    fi
     local moved
     for moved in "$@"; do
         case "${moved}" in
@@ -555,6 +560,25 @@ ROOT_OWNED=1
 run_deploy "${PR_NUMBER}"
 contains 'a landing onto a root-owned tree is not a clean landing' "${OUT}" 'NOT LANDED CLEANLY: 1 path(s)'
 absent 'and the repair is the reader"s, not a blanket chown' "$(logged chown.argv)" '-R'
+
+# fleet-deploy exports scripts/ outside the checkout; the real classifier must still read it.
+REAL_CLASSIFIER="$(dirname -- "${DEPLOY_SH}")/docs-only.sh"
+fixture real-classifier-docs docs
+cp "${REAL_CLASSIFIER}" "${CASE}/scripts/docs-only.sh"
+run_deploy "${PR_NUMBER}"
+contains 'the real classifier run from the export lands a docs-only merge' "${OUT}" "LANDED docs-only ${MERGE_SHA:0:7}"
+contains 'and it read the checkout, not the export' "$(cat "$(log_file)")" 'DOCS-ONLY: 1 file(s)'
+
+fixture real-classifier-code
+cp "${REAL_CLASSIFIER}" "${CASE}/scripts/docs-only.sh"
+run_deploy "${PR_NUMBER}"
+contains 'the real classifier run from the export sends a code merge down the full path' "${OUT}" 'CLASSIFIED code: the full deploy path'
+contains 'and names the code it found' "$(cat "$(log_file)")" 'CODE: app/feature.txt'
+
+fixture real-classifier-seam
+OUT="$(cd "${ROOT}" && DOCS_ONLY_GIT="git -C ${CASE}/origin.git" "${REAL_CLASSIFIER}" "${MERGE_SHA}" 2>&1)"
+equals 'a seam naming another tree than the caller stands in exits' "$?" 3
+contains 'and the classifier refuses it' "${OUT}" "DOCS_ONLY_GIT points at ${CASE}/origin.git but this script runs in ${ROOT}."
 
 fixture nothing-to-land
 CLASSIFY_RC=2
