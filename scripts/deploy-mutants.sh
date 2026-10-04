@@ -161,6 +161,9 @@ mutant 'gated stops reading the ledger' lib/deploy/ledger.sh \
 mutant 'by hand stops saying so' lib/deploy/ledger.sh \
     's/ over the verdict above — transition/ — transition/' \
     '--gated-by-hand says so out loud'
+mutant 'a dirty tree is recorded' lib/deploy/ledger.sh \
+    '/^        return 2$/d' \
+    'a dirty tree writes no row'
 mutant 'the suite runs as anyone' deploy-test.sh \
     '/^\[ "\$(id -u)" -eq 0 \] ||/d' \
     'a run as anyone but root refuses in one line'
