@@ -44,7 +44,7 @@ final class ToolchainPinsTest extends TestCase
 
         $this->assertIsString($engine, 'package.json declares no engines.node.');
         $this->assertSame(
-            $nvmrc.'.x',
+            explode('.', $nvmrc)[0].'.x',
             $engine,
             "package.json allows Node '{$engine}' where .nvmrc pins '{$nvmrc}'. npm warns against "
             .'the engines range, not against .nvmrc, so a widened range is how a wrong Node gets in.'
@@ -59,8 +59,8 @@ final class ToolchainPinsTest extends TestCase
         $this->assertIsString($platform, 'composer.json declares no config.platform.php.');
         $this->assertSame(
             $this->matched('/^FROM php:(\S+)-fpm-alpine\s*$/m', 'docker/app/Dockerfile'),
-            implode('.', array_slice(explode('.', $platform), 0, 2)),
-            "composer.json resolves for PHP '{$platform}', which is not the minor line the app "
+            $platform,
+            "composer.json resolves for PHP '{$platform}', which is not the PHP the app "
             .'image is built from. Composer would pick packages for a PHP the site does not run.'
         );
     }

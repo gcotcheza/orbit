@@ -769,8 +769,8 @@ and an HTML report at `e2e/artifacts/report/index.html`.
 
 ## Versions move together
 
-`@playwright/test` in `package.json` is pinned **exactly** (`1.62.1`, no caret)
-and `scripts/e2e.sh` pins `mcr.microsoft.com/playwright:v1.62.1-noble`. The
+`@playwright/test` in `package.json` is pinned **exactly** (`1.63.0`, no caret)
+and `scripts/e2e.sh` pins `mcr.microsoft.com/playwright:v1.63.0-noble`. The
 browsers live in the image and the driver that speaks to them lives in
 `node_modules`; Playwright refuses to run a driver against browsers it did not
 ship with. Bumping one without the other is a suite that will not start.

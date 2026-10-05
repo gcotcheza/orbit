@@ -76,7 +76,7 @@ gate_record() {
 # speaks to them lives in package.json. Playwright refuses to run a driver
 # against browsers it did not ship with, so these two versions move together or
 # not at all. See docs/E2E.md.
-PLAYWRIGHT_VERSION='1.62.1'
+PLAYWRIGHT_VERSION='1.63.0'
 PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
 
 # The hostname the app answers to — production's own name, not `localhost`. On the
@@ -398,7 +398,7 @@ fi
 if [ ! -f node_modules/.package-lock.json ]; then
     step 'npm ci'
     docker run --rm -u "${APP_UID}:${APP_GID}" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
-        -v "$ROOT":/var/www/html -w /var/www/html node:24-alpine \
+        -v "$ROOT":/var/www/html -w /var/www/html node:24.21.0-alpine \
         npm ci --no-audit --fund=false
 fi
 
@@ -425,7 +425,7 @@ if [ -n "$vite_build_reason" ]; then
     fi
     step "vite build (${vite_build_reason})"
     docker run --rm -u "${APP_UID}:${APP_GID}" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
-        -v "$ROOT":/var/www/html -w /var/www/html node:24-alpine \
+        -v "$ROOT":/var/www/html -w /var/www/html node:24.21.0-alpine \
         npm run build
 fi
 
