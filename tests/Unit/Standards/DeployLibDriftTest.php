@@ -16,7 +16,7 @@ final class DeployLibDriftTest extends TestCase
 {
     private const HEADER = '/^# fleet-deploy-lib (\S+) sha256:([0-9a-f]{64})$/';
 
-    private const FILES = ['summary.sh', 'resolve.sh', 'ledger.sh', 'preflight.sh'];
+    private const FILES = ['summary.sh', 'resolve.sh', 'ledger.sh', 'preflight.sh', 'compose.sh', 'literal.sh'];
 
     /** @return array<string, array{string}> */
     public static function files(): array
@@ -69,9 +69,9 @@ final class DeployLibDriftTest extends TestCase
         $version = trim($this->contents('VERSION'));
 
         $this->assertMatchesRegularExpression(
-            '/^\d{4}-\d{2}-\d{2}$/',
+            '/^\d{4}-\d{2}-\d{2}(\.\d+)?$/',
             $version,
-            "scripts/lib/deploy/VERSION declares '{$version}'; the library's version is a date.",
+            "scripts/lib/deploy/VERSION declares '{$version}'; the library's version is a date, with an optional same-day serial.",
         );
     }
 

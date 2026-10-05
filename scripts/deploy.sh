@@ -23,6 +23,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 . "$(dirname "$0")/lib/deploy/ledger.sh"
 # shellcheck source=scripts/lib/deploy/preflight.sh
 . "$(dirname "$0")/lib/deploy/preflight.sh"
+# shellcheck source=scripts/lib/deploy/compose.sh
+. "$(dirname "$0")/lib/deploy/compose.sh"
+# shellcheck source=scripts/lib/deploy/literal.sh
+. "$(dirname "$0")/lib/deploy/literal.sh"
 
 usage() {
     printf 'usage: fleet-deploy orbit <PR#> [--gated-by-hand]\n' >&2
@@ -199,7 +203,7 @@ $COMPOSE restart $RESTARTED
 rooted=\$(rooted_count)
 if [ "\$rooted" -ne 0 ]; then
     echo "STEP 10 REPAIR: \$rooted root-owned path(s)"
-    find "$ROOT" -user root -not -path "$ROOT/.claude/*" -exec chown orbit:orbit {} +
+    find -P "$ROOT" -user root -not -path "$ROOT/.claude/*" -exec chown -h orbit:orbit {} +
     rooted=\$(rooted_count)
 fi
 echo "@@ROOT-OWNED \$rooted"
@@ -346,12 +350,11 @@ main() {
     [ -n "$PR" ] || usage
 
     ROOT=${DEPLOY_ROOT:-/var/www/orbit}
-    # DEPLOY_GIT and DEPLOY_COMPOSE are COMMANDS WITH ARGUMENTS, so they are
+    # GIT and COMPOSE are COMMANDS WITH ARGUMENTS, so they are
     # unquoted at every call site on purpose: they have to split.
     GIT=${DEPLOY_GIT:-git-as orbit -C $ROOT}
     GH=${DEPLOY_GH:-gh}
     HEAVY=${DEPLOY_HEAVY:-heavy-work}
-    COMPOSE=${DEPLOY_COMPOSE:-docker compose}
     DOCKER=${DEPLOY_DOCKER:-docker}
     HEALTH_TIMEOUT=${DEPLOY_HEALTH_TIMEOUT:-180}
     HEALTH_INTERVAL=${DEPLOY_HEALTH_INTERVAL:-3}
@@ -378,6 +381,8 @@ main() {
 
     head_is_present
     resolve
+    deploy_compose_init "$MERGE_SHA"
+    COMPOSE=$DEPLOY_COMPOSE
     BEFORE=$($GIT rev-parse --short HEAD)
     refuse_if_dirty
     classify

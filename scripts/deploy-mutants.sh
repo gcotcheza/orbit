@@ -285,8 +285,18 @@ mutant 'the root-owned proof stops stopping' deploy.sh \
     '/STEP 2 FAILED/d' \
     'a root-owned path before anything is built stops the job'
 mutant 'the root-owned repair is a blanket chown' deploy.sh \
-    's#find "\$ROOT" -user root -not -path "\$ROOT/\.claude/\*" -exec chown orbit:orbit {} +#chown -R orbit:orbit "\$ROOT"#' \
+    's#find -P "\$ROOT" -user root -not -path "\$ROOT/\.claude/\*" -exec chown -h orbit:orbit {} +#chown -R orbit:orbit "\$ROOT"#' \
     'root-owned paths that appear during the deploy are repaired narrowly'
+mutant 'the root-owned repair follows a symlink' deploy.sh \
+    's/-exec chown -h orbit:orbit/-exec chown orbit:orbit/' \
+    'root-owned paths that appear during the deploy are repaired narrowly'
+mutant "compose reads the checkout's files again" deploy.sh \
+    's/^    COMPOSE=\$DEPLOY_COMPOSE$/    COMPOSE="$DOCKER compose"/' \
+    "compose runs as root's argv over fleet-deploy's export" \
+    'and no compose call goes around it'
+mutant "fleet-deploy's export is never checked" deploy.sh \
+    '/^    deploy_compose_init "\$MERGE_SHA"$/d' \
+    'compose files exported at another commit are refused'
 mutant 'every release verifies backend-only' deploy.sh \
     's#^\( *\)ORBIT_DIR="\$ROOT" "\$SCRIPT_DIR/verify.sh" || rc=\$?$#\1ORBIT_DIR="$ROOT" "$SCRIPT_DIR/verify.sh" --backend-only || rc=$?#' \
     'and never passes --backend-only'
