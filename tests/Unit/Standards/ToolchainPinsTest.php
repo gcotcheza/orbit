@@ -37,6 +37,30 @@ final class ToolchainPinsTest extends TestCase
     }
 
     #[Test]
+    public function the_browser_gate_runs_the_images_production_runs(): void
+    {
+        $production = $this->read('docker-compose.yml');
+        $copies = [
+            'node'     => $this->read('scripts/e2e.sh'),
+            'postgres' => $this->read('docker-compose.e2e.yml'),
+            'redis'    => $this->read('docker-compose.e2e.yml'),
+        ];
+
+        foreach ($copies as $image => $copy) {
+            preg_match('/\b'.$image.':(\S+)-alpine\b/', $production, $pinned);
+            preg_match_all('/\b'.$image.':(\S+)-alpine\b/', $copy, $quoted);
+
+            $this->assertNotEmpty($quoted[1], "The browser gate no longer names a {$image} image.");
+            $this->assertSame(
+                [$pinned[1] ?? null],
+                array_values(array_unique($quoted[1])),
+                "The browser gate runs a different {$image} than docker-compose.yml pins, so it "
+                .'tests a runtime production does not have.'
+            );
+        }
+    }
+
+    #[Test]
     public function the_declared_node_engine_matches_the_nvmrc(): void
     {
         $nvmrc = trim($this->read('.nvmrc'));
@@ -44,7 +68,7 @@ final class ToolchainPinsTest extends TestCase
 
         $this->assertIsString($engine, 'package.json declares no engines.node.');
         $this->assertSame(
-            $nvmrc.'.x',
+            explode('.', $nvmrc)[0].'.x',
             $engine,
             "package.json allows Node '{$engine}' where .nvmrc pins '{$nvmrc}'. npm warns against "
             .'the engines range, not against .nvmrc, so a widened range is how a wrong Node gets in.'
@@ -59,8 +83,8 @@ final class ToolchainPinsTest extends TestCase
         $this->assertIsString($platform, 'composer.json declares no config.platform.php.');
         $this->assertSame(
             $this->matched('/^FROM php:(\S+)-fpm-alpine\s*$/m', 'docker/app/Dockerfile'),
-            implode('.', array_slice(explode('.', $platform), 0, 2)),
-            "composer.json resolves for PHP '{$platform}', which is not the minor line the app "
+            $platform,
+            "composer.json resolves for PHP '{$platform}', which is not the PHP the app "
             .'image is built from. Composer would pick packages for a PHP the site does not run.'
         );
     }

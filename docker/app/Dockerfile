@@ -9,7 +9,7 @@
 # The defaults below are the real ids on this box; docker-compose.yml passes
 # them explicitly as build args anyway, so a rebuild elsewhere is one flag.
 # =============================================================================
-FROM php:8.5-fpm-alpine
+FROM php:8.5.11-fpm-alpine
 
 ARG APP_UID=115
 ARG APP_GID=119
