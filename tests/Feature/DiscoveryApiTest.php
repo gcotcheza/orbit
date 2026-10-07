@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Airport;
 use App\Models\Discovery;
 use App\Domain\Discovery\Lane;
+use Tests\Concerns\BuildsRouteData;
 use Illuminate\Support\Facades\Date;
 use PHPUnit\Framework\Attributes\Test;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,7 +19,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
  */
 final class DiscoveryApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use BuildsRouteData, RefreshDatabase;
 
     private User $user;
 
@@ -193,6 +194,27 @@ final class DiscoveryApiTest extends TestCase
         $this->actingAs($this->user)->getJson('/api/discoveries')
             ->assertOk()
             ->assertJsonCount(0, 'data');
+    }
+
+    /**
+     * "Routes you are not watching": a paused route is still watched, and somebody else's watchlist
+     * is not the reader's.
+     */
+    #[Test]
+    public function the_readers_own_watched_routes_are_not_served_paused_or_not(): void
+    {
+        $this->discovery(['code' => 'DUS-AGP']);
+        $this->discovery(['code' => 'DUS-RAK']);
+        $this->discovery(['code' => 'AMS-DUB']);
+
+        $this->watch($this->user, $this->makeRoute('DUS', 'AGP'));
+        $this->watch($this->user, $this->makeRoute('DUS', 'RAK'), active: false);
+        $this->watch(User::factory()->create(), $this->makeRoute('AMS', 'DUB'));
+
+        $this->actingAs($this->user)->getJson('/api/discoveries')
+            ->assertOk()
+            ->assertJsonPath('data.*.code', ['AMS-DUB'])
+            ->assertJsonPath('meta.count', 1);
     }
 
     /**

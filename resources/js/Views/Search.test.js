@@ -145,6 +145,24 @@ describe('the search screen', () => {
         expect(from(wrapper).element.value).toBe('AMS')
     })
 
+    // The strip is "routes you are not watching": one watched a moment ago leaves it, no reload.
+    it('drops a find from the strip once its route is watched', async () => {
+        post.mockResolvedValue(added('AMS-AGP'))
+
+        const wrapper = await screen({ finds: FINDS })
+
+        expect(wrapper.findAll('.finds__list .find')).toHaveLength(2)
+
+        await pair(wrapper, 'AMS', 'AGP')
+        await watch(wrapper).trigger('click')
+        await flushPromises()
+
+        const cards = wrapper.findAll('.finds__list .find')
+
+        expect(cards).toHaveLength(1)
+        expect(cards[0].text()).toContain('Barcelona')
+    })
+
     // The server's own sentence, shown where the pair was typed.
     it('shows what the server said when the add was refused', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {})

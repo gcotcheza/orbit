@@ -1284,6 +1284,10 @@ The routes **nobody is watching** that turned out to be absurdly cheap — the
 search screen's "Deals from your airports" strip. Cheapest per kilometre first,
 which is the ranking rather than a convenience.
 
+**A route on the reader's own watchlist is left out, paused or not** — a paused
+route is still being watched. Somebody else's watchlist does not count, and
+`meta.count` counts what is left.
+
 ```json
 {
   "data": [

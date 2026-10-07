@@ -1946,8 +1946,10 @@ card already claimed; `lane` and `google_verdict` are both in the upsert's
 update list so a route can lose its "absolute" badge or a verdict. Both
 `store()` and `rememberBaseline()` convert to UTC before every upsert —
 `upsert()` skips the model's casts, so an unconverted local Carbon is read back
-as UTC and drifts two hours fresh. `DiscoveryController` is a pure,
-parameterless read behind `auth:sanctum`, on the owner's clock. In the sandbox,
+as UTC and drifts two hours fresh. `DiscoveryController` is a
+parameterless read behind `auth:sanctum`, on the owner's clock, and it leaves
+out every route on the reader's own watchlist, paused ones too
+(`Discovery::scopeUnwatchedBy`): the strip promises routes you are not watching. In the sandbox,
 `FakeSweepProvider` reads the real `airports` table (capped at
 `MAX_SWEEP_KM = 4000` since `FakeFareModel` is distance-blind) and
 `SALE_IN_HUNDREDTHS` (22%) is tuned to fill the shortlist, not to match the real

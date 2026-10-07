@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Models\Discovery;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -11,13 +12,16 @@ use Illuminate\Support\Facades\Date;
 use App\Http\Resources\DiscoveryResource;
 
 /**
- * The current set of discoveries — a pure read of a precomputed table, no parameters, behind
+ * The current set of discoveries, less the reader's own watchlist — no parameters, behind
  * auth:sanctum. Empty `data: []` is a real and common answer (docs/BUSINESS-LOGIC.md §16).
  */
 final class DiscoveryController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
+        /** @var User $user */
+        $user = $request->user();
+
         /*
          * Owner's clock, not UTC — `live` compares departure DATE to today, and UTC would hide
          * a discovery from a reader still on yesterday locally (docs/BUSINESS-LOGIC.md §16).
@@ -31,6 +35,7 @@ final class DiscoveryController extends Controller
              */
             ->with(['origin', 'destination'])
             ->live($now)
+            ->unwatchedBy($user)
             ->get();
 
         return DiscoveryResource::collection($discoveries)
