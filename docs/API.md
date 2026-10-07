@@ -497,8 +497,13 @@ with a pair, and the one that commits.
 Both are IATA codes and both are **upper-cased and trimmed before validation**,
 so `" lis "` is accepted — the form may send what was typed.
 
+**`active`** is optional and boolean, default `true`. The watch list's Undo sends
+`false` to put a paused route back paused; a route added paused **queues no
+price poll** (the statistics refresh still runs), the same as the morning poll
+skipping it. Anything not boolean is a **422** on `active`.
+
 **201** with the new row in exactly the shape `GET /api/watchlist` returns,
-`active: true` and at the end of the owner's order:
+`active` as sent (`true` by default) and at the end of the owner's order:
 
 ```json
 {

@@ -260,6 +260,30 @@ test('a removed route says so and can be put straight back', async ({ page }) =>
     await expect(page.locator('.screen__notice--undo')).toHaveCount(0, { timeout: 12_000 })
 })
 
+// Undo puts back the route that was removed, paused one included (docs/BUSINESS-LOGIC.md §36).
+test('a paused route that is removed and put back stays paused', async ({ page }) => {
+    await watchRoute(page, 'AMS', 'MAD')
+
+    const route = () => page.locator('.pass').filter({ hasText: 'MAD' }).first()
+
+    await route().getByRole('switch').click()
+    await expect(route().getByRole('switch')).toHaveAttribute('aria-checked', 'false')
+
+    await route().getByRole('button', { name: /stop watching/i }).click()
+    await route().getByRole('button', { name: 'Remove' }).click()
+    await expect(page.locator('.pass').filter({ hasText: 'MAD' })).toHaveCount(0)
+
+    await page.locator('.screen__notice--undo').getByRole('button', { name: 'Undo' }).click()
+    await expect(route().getByRole('switch')).toHaveAttribute('aria-checked', 'false')
+
+    await page.reload()
+    await expect(route().getByRole('switch')).toHaveAttribute('aria-checked', 'false')
+
+    await route().getByRole('button', { name: /stop watching/i }).click()
+    await route().getByRole('button', { name: 'Remove' }).click()
+    await expect(page.locator('.pass')).toHaveCount(6)
+})
+
 /**
  * The empty home is still this app's screen — reached by pausing rather
  * than removing, the reversible way to empty `activeRoutes`.
