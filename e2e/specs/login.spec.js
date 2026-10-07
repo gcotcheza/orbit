@@ -40,6 +40,33 @@ test('the right password lands on the globe', async ({ page }) => {
     await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
 })
 
+// A session of its own, so ending it ends nobody else's. One sign-in for both halves: the login
+// throttle allows five a minute (docs/BUSINESS-LOGIC.md §36).
+test('a sign-out that fails says so and stays signed in, and one that works ends it', async ({ page, browserConsole }) => {
+    browserConsole.allow(/Failed to load resource: net::ERR_FAILED/, /Could not sign out/)
+
+    await signIn(page)
+    await expect(page.locator('.home__greeting')).toBeVisible()
+
+    await page.route('**/logout', (route) => (route.request().method() === 'POST' ? route.abort() : route.continue()))
+    await page.goto('/alerts')
+    await page.getByRole('button', { name: 'Sign out' }).click()
+
+    await expect(page.getByText('Could not sign out. Check your connection and try again.')).toBeVisible()
+    await expect(page).toHaveURL(/\/alerts$/)
+
+    await page.reload()
+    await expect(page).toHaveURL(/\/alerts$/)
+    await expect(page.locator('.screen__title')).toHaveText('Alerts')
+
+    await page.unroute('**/logout')
+    await page.getByRole('button', { name: 'Sign out' }).click()
+    await expect(page).toHaveURL(/\/login$/)
+
+    await page.goto('/alerts')
+    await expect(page).toHaveURL(/\/login/)
+})
+
 test('the empty login screen renders for a guest', async ({ page }) => {
     await page.goto('/login')
     await expect(page.locator('.login__title')).toHaveText('Orbit')

@@ -464,7 +464,7 @@ in.
 | file | what it is about |
 | --- | --- |
 | `auth.setup.js` | signs in once and saves the session for everything else |
-| `login.spec.js` | wrong password → an error on the form; right password → the globe; the login baseline |
+| `login.spec.js` | wrong password → an error on the form; right password → the globe; a sign-out that cannot reach the server says so and stays signed in, one that can ends the session; the login baseline |
 | `globe.spec.js` | the earth actually draws; the caption and card agree; a rail chip flies; the KeepAlive survives a tab switch |
 | `detail.spec.js` | card → detail hand-off; price, gauge sweep, chart path, Skyscanner deep-link shape; an unknown code; the leaving dialog — its sentence, its keyboard, and the second tab it really opens |
 | `calendar.spec.js` | >20 priced cells with *different* heat colours; a day opens its sheet; a route chip redraws the month; the leaving dialog over that sheet, and one Escape closing only the question |
