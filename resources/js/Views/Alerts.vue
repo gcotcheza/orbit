@@ -139,8 +139,14 @@ function saveTime(field, value) {
 }
 
 const signOutError = ref('')
+const signingOut = ref(false)
 
 async function signOut() {
+  if (signingOut.value) {
+    return
+  }
+
+  signingOut.value = true
   signOutError.value = ''
 
   try {
@@ -150,6 +156,8 @@ async function signOut() {
     console.error('Could not sign out.', failure)
 
     return
+  } finally {
+    signingOut.value = false
   }
 
   await router.push({ name: 'login' })
@@ -325,6 +333,7 @@ async function signOut() {
               <button
                 type="button"
                 class="signout"
+                :disabled="signingOut"
                 :aria-describedby="signOutError ? 'signout-error' : undefined"
                 @click="signOut"
               >

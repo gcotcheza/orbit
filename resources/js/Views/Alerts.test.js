@@ -111,6 +111,28 @@ describe('signing out', () => {
         expect(wrapper.get('.signout').attributes('disabled')).toBeUndefined()
         expect(push).not.toHaveBeenCalled()
     })
+
+    it('asks the server once on a double click, and frees the button when that fails', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const wrapper = await screen()
+        let fail
+        const logout = vi.fn(() => new Promise((resolve, reject) => { fail = reject }))
+
+        useAuthStore().logout = logout
+
+        wrapper.get('.signout').trigger('click')
+        await wrapper.get('.signout').trigger('click')
+
+        expect(logout).toHaveBeenCalledTimes(1)
+        expect(wrapper.get('.signout').attributes('disabled')).toBeDefined()
+
+        fail(new Error('Network Error'))
+        await flushPromises()
+
+        expect(wrapper.get('.signout').attributes('disabled')).toBeUndefined()
+        expect(wrapper.find('#signout-error').exists()).toBe(true)
+    })
 })
 
 describe('inside the frame', () => {

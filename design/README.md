@@ -71,7 +71,7 @@ The prototype renders inside a 372×760 phone frame; content area ≈ 352×740, 
 ### 6. Settings / Alerts (`06-settings.png`)
 - Toggle rows (email, push, weekly digest, quiet hours) with the same switch spec.
 - Alert-sensitivity segmented control (3 options) with explanatory blurb per level.
-- Sign out: when the server cannot be reached the app stays signed in, the button stays live, and a notice under it reads "Could not sign out. Check your connection and try again."
+- Sign out: the button is disabled while its request is out, so a double click asks once; when the server cannot be reached the app stays signed in, the button stays live, and a notice under it reads "Could not sign out. Check your connection and try again."
 
 ## Interactions & Behavior
 - **Auto-tour**: cycles `activeIndex` through routes; paused while a flight is in progress (tour timer is held until landing, then dwells per Motion setting). User tapping a rail chip resets the tour timer and flies that route immediately.
