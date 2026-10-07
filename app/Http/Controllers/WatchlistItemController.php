@@ -27,7 +27,7 @@ final class WatchlistItemController extends Controller
 {
     /**
      * Start watching a pair. 201, with the route's summary as it stands — for a new one that's
-     * `confident: false` and no prices until the jobs below run.
+     * `confident: false` and no prices until its first poll, which only an active add queues.
      */
     public function store(AddWatchedRouteRequest $request, RouteSnapshots $snapshots, FareRequestBudget $budget): JsonResponse
     {

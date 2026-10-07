@@ -524,8 +524,9 @@ skipping it. Anything not boolean is a **422** on `active`.
 ```
 
 **`confident: false` on a brand-new route is correct, not a failure.** The
-first poll and the first statistics refresh are **queued**, not run inside the
-request — the response is written before either has started. Render the row's
+first poll (an active add only) and the first statistics refresh are
+**queued**, not run inside the request — the response is written before
+either has started. Render the row's
 "no opinion yet" state and let the next load fill it in. A pair that Orbit
 already has a route for (watched before and dropped, or surfaced by a rule)
 comes back with its existing history immediately.
