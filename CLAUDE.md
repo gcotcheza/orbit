@@ -54,7 +54,7 @@ overrides them and says why.
 ## Exceptions
 
 - **C12, validation happens on the server and nowhere else.** The three forms
-  (`resources/js/Views/Login.vue:74`, `resources/js/Views/Search.vue:257`,
+  (`resources/js/Views/Login.vue:74`, `resources/js/Views/Search.vue:265`,
   `resources/js/Components/settings/ChangePassword.vue:115`) render the
   server's 422 sentences after a round trip; there is no rules module the
   browser reads and no test holding the two sides together. Drop this line

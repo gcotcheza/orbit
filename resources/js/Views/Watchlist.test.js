@@ -9,6 +9,7 @@ import { layoutMock } from '@/test/layoutMock'
 
 const get = vi.fn()
 const del = vi.fn()
+const post = vi.fn()
 
 /* Flipped by the wide tests; deferred inside the arrow, as vi.mock is hoisted above the const. */
 const desktop = ref(false)
@@ -16,7 +17,7 @@ const desktop = ref(false)
 vi.mock('@/lib/http', () => ({
     http: {
         get: (...args) => get(...args),
-        post: vi.fn(),
+        post: (...args) => post(...args),
         patch: vi.fn().mockResolvedValue({ data: { data: {} } }),
         delete: (...args) => del(...args),
     },
@@ -167,5 +168,29 @@ describe('inside the frame', () => {
         await flushPromises()
 
         expect(wrapper.findAll('.route-row')[0].classes()).toContain('route-row--paused')
+    })
+})
+
+describe('undo', () => {
+    it('puts a paused route back paused, in the one write', async () => {
+        const paused = { ...route('AMS-LIS', 'Lisbon', 74), active: false }
+
+        get.mockImplementation((url) =>
+            url === '/api/watchlist'
+                ? Promise.resolve({ data: { data: [paused], meta: {} } })
+                : Promise.resolve({ data: { data: RULES } }),
+        )
+        post.mockResolvedValue({ data: { data: { ...paused } } })
+
+        const wrapper = await mountWatchlist()
+
+        await wrapper.findAll('.stub__remove')[0].trigger('click')
+        await wrapper.get('.confirm__button--go').trigger('click')
+        await flushPromises()
+        await wrapper.get('.screen__undo').trigger('click')
+        await flushPromises()
+
+        expect(post).toHaveBeenCalledTimes(1)
+        expect(post).toHaveBeenCalledWith('/api/watchlist', { origin: 'AMS', destination: 'LIS', active: false })
     })
 })

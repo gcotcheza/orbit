@@ -24,10 +24,11 @@ const desktop = ref(false)
 vi.mock('@/lib/layout', () => layoutMock(() => desktop))
 
 const hash = ref('')
+const push = vi.fn()
 
 vi.mock('vue-router', () => ({
     useRoute: () => ({ get hash() { return hash.value } }),
-    useRouter: () => ({ push: vi.fn() }),
+    useRouter: () => ({ push }),
 }))
 
 import Alerts from './Alerts.vue'
@@ -77,6 +78,61 @@ beforeEach(() => {
     hash.value = ''
     get.mockResolvedValue({ data: SETTINGS })
     put.mockResolvedValue({ data: SETTINGS })
+})
+
+describe('signing out', () => {
+    it('goes to the login screen once the server has signed out', async () => {
+        const wrapper = await screen()
+
+        useAuthStore().logout = vi.fn().mockResolvedValue()
+
+        await wrapper.get('.signout').trigger('click')
+        await flushPromises()
+
+        expect(push).toHaveBeenCalledWith({ name: 'login' })
+        expect(wrapper.find('#signout-error').exists()).toBe(false)
+    })
+
+    it('says so beside the button, and stays put, when the sign-out fails', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const wrapper = await screen()
+
+        useAuthStore().logout = vi.fn().mockRejectedValue(new Error('Network Error'))
+
+        await wrapper.get('.signout').trigger('click')
+        await flushPromises()
+
+        const message = wrapper.get('#signout-error')
+
+        expect(message.text()).toBe('Could not sign out. Check your connection and try again.')
+        expect(message.attributes('role')).toBe('alert')
+        expect(wrapper.get('.signout').attributes('aria-describedby')).toBe('signout-error')
+        expect(wrapper.get('.signout').attributes('disabled')).toBeUndefined()
+        expect(push).not.toHaveBeenCalled()
+    })
+
+    it('asks the server once on a double click, and frees the button when that fails', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const wrapper = await screen()
+        let fail
+        const logout = vi.fn(() => new Promise((resolve, reject) => { fail = reject }))
+
+        useAuthStore().logout = logout
+
+        wrapper.get('.signout').trigger('click')
+        await wrapper.get('.signout').trigger('click')
+
+        expect(logout).toHaveBeenCalledTimes(1)
+        expect(wrapper.get('.signout').attributes('disabled')).toBeDefined()
+
+        fail(new Error('Network Error'))
+        await flushPromises()
+
+        expect(wrapper.get('.signout').attributes('disabled')).toBeUndefined()
+        expect(wrapper.find('#signout-error').exists()).toBe(true)
+    })
 })
 
 describe('inside the frame', () => {

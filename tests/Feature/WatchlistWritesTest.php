@@ -226,6 +226,54 @@ final class WatchlistWritesTest extends TestCase
     }
 
     /**
+     * Undo of a paused route: it comes back paused, and a paused route spends no price check.
+     */
+    #[Test]
+    public function a_route_added_back_paused_stays_paused_and_queues_no_poll(): void
+    {
+        $this->airport('AMS', isOrigin: true);
+        $this->airport('LIS');
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/watchlist', ['origin' => 'AMS', 'destination' => 'LIS', 'active' => false])
+            ->assertCreated()
+            ->assertJsonPath('data.active', false);
+
+        $this->assertFalse(WatchlistItem::query()->firstOrFail()->active);
+
+        Queue::assertNotPushed(PollRoutePrices::class);
+        Queue::assertPushed(RefreshRouteStats::class);
+    }
+
+    #[Test]
+    public function a_route_added_as_active_queues_the_first_poll(): void
+    {
+        $this->airport('AMS', isOrigin: true);
+        $this->airport('LIS');
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/watchlist', ['origin' => 'AMS', 'destination' => 'LIS', 'active' => true])
+            ->assertCreated()
+            ->assertJsonPath('data.active', true);
+
+        Queue::assertPushed(PollRoutePrices::class);
+    }
+
+    #[Test]
+    public function active_on_an_add_must_be_a_boolean(): void
+    {
+        $this->airport('AMS', isOrigin: true);
+        $this->airport('LIS');
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/watchlist', ['origin' => 'AMS', 'destination' => 'LIS', 'active' => 'maybe'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('active');
+
+        Queue::assertNothingPushed();
+    }
+
+    /**
      * A pair that was watched, dropped and added back keeps the history it
      * already cost provider calls to gather.
      */

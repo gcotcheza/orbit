@@ -81,13 +81,13 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     }
 
     /**
-     * Watch a new pair. Throws rather than setting `error` — the add form phrases a failed 422
-     * itself — and a new route arrives with no prices, which WatchRow draws.
+     * Watch a new pair, or with `{ active: false }` put a paused one back. Throws rather than setting
+     * `error` — the add form phrases a failed 422 itself — and a new route arrives with no prices.
      */
-    async function add(origin, destination) {
+    async function add(origin, destination, options = {}) {
         error.value = ''
 
-        const { data } = await http.post('/api/watchlist', { origin, destination })
+        const { data } = await http.post('/api/watchlist', { origin, destination, ...options })
 
         routes.value.push(data.data)
 

@@ -27,7 +27,7 @@ const { rules: dealRules } = storeToRefs(useRulesStore())
 // a restored route comes back intact.
 const UNDO_MS = 6000
 
-/** The route just removed: `{ label, origin, destination }`, or null. */
+/** The route just removed: `{ label, origin, destination, active }`, or null. */
 const undo = ref(null)
 const undoError = ref('')
 
@@ -90,7 +90,7 @@ async function remove(route) {
     return
   }
 
-  undo.value = { label, origin: route.origin.iata, destination: route.destination.iata }
+  undo.value = { label, origin: route.origin.iata, destination: route.destination.iata, active: route.active }
 
   clearTimeout(undoTimer)
   undoTimer = setTimeout(() => {
@@ -113,7 +113,7 @@ async function undoRemove() {
   undo.value = null
 
   try {
-    await watchlist.add(removed.origin, removed.destination)
+    await watchlist.add(removed.origin, removed.destination, { active: removed.active })
   } catch (failure) {
     undoError.value = `Could not put ${removed.label} back. Search for it and add it again.`
 

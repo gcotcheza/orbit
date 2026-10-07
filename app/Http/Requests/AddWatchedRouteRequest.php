@@ -16,6 +16,19 @@ use Illuminate\Contracts\Validation\Validator;
 final class AddWatchedRouteRequest extends RoutePairRequest
 {
     /**
+     * The pair, plus an optional `active`: Undo puts a paused route back paused.
+     *
+     * @return array<string, array<int, mixed>>
+     */
+    public function rules(): array
+    {
+        return [
+            ...parent::rules(),
+            'active' => ['sometimes', 'boolean'],
+        ];
+    }
+
+    /**
      * The pair is not already on this account's watchlist. An `after` callback rather than a
      * `unique` rule: what must be unique is the (user, route) pair, not a column.
      *

@@ -27,7 +27,7 @@ final class WatchlistItemController extends Controller
 {
     /**
      * Start watching a pair. 201, with the route's summary as it stands — for a new one that's
-     * `confident: false` and no prices until the jobs below run.
+     * `confident: false` and no prices until its first poll, which only an active add queues.
      */
     public function store(AddWatchedRouteRequest $request, RouteSnapshots $snapshots, FareRequestBudget $budget): JsonResponse
     {
@@ -52,15 +52,18 @@ final class WatchlistItemController extends Controller
         $item = WatchlistItem::query()->create([
             'user_id'  => $user->id,
             'route_id' => $route->id,
-            'active'   => true,
+            'active'   => $request->boolean('active', true),
             // Onto the end of the owner's order. `-1` so the first route added to an empty list
             // gets position 0, like the seeder's.
             'position' => (int) ($user->watchlistItems()->max('position') ?? -1) + 1,
         ]);
 
         // Queued, not synchronous: the tap should get a row back now, not after two round trips.
-        // The row renders "no opinion yet" until the poll lands.
-        PollRoutePrices::dispatch($route->id);
+        // A paused route spends no price check, the same as the morning poll skipping it.
+        if ($item->active) {
+            PollRoutePrices::dispatch($route->id);
+        }
+
         RefreshRouteStats::dispatch($route->id);
 
         // The route that crosses either morning limit says so now, not in a

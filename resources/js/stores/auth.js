@@ -62,12 +62,17 @@ export const useAuthStore = defineStore('auth', () => {
 
     async function logout() {
         try {
+            await ensureCsrfCookie()
             await http.post('/logout')
-        } finally {
-            // Client clears its session regardless of server response — a logout that fails and
-            // still looks signed in is worse (docs/BUSINESS-LOGIC.md §36).
-            user.value = null
+        } catch (error) {
+            // Cleared only once the server agrees: a session it kept signs straight back in on the
+            // next open (docs/BUSINESS-LOGIC.md §36). A 401 means it was already over.
+            if (error.response?.status !== 401) {
+                throw error
+            }
         }
+
+        user.value = null
     }
 
     return { user, resolved, isAuthenticated, check, ready, login, changePassword, logout }

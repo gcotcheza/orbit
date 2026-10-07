@@ -79,6 +79,25 @@ final class Discovery extends Model
     }
 
     /**
+     * Off this account's watchlist, paused rows included: a paused route is still being watched.
+     *
+     * @param  Builder<Discovery>  $query
+     * @return Builder<Discovery>
+     */
+    public function scopeUnwatchedBy(Builder $query, User $user): Builder
+    {
+        return $query->whereNotIn(
+            'code',
+            Route::query()
+                ->whereHas('watchlistItems', function (Builder $items) use ($user): void {
+                    /** @var Builder<WatchlistItem> $items */
+                    $items->where('user_id', $user->id);
+                })
+                ->select('code'),
+        );
+    }
+
+    /**
      * Whether Google was asked and said yes. Read off the stored verdict, never recomputed:
      * a retuned rule must not rewrite past claims (docs/BUSINESS-LOGIC.md §16).
      */

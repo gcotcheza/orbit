@@ -83,9 +83,11 @@ function lit(code) {
 
 /**
  * The discoveries this screen shows — six, in the server's order. Twelve rows is a storage
- * rule, not a display one, and the list is already sorted by what a kilometre costs.
+ * rule, not a display one. A route watched since the strip loaded leaves it without a reload.
  */
-const finds = computed(() => discoveries.discoveries.slice(0, 6))
+const finds = computed(() =>
+  discoveries.discoveries.filter((find) => !watchlist.routes.some((route) => route.code === find.code)).slice(0, 6),
+)
 
 /**
  * "this morning", "yesterday" — how old the SEARCH is, which is not the per-card price age.

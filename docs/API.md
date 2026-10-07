@@ -497,8 +497,13 @@ with a pair, and the one that commits.
 Both are IATA codes and both are **upper-cased and trimmed before validation**,
 so `" lis "` is accepted — the form may send what was typed.
 
+**`active`** is optional and boolean, default `true`. The watch list's Undo sends
+`false` to put a paused route back paused; a route added paused **queues no
+price poll** (the statistics refresh still runs), the same as the morning poll
+skipping it. Anything not boolean is a **422** on `active`.
+
 **201** with the new row in exactly the shape `GET /api/watchlist` returns,
-`active: true` and at the end of the owner's order:
+`active` as sent (`true` by default) and at the end of the owner's order:
 
 ```json
 {
@@ -519,8 +524,9 @@ so `" lis "` is accepted — the form may send what was typed.
 ```
 
 **`confident: false` on a brand-new route is correct, not a failure.** The
-first poll and the first statistics refresh are **queued**, not run inside the
-request — the response is written before either has started. Render the row's
+first poll (an active add only) and the first statistics refresh are
+**queued**, not run inside the request — the response is written before
+either has started. Render the row's
 "no opinion yet" state and let the next load fill it in. A pair that Orbit
 already has a route for (watched before and dropped, or surfaced by a rule)
 comes back with its existing history immediately.
@@ -1278,6 +1284,10 @@ whole ledger, so a client can tell whether it is looking at everything.
 The routes **nobody is watching** that turned out to be absurdly cheap — the
 search screen's "Deals from your airports" strip. Cheapest per kilometre first,
 which is the ranking rather than a convenience.
+
+**A route on the reader's own watchlist is left out, paused or not** — a paused
+route is still being watched. Somebody else's watchlist does not count, and
+`meta.count` counts what is left.
 
 ```json
 {

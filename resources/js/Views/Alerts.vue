@@ -138,8 +138,28 @@ function saveTime(field, value) {
   }
 }
 
+const signOutError = ref('')
+const signingOut = ref(false)
+
 async function signOut() {
-  await auth.logout()
+  if (signingOut.value) {
+    return
+  }
+
+  signingOut.value = true
+  signOutError.value = ''
+
+  try {
+    await auth.logout()
+  } catch (failure) {
+    signOutError.value = 'Could not sign out. Check your connection and try again.'
+    console.error('Could not sign out.', failure)
+
+    return
+  } finally {
+    signingOut.value = false
+  }
+
   await router.push({ name: 'login' })
 }
 </script>
@@ -310,7 +330,16 @@ async function signOut() {
             <div class="controls">
               <SegmentedControl :model-value="theme" :options="THEMES" label="Theme" @update:model-value="themeStore.set" />
 
-              <button type="button" class="signout" @click="signOut">Sign out</button>
+              <button
+                type="button"
+                class="signout"
+                :disabled="signingOut"
+                :aria-describedby="signOutError ? 'signout-error' : undefined"
+                @click="signOut"
+              >
+                Sign out
+              </button>
+              <p v-if="signOutError" id="signout-error" class="screen__notice" role="alert">{{ signOutError }}</p>
             </div>
           </section>
         </div>
@@ -471,6 +500,11 @@ async function signOut() {
   font-weight: 600;
   color: var(--warn-ink);
   background: var(--warn-bg);
+}
+
+/* Outranks the wide pane's notice margin, which is for the notice at the top of the pane. */
+.controls > .signout + .screen__notice {
+  margin: 14px 0 0;
 }
 
 
