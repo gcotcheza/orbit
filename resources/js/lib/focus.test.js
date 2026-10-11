@@ -53,7 +53,16 @@ describe('cycleFocus', () => {
         expect(document.activeElement).toBe(stop(box, 'one'))
     })
 
-    it('leaves the focus where it is when there is nowhere to go', () => {
+    it('skips a disabled button and anything hidden', () => {
+        const box = modal()
+        box.insertAdjacentHTML('beforeend', '<button disabled>off</button><div hidden><a href="/gone">gone</a></div>')
+        stop(box, 'two').focus()
+
+        cycleFocus(box, false)
+        expect(document.activeElement).toBe(stop(box, 'one'))
+    })
+
+        it('leaves the focus where it is when there is nowhere to go', () => {
         const box = document.createElement('div')
         box.tabIndex = -1
         document.body.append(box)

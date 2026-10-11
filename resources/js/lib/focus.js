@@ -1,9 +1,9 @@
 /**
- * One Tab press inside a modal: the next link or button in `container`, wrapping at either end, so
+ * One Tab press inside a modal: the next usable link or button in `container`, wrapping at either end, so
  * the keyboard never reaches what the modal covers.
  */
 export function cycleFocus(container, backwards) {
-    const ring = [...container.querySelectorAll('a[href], button')]
+    const ring = [...container.querySelectorAll('a[href], button:not(:disabled)')].filter((el) => !el.closest('[hidden]'))
 
     if (ring.length === 0) return
 

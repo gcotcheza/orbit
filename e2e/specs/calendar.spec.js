@@ -320,7 +320,8 @@ test('the day sheet takes the focus, keeps Tab inside and gives it back', async 
     await expect(sheet).toBeVisible()
     await expect(sheet).toBeFocused()
 
-    const stops = await sheet.locator('a[href], button').count()
+    const ring = sheet.locator('a[href], button')
+    const stops = await ring.count()
     expect(stops).toBeGreaterThan(1)
 
     for (let i = 0; i <= stops; i++) {
@@ -328,8 +329,10 @@ test('the day sheet takes the focus, keeps Tab inside and gives it back', async 
         expect(await sheet.evaluate((el) => el.contains(document.activeElement))).toBe(true)
     }
 
+    await expect(ring.first()).toBeFocused()
+
     await page.keyboard.press('Shift+Tab')
-    expect(await sheet.evaluate((el) => el.contains(document.activeElement))).toBe(true)
+    await expect(ring.last()).toBeFocused()
 
     await page.keyboard.press('Escape')
     await expect(sheet).toHaveCount(0)
