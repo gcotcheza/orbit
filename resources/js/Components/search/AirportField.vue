@@ -117,6 +117,17 @@ const emptyText = computed(() => {
     : 'No matching airport.'
 })
 
+const emptyShown = computed(
+  () => suggestions.value.length === 0 && (!didYouMean.value || worldStatus.value === 'failed'),
+)
+
+/** A failure said again outside the listbox, which is not a live region. */
+const failureNotice = computed(() => {
+  const failed = worldStatus.value !== 'searching' && (listStatus.value === 'failed' || worldStatus.value === 'failed')
+
+  return showing.value && emptyShown.value && failed ? emptyText.value : ''
+})
+
 /*
  * The box shows what was typed; `code` (toCode()) is the upper-cased form the form actually submits
  * — the box no longer shouts back every keystroke (docs/BUSINESS-LOGIC.md §36).
@@ -380,10 +391,12 @@ defineExpose({ clear })
 
       <!-- Not role="option" — nothing to choose. "Searching…" is the absence of a wrong
            answer while the world search is still in flight (docs/BUSINESS-LOGIC.md §36). -->
-      <li v-if="suggestions.length === 0 && (!didYouMean || worldStatus === 'failed')" class="option option--empty">
+      <li v-if="emptyShown" class="option option--empty">
         {{ emptyText }}
       </li>
     </ul>
+
+    <p class="sr-only" role="status">{{ failureNotice }}</p>
   </div>
 </template>
 

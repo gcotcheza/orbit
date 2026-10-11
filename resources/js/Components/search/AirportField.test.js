@@ -279,6 +279,15 @@ describe('the airport typeahead', () => {
             expect(wrapper.get('.option--empty').text()).toBe('Could not search the airports — a three-letter code still works.')
         })
 
+        // The listbox is not a live region; a screen reader hears the failure from this one.
+        it('announces the failure in a live region outside the listbox', async () => {
+            const wrapper = await failing('zzz')
+            const status = wrapper.get('[role="status"]')
+
+            expect(status.text()).toBe('Could not search the airports — a three-letter code still works.')
+            expect(status.element.closest('[role="listbox"]')).toBe(null)
+        })
+
         it('still says so beside a guess', async () => {
             const wrapper = await failing('barcelna')
 

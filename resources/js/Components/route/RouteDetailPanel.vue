@@ -127,10 +127,8 @@ const demoted = computed(() => mayBeGone.value && livePrice.value === null)
  *  `price.current`). Pill, callout and number must stay about ONE fare. */
 const judgedFare = computed(() => detail.value?.cheapest?.price ?? null)
 
-/** Google's live figure when there is one; Orbit's own fare otherwise. */
-const headline = computed(
-  () => livePrice.value ?? (demoted.value ? judgedFare.value : detail.value?.price?.current) ?? null,
-)
+/** Google's live figure when there is one; otherwise the fare of the departure line under it (docs/API.md). */
+const headline = computed(() => livePrice.value ?? judgedFare.value ?? detail.value?.price?.current ?? null)
 
 const goneLabel = computed(() =>
   seen.value === null ? 'This fare may already be gone' : `Seen ${seen.value} — may be gone`,

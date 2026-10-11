@@ -143,6 +143,18 @@ test('the usual price is struck through only under a fare that beats it', async 
     expect(await line(1)).toBe('line-through')
 })
 
+// `.screen__retry` is shared with Alerts and the deal rules; T8's 44px holds for all three.
+test('the retry after a failed load is a full-size touch target', async ({ browserConsole, page }) => {
+    browserConsole.allow(/Failed to load resource/, /Could not load the watchlist/)
+    await page.route('**/api/watchlist', (route) => route.abort())
+
+    await page.goto('/watch')
+    const retry = page.getByRole('button', { name: 'Try again' })
+    await expect(retry).toBeVisible()
+
+    expect((await retry.boundingBox()).height).toBeGreaterThanOrEqual(44)
+})
+
 test('a paused route drops out of the globe tour', async ({ page }) => {
     // The two screens share stores/watchlist.js — before the DRY pass a
     // route paused here stayed in the tour until a reload.

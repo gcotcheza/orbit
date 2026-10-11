@@ -13,6 +13,7 @@ use App\Domain\Pricing\DealScorer;
 use App\Domain\Pricing\PriceHistory;
 use Illuminate\Support\Facades\Date;
 use App\Application\Pricing\TrackingDays;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -118,19 +119,31 @@ final readonly class RouteSnapshots
 
         // The latest poll's fares only, whose minimum is `price.current`.
         // docs/DECISIONS.md, the-cheapest-departure-comes-from-the-latest-poll
-        $rows = CalendarFare::query()
+        $latest = CalendarFare::query()
+            ->selectRaw('route_id, max(fetched_at) as latest_fetched_at')
             ->whereIn('route_id', $ids)
+            ->groupBy('route_id');
+
+        $ranked = CalendarFare::query()
+            ->joinSub($latest, 'latest', static function (JoinClause $join): void {
+                $join->on('latest.route_id', '=', 'calendar_fares.route_id')
+                    ->on('latest.latest_fetched_at', '=', 'calendar_fares.fetched_at');
+            })
+            ->whereIn('calendar_fares.route_id', $ids)
             ->departingFrom($today)
             ->where('departure_date', '<', $edge)
-            ->whereRaw('fetched_at = (select max(fetched_at) from calendar_fares latest where latest.route_id = calendar_fares.route_id)')
-            ->orderBy('price_cents')
-            ->orderBy('departure_date')
+            ->select(['calendar_fares.route_id', 'departure_date', 'price_cents', 'found_at'])
+            ->selectRaw('row_number() over (partition by calendar_fares.route_id order by price_cents, departure_date) as fare_rank');
+
+        $rows = CalendarFare::query()
+            ->fromSub($ranked, 'calendar_fares')
+            ->whereRaw('fare_rank = 1')
             ->get(['route_id', 'departure_date', 'price_cents', 'found_at']);
 
         $cheapest = [];
 
         foreach ($rows as $row) {
-            $cheapest[$row->route_id] ??= new DatedFare(
+            $cheapest[$row->route_id] = new DatedFare(
                 $row->departure_date->toDateTimeImmutable(),
                 $row->price_cents,
                 /*
