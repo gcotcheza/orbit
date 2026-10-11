@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
+import { cycleFocus } from '@/lib/focus'
 
 const props = defineProps({
   /** The destination, byte for byte — the marker query is affiliate attribution. */
@@ -29,10 +30,6 @@ const sentence = computed(() => {
     + ' there are theirs, and can differ from what we recorded this morning.'
 })
 
-function stops() {
-  return [...panel.value.querySelectorAll('a[href], button')]
-}
-
 // Capture, and swallowed: a modal over the day sheet must not let one Escape
 // close both.
 function onKeydown(event) {
@@ -49,12 +46,7 @@ function onKeydown(event) {
     return
   }
 
-  const ring = stops()
-  const step = event.shiftKey ? -1 : 1
-  const at = ring.indexOf(document.activeElement)
-  const from = at === -1 ? (step === 1 ? -1 : 0) : at
-
-  ring[(from + step + ring.length) % ring.length].focus()
+  cycleFocus(panel.value, event.shiftKey)
 }
 
 // Removing the anchor inside its own click cancels the navigation it started.

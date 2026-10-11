@@ -419,3 +419,8 @@ Between midnight and the next poll the latest poll's lowest fare can be for a da
 
 Rejected: **match on `price_cents = price.current`.** A stale row at the same price would still win on an earlier date. **Change the poll to delete what it no longer sees.** The staleness delay is deliberate (docs/BUSINESS-LOGIC.md §4); the calendar still shows those days.
 
+
+### small-controls-get-a-44px-hit-area-not-a-44px-look
+T8 asks for 44px touch targets, and seven phone controls were drawn smaller (26 to 40px). Each now carries `.hit` (`resources/css/app.css`): an invisible `::after`, centred on the control and at least `--hit-min` (44px, `resources/css/tokens.css`) each way, so a tap there lands on the control and nothing it draws moves — the phone and wide baselines are unchanged. The month arrows sit 40px apart centre to centre, so two centred 44px areas would overlap by 4px; `--hit-shift` slides each 2px outward and the two areas meet without covering each other. `e2e/specs/touch-targets.spec.js` measures where taps actually land, by `elementFromPoint`, so a neighbour drawn over an area shrinks it and fails the test.
+
+Rejected: **make the controls 44px.** It changes the look `design/README.md` fixes, and every baseline with it. **Widen the arrows' gap.** It moves the arrows, for an area nobody sees.

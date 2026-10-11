@@ -20,7 +20,7 @@ defineEmits(['refresh', 'dismiss'])
 
     <button type="button" class="toast__go" @click="$emit('refresh')">Refresh</button>
 
-    <button type="button" class="toast__close" aria-label="Dismiss" @click="$emit('dismiss')">
+    <button type="button" class="toast__close hit" aria-label="Dismiss" @click="$emit('dismiss')">
       <!-- Stroked from the style block, like every other glyph in this app: a
            var() in a presentation attribute is not portable. -->
       <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -97,8 +97,7 @@ defineEmits(['refresh', 'dismiss'])
   justify-content: center;
   flex-shrink: 0;
 
-  /* A finger's worth of target on a glyph that is 13 px, with the padding
-     pulled back out of the layout so it does not stretch the toast. */
+  /* `.hit` gives the 13 px glyph a finger's worth of target without stretching the toast. */
   width: 30px;
   height: 30px;
   margin-right: -2px;

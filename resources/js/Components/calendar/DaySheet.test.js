@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The day sheet's two actions — the contract half a browser test can only
 // observe by leaving the app (docs/BUSINESS-LOGIC.md §36).
-import { RouterLinkStub, mount } from '@vue/test-utils'
+import { RouterLinkStub, enableAutoUnmount, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import DaySheet from './DaySheet.vue'
@@ -23,8 +23,12 @@ afterEach(() => {
     vi.useRealTimers()
 })
 
-function sheet(overrides = {}) {
+// Each sheet listens on window; one left mounted would answer the next test's keys.
+enableAutoUnmount(afterEach)
+
+function sheet(overrides = {}, options = {}) {
     return mount(DaySheet, {
+        ...options,
         props: {
             fare: { date: '2026-09-15', price: 44, verdict: 'cheap', foundAt: null },
             min: 40,
@@ -182,6 +186,48 @@ describe('DaySheet', () => {
 
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
         expect(wrapper.emitted('close')).toHaveLength(2)
+    })
+})
+
+// A dialog a keyboard can use: it takes the focus, keeps Tab inside, and Calendar.vue gives it back.
+describe('focus', () => {
+    let wrapper
+
+    const press = (key, init = {}) => {
+        const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init })
+        document.activeElement.dispatchEvent(event)
+
+        return event
+    }
+
+    it('takes the focus when it opens', () => {
+        wrapper = sheet({}, { attachTo: document.body })
+
+        expect(document.activeElement).toBe(wrapper.get('.sheet').element)
+    })
+
+    it('keeps Tab inside itself, in both directions', () => {
+        wrapper = sheet({}, { attachTo: document.body })
+        const stops = wrapper.findAll('a[href]').map((link) => link.element)
+        expect(stops.length).toBeGreaterThan(1)
+
+        expect(press('Tab').defaultPrevented).toBe(true)
+        expect(document.activeElement).toBe(stops[0])
+
+        for (let i = 0; i < stops.length; i++) {
+            press('Tab')
+        }
+        expect(document.activeElement).toBe(stops[0])
+
+        press('Tab', { shiftKey: true })
+        expect(document.activeElement).toBe(stops.at(-1))
+    })
+
+    it('leaves the focus and Tab alone when docked', () => {
+        wrapper = sheet({ docked: true }, { attachTo: document.body })
+
+        expect(document.activeElement).toBe(document.body)
+        expect(press('Tab').defaultPrevented).toBe(false)
     })
 })
 

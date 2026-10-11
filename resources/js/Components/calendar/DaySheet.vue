@@ -3,9 +3,10 @@
  * The bottom sheet a tapped day opens (design/README.md §3). THE VERDICT IS THE API'S, not
  * recomputed here, and both actions are links (docs/BUSINESS-LOGIC.md §36).
  */
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import NewTabLink from '@/Components/NewTabLink.vue'
+import { cycleFocus } from '@/lib/focus'
 import { euro, seenLabel, withDateTokens } from '@/lib/format'
 import { heatColour } from './heat'
 import { dayLabel } from './month'
@@ -53,15 +54,27 @@ const skyscannerUrl = computed(() => withDateTokens(props.booking?.skyscanner, p
  */
 const seen = computed(() => seenLabel(props.fare.foundAt))
 
+const panel = ref(null)
+
 // Escape closes it, the same as tapping the backdrop. A sheet that can only be dismissed by
 // pointing at it is a sheet a keyboard cannot get out of.
 function onKeydown(event) {
   if (event.key === 'Escape') {
     emit('close')
+  } else if (event.key === 'Tab' && !props.docked) {
+    event.preventDefault()
+    cycleFocus(panel.value, event.shiftKey)
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onKeydown))
+// Calendar.vue hands the focus back to the day that opened it.
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+
+  if (!props.docked) {
+    panel.value.focus()
+  }
+})
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
@@ -69,8 +82,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   <div v-if="!docked" class="backdrop" @click="$emit('close')"></div>
 
   <div
+    ref="panel"
     class="sheet"
     :class="{ 'sheet--docked': docked }"
+    :tabindex="docked ? null : -1"
     :role="docked ? 'region' : 'dialog'"
     :aria-modal="docked ? null : 'true'"
     :aria-label="dayLabel(fare.date, { withYear: true })"

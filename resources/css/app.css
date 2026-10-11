@@ -253,6 +253,23 @@ body {
     border-radius: 4px;
 }
 
+/* --- Touch targets ------------------------------------------------------ */
+
+/* A control drawn smaller than a finger keeps its look; --hit-shift moves the area off a neighbour. */
+.hit {
+    position: relative;
+}
+
+.hit::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--hit-min));
+    height: max(100%, var(--hit-min));
+    transform: translate(calc(-50% + var(--hit-shift, 0px)), -50%);
+}
+
 /* --- Motion -------------------------------------------------------------
    The two animations design/README.md reuses across screens. Everything more
    specific — the sheet slide-up, the globe's camera — belongs to its screen. */

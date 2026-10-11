@@ -307,6 +307,35 @@ test('tapping a day opens the sheet for that day', async ({ page }) => {
     await expect(sheet).toHaveCount(0)
 })
 
+// T8: a keyboard opens the day, stays inside the sheet, and Escape hands it back to that day.
+test('the day sheet takes the focus, keeps Tab inside and gives it back', async ({ page }) => {
+    await page.goto('/calendar')
+
+    const cell = page.locator('.cell--fare').first()
+    await expect(cell).toBeVisible()
+    await cell.focus()
+    await page.keyboard.press('Enter')
+
+    const sheet = page.getByRole('dialog')
+    await expect(sheet).toBeVisible()
+    await expect(sheet).toBeFocused()
+
+    const stops = await sheet.locator('a[href], button').count()
+    expect(stops).toBeGreaterThan(1)
+
+    for (let i = 0; i <= stops; i++) {
+        await page.keyboard.press('Tab')
+        expect(await sheet.evaluate((el) => el.contains(document.activeElement))).toBe(true)
+    }
+
+    await page.keyboard.press('Shift+Tab')
+    expect(await sheet.evaluate((el) => el.contains(document.activeElement))).toBe(true)
+
+    await page.keyboard.press('Escape')
+    await expect(sheet).toHaveCount(0)
+    await expect(cell).toBeFocused()
+})
+
 /**
  * The sheet in the light palette — `--muted` on `--panel` survives one
  * theme and disappears in the other (docs/E2E.md).
