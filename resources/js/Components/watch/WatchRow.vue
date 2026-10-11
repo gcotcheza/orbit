@@ -150,7 +150,7 @@ function confirmRemove() {
         @update:model-value="emit('toggle', $event)"
       />
 
-      <button type="button" class="stub__remove" :aria-label="`Stop watching ${route.code}`" @click="askToRemove">
+      <button type="button" class="stub__remove hit" :aria-label="`Stop watching ${route.code}`" @click="askToRemove">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M3 4.5h10M6.5 4V3h3v1M5 4.5l.5 8h5l.5-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
         </svg>

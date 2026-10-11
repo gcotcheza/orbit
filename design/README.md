@@ -57,7 +57,7 @@ The prototype renders inside a 372×760 phone frame; content area ≈ 352×740, 
 - Route selector chips (active = ink bg, bg-colored text).
 - 7-column grid (MO–SU), each day cell: `aspect-ratio:1`, radius 9, day number + price, background = 5-stop heat scale green→red: `rgb(121,184,148) → (176,202,150) → (236,217,168) → (228,166,116) → (214,112,76)` interpolated across the month's min–max.
 - Legend gradient bar €38 ↔ €116; banner "★ Cheapest this month: June 11 · €38" on good-bg.
-- Tapping a day opens a bottom sheet: date, price, verdict pill (cheap ≤ lo+28% of range / pricey ≥ 66%), color swatch.
+- Tapping a day opens a bottom sheet: date, price, verdict pill (cheap ≤ lo+28% of range / pricey ≥ 66%), color swatch. On a phone it is a dialog: it takes the focus, keeps Tab inside itself, closes on Escape or on its backdrop and hands the focus back to the day that opened it.
 
 ### 4. Create alert rule (`04-create-rule.png`)
 - Free-text textarea seeded with "cheap weekend somewhere sunny in spring, leaving Friday from any NL airport, under €80".

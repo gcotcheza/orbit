@@ -24,7 +24,7 @@ const emit = defineEmits(['update:modelValue'])
       :key="option.value"
       type="button"
       role="radio"
-      class="segmented__option"
+      class="segmented__option hit"
       :class="{ 'segmented__option--on': option.value === modelValue }"
       :aria-checked="option.value === modelValue"
       @click="emit('update:modelValue', option.value)"

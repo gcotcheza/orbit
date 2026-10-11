@@ -136,6 +136,8 @@
     --radius-screen: 38px;
 
     --gutter: 18px;
+    /* The smallest target a finger is asked to hit (docs/STANDARDS.md T8); `.hit` in app.css. */
+    --hit-min: 44px;
     --tab-bar-height: 78px;
     /* HOW FAR THE SPOTLIGHT CARD CLIMBS OVER THE GLOBE (design/README.md §1's
        "overlaps globe by −30px"), and a token rather than two hard-coded

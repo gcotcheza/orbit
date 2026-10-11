@@ -26,7 +26,7 @@ defineProps({
          on #account, not the top of that screen (docs/BUSINESS-LOGIC.md §36). -->
     <RouterLink
       v-if="profile"
-      class="home__profile"
+      class="home__profile hit"
       :to="{ name: 'alerts', hash: '#account' }"
       aria-label="Your account and alert settings"
     >

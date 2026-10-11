@@ -287,7 +287,7 @@ function messageFor(failure) {
                 v-for="code in HOME"
                 :key="code"
                 type="button"
-                class="quick__chip"
+                class="quick__chip hit"
                 :class="{ 'quick__chip--on': lit(code) }"
                 :aria-pressed="lit(code)"
                 @click="takeHome(code)"
@@ -333,7 +333,7 @@ function messageFor(failure) {
 
         <!-- THE COMMITMENT, KEPT AND MADE QUIETER: the same write it always was, and still one
              tap. -->
-        <button class="search__watch" type="button" :disabled="!canSubmit" @click="attempt('watch')">
+        <button class="search__watch hit" type="button" :disabled="!canSubmit" @click="attempt('watch')">
           {{ adding ? 'Adding…' : 'Add to watch' }}
         </button>
       </form>
@@ -488,8 +488,7 @@ function messageFor(failure) {
   font-weight: 600;
 }
 
-/* The second action, and it looks like one: no fill, no border, and 40px tall so it is still a
-   thumb target. */
+/* The second action, and it looks like one: no fill and no border; `.hit` makes it a thumb target. */
 .search__watch {
   width: 100%;
   height: 40px;
