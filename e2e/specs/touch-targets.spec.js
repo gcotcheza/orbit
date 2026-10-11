@@ -99,6 +99,7 @@ test('the search pills and Add to watch are finger-sized', async ({ page }) => {
     await page.goto('/search')
 
     const pills = page.getByRole('group', { name: 'Home airports' }).getByRole('button')
+    await expect(pills.first()).toBeVisible()
     expect(await pills.count()).toBeGreaterThan(1)
 
     for (const pill of await pills.all()) {
@@ -112,6 +113,7 @@ test('the segmented controls are finger-sized', async ({ page }) => {
     await page.goto('/alerts')
 
     const options = page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio')
+    await expect(options.first()).toBeVisible()
     expect(await options.count()).toBeGreaterThan(1)
 
     for (const option of await options.all()) {
