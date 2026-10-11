@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Routes;
 
 use App\Models\Route;
+use Carbon\CarbonInterface;
 use App\Models\CalendarFare;
 use App\Models\PriceObservation;
 use App\Domain\Pricing\DatedFare;
@@ -67,7 +68,7 @@ final readonly class RouteSnapshots
             ->toBase()
             ->pluck('first_observed_on', 'route_id');
 
-        $cheapest = $this->cheapestFares($ids);
+        $cheapest = $this->cheapestFares($ids, $today);
 
         $snapshots = [];
 
@@ -110,24 +111,19 @@ final readonly class RouteSnapshots
      * @param  list<int>  $ids
      * @return array<int, DatedFare>
      */
-    private function cheapestFares(array $ids): array
+    private function cheapestFares(array $ids, CarbonInterface $today): array
     {
-        /*
-         * THE DAY AFTER THE EDGE, COMPARED WITH `<`: this table is written both as a bare
-         * 'Y-m-d' and through the model's cast, and `<=` drops the last day on SQLite.
-         */
-        $edge = Date::now((string) config('orbit.timezone'))
-            ->startOfDay()
-            ->addDays((int) config('orbit.poll.window_days') + 1)
-            ->toDateString();
+        // The day after the edge, compared with `<`: `<=` drops the last day on SQLite.
+        $edge = $today->copy()->addDays((int) config('orbit.poll.window_days') + 1)->toDateString();
 
+        // The latest poll's fares only, whose minimum is `price.current`.
+        // docs/DECISIONS.md, the-cheapest-departure-comes-from-the-latest-poll
         $rows = CalendarFare::query()
             ->whereIn('route_id', $ids)
+            ->departingFrom($today)
             ->where('departure_date', '<', $edge)
-            ->whereRaw(
-                'price_cents = (select min(price_cents) from calendar_fares cheapest where cheapest.route_id = calendar_fares.route_id and cheapest.departure_date < ?)',
-                [$edge],
-            )
+            ->whereRaw('fetched_at = (select max(fetched_at) from calendar_fares latest where latest.route_id = calendar_fares.route_id)')
+            ->orderBy('price_cents')
             ->orderBy('departure_date')
             ->get(['route_id', 'departure_date', 'price_cents', 'found_at']);
 

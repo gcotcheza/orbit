@@ -60,9 +60,9 @@ export const useSettingsStore = defineStore('settings', () => {
                 status.value = 'ready'
             }
         } catch (failure) {
+            // No `error`: its sentences are about saving, and Alerts says a failed load itself.
             if (token === sequence) {
                 status.value = 'failed'
-                error.value = messageFor(failure)
             }
 
             console.error('Could not load the alert settings.', failure)

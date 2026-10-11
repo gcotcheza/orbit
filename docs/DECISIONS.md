@@ -411,3 +411,9 @@ CARRY-OVER, NOT FIXED HERE. `scripts/verify.sh` and the runbook's manual blocks 
 `stores/auth.js` `logout()` used to clear `user` in a `finally`, on the reasoning that a sign-out that fails and still looks signed in is worse. It is not: the server session and the remember cookie survived the failed POST, so the next open signed straight back in, and Alerts showed nothing (backlog 397). `logout()` now asks for a fresh CSRF cookie, then clears `user` only on a 2xx or a 401; anything else keeps it and throws, and Alerts shows "Could not sign out. Check your connection and try again." beside a button that stays enabled.
 
 Rejected: **clear regardless.** It looks signed out on a device that is not, which is the one state a person cannot see or correct.
+
+### the-cheapest-departure-comes-from-the-latest-poll
+`price.current` is the minimum of the near-window fares the latest poll returned, but `cheapest` used to be the minimum of every stored row, and a date the provider stopped quoting is kept for `orbit.poll.stale_after_days` (3) before it is deleted. So the headline could print one price and book the date of another, cheaper one nobody offers any more (docs/API.md `cheapest`). `RouteSnapshots::cheapestFares` now reads only the rows carrying the route's newest `fetched_at`, from today (`orbit.timezone`) to the window's edge: every row one poll writes shares that `fetched_at`, so those rows are the ones the price came from. A poll that returned fares only beyond the window writes no observation, and leaves `cheapest` null until the next one.
+
+Rejected: **match on `price_cents = price.current`.** A stale row at the same price would still win on an earlier date. **Change the poll to delete what it no longer sees.** The staleness delay is deliberate (docs/BUSINESS-LOGIC.md §4); the calendar still shows those days.
+

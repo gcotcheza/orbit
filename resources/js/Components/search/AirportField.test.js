@@ -261,6 +261,32 @@ describe('the airport typeahead', () => {
         expect(wrapper.get('.option--empty').text()).toBe('No matching airport.')
     })
 
+    describe('when the airport search fails', () => {
+        async function failing(typed) {
+            vi.spyOn(console, 'error').mockImplementation(() => {})
+            const wrapper = await field(WIDER)
+
+            get.mockRejectedValue(new Error('offline'))
+            await box(wrapper).setValue(typed)
+            await settle()
+
+            return wrapper
+        }
+
+        it('says it failed rather than that nothing matched', async () => {
+            const wrapper = await failing('zzz')
+
+            expect(wrapper.get('.option--empty').text()).toBe('Could not search the airports — a three-letter code still works.')
+        })
+
+        it('still says so beside a guess', async () => {
+            const wrapper = await failing('barcelna')
+
+            expect(wrapper.get('.option--guess').text()).toContain('Barcelona')
+            expect(wrapper.get('.option--empty').text()).toBe('Could not search the airports — a three-letter code still works.')
+        })
+    })
+
     it('offers what was probably meant when one letter is wrong', async () => {
         const wrapper = await field(WIDER)
 

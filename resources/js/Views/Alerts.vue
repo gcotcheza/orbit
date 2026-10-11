@@ -195,8 +195,8 @@ async function signOut() {
 
       <p v-if="status === 'loading' && !isReady" class="screen__state">Loading your settings…</p>
 
-      <div v-else-if="status === 'failed' && !isReady" class="screen__state">
-        <p>Could not load your alert settings.</p>
+      <div v-else-if="status === 'failed'" class="screen__state">
+        <p role="alert">Could not load your alert settings.</p>
         <button type="button" class="screen__retry" @click="settingsStore.load">Try again</button>
       </div>
 

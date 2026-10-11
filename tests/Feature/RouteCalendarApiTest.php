@@ -224,6 +224,18 @@ final class RouteCalendarApiTest extends TestCase
     }
 
     #[Test]
+    public function a_day_that_has_gone_is_not_offered(): void
+    {
+        $route = $this->makeRoute('AMS', 'FAO');
+        $this->offer($route, ['2026-08-13' => 3000, '2026-08-14' => 5000, '2026-08-20' => 6000]);
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-FAO/calendar?month=2026-08')
+            ->assertJsonCount(2, 'data.days')
+            ->assertJsonPath('data.days.0.date', '2026-08-14')
+            ->assertJsonPath('data.cheapest.date', '2026-08-14');
+    }
+
+    #[Test]
     public function a_month_that_is_not_a_month_is_rejected(): void
     {
         $this->seedMonth();

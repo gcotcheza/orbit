@@ -33,6 +33,7 @@ vi.mock('vue-router', () => ({
 
 import Alerts from './Alerts.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useSettingsStore } from '@/stores/settings'
 
 /** `GET /api/settings`, in the shape docs/API.md sends. */
 const SETTINGS = {
@@ -78,6 +79,32 @@ beforeEach(() => {
     hash.value = ''
     get.mockResolvedValue({ data: SETTINGS })
     put.mockResolvedValue({ data: SETTINGS })
+})
+
+describe('when the settings cannot be loaded', () => {
+    const LOAD_FAILED = 'Could not load your alert settings.'
+
+    it('says they could not be loaded, not that they were not saved', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        get.mockRejectedValue(new Error('Network Error'))
+
+        const wrapper = await screen()
+
+        expect(wrapper.get('[role="alert"]').text()).toBe(LOAD_FAILED)
+        expect(wrapper.text()).not.toContain('not saved')
+    })
+
+    it('says so too when an earlier visit already loaded them', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        const wrapper = await screen()
+
+        get.mockRejectedValue(new Error('Network Error'))
+        await useSettingsStore().load()
+        await flushPromises()
+
+        expect(wrapper.get('[role="alert"]').text()).toBe(LOAD_FAILED)
+        expect(wrapper.text()).not.toContain('not saved')
+    })
 })
 
 describe('signing out', () => {

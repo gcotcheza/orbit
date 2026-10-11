@@ -59,7 +59,7 @@ final class RuleMatches
 
         $fares = CalendarFare::query()
             ->whereIn('route_id', $routes->pluck('id')->all())
-            ->where('departure_date', '>=', $today->toDateString())
+            ->departingFrom($today)
             ->orderBy('departure_date')
             ->get(['route_id', 'departure_date', 'price_cents', 'found_at'])
             ->groupBy('route_id');

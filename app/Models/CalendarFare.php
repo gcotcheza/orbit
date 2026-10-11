@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -29,6 +31,17 @@ final class CalendarFare extends Model
     public function route(): BelongsTo
     {
         return $this->belongsTo(Route::class);
+    }
+
+    /**
+     * Departures on `$today` or later: a day that has gone cannot be booked.
+     *
+     * @param  Builder<CalendarFare>  $query
+     * @return Builder<CalendarFare>
+     */
+    public function scopeDepartingFrom(Builder $query, CarbonInterface $today): Builder
+    {
+        return $query->where('departure_date', '>=', $today->toDateString());
     }
 
     /**

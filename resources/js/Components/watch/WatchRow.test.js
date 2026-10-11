@@ -124,3 +124,20 @@ describe('what the stub says', () => {
         expect(pass({ active: false, trackingDays: 1 }).get('.stub__tracking').text()).toBe('Paused')
     })
 })
+
+describe('the usual price', () => {
+    const usual = (wrapper) => wrapper.get('.stub__price--usual')
+
+    it('is struck through when the fare is under it', () => {
+        expect(usual(pass()).classes()).toContain('stub__price--beaten')
+    })
+
+    it('is left whole when the fare is at it or above it', () => {
+        expect(usual(pass({ price: { current: 111, usual: 111, pctBelow: 0 } })).classes()).not.toContain('stub__price--beaten')
+        expect(usual(pass({ price: { current: 130, usual: 111, pctBelow: -17 } })).classes()).not.toContain('stub__price--beaten')
+    })
+
+    it('is left whole when either price is missing', () => {
+        expect(usual(pass({ price: { current: null, usual: 111, pctBelow: null } })).classes()).not.toContain('stub__price--beaten')
+    })
+})

@@ -121,6 +121,28 @@ test('a paused row is actually dimmed, and not just given a class', async ({ pag
     expect(paused.fill, 'an entrance animation is filling forwards again — it will win the cascade').not.toBe('both')
 })
 
+// Every seeded route is under its usual price, so the one above it is constructed.
+test('the usual price is struck through only under a fare that beats it', async ({ page }) => {
+    await page.route('**/api/watchlist', async (route) => {
+        const response = await route.fetch()
+        const body = await response.json()
+        const { usual } = body.data[0].price
+
+        body.data[0].price = { ...body.data[0].price, current: usual + 20, pctBelow: -20 }
+
+        await route.fulfill({ response, json: body })
+    })
+
+    await page.goto('/watch')
+    await expect(page.locator('.pass')).toHaveCount(6)
+
+    const line = (row) => page.locator('.pass').nth(row).locator('.stub__price--usual')
+        .evaluate((element) => getComputedStyle(element).textDecorationLine)
+
+    expect(await line(0)).toBe('none')
+    expect(await line(1)).toBe('line-through')
+})
+
 test('a paused route drops out of the globe tour', async ({ page }) => {
     // The two screens share stores/watchlist.js — before the DRY pass a
     // route paused here stayed in the tour until a reload.

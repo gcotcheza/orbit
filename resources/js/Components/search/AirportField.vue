@@ -101,15 +101,19 @@ const showing = computed(() => props.open && filled.value)
 
 /**
  * What the panel says when empty, in priority order: still searching, curated list failed
- * (code-only mode), or genuinely nothing found (docs/BUSINESS-LOGIC.md §36).
+ * (code-only mode), world search failed, or genuinely nothing found (docs/BUSINESS-LOGIC.md §36).
  */
 const emptyText = computed(() => {
   if (worldStatus.value === 'searching') {
     return 'Searching…'
   }
 
-  return listStatus.value === 'failed'
-    ? 'Suggestions are unavailable — a three-letter code still works.'
+  if (listStatus.value === 'failed') {
+    return 'Suggestions are unavailable — a three-letter code still works.'
+  }
+
+  return worldStatus.value === 'failed'
+    ? 'Could not search the airports — a three-letter code still works.'
     : 'No matching airport.'
 })
 
@@ -376,7 +380,7 @@ defineExpose({ clear })
 
       <!-- Not role="option" — nothing to choose. "Searching…" is the absence of a wrong
            answer while the world search is still in flight (docs/BUSINESS-LOGIC.md §36). -->
-      <li v-if="suggestions.length === 0 && !didYouMean" class="option option--empty">
+      <li v-if="suggestions.length === 0 && (!didYouMean || worldStatus === 'failed')" class="option option--empty">
         {{ emptyText }}
       </li>
     </ul>

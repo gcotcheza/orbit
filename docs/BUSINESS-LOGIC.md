@@ -318,7 +318,10 @@ a second point and bending the trend.
 
 1. **Departures that have gone by** are removed on every successful poll —
    otherwise the table grows a permanent tail of flights nobody can take, and
-   the "cheapest this month" banner would happily point at one.
+   the "cheapest this month" banner would happily point at one. Between midnight
+   and the morning's poll, and for good on a paused route, yesterday's row is
+   still there, so every read of a fare a person could book (`CalendarFare`'s
+   `departingFrom` scope) starts at today as well.
 2. **Departures past the maintained horizon** are removed on every successful
    poll too — bounded by `poll.horizon_days`, **never** by the near window.
    Rows can only get out there by the horizon shrinking, and this clause is
