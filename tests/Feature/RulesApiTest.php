@@ -85,6 +85,19 @@ final class RulesApiTest extends TestCase
         $response->assertJsonPath('data.matches.sample.1.code', 'EIN-LIS');
     }
 
+    /** Yesterday's Friday stays in the table until the morning's poll; it cannot be booked. */
+    #[Test]
+    public function a_fare_for_a_day_that_has_gone_is_not_a_match(): void
+    {
+        $this->offer(Route::query()->where('code', 'AMS-FAO')->firstOrFail(), ['2026-08-14' => 1200]);
+
+        $this->actingAs($this->owner)
+            ->postJson('/api/rules/parse', ['text' => 'somewhere sunny under €80 leaving Friday'])
+            ->assertOk()
+            ->assertJsonPath('data.matches.cheapest', 34)
+            ->assertJsonPath('data.matches.sample.0.cheapest.date', '2026-09-04');
+    }
+
     /**
      * The count is a floor until every candidate has a price, published as
      * `matches.partial` (docs/BUSINESS-LOGIC.md §11).

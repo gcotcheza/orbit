@@ -17,7 +17,8 @@ const props = defineProps({
 /** docs/API.md: under a fortnight of our own observations is worth saying. */
 const TRACKING_NOTE_DAYS = 14
 
-const price = computed(() => euro(props.route.price.current))
+/** `cheapest.price` before `price.current`: the price beside a date is that date's fare (docs/API.md). */
+const price = computed(() => euro(props.route.cheapest?.price ?? props.route.price.current))
 
 const comparison = computed(() => usualPriceLabel(props.route.price.pctBelow))
 

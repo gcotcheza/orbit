@@ -194,6 +194,7 @@ body {
 }
 
 .screen__retry {
+    min-height: 44px;
     margin-top: 12px;
     padding: 9px 16px;
     border-radius: var(--radius-chip);

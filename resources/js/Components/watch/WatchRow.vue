@@ -46,6 +46,13 @@ const stubNote = computed(() => {
   return days === 1 ? 'Tracking 1 day' : `Tracking ${days} days`
 })
 
+/* Struck through only when the fare beats it: a usual price the fare is above is not undercut. */
+const usualBeaten = computed(() => {
+  const { current, usual } = props.route.price
+
+  return current !== null && usual !== null && current < usual
+})
+
 function askToRemove() {
   confirming.value = true
 }
@@ -126,7 +133,9 @@ function confirmRemove() {
 
       <div class="stub__figure">
         <p class="stub__label">Usual</p>
-        <p class="stub__price stub__price--usual tabular">{{ euro(route.price.usual) ?? '—' }}</p>
+        <p class="stub__price stub__price--usual tabular" :class="{ 'stub__price--beaten': usualBeaten }">
+          {{ euro(route.price.usual) ?? '—' }}
+        </p>
       </div>
 
       <p v-if="stubNote" class="stub__tracking" :class="{ 'stub__tracking--paused': !route.active }">
@@ -337,6 +346,9 @@ function confirmRemove() {
 .stub__price--usual {
   font-weight: 600;
   color: var(--muted);
+}
+
+.stub__price--beaten {
   text-decoration: line-through;
 }
 

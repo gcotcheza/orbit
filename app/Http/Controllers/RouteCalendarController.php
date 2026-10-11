@@ -44,6 +44,7 @@ final class RouteCalendarController extends Controller
         $fares = CalendarFare::query()
             ->where('route_id', $route->id)
             ->whereBetween('departure_date', [$start->toDateString(), $end->toDateString()])
+            ->departingFrom(Date::now($timezone)->startOfDay())
             ->orderBy('departure_date')
             ->get(['departure_date', 'price_cents', 'found_at']);
 

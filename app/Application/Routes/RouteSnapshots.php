@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Routes;
 
 use App\Models\Route;
+use Carbon\CarbonInterface;
 use App\Models\CalendarFare;
 use App\Models\PriceObservation;
 use App\Domain\Pricing\DatedFare;
@@ -12,6 +13,7 @@ use App\Domain\Pricing\DealScorer;
 use App\Domain\Pricing\PriceHistory;
 use Illuminate\Support\Facades\Date;
 use App\Application\Pricing\TrackingDays;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -67,7 +69,7 @@ final readonly class RouteSnapshots
             ->toBase()
             ->pluck('first_observed_on', 'route_id');
 
-        $cheapest = $this->cheapestFares($ids);
+        $cheapest = $this->cheapestFares($ids, $today);
 
         $snapshots = [];
 
@@ -110,31 +112,38 @@ final readonly class RouteSnapshots
      * @param  list<int>  $ids
      * @return array<int, DatedFare>
      */
-    private function cheapestFares(array $ids): array
+    private function cheapestFares(array $ids, CarbonInterface $today): array
     {
-        /*
-         * THE DAY AFTER THE EDGE, COMPARED WITH `<`: this table is written both as a bare
-         * 'Y-m-d' and through the model's cast, and `<=` drops the last day on SQLite.
-         */
-        $edge = Date::now((string) config('orbit.timezone'))
-            ->startOfDay()
-            ->addDays((int) config('orbit.poll.window_days') + 1)
-            ->toDateString();
+        // The day after the edge, compared with `<`: `<=` drops the last day on SQLite.
+        $edge = $today->copy()->addDays((int) config('orbit.poll.window_days') + 1)->toDateString();
+
+        // The latest poll's fares only, whose minimum is `price.current`.
+        // docs/DECISIONS.md, the-cheapest-departure-comes-from-the-latest-poll
+        $latest = CalendarFare::query()
+            ->selectRaw('route_id, max(fetched_at) as latest_fetched_at')
+            ->whereIn('route_id', $ids)
+            ->groupBy('route_id');
+
+        $ranked = CalendarFare::query()
+            ->joinSub($latest, 'latest', static function (JoinClause $join): void {
+                $join->on('latest.route_id', '=', 'calendar_fares.route_id')
+                    ->on('latest.latest_fetched_at', '=', 'calendar_fares.fetched_at');
+            })
+            ->whereIn('calendar_fares.route_id', $ids)
+            ->departingFrom($today)
+            ->where('departure_date', '<', $edge)
+            ->select(['calendar_fares.route_id', 'departure_date', 'price_cents', 'found_at'])
+            ->selectRaw('row_number() over (partition by calendar_fares.route_id order by price_cents, departure_date) as fare_rank');
 
         $rows = CalendarFare::query()
-            ->whereIn('route_id', $ids)
-            ->where('departure_date', '<', $edge)
-            ->whereRaw(
-                'price_cents = (select min(price_cents) from calendar_fares cheapest where cheapest.route_id = calendar_fares.route_id and cheapest.departure_date < ?)',
-                [$edge],
-            )
-            ->orderBy('departure_date')
+            ->fromSub($ranked, 'calendar_fares')
+            ->whereRaw('fare_rank = 1')
             ->get(['route_id', 'departure_date', 'price_cents', 'found_at']);
 
         $cheapest = [];
 
         foreach ($rows as $row) {
-            $cheapest[$row->route_id] ??= new DatedFare(
+            $cheapest[$row->route_id] = new DatedFare(
                 $row->departure_date->toDateTimeImmutable(),
                 $row->price_cents,
                 /*

@@ -60,6 +60,20 @@ describe('the route detail panel', () => {
         expect(wrapper.find('.detail__bar').exists()).toBe(false)
     })
 
+    // Overnight the latest poll's lowest fare can be for a day now gone; then `cheapest` is dearer.
+    it('prints the fare of the departure line, not price.current', async () => {
+        get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75, { cheapest: { date: '2026-09-10', price: 81, foundAt: null } }))
+
+        const wrapper = mount(RouteDetailPanel, {
+            props: { code: 'AMS-LIS' },
+            global: { plugins: [createPinia()] },
+        })
+        await flushPromises()
+
+        expect(wrapper.get('.price__value').text()).toBe('€81')
+        expect(wrapper.get('.price__when').text()).toBe('Cheapest departure · Thu, Sep 10')
+    })
+
     // How the desktop master pane changes route: the prop moves, nothing navigates.
     it('reloads for a new pair when the prop changes', async () => {
         get.mockResolvedValue(document_('AMS-LIS', 'Lisbon', 75))

@@ -101,16 +101,31 @@ const showing = computed(() => props.open && filled.value)
 
 /**
  * What the panel says when empty, in priority order: still searching, curated list failed
- * (code-only mode), or genuinely nothing found (docs/BUSINESS-LOGIC.md §36).
+ * (code-only mode), world search failed, or genuinely nothing found (docs/BUSINESS-LOGIC.md §36).
  */
 const emptyText = computed(() => {
   if (worldStatus.value === 'searching') {
     return 'Searching…'
   }
 
-  return listStatus.value === 'failed'
-    ? 'Suggestions are unavailable — a three-letter code still works.'
+  if (listStatus.value === 'failed') {
+    return 'Suggestions are unavailable — a three-letter code still works.'
+  }
+
+  return worldStatus.value === 'failed'
+    ? 'Could not search the airports — a three-letter code still works.'
     : 'No matching airport.'
+})
+
+const emptyShown = computed(
+  () => suggestions.value.length === 0 && (!didYouMean.value || worldStatus.value === 'failed'),
+)
+
+/** A failure said again outside the listbox, which is not a live region. */
+const failureNotice = computed(() => {
+  const failed = worldStatus.value !== 'searching' && (listStatus.value === 'failed' || worldStatus.value === 'failed')
+
+  return showing.value && emptyShown.value && failed ? emptyText.value : ''
 })
 
 /*
@@ -376,10 +391,12 @@ defineExpose({ clear })
 
       <!-- Not role="option" — nothing to choose. "Searching…" is the absence of a wrong
            answer while the world search is still in flight (docs/BUSINESS-LOGIC.md §36). -->
-      <li v-if="suggestions.length === 0 && !didYouMean" class="option option--empty">
+      <li v-if="emptyShown" class="option option--empty">
         {{ emptyText }}
       </li>
     </ul>
+
+    <p class="sr-only" role="status">{{ failureNotice }}</p>
   </div>
 </template>
 

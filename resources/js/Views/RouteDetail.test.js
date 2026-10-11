@@ -221,7 +221,12 @@ describe('fares that have gone stale', () => {
     const STALE = { watched: false, fares: { fetchedAt: '2026-07-02T06:12:00+02:00', fresh: false } }
 
     it('are refreshed when nothing else is going to refresh them', async () => {
-        post.mockResolvedValue({ data: { data: { ...DETAIL, price: { current: 61, usual: 111, pctBelow: 45 } }, meta: FRESH } })
+        post.mockResolvedValue({
+            data: {
+                data: { ...DETAIL, price: { current: 61, usual: 111, pctBelow: 45 }, cheapest: { date: '2026-09-09', price: 61, foundAt: null } },
+                meta: FRESH,
+            },
+        })
 
         const wrapper = await detail({}, STALE)
 

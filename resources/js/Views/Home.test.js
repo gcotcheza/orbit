@@ -53,6 +53,7 @@ const OPO = {
     destination: { iata: 'OPO', city: 'Porto', country: 'Portugal', countryCode: 'PT', lat: 41.2481, lng: -8.6814 },
     price: { current: 44, usual: 93, pctBelow: 53 },
     verdict: { label: 'Cheap & still falling', short: 'Falling', tone: 'info' },
+    cheapest: { date: '2026-09-12', price: 44 },
 }
 
 const PAUSED = { ...LIS, code: 'AMS-BCN', destination: { ...LIS.destination, iata: 'BCN', city: 'Barcelona' }, active: false }
@@ -143,6 +144,14 @@ describe('the tour', () => {
         // The DAY the €74 is for. A fare with no date on it is not something
         // anybody can act on, and this card printed one for months.
         expect(wrapper.find('.spotlight__when').text()).toBe('Wed, Sep 9')
+    })
+
+    // Overnight the latest poll's lowest fare can be for a day now gone; then `cheapest` is dearer.
+    it('prints the price of the day it shows, not price.current', async () => {
+        const wrapper = await mountHome([{ ...LIS, cheapest: { date: '2026-09-10', price: 81 } }])
+
+        expect(wrapper.find('.spotlight__price').text()).toBe('€81')
+        expect(wrapper.find('.spotlight__when').text()).toBe('Thu, Sep 10')
     })
 
     it('moves the whole screen on when the globe has finished a route', async () => {

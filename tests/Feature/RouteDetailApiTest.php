@@ -161,6 +161,39 @@ final class RouteDetailApiTest extends TestCase
             ->assertJsonPath('data.cheapest.price', 50);
     }
 
+    /** 00:30 on the 15th in Amsterdam is still the 14th in UTC: Orbit's day is Amsterdam's. */
+    #[Test]
+    public function a_departure_that_has_gone_is_never_the_cheapest(): void
+    {
+        Date::setTestNow('2026-08-14 22:30:00');
+        $route = $this->makeRoute('AMS', 'OPO');
+        $this->trackedSince($route, 9000);
+        $this->offer($route, ['2026-08-14' => 3000, '2026-09-03' => 5000]);
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('data.cheapest.date', '2026-09-03')
+            ->assertJsonPath('data.cheapest.price', 50);
+    }
+
+    #[Test]
+    public function the_cheapest_departure_is_one_the_latest_poll_still_quoted(): void
+    {
+        $route = $this->makeRoute('AMS', 'OPO');
+        $this->trackedSince($route, 9000);
+
+        Date::setTestNow('2026-08-13 09:00:00');
+        $this->offer($route, ['2026-09-01' => 3000]);
+
+        Date::setTestNow('2026-08-14 09:00:00');
+        $this->offer($route, ['2026-09-03' => 5000, '2026-09-10' => 6000]);
+        $this->observe($route, [5000], '2026-08-14');
+
+        $this->actingAs($this->owner)->getJson('/api/routes/AMS-OPO')
+            ->assertJsonPath('data.price.current', 50)
+            ->assertJsonPath('data.cheapest.date', '2026-09-03')
+            ->assertJsonPath('data.cheapest.price', 50);
+    }
+
     /**
      * Both links are aimed at the same departure, encoded differently —
      * a link that opens and searches the wrong day (docs/BUSINESS-LOGIC.md §12).
