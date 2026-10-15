@@ -1,4 +1,4 @@
-# fleet-deploy-lib 2026-10-04.4 sha256:fe581a66d61affabe7914af47d7eb3ca64fcca9f1ff23b36f4ff9b5556d37b1c
+# fleet-deploy-lib 2026-10-15 sha256:bc16a05915b49259440b5a17bc354911e54176146bc143f8d0dd9a2e2ef67049
 # shellcheck shell=bash
 # Root runs a deploy only from files root alone can write, never from inside ROOT: no switch turns
 # this off, and fleet-deploy's export passes it. docs/DECISIONS.md (backlog 317)
@@ -46,20 +46,71 @@ fail_tail() {
     tail -20 "$LOG" >&3
 }
 
-# The live commit, read as files and never through the checkout's own config.
+# The app user: DEPLOY_APP_USER, else ROOT's last part, which every app's account is named after.
+deploy_app_user() { printf '%s' "${DEPLOY_APP_USER:-$(basename -- "$ROOT")}"; }
+
+# deploy_git_plain <.git>: a fast path, by stat only, over the files where a FIFO was seen to hang git;
+# not a complete list. docs/DECISIONS.md (deploy-lib 2026-10-11.1)
+deploy_git_plain() {
+    local g=${1:-} f
+    [[ $g == /* && -d $g && ! -L $g ]] || return 1
+    [[ -f $g/HEAD && ! -L $g/HEAD ]] || return 1
+    for f in "$g"/{config,commondir,packed-refs,refs/heads/main,index,info/attributes,info/exclude} "$g"/worktrees/*/{HEAD,commondir,gitdir,index,locked}; do [[ ! -L $f && ( -f $f || ! -e $f ) ]] || return 1; done
+}
+deploy_git_plain_refusal() { printf '%s/.git is not a plain git directory (a link, a FIFO or a non-file where git reads), so git is not run in it' "$1"; }
+
+# deploy_git_bounded <git argv…>: git under a timeout, its output read back from unlinked root files,
+# never a pipe a setsid grandchild can hold open; stdout in DEPLOY_GIT_OUT. docs/DECISIONS.md (card 441)
+deploy_git_bounded() {
+    local n=${DEPLOY_GIT_TIMEOUT:-300} o e wo we rc=0
+    DEPLOY_GIT_OUT='' DEPLOY_GIT_STDERR='' DEPLOY_GIT_ERR=''
+    [[ $n =~ ^[1-9][0-9]{0,4}$ ]] || { DEPLOY_GIT_ERR="DEPLOY_GIT_TIMEOUT '$n' is not a whole number of seconds from 1 to 99999"; return 1; }
+    o=$(mktemp -p /tmp deploy-git.XXXXXXXX) || { DEPLOY_GIT_ERR='no temp file could hold git output'; return 1; }
+    e=$(mktemp -p /tmp deploy-git.XXXXXXXX) || { rm -f -- "${o:?}"; DEPLOY_GIT_ERR='no temp file could hold git output'; return 1; }
+    exec {wo}>"$o" {we}>"$e" || { rm -f -- "${o:?}" "${e:?}"; DEPLOY_GIT_ERR='no temp file could hold git output'; return 1; }
+    # Unlinked while open, before git starts: a deploy killed mid-git leaves no file, and no trap is touched.
+    rm -f -- "${o:?}" "${e:?}"
+    /usr/bin/timeout -k 5 "$n" "$@" </dev/null >&"$wo" 2>&"$we" 3>&- {wo}>&- {we}>&- || rc=$?
+    DEPLOY_GIT_OUT=$(<"/dev/fd/$wo") || { DEPLOY_GIT_ERR='git output could not be read back'; rc=1; }
+    DEPLOY_GIT_STDERR=$(<"/dev/fd/$we") || { DEPLOY_GIT_ERR='git output could not be read back'; rc=1; }
+    exec {wo}>&- {we}>&-
+    [ -z "$DEPLOY_GIT_STDERR" ] || printf '%s\n' "$DEPLOY_GIT_STDERR" >&2
+    case $rc in 124|137) DEPLOY_GIT_ERR="git did not answer in ${n}s"; printf '%s: %s\n' "$DEPLOY_GIT_ERR" "$*" >&2 ;; esac
+    return "$rc"
+}
+
+# deploy_git_or_refuse <git argv…>: deploy_git_bounded, where a git that did not answer stops the deploy.
+deploy_git_or_refuse() {
+    local rc=0
+    deploy_git_bounded "$@" || rc=$?
+    [ -z "$DEPLOY_GIT_ERR" ] || refuse "$DEPLOY_GIT_ERR: $*"
+    return "$rc"
+}
+
+# The live commit, read by git as the app user through git-as: root opens nothing under ROOT/.git.
+# Returns 1 when HEAD names no main sha, and git's 124 or 137 when git did not answer.
 deploy_head_file() {
-    local g="$ROOT/.git" head sha
-    [ -f "$g/HEAD" ] && [ ! -L "$g/HEAD" ] && head=$(head -c 200 "$g/HEAD") || return 1
-    [ "$head" = 'ref: refs/heads/main' ] || return 1
-    if [ -f "$g/refs/heads/main" ] && [ ! -L "$g/refs/heads/main" ]; then
-        sha=$(head -c 200 "$g/refs/heads/main")
-    elif [ -f "$g/packed-refs" ] && [ ! -L "$g/packed-refs" ]; then
-        sha=$(awk '$2 == "refs/heads/main" { print $1; exit }' "$g/packed-refs") || return 1
-    else
-        return 1
-    fi
-    [[ $sha =~ ^[0-9a-f]{40}$ ]] || return 1
-    printf '%s' "$sha"
+    local as=${DEPLOY_GIT_AS:-git-as} user rc=0
+    user=$(deploy_app_user)
+    deploy_git_plain "$ROOT/.git" || return 1
+    deploy_git_bounded "$as" "$user" -C "$ROOT" symbolic-ref -q HEAD || rc=$?
+    [ "$rc" = 0 ] || { [ -n "$DEPLOY_GIT_ERR" ] || rc=1; return "$rc"; }
+    [ "$DEPLOY_GIT_OUT" = refs/heads/main ] || return 1
+    deploy_git_bounded "$as" "$user" -C "$ROOT" rev-parse --verify -q 'refs/heads/main^{commit}' || rc=$?
+    [ "$rc" = 0 ] || { [ -n "$DEPLOY_GIT_ERR" ] || rc=1; return "$rc"; }
+    printf '%s' "$DEPLOY_GIT_OUT"
+}
+
+# deploy_build_hash <dir>: one sha256 over every regular file under <dir> and its path, read as the
+# app user; find -P lists no link, so none is followed or hashed. Unreadable is a refusal.
+deploy_build_hash() {
+    local user out
+    user=$(deploy_app_user)
+    [[ ${1:-} == /* ]] || { printf "REFUSED: deploy_build_hash: '%s' is not an absolute directory\n" "${1:-}" >&2; return 1; }
+    # shellcheck disable=SC2016  # $1 is the inner bash's, by design
+    out=$(sudo -n -u "$user" -- bash -c 'set -o pipefail; cd -- "$1" && find -P . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum --' _ "${1:-}") \
+        || { printf 'REFUSED: %s could not be hashed as %s, so no build is named\n' "${1:-}" "$user" >&2; return 1; }
+    printf '%s\n' "$out" | sha256sum | cut -d' ' -f1
 }
 
 deploy_owned_by_me() { [ "$(stat -c %u:%a "$1" 2>/dev/null)" = "$(id -u):$2" ]; }
@@ -76,7 +127,7 @@ deploy_is_full_sha() { [[ ${1:-} =~ ^[0-9a-f]{40}$ ]]; }
 
 # Root's record of what is live: one row by path, so no step's output reaches it. docs/DECISIONS.md
 deploy_record_row() {
-    local kind=$1 sha=$2 rest=$3 name f landed lead=''
+    local kind=$1 sha=$2 rest=$3 name f landed lead='' rc=0
     DEPLOY_RECORD_ERR=''
     [ -n "${ROOT:-}" ] || { DEPLOY_RECORD_ERR="ROOT is unset, so no record names this project."; return 1; }
     name=$(basename "$ROOT")
@@ -84,7 +135,8 @@ deploy_record_row() {
     [ -n "${DEPLOY_RECORD_ROOT:-}" ] || [[ $ROOT == /var/www/?* ]] || { DEPLOY_RECORD_ERR="ROOT $ROOT is not under /var/www/ and DEPLOY_RECORD_ROOT is unset: only a live tree writes the live record."; return 1; }
     f="${DEPLOY_RECORD_ROOT:-/var/lib/fleet/deploy-on-merge}/$name.record"
     deploy_is_full_sha "$sha" || { DEPLOY_RECORD_ERR="'$sha' is not a full 40-hex sha, and root's record $f takes nothing less."; return 1; }
-    landed=$(deploy_head_file) || landed=''
+    landed=$(deploy_head_file) || { rc=$?; landed=''; }
+    case $rc in 124|137) DEPLOY_RECORD_ERR="git did not answer in ${DEPLOY_GIT_TIMEOUT:-300}s reading $ROOT/.git/HEAD: root's record $f is not written."; return 1 ;; esac
     [ "$landed" = "$sha" ] || { DEPLOY_RECORD_ERR="$ROOT/.git/HEAD reads ${landed:-no main sha}, not $sha: root's record $f is not written."; return 1; }
     [ -e "$(dirname "$f")" ] || [ -L "$(dirname "$f")" ] || mkdir -m 700 "$(dirname "$f")" \
         || { DEPLOY_RECORD_ERR="cannot create the directory of root's record $f."; return 1; }
