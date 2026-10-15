@@ -73,6 +73,25 @@ printf '%s\n' "$*" >> "${FAKE_LOG_DIR}/git-as.argv"
 echo 'git-as: this test must never reach the real checkout' >&2
 exit 99
 SH
+    # DEPLOY_GIT_AS: the library's own app-user reads; the sandbox is root's, so the user is not switched.
+    cat >"${BIN}/git-as-sandbox" <<'SH'
+#!/bin/sh
+printf '%s\n' "$1" >> "${FAKE_LOG_DIR}/git-as-sandbox.users"
+shift
+exec git "$@"
+SH
+    # A git that never answers (STALL_ON, after STALL_SKIP matches) or fails (FAIL_ON) on one argv.
+    cat >"${BIN}/git-stalls" <<'SH'
+#!/bin/sh
+case " $* " in
+    *" ${STALL_ON:-@@} "*)
+        n=$(cat "${FAKE_LOG_DIR}/stall.n" 2>/dev/null || echo 0)
+        echo $((n + 1)) >"${FAKE_LOG_DIR}/stall.n"
+        [ "$n" -lt "${STALL_SKIP:-0}" ] || exec sleep 600 >/dev/null 2>&1 ;;
+    *" ${FAIL_ON:-@@} "*) echo 'fatal: fake failure' >&2; exit 128 ;;
+esac
+exec git "$@"
+SH
     cat >"${BIN}/heavy-work" <<'SH'
 #!/bin/sh
 [ "$1" = '--status' ] && { echo 'free'; exit 0; }
@@ -347,7 +366,7 @@ build_fixture() {
 }
 
 run_deploy() {
-    OUT="$(env \
+    OUT="$(${RUN_CAP:-} env \
         PATH="${BIN}:${PATH}" \
         FAKE_LOG_DIR="${CASE}" \
         FAKE_GH_JSON="${CASE}/gh.json" \
@@ -365,7 +384,11 @@ run_deploy() {
         FAKE_HEALTHY_AFTER="${HEALTHY_AFTER:-0}" \
         FAKE_UNHEALTHY="${UNHEALTHY:-}" \
         DEPLOY_ROOT="${ROOT}" \
-        DEPLOY_GIT="git -C ${ROOT}" \
+        DEPLOY_GIT="${CASE_GIT:-git -C ${ROOT}}" \
+        DEPLOY_GIT_AS="${BIN}/git-as-sandbox" \
+        DEPLOY_GIT_TIMEOUT="${GIT_TIMEOUT:-300}" \
+        STALL_ON="${STALL_ON:-@@}" STALL_SKIP="${STALL_SKIP:-0}" FAIL_ON="${FAIL_ON:-@@}" \
+        DEPLOY_GITHUB_E2E_DIR="${CASE}/no-github-e2e" \
         DEPLOY_GH="${BIN}/gh" \
         FLEET_DEPLOY_REPO="${FLEET_REPO-gcotcheza/orbit}" \
         FLEET_DEPLOY_MERGE_SHA="${MERGE_SHA}" \
@@ -381,6 +404,7 @@ run_deploy() {
         ORBIT_PUBLIC='https://orbit.test' \
         ORBIT_BASE='http://127.0.0.1:3085' \
         bash "${DEPLOY_COPY:-${CASE}/scripts/deploy.sh}" "$@" 2>&1)"
+    RUN_RC=$?
     unset FLEET_REPO DEPLOY_COPY
     CLASSIFY_RC=''
     COMPOSE_FAIL=''
@@ -494,7 +518,7 @@ run_deploy "${PR_NUMBER}"
 contains 'a merge tree that is not the head tree names the merge as the commit to gate' "${OUT}" \
     "RESOLVED #90 merge ${MERGE_SHA:0:7} is origin/main and its tree is not head ${HEAD_SHA:0:7}'s, so the merge commit itself is what must be gated"
 contains 'and a green head does not deploy a merge the ledger never saw' "${OUT}" \
-    "REFUSED: the ledger holds no green ci for ${MERGE_SHA:0:7} (ci absent, e2e absent)"
+    "REFUSED: the ledger holds no green ci for ${MERGE_SHA:0:7} (ci absent, e2e absent, e2e github: off (no config))"
 contains 'and the recipe says it is the merge that wants gating' "${OUT}" \
     "NOT GATED ${MERGE_SHA:0:7}: gate that merge in a worktree"
 contains 'and the recipe names the merge commit' "${OUT}" \
@@ -544,7 +568,7 @@ run_deploy "${PR_NUMBER}" --gated-by-hand
 contains '--gated-by-hand says so out loud' "${OUT}" \
     "GATED BY HAND: #90 deploys on a human's word over the verdict above — transition and rescue only."
 contains 'and prints the verdict it overrides' "${OUT}" "GATE NOT GREEN head ${HEAD_SHA:0:7}: ci absent, e2e absent"
-contains 'and DONE records that verdict' "${OUT}" "gated by hand over [NOT GREEN head ${HEAD_SHA:0:7}: ci absent, e2e absent]"
+contains 'and DONE records that verdict' "${OUT}" "gated by hand over [NOT GREEN head ${HEAD_SHA:0:7}: ci absent, e2e absent, e2e github: off (no config)]"
 absent 'and the recipe is not printed at it' "${OUT}" 'worktree add'
 
 # --- 4. a dirty checkout ------------------------------------------------------
@@ -924,10 +948,10 @@ GATE_LEDGER_GIT="git -C ${ROOT}" gate_ledger_arm
 GATE_SUITE_PASSED=1 GATE_LEDGER="${LEDGER_OUT}" GATE_LEDGER_GIT="git -C ${ROOT}" \
     gate_ledger_record ci 0 /tmp/ci.log >/dev/null
 CLEAN_LINE="$(tail -1 "${LEDGER_OUT}")"
-if printf '%s' "${CLEAN_LINE}" | grep -qE "^${LIVE_SHA} ci [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z 0 /tmp/ci\.log$"; then
-    pass "the ledger line is <sha> <kind> <utc> <rc> <log>: ${CLEAN_LINE}"
+if printf '%s' "${CLEAN_LINE}" | grep -qE "^${LIVE_SHA} ci [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z 0 /tmp/ci\.log $(git_at rev-parse "${LIVE_SHA}^{tree}")$"; then
+    pass "the ledger line is <sha> <kind> <utc> <rc> <log> <tree>: ${CLEAN_LINE}"
 else
-    fail "the ledger line is not <sha> <kind> <utc> <rc> <log>: ${CLEAN_LINE}"
+    fail "the ledger line is not <sha> <kind> <utc> <rc> <log> <tree>: ${CLEAN_LINE}"
 fi
 unset GATE_SUITE_PASSED
 GATE_LEDGER="${LEDGER_OUT}" GATE_LEDGER_GIT="git -C ${ROOT}" \
@@ -1010,6 +1034,88 @@ if [ -s "${BREACH_LOG}" ]; then
 else
     pass "${HELPER_RULE}"
 fi
+
+# --- 15. every git the deploy runs is bounded: one that never answers is refused, not waited on ---
+stalled() { # fixture, STALL_ON argv, [STALL_SKIP earlier matches], [classifier rc]
+    fixture "$1"
+    CLASSIFY_RC=${4:-1}
+    RUN_CAP='timeout 60' CASE_GIT="git-stalls -C ${ROOT}" GIT_TIMEOUT=1 STALL_ON="$2" STALL_SKIP="${3:-0}" \
+        run_deploy "${PR_NUMBER}"
+}
+untouched() { # name
+    equals "$1: the checkout did not move" "$(git_at rev-parse HEAD)" "${LIVE_SHA}"
+    equals "$1: no heavy-work job ran" "$(logged heavy.argv)" ''
+}
+job_stalled() { # name, log line
+    contains "$1 fails the job" "${OUT}" 'STEPS 1-10 FAILED rc=1'
+    contains "$1 is named as a timeout" "${OUT}" "$2"
+    absent "$1: nothing is DONE" "${OUT}" 'DONE #'
+}
+TIMED_OUT="REFUSED: git did not answer in 1s: git-stalls -C"
+
+stalled stall-branch 'rev-parse --abbrev-ref HEAD'
+equals 'a branch read that never answers exits' "${RUN_RC}" 1
+contains 'and is refused as a timeout' "${OUT}" "${TIMED_OUT} ${CASE}/orbit rev-parse --abbrev-ref HEAD"
+untouched 'a branch read that never answers'
+
+fixture fail-branch
+RUN_CAP='timeout 60' CASE_GIT="git-stalls -C ${ROOT}" FAIL_ON='rev-parse --abbrev-ref HEAD' run_deploy "${PR_NUMBER}"
+contains 'a branch read git fails is named as that failure' "${OUT}" "reading the branch of ${ROOT} exited 128"
+absent 'not as a checkout off main' "${OUT}" 'is not on main'
+
+stalled stall-log 'log --oneline -3'
+contains 'a history read that never answers is refused' "${OUT}" "${TIMED_OUT} ${CASE}/orbit log --oneline -3"
+untouched 'a history read that never answers'
+
+stalled stall-head-fetch 'fetch origin'
+contains "the head check's fetch that never answers is refused" "${OUT}" "${TIMED_OUT} ${CASE}/orbit fetch origin"
+untouched "the head check's fetch that never answers"
+
+stalled stall-head-cat 'cat-file -e'
+contains "the head check's commit read that never answers is refused" "${OUT}" "${TIMED_OUT} ${CASE}/orbit cat-file -e"
+untouched "the head check's commit read that never answers"
+
+stalled stall-before 'rev-parse --short HEAD'
+contains 'a rollback-target read that never answers is refused' "${OUT}" "${TIMED_OUT} ${CASE}/orbit rev-parse --short HEAD"
+absent 'and nothing reaches STEP 1' "${OUT}" 'STEP 1 rollback target'
+untouched 'a rollback-target read that never answers'
+
+stalled stall-job-status 'status --short'
+job_stalled "the job's status that never answers" 'STEP 1 FAILED: git did not answer in 1s, and the live tree did not move'
+equals "the job's status that never answers: the checkout did not move" "$(git_at rev-parse HEAD)" "${LIVE_SHA}"
+
+stalled stall-job-fetch 'fetch origin' 2
+job_stalled "the job's fetch that never answers" 'STEP 1 FAILED: git did not answer in 1s, and the live tree did not move'
+equals "the job's fetch that never answers: the checkout did not move" "$(git_at rev-parse HEAD)" "${LIVE_SHA}"
+
+stalled stall-job-merge 'merge --ff-only'
+job_stalled "the job's fast-forward that never answers" "STEP 1 FAILED: git did not answer in 1s merging ${MERGE_SHA}"
+absent 'and no migration runs after it' "$(logged compose.argv)" 'migrate --force'
+
+stalled stall-job-landed 'rev-parse HEAD' 2
+job_stalled "the job's landed-head read that never answers" 'STEP 1 FAILED: git did not answer in 1s, so the landed commit is unknown'
+absent 'and no migration runs after it' "$(logged compose.argv)" 'migrate --force'
+
+stalled stall-job-diff 'diff --name-only'
+job_stalled "the job's what-moved read that never answers" 'STEP 3 FAILED: git did not answer in 1s reading what moved'
+absent 'and no migration runs after it' "$(logged compose.argv)" 'migrate --force'
+
+stalled stall-vhost 'diff --name-only' 3
+contains 'a vhost read that never answers is announced' "${OUT}" 'HOST VHOST UNKNOWN: git did not answer in 1s'
+contains 'and DONE carries it' "${OUT}" 'vhost-unknown'
+
+stalled stall-land-merge 'merge --ff-only' 0 0
+equals 'a landing whose fast-forward never answers exits' "${RUN_RC}" 4
+contains 'and is not called unchanged' "${OUT}" "NOT LANDED: git did not answer in 1s merging ${MERGE_SHA}"
+absent 'and it never says DONE' "${OUT}" 'DONE #'
+
+stalled stall-land-head 'rev-parse --short HEAD' 1 0
+contains 'a landing whose head read never answers says the head is unknown' "${OUT}" 'head unknown (git did not answer in 1s)'
+contains 'and DONE carries it as RED' "${OUT}" 'RED head unknown'
+
+stalled stall-nothing 'rev-parse HEAD' 0 2
+contains 'a nothing-to-land head read that never answers is refused' "${OUT}" "${TIMED_OUT} ${CASE}/orbit rev-parse HEAD"
+absent 'and it is not called nothing to land' "${OUT}" 'NOTHING TO LAND'
 
 if [ "${fails}" -eq 0 ]; then
     printf '\ndeploy-test: all checks passed\n'

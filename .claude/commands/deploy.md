@@ -78,6 +78,10 @@ One line per phase on stdout, the whole run in `/root/personal-vps-deploys/orbit
 | `HOST VHOST NEEDED, NOT RUN …` | `deploy/nginx` moved, and nginx reads `/etc/nginx/sites-available/flights.ghiecode.io`, which no pull touches. By hand, in this order: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`. Both tests say `syntax is ok`; never reload on a failed second one |
 | `DONE #N live <full merge sha> was … gated … root-owned 0 verify …` | the deploy is finished, and root's record `/var/lib/fleet/deploy-on-merge/orbit.record` took its `DONE` row first. `gated` says what was read and for which commit — `ledger head <sha>`, `ledger merge <sha>` or `by hand over [<verdict>]`. `root-owned` must read `0` |
 | `PAPERWORK PR #N deployed …` | backlog, handoff and the fleet-docs page still want a line from you |
+| `REFUSED: git did not answer in Ns: <git command>` | a git read before the job hung past `DEPLOY_GIT_TIMEOUT` (default 300s) and was killed; nothing moved. Find out why git is stuck (a lock, a FIFO, a full disk) before running it again |
+| `STEP 1 FAILED: git did not answer in Ns …` / `NOT LANDED: git did not answer …` | the fast-forward or a read around it hung and was killed. A fast-forward cut off mid-checkout can write files before it moves HEAD, so read `git status` as `orbit` and roll back to the `STEP 1` sha by the block below |
+| `head unknown (…)` | after a docs-only landing, the head read hung or failed, and `DONE` carries `RED head unknown`. The landing is on disk: read the head by hand as `orbit` |
+| `HOST VHOST UNKNOWN: …` | whether `deploy/nginx` moved could not be read, and `DONE` carries `vhost-unknown`. Run the `git diff` it prints, then the `HOST VHOST NEEDED` steps if it lists a file |
 | `REFUSED: …` | nothing moved. `FAILED rc=…` with a 20-line tail means something did — read the log, do not re-run a step. A `FAILED` at `VERIFY` is the one exception: see below |
 
 **After a `FAILED` at `VERIFY`** no `DONE` row names the sha, so the health check's live-tripwire fires. Check first, in this order:

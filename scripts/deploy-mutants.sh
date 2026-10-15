@@ -131,7 +131,7 @@ mutant 'resolve stops comparing the tip' lib/deploy/resolve.sh \
     's/\[ "\$tip" = "\$MERGE_SHA" \]/true/' \
     'a merge behind the tip is refused'
 mutant 'resolve stops comparing the trees' lib/deploy/resolve.sh \
-    's/if \$GIT diff --quiet "\$HEAD_SHA" "\$MERGE_SHA"; then/if true; then/' \
+    's/if deploy_git_or_refuse \$GIT diff --quiet "\$HEAD_SHA" "\$MERGE_SHA"; then/if true; then/' \
     'a merge tree that is not the head tree names the merge as the commit to gate' \
     'and a green head does not deploy a merge the ledger never saw' \
     'an ungated merge builds nothing' \
@@ -148,7 +148,7 @@ mutant 'gated reads the branch head, not the commit that was gated' lib/deploy/l
     'a gated merge commit deploys' \
     'and the ledger read is the merge commit, not the branch head'
 mutant 'the summary never says which commit was gated' lib/deploy/ledger.sh \
-    's/GATED="ledger \$what \${sha:0:7}"/GATED=ledger/' \
+    's/GATED="ledger \$what \${sha:0:7}\${bytree:+, by identical tree: \$bytree}"/GATED=ledger/' \
     'and DONE says the merge was the commit that was gated' \
     'and DONE says the head was the commit that was gated'
 mutant 'the recipe sends the operator to the branch head' deploy.sh \
@@ -208,16 +208,16 @@ mutant 'the landing stops proving ownership' deploy.sh \
     's/^    if \[ "\$rooted" -ne 0 \]; then$/    if false; then/' \
     'a landing onto a root-owned tree is not a clean landing'
 mutant 'the composer guard never matches' deploy.sh \
-    's/-- composer.lock)/-- composer.lock.absent)/' \
+    's/^if moved composer.lock; then/if moved composer.lock.absent; then/' \
     'composer.lock moving runs composer'
 mutant 'the image guard never matches' deploy.sh \
-    's#-- docker/app docker-compose.yml)#-- docker/app.absent)#' \
+    's#^if moved docker/app docker-compose.yml; then#if moved docker/app.absent; then#' \
     'docker moving recreates rather than restarts' 'compose moving recreates rather than restarts'
 mutant 'a compose-only change is restarted, not recreated' deploy.sh \
-    's#-- docker/app docker-compose.yml)#-- docker/app)#' \
+    's#^if moved docker/app docker-compose.yml; then#if moved docker/app; then#' \
     'compose moving recreates rather than restarts'
 mutant 'the front-end guard never matches' deploy.sh \
-    's/-- \$FRONT_END)/-- composer.lock.absent)/' \
+    's/^if moved \$FRONT_END; then/if moved composer.lock.absent; then/' \
     'frontend moving builds the assets' 'npm moving builds the assets' \
     'vite moving builds the assets' 'publicasset moving builds the assets' \
     'pkgjson moving builds the assets' 'npmrc moving builds the assets'
