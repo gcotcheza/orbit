@@ -209,8 +209,8 @@ is refused for having no token and never reaches the guard. Only a request sent 
 ## Rollback
 
 The deploy is a merge commit, so what has to reach `main` is a revert of that merge: a reset on the box alone leaves `main`
-carrying the bad code and the next deploy pulls it straight back. **⚠ NOTHING ON THIS BOX CAN PUSH** — `git-as` uses the app's
-read-only deploy key and root's git cannot enter this tree — so the rollback is two separate things.
+carrying the bad code and the next deploy pulls it back. **⚠ NOTHING ON THIS BOX CAN PUSH** — `git-as` uses the app's
+read-only deploy key and root's git cannot enter this tree — so the rollback is two things.
 
 **On disk — put the checkout back on the sha `DONE` printed as `was`:**
 
@@ -235,11 +235,9 @@ library comes from a root 700 copy out of root's mirror, never from the tree, wh
 )
 ```
 
-It prints `ROLLBACK <sha> recorded`, or a `REFUSED:` line naming why no row was written. Then **rebuild what the deploy built** — the asset build, `build:retain`, `view:clear`, the drain and
-the four restarts, then the `verify.sh` block under "After a `FAILED` at `VERIFY`" — because reverting and not restarting leaves the bad build serving. Reverting the
-merge and deploying that is the shorter path whenever there is time for it.
-**⚠ Known gap (card 536):** that rebuild runs root's `docker compose` over the checkout's own `docker-compose.yml` and `.env`, which the
-deploy itself refuses to read; the library has no root-compose entry point for a hand rollback yet, so this is the one place it still happens.
+It prints `ROLLBACK <sha> recorded` or a `REFUSED:` line naming why. Then **rebuild what the deploy built** — the asset build, `build:retain`, `view:clear`, the drain and
+the four restarts, then the `verify.sh` block under "After a `FAILED` at `VERIFY`" — a revert left unrestarted serves the bad build. Reverting the
+merge and deploying it is quicker given time. ⚠ Root's compose here, in the lift blocks and `verify.sh` reads the checkout's compose and `.env` (card 536).
 
 **For the record — the revert PR, from a root-owned private clone, never from this tree nor a worktree of it** (a worktree here
 is `orbit`-owned too, so `git-as` would push it with the same read-only key):
@@ -255,7 +253,7 @@ gh pr create --draft --fill --base main --head revert/<sha>
 
 Ghie merges it; the next deploy lands it, and the `reset --hard` above is what holds until then.
 
-**Migrations are not reverted, and so far do not need to be**: every one in this repo is additive, so the reverted code ignores
+**Migrations are not reverted**: every one in this repo is additive, so the reverted code ignores
 the new columns. Check before assuming — a destructive one needs its own written-down rollback. **Assets survive a rollback on
 purpose**: `build:retain` keeps the newest three builds, so a phone holding a reference to the previous one still resolves while
 the revert is deploying.
