@@ -70,12 +70,13 @@ land() {
     finish "$MERGE_SHA"
 }
 
+# The classifier's own git is unbounded, so the classifier runs under the deploy's git timeout.
 classify() {
-    local rc
-    DOCS_ONLY_GIT="$GIT" "$SCRIPT_DIR/docs-only.sh" "$MERGE_SHA"
-    rc=$?
+    local rc=0 n=${DEPLOY_GIT_TIMEOUT:-300}
+    DOCS_ONLY_GIT="$GIT" /usr/bin/timeout -k 5 "$n" "$SCRIPT_DIR/docs-only.sh" "$MERGE_SHA" </dev/null || rc=$?
     case "$rc" in
         0) land ;;
+        124|137) say "STOP: git did not answer in ${n}s while the classifier read $ROOT, so nothing was classified and nothing moved. Find out why git is stuck (a lock, a FIFO, a full disk) before running it again."; exit 1 ;;
         1) say 'CLASSIFIED code: the full deploy path' ;;
         2) nothing_to_land ;;
         3) say 'STOP: the classifier refused. A landing is a fast-forward or it is not a landing, and nothing was classified.'; exit 1 ;;

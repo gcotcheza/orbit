@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SELF="${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}"
 WORK="$(mktemp -d /srv/worker-scratch/orbit-deploy-mutants.XXXXXXXX)" || exit 1
 trap 'rm -rf "${WORK:?}"' EXIT
-HARNESS_TIMEOUT=120
+HARNESS_TIMEOUT=180
 missed=0
 n=0
 ran=0
@@ -353,6 +353,29 @@ mutant 'a short-sha DONE from an older log is not read' deploy.sh \
 mutant 'a head that is not in this checkout is never named' deploy.sh \
     's/^head_is_present() {/head_is_present() { return 0;/' \
     'a head this checkout never had is named, not blamed on the tree'
+
+# --- a git that never answers: each bounded call site, unbounded -------------
+mutant "the job's status is unbounded" deploy.sh \
+    's/^deploy_git_bounded \(\$GIT --no-optional-locks status --short\) /DEPLOY_GIT_OUT=\\$(\1) /' \
+    "the job's status that never answers fails the job"
+mutant "the job's fetch is unbounded" deploy.sh \
+    's/^deploy_git_bounded \(\$GIT fetch origin\) /DEPLOY_GIT_OUT=\\$(\1) /' \
+    "the job's fetch that never answers fails the job"
+mutant "the job's fast-forward is unbounded" deploy.sh \
+    's/^deploy_git_bounded \(\$GIT merge --ff-only \$MERGE_SHA\) /DEPLOY_GIT_OUT=\\$(\1) /' \
+    "the job's fast-forward that never answers fails the job"
+mutant "the job's landed-head read is unbounded" deploy.sh \
+    's/^deploy_git_bounded \(\$GIT rev-parse HEAD\) /DEPLOY_GIT_OUT=\\$(\1) /' \
+    "the job's landed-head read that never answers fails the job"
+mutant "the job's what-moved read is unbounded" deploy.sh \
+    's/^moved() { deploy_git_bounded \(\$GIT diff [^|]*\)|| /moved() { DEPLOY_GIT_OUT=\\$(\1) || /' \
+    "the job's what-moved read that never answers fails the job"
+mutant "the landing's fast-forward is unbounded" deploy.sh \
+    's/^    if ! deploy_git_bounded \(\$GIT merge --ff-only "\$MERGE_SHA"\); then$/    if ! DEPLOY_GIT_OUT=$(\1); then/' \
+    'a landing whose fast-forward never answers exits'
+mutant 'the classifier is unbounded' deploy.sh \
+    's|/usr/bin/timeout -k 5 "\$n" "\$SCRIPT_DIR/docs-only.sh"|"$SCRIPT_DIR/docs-only.sh"|' \
+    'a classifier whose git never answers exits'
 
 mutant 'the battery asks a healthchecked service for bare Up' verify.sh \
     "s/for s in horizon postgres redis; do ps_says \"\\\$s\" '(healthy)'; done/for s in horizon postgres redis; do ps_says \"\\\$s\" 'Up'; done/" \

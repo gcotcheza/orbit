@@ -1039,7 +1039,7 @@ fi
 stalled() { # fixture, STALL_ON argv, [STALL_SKIP earlier matches], [classifier rc]
     fixture "$1"
     CLASSIFY_RC=${4:-1}
-    RUN_CAP='timeout 60' CASE_GIT="git-stalls -C ${ROOT}" GIT_TIMEOUT=1 STALL_ON="$2" STALL_SKIP="${3:-0}" \
+    RUN_CAP='timeout 20' CASE_GIT="git-stalls -C ${ROOT}" GIT_TIMEOUT=1 STALL_ON="$2" STALL_SKIP="${3:-0}" \
         run_deploy "${PR_NUMBER}"
 }
 untouched() { # name
@@ -1116,6 +1116,15 @@ contains 'and DONE carries it as RED' "${OUT}" 'RED head unknown'
 stalled stall-nothing 'rev-parse HEAD' 0 2
 contains 'a nothing-to-land head read that never answers is refused' "${OUT}" "${TIMED_OUT} ${CASE}/orbit rev-parse HEAD"
 absent 'and it is not called nothing to land' "${OUT}" 'NOTHING TO LAND'
+
+fixture stall-classifier
+cp "${REAL_CLASSIFIER}" "${CASE}/scripts/docs-only.sh"
+RUN_CAP='timeout 20' CASE_GIT="git-stalls -C ${ROOT}" GIT_TIMEOUT=1 STALL_ON='merge-base --is-ancestor' \
+    run_deploy "${PR_NUMBER}"
+equals 'a classifier whose git never answers exits' "${RUN_RC}" 1
+contains 'and is stopped as a timeout' "${OUT}" "STOP: git did not answer in 1s while the classifier read ${ROOT}"
+absent 'and it is not read as git failing' "${OUT}" 'STOP: git itself failed'
+untouched 'a classifier whose git never answers'
 
 if [ "${fails}" -eq 0 ]; then
     printf '\ndeploy-test: all checks passed\n'
