@@ -1,4 +1,4 @@
-<!-- standards-version: 2026-10-04 · sha256: 1a37891995266cf66fc46c63c33135100e19f25c5d689c80cfbe17b98eb0b3eb -->
+<!-- standards-version: 2026-10-14 · sha256: 01cc4bbfcd69c2c7cee292ea62a1af791a73ef137d99f3ad94d81c0d65ade0ef -->
 # Engineering standards — all projects
 
 One set of rules for every project on this box. Nothing here is new: each rule is
@@ -89,7 +89,7 @@ checked** — because a rule nothing checks is a preference, and preferences dri
 
 **W1. Branch and open a pull request; never commit to `main`.** The PR is the only place the change can be seen before it is live. — *checked by:* review; `main` is a convention here, not a protected branch.
 
-**W2. A PR opens as a draft, gets an adversarial review by someone who did not build it, then goes ready (a PR whose every commit is authored by dependabot[bot] excepted — see W3).** The builder is the worst reader of their own diff. — *checked by:* `gh pr create --draft` → review → `gh pr ready`.
+**W2. A PR opens as a draft; its builder reviews the whole diff against the brief or checklist and fixes what they find before the gate (before review, where T1 needs none); then someone who did not build it reviews adversarially, and it goes ready. A PR whose every commit is authored by dependabot[bot] is exempt (see W3).** The builder is the worst reader of their own diff. — *checked by:* `gh pr create --draft` → review → `gh pr ready`; "How it was checked" says what the self-review checked and changed, or the reviewer returns it.
 
 **W3. Only Ghie merges — except a PR whose every commit is authored by `dependabot[bot]`, which a session may merge once the project gate is green on its head, and then deploy by the runbook.** The merge is the moment a change reaches real users, and it triggers the deploy — so it belongs to the person who reviewed it; a dependency bump nobody here wrote is the one change whose review is the gate. Dependabot's commits never pass the fleet pre-commit hook, so the gate's secrets step is their only S1 layer. — *checked by:* nobody else runs `gh pr merge` on any other PR; before a dependabot merge, a PR comment quotes `gh pr view <n> --json commits -q '.commits[].authors[].login'` printing only `dependabot[bot]`, and a green ledger row for every kind the project gates (`ci`, and `e2e` where it has one) on the head sha; a stated intent is not consent.
 
@@ -107,3 +107,5 @@ checked** — because a rule nothing checks is a preference, and preferences dri
 **W8. Every project has one deploy runbook, followed literally — and every fenced block in it is its own shell, so a step that needs a variable sets it and uses it in the same block.** Deploys fail on ordering, ownership and restarts — things nobody remembers correctly under pressure — and on this: an `APP_HOME` exported in one step came back empty in the next, one `rm -rf "$APP_HOME/…"` away from deleting the wrong tree. — *checked by:* `.claude/commands/deploy.md` in the repo; each project's runbook states whether merging to `main` deploys automatically or not; and a name the runbook itself introduces is set inside the block that reads it — a destructive line is written with `${VAR:?}`, so an empty one stops the step instead of widening its reach.
 
 **W9. Prove a mechanism by running it, never by reading its configuration.** Comments and config say what someone once believed; only the running thing says what is true. — *checked by:* run the command and quote its output — in the PR, in the report, in the answer to "is it working?".
+
+**W10. When a task is merged — and deployed, where it deploys — its owning session cleans up after it: the PR's worktrees and lanes, its gate and e2e image tags, and its scratch files.** Finished work left on disk fills it for everyone: the health check's disk row sat red for ten days at 89% while 117 lanes and ~80 unused images waited for someone else. — *checked by:* the reaper applying for lanes whose PR is merged and deployed, a gate-tag prune that selects by the project's own gate tag (never a production tag, T9), and the disk row; selection is by name or label after the read-only preview and its count (S7), never by an "unused" filter.

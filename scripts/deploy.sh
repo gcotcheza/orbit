@@ -43,8 +43,16 @@ rooted_count() { find "$ROOT" -user root -not -path "$ROOT/.claude/*" | wc -l; }
 
 land() {
     local head rooted code edge
-    $GIT merge --ff-only "$MERGE_SHA" || { say 'NOT LANDED: fast-forward refused, checkout unchanged'; exit 1; }
-    head=$($GIT rev-parse --short HEAD)
+    # shellcheck disable=SC2086
+    if ! deploy_git_bounded $GIT merge --ff-only "$MERGE_SHA"; then
+        [ -n "$DEPLOY_GIT_ERR" ] || { say 'NOT LANDED: fast-forward refused, checkout unchanged'; exit 1; }
+        say "NOT LANDED: $DEPLOY_GIT_ERR merging $MERGE_SHA. A fast-forward cut off mid-checkout writes files before it moves HEAD: read git status, and roll back to $BEFORE by the runbook."
+        exit 4
+    fi
+    printf '%s\n' "$DEPLOY_GIT_OUT"
+    # shellcheck disable=SC2086
+    if deploy_git_bounded $GIT rev-parse --short HEAD; then head=$DEPLOY_GIT_OUT
+    else head="unknown (${DEPLOY_GIT_ERR:-git rev-parse failed})"; EXTRA_DONE='RED head unknown'; fi
     rooted=$(rooted_count)
     if [ "$rooted" -ne 0 ]; then
         say "NOT LANDED CLEANLY: $rooted path(s) under $ROOT are root-owned. Repair the paths the find names, never the tree."
@@ -62,12 +70,13 @@ land() {
     finish "$MERGE_SHA"
 }
 
+# The classifier's own git is unbounded, so the classifier runs under the deploy's git timeout.
 classify() {
-    local rc
-    DOCS_ONLY_GIT="$GIT" "$SCRIPT_DIR/docs-only.sh" "$MERGE_SHA"
-    rc=$?
+    local rc=0 n=${DEPLOY_GIT_TIMEOUT:-300}
+    DOCS_ONLY_GIT="$GIT" /usr/bin/timeout -k 5 "$n" "$SCRIPT_DIR/docs-only.sh" "$MERGE_SHA" </dev/null || rc=$?
     case "$rc" in
         0) land ;;
+        124|137) say "STOP: git did not answer in ${n}s while the classifier read $ROOT, so nothing was classified and nothing moved. Find out why git is stuck (a lock, a FIFO, a full disk) before running it again."; exit 1 ;;
         1) say 'CLASSIFIED code: the full deploy path' ;;
         2) nothing_to_land ;;
         3) say 'STOP: the classifier refused. A landing is a fast-forward or it is not a landing, and nothing was classified.'; exit 1 ;;
@@ -85,8 +94,10 @@ head_is_present() {
     json=$($GH pr view "$PR" -R "$repo" --json headRefOid) || return 0
     head=$(json_value "$json" headRefOid)
     [ -n "$head" ] || return 0
-    $GIT fetch origin >/dev/null 2>&1 || return 0
-    $GIT cat-file -e "$head^{commit}" 2>/dev/null && return 0
+    # shellcheck disable=SC2086
+    deploy_git_or_refuse $GIT fetch origin 2>/dev/null || return 0
+    # shellcheck disable=SC2086
+    deploy_git_or_refuse $GIT cat-file -e "$head^{commit}" 2>/dev/null && return 0
     refuse "PR #$PR's head ${head:0:7} is not a commit in this checkout, so nothing can compare its tree with the merge's — which is what a squash or a rebase merge looks like. Gate the merge commit itself in a worktree and deploy it with --gated-by-hand."
 }
 
@@ -123,11 +134,15 @@ finished_log() {
 
 nothing_to_land() {
     local short done_in
-    if [ "$($GIT rev-parse HEAD)" != "$MERGE_SHA" ]; then
+    # shellcheck disable=SC2086
+    deploy_git_or_refuse $GIT rev-parse HEAD || refuse "cannot read the head of $ROOT, so whether the merge already landed is not known."
+    if [ "$DEPLOY_GIT_OUT" != "$MERGE_SHA" ]; then
         say 'STOP: NOTHING TO LAND — the merge changes nothing here.'
         exit 0
     fi
-    short=$($GIT rev-parse --short HEAD)
+    # shellcheck disable=SC2086
+    deploy_git_or_refuse $GIT rev-parse --short HEAD || refuse "cannot read the short head of $ROOT that older logs name."
+    short=$DEPLOY_GIT_OUT
     if done_in=$(finished_log "$MERGE_SHA" "$short"); then
         say "STOP: NOTHING TO LAND — $short is already deployed ($done_in said DONE)."
         exit 0
@@ -164,16 +179,26 @@ deploy_job() {
 set -e
 cd "$ROOT"
 rooted_count() { find "$ROOT" -user root -not -path "$ROOT/.claude/*" | wc -l; }
+EOF
+    # The job is its own bash, so it carries the library's bounded git verbatim. docs/DECISIONS.md
+    declare -f deploy_git_bounded
+    cat <<EOF
+DEPLOY_GIT_TIMEOUT=$(printf '%q' "${DEPLOY_GIT_TIMEOUT:-300}")
+moved() { deploy_git_bounded $GIT diff --name-only $BEFORE $MERGE_SHA -- "\$@" || { echo "STEP \$step FAILED: \${DEPLOY_GIT_ERR:-git diff exited \$?} reading what moved"; exit 1; }; [ -n "\$DEPLOY_GIT_OUT" ]; }
 echo "step 1 fetch + fast-forward"
-$GIT --no-optional-locks status --short
-$GIT fetch origin
-$GIT merge --ff-only $MERGE_SHA
-landed=\$($GIT rev-parse HEAD)
+deploy_git_bounded $GIT --no-optional-locks status --short || { echo "STEP 1 FAILED: \${DEPLOY_GIT_ERR:-git status exited \$?}, and the live tree did not move"; exit 1; }
+printf '%s\n' "\$DEPLOY_GIT_OUT"
+deploy_git_bounded $GIT fetch origin || { echo "STEP 1 FAILED: \${DEPLOY_GIT_ERR:-git fetch exited \$?}, and the live tree did not move"; exit 1; }
+deploy_git_bounded $GIT merge --ff-only $MERGE_SHA || { echo "STEP 1 FAILED: \${DEPLOY_GIT_ERR:-git merge --ff-only exited \$?} merging $MERGE_SHA"; exit 1; }
+printf '%s\n' "\$DEPLOY_GIT_OUT"
+deploy_git_bounded $GIT rev-parse HEAD || { echo "STEP 1 FAILED: \${DEPLOY_GIT_ERR:-git rev-parse HEAD exited \$?}, so the landed commit is unknown"; exit 1; }
+landed=\$DEPLOY_GIT_OUT
 [ "\$landed" = "$MERGE_SHA" ] || { echo "STEP 1 FAILED: HEAD \$landed is not the resolved merge $MERGE_SHA, and nothing is built on a commit that was not gated"; exit 1; }
 echo "step 2 root-owned proof"
 rooted=\$(rooted_count)
 [ "\$rooted" -eq 0 ] || { echo "STEP 2 FAILED: \$rooted root-owned path(s) before anything was built, and git running as orbit cannot write into a root-owned .git"; exit 1; }
-if [ -n "\$($GIT diff --name-only $BEFORE $MERGE_SHA -- composer.lock)" ]; then
+step=3
+if moved composer.lock; then
     echo "@@STEP 3 RAN: composer.lock moved"
     $COMPOSE exec -T app composer install --no-dev --optimize-autoloader --no-interaction
     $COMPOSE exec -T app chmod -R go-w vendor
@@ -182,13 +207,15 @@ else
 fi
 echo "step 4 migrate"
 $COMPOSE exec -T app php artisan migrate --force
-if [ -n "\$($GIT diff --name-only $BEFORE $MERGE_SHA -- docker/app docker-compose.yml)" ]; then
+step=4.5
+if moved docker/app docker-compose.yml; then
     echo "@@STEP 4.5 RAN: docker/app or docker-compose.yml moved"
     $COMPOSE build app horizon scheduler
     $COMPOSE up -d app horizon scheduler
     $COMPOSE up -d --force-recreate web
 fi
-if [ -n "\$($GIT diff --name-only $BEFORE $MERGE_SHA -- $FRONT_END)" ]; then
+step=5
+if moved $FRONT_END; then
     echo "@@STEP 5 RAN: the front end moved"
     $COMPOSE --profile build run --rm assets
     echo "@@STEP 7 RAN: build:retain snapshots the build that is on disk"
@@ -305,7 +332,13 @@ await_health() {
 # touches it, so a moved deploy/nginx is a host step this script announces.
 vhost_notice() {
     local moved
-    moved=$($GIT diff --name-only "$BEFORE" "$MERGE_SHA" -- deploy/nginx | tr '\n' ' ')
+    # shellcheck disable=SC2086
+    if ! deploy_git_bounded $GIT diff --name-only "$BEFORE" "$MERGE_SHA" -- deploy/nginx; then
+        VHOST_EXTRA=' vhost-unknown'
+        say "HOST VHOST UNKNOWN: ${DEPLOY_GIT_ERR:-git diff failed} reading whether deploy/nginx moved — look by hand: git diff --name-only $BEFORE $MERGE_SHA -- deploy/nginx"
+        return 0
+    fi
+    moved=$(printf '%s' "$DEPLOY_GIT_OUT" | tr '\n' ' ')
     [ -n "$moved" ] || return 0
     VHOST_EXTRA=' vhost-needed'
     say "HOST VHOST NEEDED, NOT RUN (deploy/nginx moved: ${moved% }) — by hand: nginx -t, then systemctl reload nginx"
@@ -375,15 +408,24 @@ main() {
     cd "$ROOT" || { printf 'deploy.sh: no checkout at %s\n' "$ROOT" >&2; exit 64; }
     deploy_log_open "$PR"
 
-    [ "$($GIT rev-parse --abbrev-ref HEAD)" = main ] \
+    local branch_rc=0
+    # shellcheck disable=SC2086
+    deploy_git_or_refuse $GIT rev-parse --abbrev-ref HEAD || branch_rc=$?
+    [ "$branch_rc" = 0 ] || refuse "reading the branch of $ROOT exited $branch_rc, so it is not known to be main; a deploy never fast-forwards over it."
+    [ "$DEPLOY_GIT_OUT" = main ] \
         || refuse "the checkout is not on main, and a deploy fast-forwards main."
-    $GIT log --oneline -3
+    # shellcheck disable=SC2086
+    deploy_git_or_refuse $GIT log --oneline -3 || :
+    printf '%s\n' "$DEPLOY_GIT_OUT"
 
     head_is_present
     resolve
     deploy_compose_init "$MERGE_SHA"
     COMPOSE=$DEPLOY_COMPOSE
-    BEFORE=$($GIT rev-parse --short HEAD)
+    BEFORE=''
+    # shellcheck disable=SC2086
+    if deploy_git_or_refuse $GIT rev-parse --short HEAD; then BEFORE=$DEPLOY_GIT_OUT; fi
+    [ -n "$BEFORE" ] || refuse "cannot read the current head of $ROOT, and that short sha is the rollback target STEP 1 prints."
     refuse_if_dirty
     classify
     gate_or_recipe

@@ -1,4 +1,4 @@
-# fleet-deploy-lib 2026-10-04.4 sha256:4053f9cbf5aac8573e6b5db55bd0a4e25c0c39318aa3d4481d233d9b71821cf1
+# fleet-deploy-lib 2026-10-15 sha256:289fe9f3555a4cc7c4be7d236d5e5eea16b82b8b589e4c773e3aee2e0cc2effe
 # shellcheck shell=bash
 # Root's compose reads no file the app user can edit: compose files exported beside this lib by
 # fleet-deploy, and root's /etc/fleet/app-env/<app>.env. docs/DECISIONS.md (backlog 320)
@@ -66,6 +66,25 @@ def fleet_off($ok): select(IN($ok[]) | not);
 empty
 '
 
+# Names compose reads from root's env file, over `config --no-interpolate`: value-less environment entries,
+# ${X}, ${X?}, ${X:?} and $X; $$ is a literal $ and the other operators carry a default. Names only, never a value.
+# shellcheck disable=SC2016
+FLEET_COMPOSE_ENV_NAMES='
+def fleet_refs:
+  gsub("[$][$]"; "") |
+  gsub("[$][{](?<n>[A-Za-z_][A-Za-z0-9_]*):?[?][^}]*[}]"; "${\(.n)}") |
+  gsub("[$][{][A-Za-z_][A-Za-z0-9_]*:?[-+?][^}]*[}]"; "") |
+  (scan("[$][{]([A-Za-z_][A-Za-z0-9_]*)") | .[0]),
+  (scan("[$]([A-Za-z_][A-Za-z0-9_]*)") | .[0]),
+  empty;
+(.services // {} | to_entries[] | .key as $s | .value | (
+  (.environment // {} | if type == "object" then to_entries[] | select(.value == null) | .key else .[] | select(test("=") | not) end | "\($s)\t\(.)"),
+  (.. | strings | fleet_refs | "\($s)\t\(.)"),
+  empty)),
+(del(.services) | .. | strings | fleet_refs | "top level\t\(.)"),
+empty
+'
+
 deploy_compose_root_only() { [ ! -L "$1" ] && [ "$(stat -c %u "$1")" = "${DEPLOY_ROOT_UID:-0}" ] && (( (8#$(stat -c %a "$1") & 8#022) == 0 )); }
 
 # Root's list of extra bind sources outside ROOT, /etc/fleet/app-binds/<app>: exact paths, no prefixes.
@@ -89,16 +108,25 @@ deploy_compose_bind_listed() { # path -> 0 when it is exactly a listed path and 
     return 1
 }
 
-deploy_compose_policy() { # root, config json, app -> 0, or 1 with DEPLOY_COMPOSE_ERR naming service and key
-    local root=$1 app=${3:-} rules kind svc key path
+deploy_compose_policy() { # root, config json, app, env file, compose command… -> 0, or 1 with DEPLOY_COMPOSE_ERR naming service and key
+    local root=$1 app=${3:-} env=${4:-} rules kind svc key path raw names keys
     [[ $app =~ ^[a-z0-9-]+$ ]] || { DEPLOY_COMPOSE_ERR="the policy was given no app name"; return 1; }
     deploy_compose_binds "$root" || return 1
+    [[ $2 == *[![:space:]]* ]] || { DEPLOY_COMPOSE_ERR="compose config returned nothing, so the policy could not be checked"; return 1; }
     rules=$(printf '%s' "$2" | jq -r --arg app "$app" --arg shared "$FLEET_COMPOSE_SHARED_NETWORKS" "$FLEET_COMPOSE_POLICY") || { DEPLOY_COMPOSE_ERR="jq could not read the compose config, so no compose call runs"; return 1; }
     while IFS=$'\t' read -r kind svc key path; do
         [ "$kind" != F ] || { DEPLOY_COMPOSE_ERR="compose $svc sets $key, which root's compose does not run (policy, backlog 320)"; return 1; }
         [ "$kind" != A ] || { DEPLOY_COMPOSE_ERR="compose $svc sets $key, which is not on root's compose list (policy, backlog 320)"; return 1; }
         [ "$kind" != P ] || [[ $path == /* && "$(realpath -m -- "$path")/" == "$root"/* ]] || { [ "$key" = volumes ] && deploy_compose_bind_listed "$path"; } || { DEPLOY_COMPOSE_ERR="compose $svc: $key reaches outside $root (policy, backlog 320)"; return 1; }
     done <<<"$rules"
+    raw=$("${@:5}" --profile '*' config --no-interpolate --format json) || { DEPLOY_COMPOSE_ERR="compose config --no-interpolate failed, so root's env file was not checked and no compose call runs"; return 1; }
+    [[ $raw == *[![:space:]]* ]] || { DEPLOY_COMPOSE_ERR="compose config returned nothing, so the policy could not be checked"; return 1; }
+    names=$(printf '%s' "$raw" | jq -r "$FLEET_COMPOSE_ENV_NAMES") || { DEPLOY_COMPOSE_ERR="jq could not read the uninterpolated compose config, so no compose call runs"; return 1; }
+    keys=$(sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' -- "$env") || { DEPLOY_COMPOSE_ERR="root's env file could not be read for its keys, so no compose call runs"; return 1; }
+    while IFS=$'\t' read -r svc key; do
+        [ -n "$key" ] || continue
+        grep -qxF -- "$key" <<<"$keys" || { DEPLOY_COMPOSE_ERR="compose $svc: $key has no value in root's env file (policy, backlog 320)"; return 1; }
+    done <<<"$names"
 }
 
 deploy_compose_buildcheck() { # root, run dir, config json -> 0, or 1 with DEPLOY_COMPOSE_ERR
@@ -142,24 +170,68 @@ deploy_compose_exec() {
     argv+=(--env-file "$env")
     sub=''
     for f in "$@"; do
+        [ "$sub" != next ] || { sub=''; continue; }
         case $f in
-            -f|--file|--file=*|--env-file|--env-file=*|--project-directory|--project-directory=*|-p|--project-name|--project-name=*)
+            -[!-]*|--file|--file=*|--env-file|--env-file=*|--project-directory|--project-directory=*|--project-name|--project-name=*|--workdir|--workdir=*)
                 [ -n "$sub" ] || { printf 'REFUSED: a caller names no compose file, env file, project directory or name: deploy_compose fixes them\n' >&2; return 1; } ;;
             --profile|--progress|--ansi|--parallel) [ -n "$sub" ] || sub=next ;;
             -*) ;;
-            *) case $sub in '') sub=$f ;; next) sub='' ;; esac ;;
+            *) [ -n "$sub" ] || sub=$f ;;
         esac
     done
+    case $sub in
+        build|up|create|run) deploy_compose_tracked "$root" || { printf 'REFUSED: %s\n' "$DEPLOY_COMPOSE_ERR" >&2; return 1; } ;;
+    esac
     case $sub in
         watch) printf 'REFUSED: compose watch copies the app tree into running containers, so root does not run it\n' >&2; return 1 ;;
         build|up|run|create)
             json=$("$docker" "${argv[@]}" --profile '*' config --no-env-resolution --format json) || { printf 'REFUSED: compose config failed, so the policy and the build context were not checked\n' >&2; return 1; }
-            deploy_compose_policy "$root" "$json" "$DEPLOY_COMPOSE_APP" || { printf 'REFUSED: %s\n' "$DEPLOY_COMPOSE_ERR" >&2; return 1; }
+            deploy_compose_policy "$root" "$json" "$DEPLOY_COMPOSE_APP" "$env" "$docker" "${argv[@]}" || { printf 'REFUSED: %s\n' "$DEPLOY_COMPOSE_ERR" >&2; return 1; }
             deploy_compose_buildcheck "$root" "$run" "$json" || { printf 'REFUSED: %s\n' "$DEPLOY_COMPOSE_ERR" >&2; return 1; } ;;
     esac
     for f in "${!COMPOSE_@}"; do unset "$f"; done
     "$docker" "${argv[@]}" "$@"
 }
+
+# Before a build, up, create or run (a plain run builds a missing image), the tracked files as the app user
+# sees them: an edit after the fast-forward is not built (cards 363, 371). root -> 0, or 1 with DEPLOY_COMPOSE_ERR
+deploy_compose_tracked() {
+    local out rc=0
+    deploy_compose_git_plain "$1/.git" || { DEPLOY_COMPOSE_ERR="$1/.git is not a plain git directory (a link, a FIFO or a non-file where git reads), so git is not run in it"; return 1; }
+    deploy_compose_git_bounded "${DEPLOY_GIT_AS:-git-as}" "$(deploy_compose_user "$1")" -C "$1" --no-optional-locks status --porcelain --untracked-files=no || rc=$?
+    out=$DEPLOY_GIT_OUT
+    [ "$rc" = 0 ] || { DEPLOY_COMPOSE_ERR="${DEPLOY_GIT_ERR:-git status exited $rc} in $1, so the tracked files are not known to be the merge and nothing is built over them"; return 1; }
+    [ -z "$out" ] || { DEPLOY_COMPOSE_ERR="tracked files in $1 are modified since the fast-forward, so nothing is built over them: ${out//$'\n'/; }"; return 1; }
+}
+
+# summary.sh's deploy_git_plain, which compose.sh run cannot source; test.sh fails if the two drift.
+deploy_compose_git_plain() {
+    local g=${1:-} f
+    [[ $g == /* && -d $g && ! -L $g ]] || return 1
+    [[ -f $g/HEAD && ! -L $g/HEAD ]] || return 1
+    for f in "$g"/{config,commondir,packed-refs,refs/heads/main,index,info/attributes,info/exclude} "$g"/worktrees/*/{HEAD,commondir,gitdir,index,locked}; do [[ ! -L $f && ( -f $f || ! -e $f ) ]] || return 1; done
+}
+
+# summary.sh's deploy_git_bounded, for the same reason; test.sh fails if the two drift.
+deploy_compose_git_bounded() {
+    local n=${DEPLOY_GIT_TIMEOUT:-300} o e wo we rc=0
+    DEPLOY_GIT_OUT='' DEPLOY_GIT_STDERR='' DEPLOY_GIT_ERR=''
+    [[ $n =~ ^[1-9][0-9]{0,4}$ ]] || { DEPLOY_GIT_ERR="DEPLOY_GIT_TIMEOUT '$n' is not a whole number of seconds from 1 to 99999"; return 1; }
+    o=$(mktemp -p /tmp deploy-git.XXXXXXXX) || { DEPLOY_GIT_ERR='no temp file could hold git output'; return 1; }
+    e=$(mktemp -p /tmp deploy-git.XXXXXXXX) || { rm -f -- "${o:?}"; DEPLOY_GIT_ERR='no temp file could hold git output'; return 1; }
+    exec {wo}>"$o" {we}>"$e" || { rm -f -- "${o:?}" "${e:?}"; DEPLOY_GIT_ERR='no temp file could hold git output'; return 1; }
+    # Unlinked while open, before git starts: a deploy killed mid-git leaves no file, and no trap is touched.
+    rm -f -- "${o:?}" "${e:?}"
+    /usr/bin/timeout -k 5 "$n" "$@" </dev/null >&"$wo" 2>&"$we" 3>&- {wo}>&- {we}>&- || rc=$?
+    DEPLOY_GIT_OUT=$(<"/dev/fd/$wo") || { DEPLOY_GIT_ERR='git output could not be read back'; rc=1; }
+    DEPLOY_GIT_STDERR=$(<"/dev/fd/$we") || { DEPLOY_GIT_ERR='git output could not be read back'; rc=1; }
+    exec {wo}>&- {we}>&-
+    [ -z "$DEPLOY_GIT_STDERR" ] || printf '%s\n' "$DEPLOY_GIT_STDERR" >&2
+    case $rc in 124|137) DEPLOY_GIT_ERR="git did not answer in ${n}s"; printf '%s: %s\n' "$DEPLOY_GIT_ERR" "$*" >&2 ;; esac
+    return "$rc"
+}
+
+deploy_compose_user() { printf '%s' "${DEPLOY_APP_USER:-$(basename -- "$1")}"; }
 
 deploy_compose_pieces() { # root, env file, run dir, file… -> 0, or 1 with DEPLOY_COMPOSE_ERR
     local root=$1 env=$2 run=$3 f d
@@ -196,18 +268,20 @@ deploy_compose_init() {
     [[ ${DOCKER:-docker} =~ $FLEET_COMPOSE_WORD ]] || refuse "DOCKER '${DOCKER:-}' is not one plain word."
     DEPLOY_COMPOSE="bash $FLEET_COMPOSE_LIB run $root ${DOCKER:-docker} $env ${DEPLOY_COMPOSE_FILE_LIST[*]} --"
     json=$($DEPLOY_COMPOSE --profile '*' config --no-env-resolution --format json) || refuse "compose config failed, so the policy could not be checked."
-    deploy_compose_policy "$root" "$json" "$DEPLOY_COMPOSE_APP" || refuse "$DEPLOY_COMPOSE_ERR"
+    deploy_compose_policy "$root" "$json" "$DEPLOY_COMPOSE_APP" "$env" deploy_compose || refuse "$DEPLOY_COMPOSE_ERR"
     say "COMPOSE root's files: ${DEPLOY_COMPOSE_FILE_LIST[*]} at ${exported:0:12}, env $env, policy clean"
 }
 
 deploy_compose() { [ -n "${DEPLOY_COMPOSE:-}" ] || refuse "deploy_compose_init has not run."; $DEPLOY_COMPOSE "$@"; }
 
-# A value from the app's .env, read as the app user (root never follows the app user's link);
+# A value from the app's .env, a plain file read as the app user (root never follows the app user's link);
 # a failed sudo returns 1 on stderr, never an empty value.
 deploy_app_env_value() {
-    local user=${DEPLOY_APP_USER:-$(basename -- "$ROOT")} dotenv
+    local user dotenv
+    user=$(deploy_compose_user "$ROOT")
     [[ ${1:-} =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || refuse "'${1:-}' is not an env key."
-    dotenv=$(sudo -n -u "$user" -- cat -- "$ROOT/.env" 2>/dev/null) || { printf 'REFUSED: %s/.env could not be read as %s (sudo), so no value is guessed\n' "$ROOT" "$user" >&2; return 1; }
+    # shellcheck disable=SC2016  # $1 is the inner bash's; a FIFO or a link is never opened
+    dotenv=$(sudo -n -u "$user" -- bash -c '[[ -f $1 && ! -L $1 ]] && exec cat -- "$1"' _ "$ROOT/.env" 2>/dev/null) || { printf 'REFUSED: %s/.env could not be read as %s (sudo), so no value is guessed\n' "$ROOT" "$user" >&2; return 1; }
     printf '%s\n' "$dotenv" | grep -m1 "^$1=" | cut -d= -f2-
 }
 
