@@ -238,6 +238,8 @@ library comes from a root 700 copy out of root's mirror, never from the tree, wh
 It prints `ROLLBACK <sha> recorded`, or a `REFUSED:` line naming why no row was written. Then **rebuild what the deploy built** — the asset build, `build:retain`, `view:clear`, the drain and
 the four restarts, then the `verify.sh` block under "After a `FAILED` at `VERIFY`" — because reverting and not restarting leaves the bad build serving. Reverting the
 merge and deploying that is the shorter path whenever there is time for it.
+**⚠ Known gap (card 536):** that rebuild runs root's `docker compose` over the checkout's own `docker-compose.yml` and `.env`, which the
+deploy itself refuses to read; the library has no root-compose entry point for a hand rollback yet, so this is the one place it still happens.
 
 **For the record — the revert PR, from a root-owned private clone, never from this tree nor a worktree of it** (a worktree here
 is `orbit`-owned too, so `git-as` would push it with the same read-only key):
