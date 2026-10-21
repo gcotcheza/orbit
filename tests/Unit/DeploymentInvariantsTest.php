@@ -155,6 +155,16 @@ final class DeploymentInvariantsTest extends TestCase
         }
     }
 
+    #[Test]
+    public function the_image_turns_upload_progress_off(): void
+    {
+        $ini = parse_ini_file(dirname(__DIR__, 2).'/docker/app/php.ini', false, INI_SCANNER_TYPED);
+        $this->assertIsArray($ini);
+
+        $this->assertArrayHasKey('session.upload_progress.enabled', $ini, 'php.ini leaves upload progress at its default, On.');
+        $this->assertFalse($ini['session.upload_progress.enabled']);
+    }
+
     /**
      * @return array<string, array<string, mixed>>
      */
