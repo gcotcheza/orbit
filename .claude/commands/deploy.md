@@ -2,15 +2,14 @@
 
 `/var/www/orbit` · https://flights.ghiecode.io · compose project `orbit` · user `orbit` (115:119) · nginx on 127.0.0.1:3085 only
 
-**Merging to `main` does not deploy:** nothing ships until this is run. `scripts/deploy.sh` **is** this runbook, held there by
-`scripts/deploy-test.sh`. Reasons: `docs/DECISIONS.md`, the-deploy-runbook-keeps-commands-not-reasons.
+**Merging to `main` does not deploy:** nothing ships until this is run. Reasons: `docs/DECISIONS.md`, the-deploy-runbook-keeps-commands-not-reasons.
 
 ## Before you run it
 
-1. **Ghie merged the pull request.** Only a merged pull request deploys.
-2. **The ledger holds a green `ci` and `e2e` for the commit `RESOLVED` names.** They are **not** re-run here.
-3. **Run as root**, from any directory; git goes through `git-as`, or reads root's mirror `/var/lib/fleet/deploy-src/orbit.git`.
-4. **One deploy a day, and this is that one.** Ghie's rule, not a technical limit.
+1. Ghie merged the pull request.
+2. The ledger holds a green `ci` and `e2e` for the commit `RESOLVED` names. They are **not** re-run here.
+3. Run as root, from any directory.
+4. One deploy a day, and this is that one.
 
 ## The one command
 
@@ -18,9 +17,7 @@
 fleet-deploy orbit <PR#>
 ```
 
-**`scripts/deploy.sh` run any other way refuses** (`REFUSED: … Deploy with: fleet-deploy <app> <PR#>`, or on
-`FLEET_DEPLOY_REPO` unset); never work around it. **Orbit does not use `--gated-by-hand`.** **A docs-only merge is the same
-command**: it lands, is proved and stops.
+**`scripts/deploy.sh` run any other way refuses**; never work around it. Orbit does not use `--gated-by-hand`. A docs-only merge is the same command.
 
 ## If it says NOT GATED
 
@@ -34,8 +31,7 @@ heavy-work orbit-gate-pr<N> -- bash scripts/check.sh overlay
 heavy-work orbit-e2e-pr<N> -- bash scripts/e2e.sh
 ```
 
-Then re-run `fleet-deploy orbit <PR#>`. Gate only the sha the line named; without both greens it is re-gated, not argued
-with. `docs/DEVELOPMENT.md` lists the five paths `scripts/e2e.sh` needs handed over.
+Then re-run `fleet-deploy orbit <PR#>`. Gate only the sha the line named. `docs/DEVELOPMENT.md` lists the five paths `scripts/e2e.sh` needs handed over.
 
 ## What it prints
 
@@ -43,20 +39,20 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 
 | line | means |
 |---|---|
-| `RESOLVED #N head … merge … trees identical` | the **head** is gated |
-| `RESOLVED #N merge … is origin/main and its tree is not head …'s` | the **merge commit** is gated |
+| `RESOLVED #N head … merge … trees identical` | the head is gated |
+| `RESOLVED #N merge … is origin/main and its tree is not head …'s` | the merge commit is gated |
 | `CLASSIFIED code` / `LANDED docs-only …` | a landing ends the run |
 | `GATED … ci and e2e both green` | `NOT GATED` prints the recipe above and stops |
 | `PRE-FLIGHT load … available …` | never refuses |
-| `STEP 0 baseline recorded` | bundle hash, four start times |
+| `STEP 0 baseline recorded` | |
 | `STEP 1 rollback target <sha>` | the sha to go back to |
-| `STEPS 1-10 ok in one heavy-work job` | names the steps that ran |
+| `STEPS 1-10 ok in one heavy-work job` | |
 | `HEALTH … healthy …` | `HEALTH TIMEOUT`: landed, battery **not** run, not a rollback |
 | `VERIFY --backend-only` / `VERIFY full` | bundle not rebuilt / rebuilt and served |
 | `HOST VHOST NEEDED, NOT RUN …` | by hand: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`, in this order; reload only when both say `syntax is ok` |
 | `DONE #N live <full merge sha> was … gated … root-owned 0 verify …` | finished; `root-owned` must read `0` |
-| `PAPERWORK PR #N deployed …` | backlog, handoff, fleet-docs page |
-| `REFUSED: git did not answer in Ns: <git command>` / `STOP: git did not answer in Ns while the classifier read …` | past `DEPLOY_GIT_TIMEOUT`; nothing moved. Find why git hangs first |
+| `PAPERWORK PR #N deployed …` | |
+| `REFUSED: git did not answer in Ns: <git command>` / `STOP: git did not answer in Ns while the classifier read …` | nothing moved; find why git hangs first |
 | `STEP 1 FAILED: git did not answer in Ns …` / `NOT LANDED: git did not answer …` | read `git status` as `orbit`; roll back to the `STEP 1` sha |
 | `head unknown (…)` | landed; read the head as `orbit`; `DONE` carries `RED head unknown` |
 | `HOST VHOST UNKNOWN: …` | `DONE` carries `vhost-unknown`; run the `git diff` it prints, then the `HOST VHOST NEEDED` steps if it lists a file |
@@ -83,13 +79,12 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 
 ## What stays human
 
-**Which pull request**; **one look at the site on a phone** when the release touches anything you tap; **the host vhost** when
-the notice fires; **the paperwork**; and **a surprise in the log** — an unexpected migration is a conversation, not a step.
+Which PR; a phone look when the release touches anything you tap; the vhost notice; the paperwork; a surprise in the log.
 
 ## Authenticated writes — not part of the battery
 
 **⚠ EVERYTHING IN THIS SECTION CHANGES PRODUCTION DATA.** Prefer `scripts/e2e.sh` (a sandbox). A
-write needs the CSRF token lifted **again, from the login response**; the pre-login one answers **419**.
+write needs the CSRF token lifted **again, from the login response**.
 
 ```bash
 (
@@ -118,7 +113,7 @@ rm -f "${HDR:?}" "${OUT:?}"
 
 **Good:** `204`, then `200`. A write goes inside its own copy of the lift, as below.
 
-**Pausing a route, and putting it back** — one block: a paused route is skipped in silence. Never pause without the restore.
+**Pausing a route, and putting it back** — one block. Never pause without the restore.
 
 ```bash
 (
@@ -161,13 +156,12 @@ curl -s --connect-timeout 5 --max-time 15 -H "$H" -H "Cookie: $AUTHED" \
 )
 ```
 
-**Good:** `204`, `200`, `200` from each PATCH, `[True]` from the read. A `419` from a PATCH is the token, not the app.
-Anything but `[True]` means a production route is still paused — put it back. **⚠ A bare `PUT /api/profile/password` is
-419, not 401.**
+**Good:** `204`, `200`, `200` from each PATCH, `[True]` from the read. Anything but `[True]` means a production route is
+still paused — put it back. **⚠ A bare `PUT /api/profile/password` is 419, not 401.**
 
 ## Rollback
 
-What has to reach `main` is a revert of the merge commit. **⚠ NOTHING ON THIS BOX CAN PUSH**, so the rollback is two things.
+**⚠ NOTHING ON THIS BOX CAN PUSH**, so the rollback is two things: the checkout on disk, and a revert of the merge commit for `main`.
 
 **On disk — put the checkout back on the sha `DONE` printed as `was`:**
 
@@ -192,8 +186,8 @@ The count must print `0`. Then write the rollback into root's record:
 ```
 
 It prints `ROLLBACK <sha> recorded` or a `REFUSED:` line naming why. Then **rebuild what the deploy built** — asset build,
-`build:retain`, `view:clear`, the drain, the four restarts, then the `verify.sh` block above. Reverting the merge and deploying it is quicker given time. ⚠ Root's compose here, in the lift blocks and `verify.sh`
-reads the checkout's compose and `.env` (card 536).
+`build:retain`, `view:clear`, the drain, the four restarts, then the `verify.sh` block above. Reverting the merge and deploying it is quicker given time.
+⚠ Root's compose here, in the lift blocks and `verify.sh` reads the checkout's compose and `.env` (card 536).
 
 **For the record — the revert PR, from a root-owned private clone, never this tree nor a worktree of it:**
 
@@ -206,5 +200,5 @@ git push -u origin revert/<sha>
 gh pr create --draft --fill --base main --head revert/<sha>
 ```
 
-Ghie merges it; the next deploy lands it, and the `reset --hard` holds until then. **Migrations are not reverted** — check
-each is additive first; a destructive one needs its own written-down rollback.
+**Migrations are not reverted** — check each is additive first; a destructive one needs its own
+written-down rollback.

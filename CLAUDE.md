@@ -11,7 +11,7 @@ overrides them and says why.
   `/var/www/orbit` IS production and is bind-mounted into the running
   containers, so editing, branching or building there changes the live site
   immediately; root's git does not enter it at all, and
-  `/var/www/orbit-worktrees/` is retired.
+  `/var/www/orbit-worktrees/` is retired. Workers and reviewers use a lane clone (`git clone /srv/sessions/orbit/repo /srv/worker-scratch/<lane>/repo`), never a worktree off the live repo.
 - **Merging to `main` does not deploy.** Nothing ships until
   `.claude/commands/deploy.md` is run, literally: the long-lived containers
   boot the code once, so an unrestarted deploy looks entirely successful and
