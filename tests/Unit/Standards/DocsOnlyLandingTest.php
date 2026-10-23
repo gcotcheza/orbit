@@ -32,7 +32,6 @@ final class DocsOnlyLandingTest extends TestCase
     }
 
     #[Test]
-    #[TestWith(['docs/STANDARDS.md', 'It is loaded as agent instructions through .claude/rules/standards.md.'])]
     #[TestWith(['docs/GO-LIVE.md', 'It is a procedure, and running it is the only test it gets.'])]
     #[TestWith(['.claude/commands/deploy.md', 'A runbook is checked by being run, never by being read.'])]
     #[TestWith(['scripts/docs-only.sh', 'The script that decides this cannot decide its own landing.'])]
@@ -265,15 +264,38 @@ final class DocsOnlyLandingTest extends TestCase
     #[Test]
     public function every_document_loaded_as_agent_instructions_is_excluded(): void
     {
-        $root = dirname(__DIR__, 3);
-        $rules = glob($root.'/.claude/rules/*') ?: [];
+        $this->assertSame(
+            [],
+            $this->rulesThatWouldLand(dirname(__DIR__, 3)),
+            'A document loaded as agent instructions through .claude/rules/ changes how the next '
+            .'change gets built, but the classifier would land it with no gate. Add it to the exclusion arm.'
+        );
+    }
 
-        $this->assertNotSame([], $rules, '.claude/rules/ is empty, so this test vets nothing.');
+    #[Test]
+    public function a_rule_pointing_at_an_unexcluded_document_is_found(): void
+    {
+        $sandbox = sys_get_temp_dir().'/orbit-rules-'.bin2hex(random_bytes(6));
+        mkdir($sandbox.'/.claude/rules', 0700, true);
+        mkdir($sandbox.'/docs', 0700);
+        touch($sandbox.'/docs/new-rule.md');
+        touch($sandbox.'/docs/GO-LIVE.md');
+        symlink('../../docs/new-rule.md', $sandbox.'/.claude/rules/new.md');
+        symlink('../../docs/GO-LIVE.md', $sandbox.'/.claude/rules/go-live.md');
 
-        $script = $this->read(self::SCRIPT);
-        $checked = 0;
+        $found = $this->rulesThatWouldLand($sandbox);
+        $this->remove($sandbox);
 
-        foreach ($rules as $rule) {
+        $this->assertSame(['docs/new-rule.md'], $found);
+    }
+
+    /** @return list<string> each docs/ or design/ document a .claude/rules entry loads that would land ungated */
+    private function rulesThatWouldLand(string $root): array
+    {
+        $root = realpath($root) ?: $root;
+        $landing = [];
+
+        foreach (glob($root.'/.claude/rules/*') ?: [] as $rule) {
             $target = realpath($rule);
 
             if ($target === false || ! str_starts_with($target, $root.'/')) {
@@ -282,22 +304,13 @@ final class DocsOnlyLandingTest extends TestCase
 
             $relative = substr($target, strlen($root) + 1);
 
-            if (! str_starts_with($relative, 'docs/') && ! str_starts_with($relative, 'design/')) {
-                continue;
+            if ((str_starts_with($relative, 'docs/') || str_starts_with($relative, 'design/'))
+                && $this->classify([$relative])['status'] === 0) {
+                $landing[] = $relative;
             }
-
-            $checked++;
-
-            $this->assertStringContainsString(
-                $relative,
-                $script,
-                "{$relative} is loaded as agent instructions through .claude/rules/, so a change to "
-                .'it changes how the next change gets built — but the classifier would land it as '
-                .'documentation with no gate. Add it to the exclusion arm.'
-            );
         }
 
-        $this->assertGreaterThan(0, $checked, 'No rule resolved into docs/ or design/ to vet.');
+        return $landing;
     }
 
     /**

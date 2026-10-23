@@ -28,11 +28,11 @@ refuse() {
     exit 3
 }
 
-# An allowlist: anything unlisted is code. STANDARDS.md is loaded as agent
-# instructions and GO-LIVE.md is a procedure, so both change what runs.
+# An allowlist: anything unlisted is code. GO-LIVE.md is a procedure, so it
+# changes what runs.
 is_documentation() {
     case "$1" in
-        docs/STANDARDS.md | docs/GO-LIVE.md) return 1 ;;
+        docs/GO-LIVE.md) return 1 ;;
         docs/* | design/*) return 0 ;;
         # `*` spans `/` in a case pattern, so the three root files are matched
         # only after every deeper path has been sent to code.

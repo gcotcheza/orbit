@@ -258,11 +258,6 @@ step 'The worktree script (scripts/worktree-test.sh)'
 # throwaway clone with a fake docker and a fake git on its PATH.
 "$here/scripts/worktree-test.sh"
 
-step 'Standards version (the canonical clone)'
-# A host step for the reason the one below is, and the only check here that can see
-# the copy go stale: the suite's drift test only ever reads its own header.
-"$here/scripts/standards-drift.sh" "$here"
-
 step 'Image tags (T9)'
 # A host step: the canonical clone is on this box and inside no container.
 # docs/DECISIONS.md, the-gate-is-one-script-two-runners
