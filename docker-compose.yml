@@ -37,9 +37,8 @@
 #     and FOWNER; `cap_drop: ALL` there is a container that will not boot.
 #     redis starts as 2999:2999 (`user:` below), not through the entrypoint's
 #     drop, which our `sh` command bypasses. Dropping its caps too is a separate
-#     change with a smoke-test in front of it. The one-shot redis-data-owner
-#     runs as root with the default set: the fleet's compose policy refuses
-#     `cap_add` (docs/DECISIONS.md, redis-runs-as-2999-…).
+#     change with a smoke-test in front of it. The one-shot redis-data-owner:
+#     docs/DECISIONS.md, redis-runs-as-2999-and-its-volume-is-handed-over.
 #
 # Usage:
 #   docker compose up -d --build

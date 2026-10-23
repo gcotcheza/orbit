@@ -80,7 +80,7 @@ final class DeploymentInvariantsTest extends TestCase
     }
 
     /**
-     * Root-run redis left /data root-owned at 0600; redis as 999 cannot open
+     * Root-run redis left /data root-owned at 0600; redis as 2999 cannot open
      * its AOF unless the one-shot hands the volume over first, on every `up`.
      */
     #[Test]
