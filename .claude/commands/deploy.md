@@ -44,14 +44,14 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 | `CLASSIFIED code` / `LANDED docs-only …` | a landing ends the run |
 | `GATED … ci and e2e both green` | `NOT GATED` prints the recipe above and stops |
 | `PRE-FLIGHT load … available …` | never refuses |
-| `STEP 0 baseline recorded` | |
+| `STEP 0 baseline recorded` | bundle hash, start times |
 | `STEP 1 rollback target <sha>` | the sha to go back to |
-| `STEPS 1-10 ok in one heavy-work job` | |
+| `STEPS 1-10 ok in one heavy-work job` | steps that ran |
 | `HEALTH … healthy …` | `HEALTH TIMEOUT`: landed, battery **not** run, not a rollback |
 | `VERIFY --backend-only` / `VERIFY full` | bundle not rebuilt / rebuilt and served |
 | `HOST VHOST NEEDED, NOT RUN …` | by hand: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`, in this order; reload only when both say `syntax is ok` |
 | `DONE #N live <full merge sha> was … gated … root-owned 0 verify …` | finished; `root-owned` must read `0` |
-| `PAPERWORK PR #N deployed …` | |
+| `PAPERWORK PR #N deployed …` | backlog, handoff, fleet-docs page |
 | `REFUSED: git did not answer in Ns: <git command>` / `STOP: git did not answer in Ns while the classifier read …` | nothing moved; find why git hangs first |
 | `STEP 1 FAILED: git did not answer in Ns …` / `NOT LANDED: git did not answer …` | read `git status` as `orbit`; roll back to the `STEP 1` sha |
 | `head unknown (…)` | landed; read the head as `orbit`; `DONE` carries `RED head unknown` |
@@ -79,7 +79,7 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 
 ## What stays human
 
-Which PR; a phone look when the release touches anything you tap; the vhost notice; the paperwork; a surprise in the log.
+Which PR; a phone look when the release touches anything you tap; the vhost notice; the paperwork; a surprise in the log — an unexpected migration is a conversation, not a step.
 
 ## Authenticated writes — not part of the battery
 
@@ -157,7 +157,8 @@ curl -s --connect-timeout 5 --max-time 15 -H "$H" -H "Cookie: $AUTHED" \
 ```
 
 **Good:** `204`, `200`, `200` from each PATCH, `[True]` from the read. Anything but `[True]` means a production route is
-still paused — put it back. **⚠ A bare `PUT /api/profile/password` is 419, not 401.**
+still paused — put it back. A `419` from a PATCH is the token, not the app.
+**⚠ A bare `PUT /api/profile/password` is 419, not 401.**
 
 ## Rollback
 
