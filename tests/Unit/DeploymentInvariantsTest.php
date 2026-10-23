@@ -18,9 +18,12 @@ final class DeploymentInvariantsTest extends TestCase
     private const UNPRIVILEGED = ['app', 'horizon', 'scheduler', 'web', 'assets'];
 
     /** Services whose official entrypoint starts as root and drops privileges itself. */
-    private const ROOT_ENTRYPOINT = ['postgres', 'redis'];
+    private const ROOT_ENTRYPOINT = ['postgres'];
 
     private const EXPECTED_USER = '115:119';
+
+    /** uid:gid of `redis` in the redis image, which already owns the volume's /data. */
+    private const REDIS_USER = '999:1000';
 
     #[Test]
     public function every_service_forbids_privilege_escalation(): void
@@ -62,7 +65,20 @@ final class DeploymentInvariantsTest extends TestCase
     }
 
     /**
-     * Deliberate exception: both entrypoints start as root and need CHOWN,
+     * redis's command is a `sh` wrapper, so the entrypoint never drops root;
+     * without `user:` redis-server runs as uid 0.
+     */
+    #[Test]
+    public function redis_runs_as_its_own_non_root_user(): void
+    {
+        $services = $this->services();
+        $this->assertArrayHasKey('redis', $services);
+        $this->assertArrayHasKey('user', $services['redis'], 'redis must not run as root');
+        $this->assertSame(self::REDIS_USER, $services['redis']['user']);
+    }
+
+    /**
+     * Deliberate exception: postgres's entrypoint starts as root and needs CHOWN,
      * SETUID, SETGID, DAC_OVERRIDE, FOWNER — `cap_drop: ALL` would not boot.
      */
     #[Test]

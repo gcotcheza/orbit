@@ -32,11 +32,12 @@
 #     capability at all — the kernel hands every container a default set of 14
 #     they have no use for.
 #
-#     DELIBERATELY NOT ON postgres AND redis. Both official entrypoints start as
-#     root and drop to their own user, which needs CHOWN, SETUID, SETGID,
-#     DAC_OVERRIDE and FOWNER; `cap_drop: ALL` there is a container that will
-#     not boot. Trimming their caps to that exact list is a separate change with
-#     a smoke-test in front of it, not a line snuck into this one.
+#     DELIBERATELY NOT ON postgres. Its official entrypoint starts as root and
+#     drops to its own user, which needs CHOWN, SETUID, SETGID, DAC_OVERRIDE
+#     and FOWNER; `cap_drop: ALL` there is a container that will not boot.
+#     redis starts as its image's `redis` user (999:1000, `user:` below), not
+#     through the entrypoint's drop, which our `sh` command bypasses. Dropping
+#     its caps too is a separate change with a smoke-test in front of it.
 #
 # Usage:
 #   docker compose up -d --build
@@ -265,8 +266,9 @@ services:
   redis:
     image: redis:8.10.2-alpine
     restart: unless-stopped
-    # no-new-privileges only, same reasoning as postgres: the official entrypoint
-    # starts as root and drops to `redis`. See the header.
+    # The image's `redis` user: the entrypoint drops root only when argv[0] is
+    # redis-server, and ours is `sh`, so without this redis ran as root.
+    user: '999:1000'
     security_opt: ['no-new-privileges:true']
     # The value, not a copy of it: this is the same REDIS_PASSWORD Laravel reads
     # out of .env, so the two cannot drift apart.
