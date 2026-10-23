@@ -18,9 +18,12 @@ final class DeploymentInvariantsTest extends TestCase
     private const UNPRIVILEGED = ['app', 'horizon', 'scheduler', 'web', 'assets'];
 
     /** Services whose official entrypoint starts as root and drops privileges itself. */
-    private const ROOT_ENTRYPOINT = ['postgres', 'redis'];
+    private const ROOT_ENTRYPOINT = ['postgres'];
 
     private const EXPECTED_USER = '115:119';
+
+    /** No host account's uid (999 is ghiecode's, 1000 the worker's); the one-shot hands the volume to it. */
+    private const REDIS_USER = '2999:2999';
 
     #[Test]
     public function every_service_forbids_privilege_escalation(): void
@@ -62,7 +65,76 @@ final class DeploymentInvariantsTest extends TestCase
     }
 
     /**
-     * Deliberate exception: both entrypoints start as root and need CHOWN,
+     * redis's command is a `sh` wrapper, so the entrypoint never drops root;
+     * without `user:` redis-server runs as uid 0, in production and the browser gate.
+     */
+    #[Test]
+    public function redis_runs_as_its_own_non_root_user(): void
+    {
+        foreach (['docker-compose.yml', 'docker-compose.e2e.yml'] as $file) {
+            $services = $this->services($file);
+            $this->assertArrayHasKey('redis', $services, $file);
+            $this->assertArrayHasKey('user', $services['redis'], "redis must not run as root in {$file}");
+            $this->assertSame(self::REDIS_USER, $services['redis']['user'], $file);
+        }
+    }
+
+    /**
+     * Root-run redis left /data root-owned at 0600; redis as 2999 cannot open
+     * its AOF unless the one-shot hands the volume over first, on every `up`.
+     */
+    #[Test]
+    public function redis_starts_only_after_its_volume_is_handed_to_it(): void
+    {
+        $services = $this->services();
+        $this->assertArrayHasKey('redis-data-owner', $services);
+        $owner = $services['redis-data-owner'];
+
+        $this->assertSame(
+            ['redis-data-owner' => ['condition' => 'service_completed_successfully']],
+            $services['redis']['depends_on'] ?? null,
+            'redis must wait for the volume hand-over to finish, or it starts on root-owned files.'
+        );
+        $this->assertSame(['chown', '-R', self::REDIS_USER, '/data'], $owner['command'] ?? null);
+        $this->assertSame($services['redis']['volumes'] ?? null, $owner['volumes'] ?? null);
+        $this->assertSame(
+            ['command', 'image', 'security_opt', 'user', 'volumes'],
+            $this->sortedKeys($owner),
+            'the one-shot is root with default caps and nothing else: no cap_add, network_mode or ports'
+        );
+    }
+
+    /**
+     * fleet-deploy refuses a service key off its policy's allowlist (cap_add and
+     * network_mode among them); jq is in no image, so this reads that list from compose.sh.
+     */
+    #[Test]
+    public function every_service_key_is_on_roots_compose_allowlist(): void
+    {
+        $policy = (string) file_get_contents(dirname(__DIR__, 2).'/scripts/lib/deploy/compose.sh');
+        $this->assertSame(1, preg_match('/keys\[\] \| fleet_off\(\[([^\]]+)\]\) \| "A\\\\t\\\\\(\$s\)/', $policy, $allow));
+        $allowed = array_map(static fn (string $key): string => trim($key, ' "'), explode(',', $allow[1] ?? ''));
+        $this->assertContains('user', $allowed);
+
+        foreach ($this->services() as $name => $service) {
+            $this->assertSame([], array_values(array_diff(array_keys($service), $allowed)), "{$name} sets a key root's compose does not run");
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $service
+     * @return list<string>
+     */
+    private function sortedKeys(array $service): array
+    {
+        $keys = array_keys($service);
+        sort($keys);
+
+        return $keys;
+    }
+
+    /**
+     * Deliberate exception: postgres's entrypoint starts as root and needs CHOWN,
      * SETUID, SETGID, DAC_OVERRIDE, FOWNER — `cap_drop: ALL` would not boot.
      */
     #[Test]
@@ -168,9 +240,9 @@ final class DeploymentInvariantsTest extends TestCase
     /**
      * @return array<string, array<string, mixed>>
      */
-    private function services(): array
+    private function services(string $file = 'docker-compose.yml'): array
     {
-        $compose = Yaml::parseFile(dirname(__DIR__, 2).'/docker-compose.yml');
+        $compose = Yaml::parseFile(dirname(__DIR__, 2).'/'.$file);
 
         $this->assertIsArray($compose);
         $this->assertArrayHasKey('services', $compose);

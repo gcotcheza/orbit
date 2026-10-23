@@ -26,17 +26,19 @@
 #     the usual "shell in a container -> root in the container" ladder.
 #
 #   cap_drop: ['ALL']
-#     Set only on app / horizon / scheduler / web / assets. Those five start as
+#     Set on app / horizon / scheduler / web / assets. Those five start as
 #     uid 115 (`user:` below), never bind a port below 1024, never chown a file
 #     they do not own and never change identity, so they need no Linux
 #     capability at all — the kernel hands every container a default set of 14
 #     they have no use for.
 #
-#     DELIBERATELY NOT ON postgres AND redis. Both official entrypoints start as
-#     root and drop to their own user, which needs CHOWN, SETUID, SETGID,
-#     DAC_OVERRIDE and FOWNER; `cap_drop: ALL` there is a container that will
-#     not boot. Trimming their caps to that exact list is a separate change with
-#     a smoke-test in front of it, not a line snuck into this one.
+#     DELIBERATELY NOT ON postgres. Its official entrypoint starts as root and
+#     drops to its own user, which needs CHOWN, SETUID, SETGID, DAC_OVERRIDE
+#     and FOWNER; `cap_drop: ALL` there is a container that will not boot.
+#     redis starts as 2999:2999 (`user:` below), not through the entrypoint's
+#     drop, which our `sh` command bypasses. Dropping its caps too is a separate
+#     change with a smoke-test in front of it. The one-shot redis-data-owner:
+#     docs/DECISIONS.md, redis-runs-as-2999-and-its-volume-is-handed-over.
 #
 # Usage:
 #   docker compose up -d --build
@@ -262,11 +264,26 @@ services:
   # this bridge network. With no password, anything that ever gets a foothold in
   # any container on the network can read the cache and push jobs onto the
   # queue. `--requirepass` is the one line that closes that.
+  #
+  # One-shot: hands /data to redis's uid before redis starts, every `up`.
+  # docs/DECISIONS.md redis-runs-as-2999-and-its-volume-is-handed-over
+  redis-data-owner:
+    image: redis:8.10.2-alpine
+    user: '0:0'
+    security_opt: ['no-new-privileges:true']
+    command: ['chown', '-R', '2999:2999', '/data']
+    volumes:
+      - 'orbit-redis:/data'
+
   redis:
     image: redis:8.10.2-alpine
     restart: unless-stopped
-    # no-new-privileges only, same reasoning as postgres: the official entrypoint
-    # starts as root and drops to `redis`. See the header.
+    depends_on:
+      redis-data-owner:
+        condition: service_completed_successfully
+    # The entrypoint drops root only when argv[0] is redis-server, and ours is
+    # `sh`; 2999 is no host user's uid (999 is ghiecode's, 1000 the worker's).
+    user: '2999:2999'
     security_opt: ['no-new-privileges:true']
     # The value, not a copy of it: this is the same REDIS_PASSWORD Laravel reads
     # out of .env, so the two cannot drift apart.
