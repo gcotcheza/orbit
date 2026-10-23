@@ -63,3 +63,8 @@ overrides them and says why.
   when `resources/js/lib/` carries that module and a test compares its
   sentences with `app/Http/Requests/`; follow-up branch
   `feat/inline-validation`.
+- **W7, decisions stay in the single `docs/DECISIONS.md`.** Orbit keeps the
+  old W7 rather than one file per decision under `docs/decisions/`, and a PR
+  body closes with `Technical detail: commits and docs/DECISIONS.md.`; the
+  per-file W7 is adopted at backlog 576, after KQ #78. Drop this line when
+  576 lands.
