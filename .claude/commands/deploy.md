@@ -53,20 +53,20 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 | `STEPS 1-10 ok in one heavy-work job` | names the steps that ran |
 | `HEALTH … healthy …` | `HEALTH TIMEOUT`: landed, battery **not** run, not a rollback |
 | `VERIFY --backend-only` / `VERIFY full` | bundle not rebuilt / rebuilt and served |
-| `HOST VHOST NEEDED, NOT RUN …` | by hand: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`; reload only on a second `syntax is ok` |
+| `HOST VHOST NEEDED, NOT RUN …` | by hand: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`, in this order; reload only when both say `syntax is ok` |
 | `DONE #N live <full merge sha> was … gated … root-owned 0 verify …` | finished; `root-owned` must read `0` |
 | `PAPERWORK PR #N deployed …` | backlog, handoff, fleet-docs page |
 | `REFUSED: git did not answer in Ns: <git command>` / `STOP: git did not answer in Ns while the classifier read …` | past `DEPLOY_GIT_TIMEOUT`; nothing moved. Find why git hangs first |
 | `STEP 1 FAILED: git did not answer in Ns …` / `NOT LANDED: git did not answer …` | read `git status` as `orbit`; roll back to the `STEP 1` sha |
-| `head unknown (…)` | landed; read the head as `orbit` |
-| `HOST VHOST UNKNOWN: …` | run the `git diff` it prints, then the `HOST VHOST NEEDED` steps if it lists a file |
+| `head unknown (…)` | landed; read the head as `orbit`; `DONE` carries `RED head unknown` |
+| `HOST VHOST UNKNOWN: …` | `DONE` carries `vhost-unknown`; run the `git diff` it prints, then the `HOST VHOST NEEDED` steps if it lists a file |
 | `REFUSED: …` | before `STEPS 1-10` nothing moved; inside the job it is a `FAILED`. `FAILED rc=…`: read the log, never re-run a step (at `VERIFY`: below) |
 
 **After a `FAILED` at `VERIFY`** the live-tripwire fires. Check, in this order:
 
 1. The only `orbit` live-tripwire line is `HEAD is <sha>, and no deploy log … names it`. Any `changed outside a deploy`, `hooks … changed` or `HEAD moved from` line is something else: stop and investigate.
 2. `HEAD` = `origin/main` in `/var/www/orbit` (`git-as orbit -C /var/www/orbit rev-parse HEAD origin/main`).
-3. Re-run the read-only battery from a root 700 copy out of root's mirror. Green → accept once with
+3. Re-run the read-only battery from a root 700 copy out of root's mirror, never from the tree `orbit` can write. Green → accept once with
    `vps-health-check.sh --accept-tripwire orbit`. Red → roll back as the script prints.
 
 ```bash
@@ -88,7 +88,7 @@ the notice fires; **the paperwork**; and **a surprise in the log** — an unexpe
 
 ## Authenticated writes — not part of the battery
 
-**⚠ EVERYTHING IN THIS SECTION CHANGES PRODUCTION DATA.** Prefer `scripts/e2e.sh`, which makes these writes in a sandbox. A
+**⚠ EVERYTHING IN THIS SECTION CHANGES PRODUCTION DATA.** Prefer `scripts/e2e.sh` (a sandbox). A
 write needs the CSRF token lifted **again, from the login response**; the pre-login one answers **419**.
 
 ```bash
@@ -178,7 +178,7 @@ git-as orbit -C /var/www/orbit reset --hard "${WAS:?set WAS to the sha DONE prin
   && find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
 ```
 
-The count must print `0`. Then write the rollback into root's record, with the library copied out of root's mirror:
+The count must print `0`. Then write the rollback into root's record:
 
 ```bash
 (
@@ -192,8 +192,8 @@ The count must print `0`. Then write the rollback into root's record, with the l
 ```
 
 It prints `ROLLBACK <sha> recorded` or a `REFUSED:` line naming why. Then **rebuild what the deploy built** — asset build,
-`build:retain`, `view:clear`, the drain, the four restarts, then the `verify.sh` block above; unrestarted, it serves the bad
-build. ⚠ Root's compose here and in the lift blocks reads the checkout's compose and `.env` (card 536).
+`build:retain`, `view:clear`, the drain, the four restarts, then the `verify.sh` block above. Reverting the merge and deploying it is quicker given time. ⚠ Root's compose here, in the lift blocks and `verify.sh`
+reads the checkout's compose and `.env` (card 536).
 
 **For the record — the revert PR, from a root-owned private clone, never this tree nor a worktree of it:**
 
