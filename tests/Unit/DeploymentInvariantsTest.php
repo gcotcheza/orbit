@@ -22,7 +22,7 @@ final class DeploymentInvariantsTest extends TestCase
 
     private const EXPECTED_USER = '115:119';
 
-    /** uid:gid of `redis` in the redis image, which already owns the volume's /data. */
+    /** uid:gid of `redis` in the redis image; the one-shot hands the volume's contents to it. */
     private const REDIS_USER = '999:1000';
 
     #[Test]
@@ -66,15 +66,43 @@ final class DeploymentInvariantsTest extends TestCase
 
     /**
      * redis's command is a `sh` wrapper, so the entrypoint never drops root;
-     * without `user:` redis-server runs as uid 0.
+     * without `user:` redis-server runs as uid 0, in production and the browser gate.
      */
     #[Test]
     public function redis_runs_as_its_own_non_root_user(): void
     {
+        foreach (['docker-compose.yml', 'docker-compose.e2e.yml'] as $file) {
+            $services = $this->services($file);
+            $this->assertArrayHasKey('redis', $services, $file);
+            $this->assertArrayHasKey('user', $services['redis'], "redis must not run as root in {$file}");
+            $this->assertSame(self::REDIS_USER, $services['redis']['user'], $file);
+        }
+    }
+
+    /**
+     * Root-run redis left /data root-owned at 0600; redis as 999 cannot open
+     * its AOF unless the one-shot hands the volume over first, on every `up`.
+     */
+    #[Test]
+    public function redis_starts_only_after_its_volume_is_handed_to_it(): void
+    {
         $services = $this->services();
-        $this->assertArrayHasKey('redis', $services);
-        $this->assertArrayHasKey('user', $services['redis'], 'redis must not run as root');
-        $this->assertSame(self::REDIS_USER, $services['redis']['user']);
+        $this->assertArrayHasKey('redis-data-owner', $services);
+        $owner = $services['redis-data-owner'];
+
+        $this->assertSame(
+            ['redis-data-owner' => ['condition' => 'service_completed_successfully']],
+            $services['redis']['depends_on'] ?? null,
+            'redis must wait for the volume hand-over to finish, or it starts on root-owned files.'
+        );
+        $this->assertSame(['chown', '-R', self::REDIS_USER, '/data'], $owner['command'] ?? null);
+        $this->assertSame($services['redis']['volumes'] ?? null, $owner['volumes'] ?? null);
+        $this->assertSame(['ALL'], $owner['cap_drop'] ?? null, 'the hand-over keeps only the capabilities it uses');
+        $this->assertSame(
+            ['CHOWN', 'DAC_READ_SEARCH'],
+            $owner['cap_add'] ?? null,
+            'without DAC_READ_SEARCH a second `up` cannot enter the 0700 appendonlydir redis now owns, and redis never starts'
+        );
     }
 
     /**
@@ -184,9 +212,9 @@ final class DeploymentInvariantsTest extends TestCase
     /**
      * @return array<string, array<string, mixed>>
      */
-    private function services(): array
+    private function services(string $file = 'docker-compose.yml'): array
     {
-        $compose = Yaml::parseFile(dirname(__DIR__, 2).'/docker-compose.yml');
+        $compose = Yaml::parseFile(dirname(__DIR__, 2).'/'.$file);
 
         $this->assertIsArray($compose);
         $this->assertArrayHasKey('services', $compose);
