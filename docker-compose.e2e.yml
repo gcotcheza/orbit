@@ -165,10 +165,10 @@ services:
   # `--save ''` and no appendonly: nothing here outlives the run, and an RDB
   # dump into a container that is about to be deleted is a disk write for
   # nobody.
-  # No volume and nothing written, so no hand-over one-shot: the image's /data is already 999's.
+  # No volume and nothing written, so no hand-over one-shot; uid as production's.
   redis:
     image: redis:8.10.2-alpine
-    user: '999:1000'
+    user: '2999:2999'
     security_opt: ['no-new-privileges:true']
     environment:
       REDIS_PASSWORD: '${REDIS_PASSWORD:-}'

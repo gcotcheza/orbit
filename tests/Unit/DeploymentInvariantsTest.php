@@ -22,8 +22,8 @@ final class DeploymentInvariantsTest extends TestCase
 
     private const EXPECTED_USER = '115:119';
 
-    /** uid:gid of `redis` in the redis image; the one-shot hands the volume's contents to it. */
-    private const REDIS_USER = '999:1000';
+    /** No host account's uid (999 is ghiecode's, 1000 the worker's); the one-shot hands the volume to it. */
+    private const REDIS_USER = '2999:2999';
 
     #[Test]
     public function every_service_forbids_privilege_escalation(): void
@@ -97,12 +97,40 @@ final class DeploymentInvariantsTest extends TestCase
         );
         $this->assertSame(['chown', '-R', self::REDIS_USER, '/data'], $owner['command'] ?? null);
         $this->assertSame($services['redis']['volumes'] ?? null, $owner['volumes'] ?? null);
-        $this->assertSame(['ALL'], $owner['cap_drop'] ?? null, 'the hand-over keeps only the capabilities it uses');
         $this->assertSame(
-            ['CHOWN', 'DAC_READ_SEARCH'],
-            $owner['cap_add'] ?? null,
-            'without DAC_READ_SEARCH a second `up` cannot enter the 0700 appendonlydir redis now owns, and redis never starts'
+            ['command', 'image', 'security_opt', 'user', 'volumes'],
+            $this->sortedKeys($owner),
+            'the one-shot is root with default caps and nothing else: no cap_add, network_mode or ports'
         );
+    }
+
+    /**
+     * fleet-deploy refuses a service key off its policy's allowlist (cap_add and
+     * network_mode among them); jq is in no image, so this reads that list from compose.sh.
+     */
+    #[Test]
+    public function every_service_key_is_on_roots_compose_allowlist(): void
+    {
+        $policy = (string) file_get_contents(dirname(__DIR__, 2).'/scripts/lib/deploy/compose.sh');
+        $this->assertSame(1, preg_match('/keys\[\] \| fleet_off\(\[([^\]]+)\]\) \| "A\\\\t\\\\\(\$s\)/', $policy, $allow));
+        $allowed = array_map(static fn (string $key): string => trim($key, ' "'), explode(',', $allow[1] ?? ''));
+        $this->assertContains('user', $allowed);
+
+        foreach ($this->services() as $name => $service) {
+            $this->assertSame([], array_values(array_diff(array_keys($service), $allowed)), "{$name} sets a key root's compose does not run");
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $service
+     * @return list<string>
+     */
+    private function sortedKeys(array $service): array
+    {
+        $keys = array_keys($service);
+        sort($keys);
+
+        return $keys;
     }
 
     /**
