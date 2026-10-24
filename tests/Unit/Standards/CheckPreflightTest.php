@@ -111,7 +111,7 @@ final class CheckPreflightTest extends TestCase
             self::IMAGE,
             $call,
             'The lint must run from a version-pinned image; `stable` is a moving tag, and a gate '
-            ."whose linter changes under it proves nothing tomorrow (docs/STANDARDS.md S5).\n".$call
+            ."whose linter changes under it proves nothing tomorrow (fleet standard S5).\n".$call
         );
         $this->assertStringContainsString(
             '-S warning',
@@ -213,7 +213,7 @@ final class CheckPreflightTest extends TestCase
         $merged = 'Each guard\'s name has turned up in the other script, which is the visible half '
             .'of merging them; a merge under some third name would walk straight past this test, and '
             .'what holds the two apart is docs/DECISIONS.md, the-two-stack-guards-are-not-one. They '
-            .'only look alike (docs/STANDARDS.md C2): scripts/check.sh asks whether the stack it is '
+            .'only look alike (fleet standard C2): scripts/check.sh asks whether the stack it is '
             .'about to gate was started from this directory, scripts/e2e.sh whether this checkout is '
             .'the one being served. Sharing them makes one caller inherit the other question.';
 

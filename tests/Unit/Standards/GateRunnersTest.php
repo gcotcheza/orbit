@@ -21,7 +21,6 @@ final class GateRunnersTest extends TestCase
         'guard diff reads',
         'the deploy script',
         'the worktree script',
-        'standards version',
         'image tags',
         'deploy mutants',
         'composer advisories',
@@ -45,7 +44,7 @@ final class GateRunnersTest extends TestCase
         $this->assertSame(
             self::ORDER,
             $this->stepLabels(),
-            'The gate reordered itself. Cheapest first is the rule (docs/STANDARDS.md T3): a '
+            'The gate reordered itself. Cheapest first is the rule (fleet standard T3): a '
             .'four-second style failure must not be found after a ninety-second analysis run.'
         );
     }
