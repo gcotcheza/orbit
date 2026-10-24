@@ -81,14 +81,11 @@ run without it. There is no second one to weigh against it, because there is no
 override: S1 leaves the guard none, and a commit it refuses is reported with the
 key it named and then fixed, never stood up some other way.
 
-**The gate.** `scripts/check.sh` runs sixteen checks, six of them on the
+**The gate.** `scripts/check.sh` runs fifteen checks, five of them on the
 host, stopping at the first failure: ShellCheck (every shell script under
 `scripts/`, at `-S warning`), Gitleaks, Pint, the guard-diff lint (on the host,
 the fleet's `fleet-lint-guard-diff` over `scripts/`), the deploy script's own tests (on
-the host), the worktree script's own tests (on the host), the standards-version
-check (on the host, against the canonical clone's `VERSION` and
-`ENGINEERING-STANDARDS.md`, and the only check here that can see the vendored
-copy go stale), the image-tag check (on the host, over the compose files, from
+the host), the worktree script's own tests (on the host), the image-tag check (on the host, over the compose files, from
 the canonical clone at `/srv/engineering-standards`, so this step runs on this
 box), the deploy mutants
 (on the host, breaking one deploy guard at a time to prove each of those tests
@@ -223,10 +220,9 @@ host nginx vhost and the owner-key decisions, is [`docs/GO-LIVE.md`](GO-LIVE.md)
 
 - **[`CLAUDE.md`](../CLAUDE.md)** — the house rules for this repository, and the
   written exceptions to the fleet standard.
-- **[`docs/STANDARDS.md`](STANDARDS.md)** — the fleet engineering
-  standard, vendored byte-identically from the `engineering-standards`
-  repository. It applies here in full; `CLAUDE.md` says where Orbit does not
-  meet it yet.
+- **The fleet engineering standard** — kept in the `engineering-standards`
+  repository, not here; sessions on the box load it from `/root/.claude/CLAUDE.md`.
+  It applies here in full; `CLAUDE.md` says where Orbit does not meet it yet.
 - **[`docs/DECISIONS.md`](DECISIONS.md)** — the engineering *why* that is
   too long for a comment and is not a domain rule.
 - **[`docs/E2E.md`](E2E.md)** — the browser gate: the sandbox, the

@@ -1,13 +1,16 @@
 # Orbit — house rules
 
-Fleet engineering standards: `docs/STANDARDS.md` (also loaded via
-`.claude/rules/standards.md`). They apply here in full; anything below
-overrides them and says why.
+Fleet standards load centrally (`/root/.claude/CLAUDE.md`); this repo keeps no
+copy. They apply here in full; anything below overrides them and says why.
 
-- **Where work happens.** A git worktree, one per branch, cut from the
-  root-owned clone at `/srv/sessions/orbit/repo` by `scripts/worktree.sh add
-  <branch>`, which refuses any path under `/var/www` and runs:
+- **Where work happens.** The Orbit session works in a git worktree, one per
+  branch, cut from the root-owned clone at `/srv/sessions/orbit/repo` (fetch
+  first) by `scripts/worktree.sh add <branch>`, which refuses any path under
+  `/var/www` and runs:
   `git -C /srv/sessions/orbit/repo worktree add -b <branch> /srv/sessions/orbit/worktrees/<name> origin/main`.
+  Workers and reviewers use a lane clone from GitHub instead, never a
+  worktree: `gh repo clone gcotcheza/orbit /srv/worker-scratch/<lane>/repo`
+  (the session clone's local `main` can be behind GitHub's).
   `/var/www/orbit` IS production and is bind-mounted into the running
   containers, so editing, branching or building there changes the live site
   immediately; root's git does not enter it at all, and
@@ -61,3 +64,8 @@ overrides them and says why.
   when `resources/js/lib/` carries that module and a test compares its
   sentences with `app/Http/Requests/`; follow-up branch
   `feat/inline-validation`.
+- **W7, decisions stay in the single `docs/DECISIONS.md`.** Orbit keeps the
+  old W7 rather than one file per decision under `docs/decisions/`, and a PR
+  body closes with `Technical detail: commits and docs/DECISIONS.md.`; the
+  per-file W7 is adopted at backlog 576, after KQ #78. Drop this line when
+  576 lands.
