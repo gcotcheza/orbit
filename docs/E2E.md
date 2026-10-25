@@ -756,6 +756,7 @@ one in what a wait actually proves:
 | --- | --- |
 | `port 3185 is taken by something that is not the orbit-e2e stack` | a previous `--keep` run, or something else. `scripts/e2e.sh --down`. |
 | `cannot talk to docker` | run it as root, not `sudo -u orbit`. |
+| `… is a symbolic link; refusing to write through it` | `.env.e2e`, `e2e/`, `e2e/artifacts` or `e2e/baselines` is a link, and root would write wherever it points. Find out who planted it before removing it. |
 | `EACCES … mkdir '/work/e2e/baselines'` | a root-owned file in the checkout. Repair it narrowly, the way the deploy runbook does: `find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' -exec chown orbit:orbit {} +`, then read the count back. |
 | `.env.e2e is missing` | run `scripts/e2e.sh`, which generates it. |
 | `.env.e2e has no E2E_FIXED_NOW` | a file written before the frozen clock; `scripts/e2e.sh` regenerates it by itself. |

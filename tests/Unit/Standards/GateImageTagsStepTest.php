@@ -24,7 +24,7 @@ final class GateImageTagsStepTest extends TestCase
     private const NEXT_STEP = 'Deploy mutants (scripts/deploy-mutants.sh)';
 
     /** The host steps around this one, stubbed so a run is milliseconds. */
-    private const HOST_STEPS = ['guard-lint.sh', 'deploy-test.sh', 'verify-test.sh', 'worktree-test.sh', 'deploy-mutants.sh'];
+    private const HOST_STEPS = ['guard-lint.sh', 'deploy-test.sh', 'verify-test.sh', 'worktree-test.sh', 'e2e-env-test.sh', 'deploy-mutants.sh'];
 
     /** Neutralised in the copy: it reaches outside the throwaway root. */
     private const HANDS_OVER = 'chown -R 115:119';
