@@ -946,11 +946,26 @@ exit 0
 SH
 chmod 0755 "${BIN}/docker"
 E2E_LEDGER="${CASE}/e2e-ledger"
+# The browser gate judges the tree it sits in, so it runs from a copy whose owner each run sets.
+E2E_TREE="${CASE}/e2e-tree"
+mkdir -p "${E2E_TREE}/scripts/lib/gate"
+cp "${E2E_SH}" "${E2E_TREE}/scripts/e2e.sh"
+cp "$(dirname "${E2E_SH}")/lib/e2e-env.sh" "${E2E_TREE}/scripts/lib/"
+cp "$(dirname "${E2E_SH}")/lib/gate/deploy-lib.sh" "${E2E_TREE}/scripts/lib/gate/"
 : >"${E2E_LEDGER}"
 E2E_OUT="$(env PATH="${BIN}:${PATH}" GATE_LEDGER="${E2E_LEDGER}" GATE_LEDGER_GIT="git -C ${ROOT}" \
-    ORBIT_GATE_LOG=/dev/null bash "${E2E_SH}" 2>&1)" || true
+    ORBIT_GATE_LOG=/dev/null bash "${E2E_TREE}/scripts/e2e.sh" 2>&1)" || true
+contains 'a root-owned tree is refused for its owner before docker is asked anything' "${E2E_OUT}" \
+    'this tree must be owned by uid 115'
+absent 'and the owner refusal comes before the docker pre-flight' "${E2E_OUT}" 'cannot talk to docker'
+
+chown 115 "${E2E_TREE}"
+: >"${E2E_LEDGER}"
+E2E_OUT="$(env PATH="${BIN}:${PATH}" GATE_LEDGER="${E2E_LEDGER}" GATE_LEDGER_GIT="git -C ${ROOT}" \
+    ORBIT_GATE_LOG=/dev/null bash "${E2E_TREE}/scripts/e2e.sh" 2>&1)" || true
 contains 'a browser gate that cannot reach docker stops in its pre-flight' "${E2E_OUT}" \
     'cannot talk to docker'
+absent 'and its ledger arm named HEAD' "${E2E_OUT}" 'arming could not name HEAD'
 equals 'and the ledger holds no line for an environmental refusal' \
     "$(wc -l <"${E2E_LEDGER}")" '0'
 
