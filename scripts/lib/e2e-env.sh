@@ -12,6 +12,16 @@ e2e_refuse_links() { # PATH...
     done
 }
 
+e2e_refuse_foreign_owner() { # DIR UID — every file here is made as UID, so the tree must be its
+    local owner
+    owner="$(stat -c %u -- "$1")" || return 1
+    if [ "$owner" != "$2" ]; then
+        printf '%s is owned by uid %s; the browser gate makes its files as uid %s, so it needs a tree uid %s owns\n' \
+            "$1" "$owner" "$2" "$2" >&2
+        return 1
+    fi
+}
+
 e2e_as_owner() { # UID GID COMMAND... — as that uid when root, as the caller otherwise
     local uid=$1 gid=$2
     shift 2

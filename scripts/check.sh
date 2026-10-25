@@ -258,7 +258,7 @@ step 'The worktree script (scripts/worktree-test.sh)'
 # throwaway clone with a fake docker and a fake git on its PATH.
 "$here/scripts/worktree-test.sh"
 
-step 'The browser gate writes as root (scripts/e2e-env-test.sh)'
+step 'The browser gate makes its files as the app user (scripts/e2e-env-test.sh)'
 # A host step for the same reason: shell testing shell, in temp directories only.
 bash "$here/scripts/e2e-env-test.sh"
 

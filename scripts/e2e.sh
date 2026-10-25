@@ -29,8 +29,10 @@
 #   Talking to /var/run/docker.sock is a group membership, and `orbit` does not
 #   have it. This script writes, chowns and chmods nothing in the checkout as
 #   root: .env.e2e and e2e/'s directories are made as 115:119 (= the host
-#   `orbit` user), and every container runs as 115:119. Only the docker daemon
-#   acts there as root: it bind-mounts the checkout, and .env.e2e over its .env.
+#   `orbit` user), so the checkout must be 115's; the app, web and browser
+#   containers run as 115:119, postgres and redis as their own users.
+#   Root still reads .env.e2e (compose's --env-file, a grep), and the docker
+#   daemon bind-mounts the checkout, and .env.e2e over its .env.
 #
 # ⚠ IT NEEDS ~2 GB OF DISK for the Playwright image the first time it runs.
 #   That image carries the browsers; it is pulled once and cached.
@@ -133,6 +135,7 @@ if [ "$KEEP" -eq 0 ] && [ "$DOWN_ONLY" -eq 0 ] && [ "${#PW_ARGS[@]}" -eq 0 ]; th
     GATE_WHOLE=1
 fi
 
+e2e_refuse_foreign_owner "$ROOT" "$APP_UID" || fail "this tree must be owned by uid ${APP_UID} (orbit)"
 e2e_refuse_links .env.e2e e2e e2e/artifacts e2e/baselines || fail 'a path this script writes is a link'
 
 # -----------------------------------------------------------------------------
