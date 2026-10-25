@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# Sourced by scripts/e2e.sh, which runs as root inside an app-owned tree: a link
-# planted at a path it writes would aim root's write anywhere. decision: e2e-writes-refuse-links
+# Sourced by scripts/e2e.sh, which runs as root inside an app-owned tree; root itself
+# writes, chowns and chmods nothing there. decision: e2e-writes-refuse-links
 
 e2e_refuse_links() { # PATH...
     local p
@@ -12,20 +12,27 @@ e2e_refuse_links() { # PATH...
     done
 }
 
-# The content arrives on stdin; root only ever writes into its own mktemp -d.
-e2e_env_place() { # TARGET UID GID
-    local dir rc own=()
-    e2e_refuse_links "$1" || return 1
-    [ "$(id -u)" -ne 0 ] || own=(-o "$2" -g "$3")
-    dir=$(mktemp -d) || return 1
-    cat >"$dir/env" && install "${own[@]}" -m 600 "$dir/env" "$1"
-    rc=$?
-    rm -rf -- "${dir:?}"
-    return "$rc"
+e2e_as_owner() { # UID GID COMMAND... — as that uid when root, as the caller otherwise
+    local uid=$1 gid=$2
+    shift 2
+    if [ "$(id -u)" -eq 0 ]; then
+        setpriv --reuid="$uid" --regid="$gid" --clear-groups -- "$@"
+    else
+        "$@"
+    fi
 }
 
-e2e_hand_over_dirs() { # UID GID — e2e/artifacts and e2e/baselines, made and handed to the browser's user
+e2e_env_place() { # TARGET UID GID — the content arrives on stdin
+    e2e_refuse_links "$1" || return 1
+    if [ -e "$1" ] && [ ! -f "$1" ]; then
+        printf '%s is not a regular file; refusing to write into it\n' "$1" >&2
+        return 1
+    fi
+    e2e_as_owner "$2" "$3" install -m 600 /dev/null "$1" \
+        && e2e_as_owner "$2" "$3" tee "$1" >/dev/null
+}
+
+e2e_hand_over_dirs() { # UID GID — e2e/artifacts and e2e/baselines, made as the browser's user
     e2e_refuse_links e2e e2e/artifacts e2e/baselines || return 1
-    mkdir -p e2e/artifacts e2e/baselines || return 1
-    [ "$(id -u)" -ne 0 ] || chown -R -h "$1:$2" e2e
+    e2e_as_owner "$1" "$2" mkdir -p e2e/artifacts e2e/baselines
 }

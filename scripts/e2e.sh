@@ -27,9 +27,10 @@
 #
 # ⚠ RUN IT AS ROOT (or as a user in the `docker` group), NOT as `sudo -u orbit`.
 #   Talking to /var/run/docker.sock is a group membership, and `orbit` does not
-#   have it. Nothing here writes to the checkout as root: every container runs
-#   as 115:119 (= the host `orbit` user), which is also who ends up owning
-#   e2e/artifacts/.
+#   have it. This script writes, chowns and chmods nothing in the checkout as
+#   root: .env.e2e and e2e/'s directories are made as 115:119 (= the host
+#   `orbit` user), and every container runs as 115:119. Only the docker daemon
+#   acts there as root: it bind-mounts the checkout, and .env.e2e over its .env.
 #
 # ⚠ IT NEEDS ~2 GB OF DISK for the Playwright image the first time it runs.
 #   That image carries the browsers; it is pulled once and cached.
@@ -132,7 +133,7 @@ if [ "$KEEP" -eq 0 ] && [ "$DOWN_ONLY" -eq 0 ] && [ "${#PW_ARGS[@]}" -eq 0 ]; th
     GATE_WHOLE=1
 fi
 
-e2e_refuse_links .env.e2e e2e e2e/artifacts e2e/baselines || fail 'a path this script writes as root is a link'
+e2e_refuse_links .env.e2e e2e e2e/artifacts e2e/baselines || fail 'a path this script writes is a link'
 
 # -----------------------------------------------------------------------------
 # .env.e2e — the sandbox's whole identity
@@ -430,7 +431,7 @@ if [ -n "$vite_build_reason" ]; then
         npm run build
 fi
 
-# The two directories the browser container writes into, made and handed over
+# The two directories the browser container writes into, made as its user
 # BEFORE it starts. It runs as 115:119, so a root-owned e2e/ tree gives it EACCES
 # on the first screenshot, which Playwright reports as a failing assertion.
 # The deploy runbook's narrow find/chown pair is the repair.
