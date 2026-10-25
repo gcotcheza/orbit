@@ -21,6 +21,7 @@ final class GateRunnersTest extends TestCase
         'guard diff reads',
         'the deploy script',
         'the worktree script',
+        'the browser gate makes its files as the app user',
         'image tags',
         'deploy mutants',
         'composer advisories',
