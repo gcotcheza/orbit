@@ -173,14 +173,14 @@ git-as orbit -C /var/www/orbit reset --hard "${WAS:?set WAS to the sha DONE prin
   && find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
 ```
 
-The count must print `0`. Then write the rollback into root's record:
+The count must print `0`. Then write the rollback into root's record (`summary.sh` comes from root's engineering-standards clone at `origin/main`, the lib fleet-deploy lays beside `deploy.sh`):
 
 ```bash
 (
   set -u
   LIBDIR=$(mktemp -d /var/lib/fleet/deploy-src/rollback.XXXXXXXX) || exit
   trap 'rm -rf "${LIBDIR:?}"' EXIT
-  git --git-dir=/var/lib/fleet/deploy-src/orbit.git show main:scripts/lib/deploy/summary.sh >"${LIBDIR:?}/summary.sh" || exit
+  git -C / --git-dir=/srv/engineering-standards/.git show refs/remotes/origin/main:scripts/lib/deploy/summary.sh >"${LIBDIR:?}/summary.sh" || exit
   SHA=$(git-as orbit -C /var/www/orbit rev-parse --verify HEAD) || exit
   ROOT=/var/www/orbit bash -c '. "$1/summary.sh" && deploy_record_rollback "$2" runbook' _ "${LIBDIR:?}" "${SHA:?}"
 )

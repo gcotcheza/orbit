@@ -4,7 +4,7 @@
 #   fleet-deploy orbit <PR#> [--gated-by-hand]
 #
 # Root runs it only from fleet-deploy's export of scripts/ at the merge commit;
-# the vendored summary.sh refuses any other copy. Every git goes through git-as, the moving
+# the lib's summary.sh refuses any other copy. Every git goes through git-as, the moving
 # half goes through ONE heavy-work job, and every phase prints one line here
 # while the full output goes to $DEPLOY_LOG_DIR/<utc>-pr<N>.log.
 set -u
@@ -13,20 +13,22 @@ set -u
 # fleet-deploy's export, and the checkout's helpers are the app user's to edit.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-# Vendored from gcotcheza/engineering-standards and not edited here:
-# tests/Unit/Standards/DeployLibDriftTest.php recomputes each file's own hash.
-# shellcheck source=scripts/lib/deploy/summary.sh
-. "$(dirname "$0")/lib/deploy/summary.sh"
-# shellcheck source=scripts/lib/deploy/resolve.sh
-. "$(dirname "$0")/lib/deploy/resolve.sh"
-# shellcheck source=scripts/lib/deploy/ledger.sh
-. "$(dirname "$0")/lib/deploy/ledger.sh"
-# shellcheck source=scripts/lib/deploy/preflight.sh
-. "$(dirname "$0")/lib/deploy/preflight.sh"
-# shellcheck source=scripts/lib/deploy/compose.sh
-. "$(dirname "$0")/lib/deploy/compose.sh"
-# shellcheck source=scripts/lib/deploy/literal.sh
-. "$(dirname "$0")/lib/deploy/literal.sh"
+# shellcheck source=scripts/lib/gate/deploy-lib.sh
+. "$SCRIPT_DIR/lib/gate/deploy-lib.sh"
+# fleet-deploy lays root's box clone of the lib beside this file, never the
+# commit's copy; set here, so no caller's DEPLOY_LIB is read. docs/DECISIONS.md, deploy-lib-is-not-vendored
+DEPLOY_LIB="$SCRIPT_DIR/lib/deploy"
+deploy_lib_ready || { printf 'REFUSED: run this only as fleet-deploy orbit <PR#>, which lays the deploy lib beside it\n' >&2; exit 2; }
+# shellcheck source=/srv/engineering-standards/scripts/lib/deploy/summary.sh
+. "$DEPLOY_LIB/summary.sh"
+# shellcheck source=/srv/engineering-standards/scripts/lib/deploy/resolve.sh
+. "$DEPLOY_LIB/resolve.sh"
+# shellcheck source=/srv/engineering-standards/scripts/lib/deploy/ledger.sh
+. "$DEPLOY_LIB/ledger.sh"
+# shellcheck source=/srv/engineering-standards/scripts/lib/deploy/preflight.sh
+. "$DEPLOY_LIB/preflight.sh"
+# shellcheck source=/srv/engineering-standards/scripts/lib/deploy/compose.sh
+. "$DEPLOY_LIB/compose.sh"
 
 usage() {
     printf 'usage: fleet-deploy orbit <PR#> [--gated-by-hand]\n' >&2

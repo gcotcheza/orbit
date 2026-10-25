@@ -26,6 +26,9 @@ final class DeployRunbookGitAsTest extends TestCase
 
     private const MIRROR = '/var/lib/fleet/deploy-src/orbit.git';
 
+    /** Root's clone of the deploy lib, read at the origin/main fleet-deploy lays beside deploy.sh. */
+    private const LIB_CLONE = '/srv/engineering-standards/.git';
+
     /**
      * Measured on the runbook that stopped restating the deploy: the two rollback lines
      * and the rollback record's HEAD read are the only git a person still types.
@@ -76,11 +79,14 @@ final class DeployRunbookGitAsTest extends TestCase
     #[Test]
     public function only_a_read_out_of_roots_mirror_is_spared_the_root_git_check(): void
     {
-        $this->assertTrue($this->readsRootsMirror('  git --git-dir='.self::MIRROR.' show main:scripts/lib/deploy/summary.sh >"${LIBDIR:?}/summary.sh" || exit'));
+        $this->assertTrue($this->readsRootsMirror('  git --git-dir='.self::MIRROR.' show main:scripts/verify.sh >"${VDIR:?}/verify.sh" || exit'));
+        $this->assertTrue($this->readsRootsMirror('  git -C / --git-dir='.self::LIB_CLONE.' show refs/remotes/origin/main:scripts/lib/deploy/summary.sh >"${LIBDIR:?}/summary.sh" || exit'));
 
         foreach ([
             'git --git-dir=/var/www/orbit/.git show main:scripts/lib/deploy/summary.sh >x',
             'git --git-dir='.self::MIRROR.' fetch origin',
+            'git -C / --git-dir='.self::LIB_CLONE.' fetch origin',
+            'git -C / --git-dir='.self::LIB_CLONE.' show main:scripts/lib/deploy/summary.sh >x',
             'git -C /var/www/orbit show main:scripts/deploy.sh >x',
             'cd /var/www/orbit && git --git-dir='.self::MIRROR.' show main:scripts/x >y',
         ] as $line) {
@@ -88,10 +94,11 @@ final class DeployRunbookGitAsTest extends TestCase
         }
     }
 
-    /** Root's git on root's own mirror, never in the tree: the one place root reads the library. */
+    /** Root's git on root's own mirror or on the deploy lib's clone, never in the tree. */
     private function readsRootsMirror(string $line): bool
     {
-        return preg_match('#^\s*git --git-dir='.preg_quote(self::MIRROR, '#').' show main:scripts/\S+ >#', $line) === 1;
+        return preg_match('#^\s*git --git-dir='.preg_quote(self::MIRROR, '#').' show main:scripts/\S+ >#', $line) === 1
+            || preg_match('#^\s*git -C / --git-dir='.preg_quote(self::LIB_CLONE, '#').' show refs/remotes/origin/main:scripts/lib/deploy/\S+ >#', $line) === 1;
     }
 
     #[Test]

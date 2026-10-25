@@ -45,18 +45,6 @@ trait RunsGateScripts
         return ['status' => proc_close($process), 'output' => $output];
     }
 
-    /** @return list<string> */
-    private function readLog(string $path): array
-    {
-        if (! is_file($path)) {
-            return [];
-        }
-
-        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-
-        return $lines === false ? [] : $lines;
-    }
-
     private function remove(string $path): void
     {
         if (is_file($path) || is_link($path)) {

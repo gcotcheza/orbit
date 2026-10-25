@@ -17,6 +17,9 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SELF="${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}"
+# shellcheck source=scripts/lib/gate/deploy-lib.sh
+. "${SCRIPT_DIR}/lib/gate/deploy-lib.sh"
+deploy_lib_ready || exit 1
 WORK="$(mktemp -d /srv/worker-scratch/orbit-deploy-mutants.XXXXXXXX)" || exit 1
 trap 'rm -rf "${WORK:?}"' EXIT
 HARNESS_TIMEOUT=180
@@ -72,20 +75,30 @@ all_red() {
 
 run_mutant() {
     local name=$1 target=$2 expr=$3 rc dir red expect harness log pid watcher
+    local -a harness_args=()
     shift 3
     dir="${WORK}/${n}"
     mkdir -p "${dir}"
     cp -r "${SCRIPT_DIR}" "${dir}/scripts"
+    harness="${dir}/scripts/deploy-test.sh"
+    [ "${target}" = 'verify.sh' ] && harness="${dir}/scripts/verify-test.sh"
+    if [ "${target}" = 'lib/gate/deploy-lib.sh' ]; then
+        harness="${dir}/scripts/deploy-lib-test.sh"
+        harness_args=("${dir}")
+    else
+        # Laid where fleet-deploy lays it, so a mutant can break the lib there.
+        mkdir -p "${dir}/scripts/lib/deploy"
+        cp "${DEPLOY_LIB}"/*.sh "${dir}/scripts/lib/deploy/"
+    fi
     sed -i "${expr}" "${dir}/scripts/${target}" || { printf 'BROKEN %s: sed failed\n' "${name}"; missed=$((missed + 1)); return; }
     # A sed that matched nothing leaves the guard intact, so the harness passes
     # while testing nothing. docs/DECISIONS.md, the-mutant-harness-is-a-gate-step
-    if cmp -s "${SCRIPT_DIR}/${target}" "${dir}/scripts/${target}"; then
+    if cmp -s "${SCRIPT_DIR}/${target}" "${dir}/scripts/${target}" \
+        || { [ ! -e "${SCRIPT_DIR}/${target}" ] && cmp -s "${DEPLOY_LIB}/${target#lib/deploy/}" "${dir}/scripts/${target}"; }; then
         printf 'BROKEN %s: the mutation changed nothing in %s\n' "${name}" "${target}"
         missed=$((missed + 1))
         return
     fi
-    harness="${dir}/scripts/deploy-test.sh"
-    [ "${target}" = 'verify.sh' ] && harness="${dir}/scripts/verify-test.sh"
     # Nothing after the last expected red is read, so the harness is stopped there;
     # TMPDIR and DEPLOY_TEST_ROOT keep what a stopped one leaves inside this mutant's copy.
     log="${dir}/harness.out"
@@ -95,7 +108,7 @@ run_mutant() {
     # or an orphan writes into a directory this script is already removing.
     TMPDIR="${dir}/tmp" DEPLOY_TEST_ROOT="${dir}" DEPLOY_SH="${dir}/scripts/deploy.sh" VERIFY_SH="${dir}/scripts/verify.sh" \
         GATE_LEDGER_LIB="${dir}/scripts/lib/deploy/ledger.sh" \
-        setsid timeout "${HARNESS_TIMEOUT}" bash "${harness}" >"${log}" 2>&1 &
+        setsid timeout "${HARNESS_TIMEOUT}" bash "${harness}" "${harness_args[@]}" >"${log}" 2>&1 &
     pid=$!
     (
         while kill -0 "${pid}" 2>/dev/null; do
@@ -195,6 +208,36 @@ mutant 'the browser gate never arms the ledger' e2e.sh \
 mutant 'a dirty checkout is allowed' lib/deploy/preflight.sh \
     's/^refuse_if_dirty() {/refuse_if_dirty() { return 0;/' \
     'a dirty checkout is refused'
+mutant 'deploy.sh runs on with no lib beside it' deploy.sh \
+    '/^for deploy_lib_file in /d' \
+    'a deploy.sh with no lib beside it refuses and names fleet-deploy'
+mutant 'the gate takes the caller'"'"'s DEPLOY_LIB again' lib/gate/deploy-lib.sh \
+    's#^DEPLOY_LIB=/srv/engineering-standards/scripts/lib/deploy$#DEPLOY_LIB=${DEPLOY_LIB:-/srv/engineering-standards/scripts/lib/deploy}#' \
+    'an exported DEPLOY_LIB is ignored'
+mutant 'the test seam is honoured as root' lib/gate/deploy-lib.sh \
+    's/ || (( EUID == 0 )); then$/; then/' \
+    'root has the test seam refused, harness or not'
+mutant 'the test seam is honoured outside the harness' lib/gate/deploy-lib.sh \
+    's/\[\[ "\${DEPLOY_LIB_HARNESS:-}" != deploy-lib-test \]\] || //' \
+    'the test seam outside the harness is refused'
+mutant 'a clone off its origin/main is read anyway' lib/gate/deploy-lib.sh \
+    's/^    if \[\[ -z "\$head" || "\$head" != "\$main" \]\]; then$/    if [[ -z "$head" ]]; then/' \
+    'a clone whose HEAD is not its origin/main is refused'
+mutant 'the helper finds git on PATH again' lib/gate/deploy-lib.sh \
+    's#/usr/bin/git #git #g' \
+    'a git first in PATH cannot vouch for a clone off its origin/main'
+mutant 'a dirty lib is read anyway' lib/gate/deploy-lib.sh \
+    's/^    if \[\[ -n "\$dirty" \]\]; then$/    if false; then/' \
+    'a lib with a modified tracked file is refused' 'a lib with an untracked file is refused'
+mutant 'untracked files in the lib are not looked at' lib/gate/deploy-lib.sh \
+    's/--untracked-files=all/--untracked-files=no/' \
+    'a lib with an untracked file is refused'
+mutant 'a failing git status is stepped past' lib/gate/deploy-lib.sh \
+    '/REFUSED: git status failed/{n;d}' \
+    'and the failed-status refusal is a failure'
+mutant 'a lib missing compose.sh is read anyway' lib/gate/deploy-lib.sh \
+    's/ preflight.sh compose.sh; do$/ preflight.sh; do/' \
+    'a lib missing compose.sh, which deploy.sh sources, is refused'
 mutant 'the ungated head gets no recipe' deploy.sh \
     's/^    if ! ( exec 3>\/dev\/null; gated ) >\/dev\/null 2>&1; then$/    if false; then/' \
     'and the refusal is preceded by the worktree recipe'
@@ -451,6 +494,11 @@ if ! TMPDIR="${WORK}/unmutated/tmp" DEPLOY_TEST_ROOT="${WORK}/unmutated" \
     bash "${SCRIPT_DIR}/deploy-test.sh" >"${WORK}/unmutated.out" 2>&1; then
     tail -20 "${WORK}/unmutated.out" >&2
     printf 'deploy-mutants: the unmutated suite fails, so no mutant was run\n' >&2
+    exit 1
+fi
+if ! bash "${SCRIPT_DIR}/deploy-lib-test.sh" "${SCRIPT_DIR}/.." >"${WORK}/unmutated-lib.out" 2>&1; then
+    grep '^FAIL ' "${WORK}/unmutated-lib.out" | cut -c1-200 >&2
+    printf 'deploy-mutants: the unmutated deploy-lib-test.sh fails, so no mutant was run\n' >&2
     exit 1
 fi
 

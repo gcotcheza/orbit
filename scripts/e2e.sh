@@ -52,10 +52,11 @@ set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 
-# Vendored from gcotcheza/engineering-standards and not edited here:
-# tests/Unit/Standards/DeployLibDriftTest.php recomputes each file's own hash.
-# shellcheck source=scripts/lib/deploy/ledger.sh
-. "${ROOT}/scripts/lib/deploy/ledger.sh"
+# shellcheck source=scripts/lib/gate/deploy-lib.sh
+. "${ROOT}/scripts/lib/gate/deploy-lib.sh"
+deploy_lib_ready || exit 1
+# shellcheck source=/srv/engineering-standards/scripts/lib/deploy/ledger.sh
+. "${DEPLOY_LIB}/ledger.sh"
 # shellcheck source=scripts/lib/e2e-env.sh
 . "${ROOT}/scripts/lib/e2e-env.sh"
 # The commit this run judges, pinned before any step; the ledger records no other.

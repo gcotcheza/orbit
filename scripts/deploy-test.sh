@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Guards scripts/deploy.sh and its vendored scripts/lib/deploy/: every refusal,
+# Guards scripts/deploy.sh and the deploy lib it sources: every refusal,
 # both landing paths, every conditional step and the ledger writer, against
 # fakes in a temp directory.
 #
 #   scripts/deploy-test.sh          the whole list, as root
 #   cp -r scripts <dir> && DEPLOY_SH=<dir>/deploy.sh scripts/deploy-test.sh
 #                                   same list against a mutated copy (red proofs);
-#                                   GATE_LEDGER_LIB= does the same for the writer
+#                                   GATE_LEDGER_LIB= does the same for the writer;
+#                                   a lib/deploy/ beside that deploy.sh is the lib under test
 #                                   DEPLOY_TEST_TEMPLATES=<dir> keeps the fixture repos
 #                                   there, built once for every run that shares it
 #
@@ -20,7 +21,12 @@ umask 022
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 DEPLOY_SH="${DEPLOY_SH:-${SCRIPT_DIR}/deploy.sh}"
-LEDGER_LIB="${GATE_LEDGER_LIB:-${SCRIPT_DIR}/lib/deploy/ledger.sh}"
+# shellcheck source=scripts/lib/gate/deploy-lib.sh
+. "${SCRIPT_DIR}/lib/gate/deploy-lib.sh"
+deploy_lib_ready || exit 1
+LIB_UNDER_TEST="$(dirname -- "${DEPLOY_SH}")/lib/deploy"
+[ -d "${LIB_UNDER_TEST}" ] || LIB_UNDER_TEST="${DEPLOY_LIB}"
+LEDGER_LIB="${GATE_LEDGER_LIB:-${LIB_UNDER_TEST}/ledger.sh}"
 CHECK_SH="${CHECK_SH:-${SCRIPT_DIR}/check.sh}"
 E2E_SH="${E2E_SH:-${SCRIPT_DIR}/e2e.sh}"
 PR_NUMBER=90
@@ -230,6 +236,8 @@ SH
 write_own_helpers() {
     cp "${DEPLOY_SH}" "${CASE}/scripts/deploy.sh"
     cp -r "$(dirname -- "${DEPLOY_SH}")/lib" "${CASE}/scripts/lib"
+    mkdir -p "${CASE}/scripts/lib/deploy"
+    cp "${LIB_UNDER_TEST}"/*.sh "${CASE}/scripts/lib/deploy/"
     chmod -R go-w "${CASE}/scripts"
     cat >"${CASE}/scripts/docs-only.sh" <<'SH'
 #!/bin/sh
@@ -484,6 +492,14 @@ run_deploy "${PR_NUMBER}"
 contains 'compose files exported at another commit are refused' "${OUT}" \
     "the compose files were exported at ${LIVE_SHA}, not the merge ${MERGE_SHA} this deploy lands."
 equals 'and docker is asked nothing' "$(logged docker.argv)" ''
+
+# --- 0. no lib beside deploy.sh refuses, whatever DEPLOY_LIB the caller set ----
+fixture no-lib
+rm -r "${CASE}/scripts/lib/deploy"
+DEPLOY_LIB="${DEPLOY_LIB}" run_deploy "${PR_NUMBER}"
+contains 'a deploy.sh with no lib beside it refuses and names fleet-deploy' "${OUT}" \
+    'REFUSED: run this only as fleet-deploy orbit <PR#>, which lays the deploy lib beside it'
+equals 'and a caller'"'"'s DEPLOY_LIB reaches no fake' "$(logged gh.argv)" ''
 
 # --- 1. the arguments ---------------------------------------------------------
 fixture usage
@@ -940,7 +956,7 @@ equals 'and the ledger holds no line for an environmental refusal' \
 
 # --- 12. the ledger writer ----------------------------------------------------
 fixture ledger-writer
-# shellcheck source=scripts/lib/deploy/ledger.sh
+# shellcheck source=/srv/engineering-standards/scripts/lib/deploy/ledger.sh
 . "${LEDGER_LIB}"
 LEDGER_OUT="${CASE}/written"
 : >"${LEDGER_OUT}"

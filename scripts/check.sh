@@ -10,10 +10,11 @@ here=$(pwd -P)
 # docker-compose.yml alone names production's tag. docs/DECISIONS.md
 export COMPOSE_FILE="$here/docker-compose.yml:$here/docker-compose.ci.yml"
 
-# Vendored from gcotcheza/engineering-standards and not edited here:
-# tests/Unit/Standards/DeployLibDriftTest.php recomputes each file's own hash.
-# shellcheck source=scripts/lib/deploy/ledger.sh
-. "$here/scripts/lib/deploy/ledger.sh"
+# shellcheck source=scripts/lib/gate/deploy-lib.sh
+. "$here/scripts/lib/gate/deploy-lib.sh"
+deploy_lib_ready || exit 1
+# shellcheck source=/srv/engineering-standards/scripts/lib/deploy/ledger.sh
+. "$DEPLOY_LIB/ledger.sh"
 
 # Filtered until the arguments and the stack have been vetted, so a run that
 # dies in its own usage or refuses the box it found records nothing at all.
@@ -184,8 +185,9 @@ if [ ${#shell_files[@]} -eq 0 ]; then
     exit 1
 fi
 
-docker run --rm --network none -v "$here:/mnt:ro" -w /mnt koalaman/shellcheck:v0.11.0 \
-    -S warning "${shell_files[@]}"
+# The shared lib is mounted at its box path so -x reads what the gate sources from it.
+docker run --rm --network none -v "$here:/mnt:ro" -v "$DEPLOY_LIB:$DEPLOY_LIB:ro" -w /mnt koalaman/shellcheck:v0.11.0 \
+    -x -S warning "${shell_files[@]}"
 
 if [ "$mode" = overlay ]; then
     step 'Overlay (dev dependencies, outside the live vendor/)'
@@ -247,9 +249,13 @@ step 'Guard diff reads (scripts/guard-lint.sh)'
 # and in no image. docs/DECISIONS.md, the-gate-lints-every-guards-diff-reads
 "$here/scripts/guard-lint.sh"
 
+step 'The deploy lib and this gate (scripts/deploy-lib-test.sh, scripts/check-test.sh)'
+# Host steps as root, each handed the tree it judges: they read the deploy lib from root's
+# clone and run this script against fakes. docs/DECISIONS.md, deploy-lib-is-not-vendored
+bash "$here/scripts/deploy-lib-test.sh" "$here"
+bash "$here/scripts/check-test.sh" "$here"
+
 step 'The deploy script (scripts/deploy-test.sh)'
-# On the host, not in a container, and below the first containerised step:
-# CheckGitSeamTest stubs docker and must stop before this one runs under its PATH.
 "$here/scripts/deploy-test.sh"
 "$here/scripts/verify-test.sh"
 
