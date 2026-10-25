@@ -217,7 +217,7 @@ t9_root() { # <name> <exit> <stderr|stdout> <report, %s = root>
     swap /srv/engineering-standards/scripts/gate-image-tags.sh "${B}/gate-image-tags" 1 \
         '3 the canonical checker path is not in check.sh exactly once, so this is not the step it says'
     swap 'chown -R ' ': ' 2 '3 the overlay hands two paths to the app user; a third would run for real'
-    for step in $(cd "${R}/scripts" && grep -oE '"\$here/scripts/[a-z-]+\.sh"' check.sh | sed 's#.*/##; s#"##' | sort -u); do
+    for step in $(cd "${R}/scripts" && grep -oE '"\$here/scripts/[a-z0-9-]+\.sh"' check.sh | sed 's#.*/##; s#"##' | sort -u); do
         printf '#!/bin/sh\nexit 0\n' >"${R}/scripts/${step}"
         chmod 700 "${R}/scripts/${step}"
     done
@@ -250,6 +250,8 @@ t9_root t9-zero 0 stdout "${OK_REPORT//built tags:       2/built tags:       0}"
 t9_case '3 a summary that counted no built tag' 'counted 0 built image tag(s) in'
 t9_root t9-unjudged 0 stdout "${OK_REPORT//14 resolved, 0 unresolved/13 resolved, 1 unresolved}"
 t9_case '3 an image value it could not judge' 'left 1 image value(s) unjudged in'
+t9_root t9-status 1 stdout "${OK_REPORT}"
+t9_case '3 a checker that fails over a report that reads as a pass' 'built tags:       2'
 
 # --- 4. the overlay runner removes the mount points it caused, and only those -------------------
 mount_root() {
