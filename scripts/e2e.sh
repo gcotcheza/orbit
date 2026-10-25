@@ -48,6 +48,8 @@
 #                 `scripts/e2e.sh -- specs/globe.spec.js --headed`
 # =============================================================================
 set -Eeuo pipefail
+# No caller's environment says a gate was recorded, here or in any child (card 702).
+unset GATE_RECORDED
 
 cd "$(dirname "$0")/.."
 ROOT="$PWD"

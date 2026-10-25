@@ -2,6 +2,8 @@
 # usage: scripts/check.sh dev|overlay
 # Why two runners, and what each may not lose: docs/DECISIONS.md, the-gate-is-one-script-two-runners
 set -Eeuo pipefail
+# No caller's environment says a gate was recorded, here or in any child (card 702).
+unset GATE_RECORDED
 
 cd "$(dirname "$0")/.."
 here=$(pwd -P)
@@ -204,7 +206,7 @@ if [ "$mode" = overlay ]; then
     chown -R 115:119 "$gate"
     # storage/ is the app's own writable directory, not a build product, so it is
     # handed over rather than overlaid. docs/DECISIONS.md, worktrees-live-outside-the-served-tree
-    chown -R 115:119 "$here/storage"
+    chown -R -P 115:119 "$here/storage"
     # Unconditionally: compose builds a MISSING image and never a stale one, so
     # without this every step below runs whatever the box holds. docs/DECISIONS.md
     docker compose build app

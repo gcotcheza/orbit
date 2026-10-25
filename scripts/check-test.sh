@@ -288,6 +288,24 @@ contains '4 and the notice says it was not removed' "${OUT}" 'not removed: anoth
 contains '4 and names it' "${OUT}" "${FOREIGN}"
 rmdir -- "${FOREIGN}" 2>/dev/null
 
+# --- 5. a caller's GATE_RECORDED never stops the run's own row (card 702) ---------------------
+new_root recorded
+run_check dev GATE_RECORDED=1 FAKE_FAIL_ON='*pint*'
+equals '5 the stubbed Pint step stops the run' "${RC}" 1
+equals '5 and a caller'"'"'s GATE_RECORDED=1 still leaves the red row' "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 1"
+
+# --- 6. storage/ is handed over without following a link planted in it ------------------------
+new_root chown-link
+swap 'chown -R 115:119 "$gate"' ': "$gate"' 1 '6 the overlay scratch chown is stubbed; only storage/ is chowned for real'
+printf 'scripts/check.sh\0' >"${C}/scripts.list"
+mkdir -p "${R}/storage"
+touch "${C}/sentinel"
+ln -s "${C}/sentinel" "${R}/storage/planted"
+run_check overlay FAKE_MOUNTS=1
+equals '6 the overlay run fails at the fake install, after the storage chown' "${RC}" 1
+equals '6 storage/ itself went to the app user' "$(stat -c %u "${R}/storage")" 115
+equals '6 a file a link in storage/ points at keeps its owner' "$(stat -c %u "${C}/sentinel")" 0
+
 if [ "${fails}" -ne 0 ]; then
     printf '\ncheck-test: %s check(s) failed\n' "${fails}" >&2
     exit 1
