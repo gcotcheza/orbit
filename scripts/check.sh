@@ -26,6 +26,8 @@ GATE_FILTERED=1
 # its own -C, so no call site below adds one. docs/DECISIONS.md, the-gate-scans-for-secrets-over-gits-view-of-the-tree
 GIT=${CI_GIT:-git}
 GATE_LEDGER_GIT="${GIT}"
+# The commit this run judges, pinned before any step (card 717); the ledger records no other.
+gate_ledger_arm
 
 mode=${1-}
 if [ $# -ne 1 ] || { [ "$mode" != dev ] && [ "$mode" != overlay ]; }; then
@@ -55,9 +57,6 @@ if [ -n "$seam_dir" ] && [ "$(realpath -- "$seam_dir" 2>/dev/null)" != "$here" ]
     printf '  the copy would disagree.\n' >&2
     exit 2
 fi
-
-# The commit this run judges, pinned before any step; the ledger records no other.
-gate_ledger_arm
 
 # 124 is GNU timeout on the host, 143 is BusyBox timeout in the test container.
 docker_answer() {

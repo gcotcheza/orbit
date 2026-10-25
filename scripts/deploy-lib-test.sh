@@ -163,6 +163,21 @@ for script in check.sh e2e.sh; do
     esac
 done
 
+# Card 717: the run's sha is armed before any build, test or check runs.
+for script in check.sh e2e.sh; do
+    ARMED="$(awk '
+        /^[A-Za-z_][A-Za-z0-9_]*\(\) *\{.*\} *$/ { next }
+        /^[A-Za-z_][A-Za-z0-9_]*\(\) *\{ *$/ { infn = 1; next }
+        infn && /^\}/ { infn = 0; next }
+        infn || /^[[:space:]]*#/ { next }
+        /^[[:space:]]*gate_ledger_arm[[:space:]]*$/ { armed = NR; exit }
+        { line = $0; gsub(/"[^"]*"|\047[^\047]*\047/, "", line) }
+        line ~ /docker|compose|npm|composer|playwright|tee |grep |bash |mktemp|php_step|node_step|^step / && !first { first = NR ": " $0 }
+        END { if (!armed) print "no gate_ledger_arm"; else if (first) print "line " first " runs before the arm"; else print "armed-first" }
+    ' "${SCRIPTS}/${script}")"
+    equals "${script} arms the ledger before any step" "${ARMED}" armed-first
+done
+
 ORDER="$(awk '/^deploy_lib_ready \|\| \{.*exit 2; \}$/ && !r { r = NR } /^\. "\$DEPLOY_LIB\// && !l { l = NR } END { print (r && l && r < l) ? "ready-first" : "r=" r " l=" l }' "${SCRIPTS}/deploy.sh")"
 equals 'deploy.sh asks deploy_lib_ready before it sources the lib' "${ORDER}" ready-first
 
