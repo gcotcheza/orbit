@@ -269,6 +269,9 @@ step 'The browser gate makes its files as the app user (scripts/e2e-env-test.sh)
 # A host step for the same reason: shell testing shell, in temp directories only.
 bash "$here/scripts/e2e-env-test.sh"
 
+step 'The browser gate end to end against a fake docker (scripts/e2e-gate-test.sh)'
+bash "$here/scripts/e2e-gate-test.sh" "$here"
+
 step 'Image tags (T9)'
 # A host step: the canonical clone is on this box and inside no container.
 # docs/DECISIONS.md, the-gate-is-one-script-two-runners
