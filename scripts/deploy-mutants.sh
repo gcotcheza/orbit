@@ -520,6 +520,30 @@ mutant 'a RED from main is not code 3' deploy.sh \
 mutant 'a busy lock is not code 5' deploy.sh \
     '/^on_exit() {/,/^}/s/^        rc=5$/        rc=1/' \
     'lock busy, a code of its own, exits'
+mutant 'a moved vhost deploys from main' deploy.sh \
+    's/^        vhost_refuse$/        :/' \
+    'from main, a moved deploy/nginx is a RED line naming the sha'
+mutant 'a vhost red is not code 6' deploy.sh \
+    '/^    elif \[ "\$VHOST_RED" -eq 1 \]; then$/,/^        rc=6$/d' \
+    'a moved vhost, the alarm code, exits'
+mutant 'a vhost red carries on to STEP 1' deploy.sh \
+    '/^vhost_refuse() {/,/^}/{/^    exit 6$/d}' \
+    'a moved vhost: nothing reaches STEP 1'
+mutant 'a vhost alarms every tick' deploy.sh \
+    '/! grep -qxF "\$MERGE_SHA" "\$VHOST_SEEN"/,/alarmed once already/d' \
+    'the same moved vhost again exits' 'refuses without a second alarm'
+mutant 'the alarmed sha is never kept' deploy.sh \
+    '/>>"\$VHOST_SEEN"/d' \
+    'and the alarmed sha is kept beside the lock' 'the same moved vhost again exits'
+mutant 'an unwritable vhost marker refuses' deploy.sh \
+    's/|| say "cannot note \$MERGE_SHA in \$VHOST_SEEN, so the next tick alarms again"/|| refuse "cannot note"/' \
+    'a vhost marker that cannot be written, the alarm code, exits'
+mutant 'an unanswered vhost diff deploys' deploy.sh \
+    's/|| refuse "the mirror cannot say whether deploy\/nginx moved/|| true "/' \
+    'a vhost diff the mirror cannot answer is refused'
+mutant 'the shadow skips the vhost guard' deploy.sh \
+    's/^        vhost_refuse$/        [ "$DECIDE_ONLY" -eq 1 ] || vhost_refuse/' \
+    '--decide-only on a moved vhost, the alarm code, exits' '--decide-only on a moved vhost never says it would deploy'
 
 mutant 'the battery asks a healthchecked service for bare Up' verify.sh \
     "s/for s in horizon postgres redis; do ps_says \"\\\$s\" '(healthy)'; done/for s in horizon postgres redis; do ps_says \"\\\$s\" 'Up'; done/" \

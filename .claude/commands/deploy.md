@@ -53,7 +53,7 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 | `STEPS 1-10 ok in one heavy-work job` | steps that ran |
 | `HEALTH … healthy …` | `HEALTH TIMEOUT`: landed, battery **not** run, not a rollback |
 | `VERIFY --backend-only` / `VERIFY full` | bundle not rebuilt / rebuilt and served |
-| `HOST VHOST NEEDED, NOT RUN …` | by hand: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`, in this order; reload only when both say `syntax is ok` |
+| `HOST VHOST NEEDED, NOT RUN …` | by hand: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`, in this order; reload only when both say `syntax is ok`. From main: `RED: HOST VHOST NEEDED <sha>`, nothing moved; deploy that PR by hand |
 | `DONE #N live <full merge sha> was … gated … root-owned 0 verify …` | finished; `root-owned` must read `0` |
 | `PAPERWORK PR #N deployed …` | backlog, handoff, fleet-docs page |
 | `REFUSED: git did not answer in Ns: <git command>` / `STOP: git did not answer in Ns while the classifier read …` | nothing moved; find why git hangs first |

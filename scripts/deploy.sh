@@ -38,12 +38,14 @@ usage() {
     exit 64
 }
 
-# From main: 0 live, 2 refused with nothing moved, 3 live with RED, 4 failed after STEP 1;
-# 5 lock busy either way. The codes fleet-deploy-on-merge reads.
+# From main: 0 live, 2 refused with nothing moved, 3 live with RED, 4 failed after STEP 1,
+# 6 vhost red; 5 lock busy either way. The codes fleet-deploy-on-merge reads.
 on_exit() {
     local rc=$1
     if [ "$LOCK_BUSY" -eq 1 ]; then
         rc=5
+    elif [ "$VHOST_RED" -eq 1 ]; then
+        rc=6
     elif [ "$FROM_MAIN" -eq 0 ]; then
         :
     elif [ "$rc" -eq 0 ]; then
@@ -144,6 +146,21 @@ judge_main() {
     owed_rows_green
     GATED="$GATED; deployed by deploy-on-merge"
     say "JUDGED #$PR main $MERGE_SHA: GitHub's signed merge of head $HEAD_SHA, same tree, every gate row its test scope owes green, merged $(( (now - ts) / 60 )) min ago, a fast-forward from root's record $RECORD"
+}
+
+# No pull touches the host vhost, so from main refuses a moved deploy/nginx, alarming once per sha.
+# decision: from-main-refuses-a-moved-vhost
+vhost_refuse() {
+    local moved
+    moved=$(mirror_run diff --name-only "$RECORD" "$MERGE_SHA" -- deploy/nginx) \
+        || refuse "the mirror cannot say whether deploy/nginx moved in $RECORD..$MERGE_SHA."
+    [ -n "$moved" ] || return 0
+    ! grep -qxF "$MERGE_SHA" "$VHOST_SEEN" 2>/dev/null \
+        || refuse "HOST VHOST NEEDED $MERGE_SHA, alarmed once already ($VHOST_SEEN): deploy by the runbook."
+    printf '%s\n' "$MERGE_SHA" >>"$VHOST_SEEN" || say "cannot note $MERGE_SHA in $VHOST_SEEN, so the next tick alarms again"
+    VHOST_RED=1
+    say "RED: HOST VHOST NEEDED $MERGE_SHA: deploy by the runbook"
+    exit 6
 }
 
 # The library's gated, read in root's mirror against root's live record: the rows the test
@@ -569,7 +586,9 @@ main() {
     # CLOCK is a COMMAND WITH ARGUMENTS, unquoted at its call sites like GIT.
     CLOCK=${DEPLOY_CLOCK:-date +%s}
     FRESH_S=1800
+    VHOST_SEEN=${LOCK%.lock}.vhost-red
     LOCK_BUSY=0
+    VHOST_RED=0
     PHASE=decide
     DEADLINE=''
     STATUS_BEFORE=unread
@@ -606,6 +625,7 @@ under_lock() {
 
     if [ "$FROM_MAIN" -eq 1 ]; then
         judge_main
+        vhost_refuse
         # shellcheck disable=SC2086
         deploy_git_or_refuse $GIT fetch origin || refuse "fetching origin into $ROOT failed, so the classifier could not read main $MERGE_SHA."
     else

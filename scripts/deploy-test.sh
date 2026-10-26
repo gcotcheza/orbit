@@ -204,6 +204,11 @@ SH
 case " $* " in *' fetch '*) exec sleep 600 >/dev/null 2>&1 ;; esac
 exec git "$@"
 SH
+    cat >"${BIN}/git-mirror-nodiff" <<'SH'
+#!/bin/sh
+case " $* " in *' diff --name-only '*) exit 128 ;; esac
+exec git "$@"
+SH
     # Signs for the fixture, and verifies by the mode file in the pinned GNUPGHOME.
     cat >"${BIN}/gpg" <<'SH'
 #!/bin/sh
@@ -1250,9 +1255,10 @@ record_row() {
     install -d -m 700 "${CASE}/records"
     ( umask 077; printf '%s\n' "$1" >>"${CASE}/records/orbit.record" )
 }
-fm_case() { # name, the commit origin's main names
-    fixture "$1" frommain
+fm_case() { # name, the commit origin's main names (good: this template's signed merge), [moved...]
+    fixture "$1" frommain "${@:3}"
     MERGE_SHA=$2
+    [ "${MERGE_SHA}" != good ] || MERGE_SHA=${FM_GOOD}
     printf '%s\n' "${MERGE_SHA}" >"${CASE}/export-sha"
     git -C "${CASE}/origin.git" update-ref refs/heads/main "${MERGE_SHA}"
     git init -q --bare "${CASE}/mirror.git"
@@ -1444,7 +1450,38 @@ CASE_GIT="git-stalls -C ${ROOT}" STALL_ON='rev-parse --short HEAD' GIT_TIMEOUT=1
 equals 'from main, live with a RED, exits' "${RUN_RC}" 3
 contains 'and the DONE line carries it' "$(printf '%s\n' "${OUT}" | grep '^DONE #')" 'RED head unknown'
 
-fm_case fm-lock "${FM_GOOD}"
+fm_case fm-vhost good nginx
+run_from_main
+contains 'from main, a moved deploy/nginx is a RED line naming the sha' "${OUT}" "RED: HOST VHOST NEEDED ${FM_GOOD}: deploy by the runbook"
+equals 'a moved vhost, the alarm code, exits' "${RUN_RC}" 6
+absent 'a moved vhost: nothing reaches STEP 1' "${OUT}" 'STEP 1 rollback target'
+absent 'a moved vhost: no heavy-work job' "$(logged heavy.argv)" 'orbit-deploy'
+live_is 'a moved vhost: the live tree did not move' "${LIVE_SHA}"
+equals 'and the alarmed sha is kept beside the lock' "$(cat "${CASE}/deploy.vhost-red" 2>/dev/null)" "${FM_GOOD}"
+run_from_main
+equals 'the same moved vhost again exits' "${RUN_RC}" 2
+contains 'refuses without a second alarm' "${OUT}" "REFUSED: HOST VHOST NEEDED ${FM_GOOD}, alarmed once already"
+absent 'and prints no second RED line' "${OUT}" 'RED: HOST VHOST'
+
+fm_case fm-vhost-shadow good nginx
+run_from_main --decide-only
+equals '--decide-only on a moved vhost, the alarm code, exits' "${RUN_RC}" 6
+contains '--decide-only on a moved vhost is the same RED line' "${OUT}" "RED: HOST VHOST NEEDED ${FM_GOOD}: deploy by the runbook"
+absent '--decide-only on a moved vhost never says it would deploy' "${OUT}" 'WOULD DEPLOY'
+
+fm_case fm-vhost-unnoted good nginx
+mkdir "${CASE}/deploy.vhost-red"
+run_from_main
+equals 'a vhost marker that cannot be written, the alarm code, exits' "${RUN_RC}" 6
+contains 'and says it cannot note the sha' "${OUT}" "cannot note ${FM_GOOD} in ${CASE}/deploy.vhost-red, so the next tick alarms again"
+
+fm_case fm-vhost-nodiff good nginx
+FM_ENV=(DEPLOY_MIRROR_GIT="${BIN}/git-mirror-nodiff")
+run_from_main
+contains 'a vhost diff the mirror cannot answer is refused' "${OUT}" 'the mirror cannot say whether deploy/nginx moved'
+refused_untouched 'no vhost answer'
+
+fm_case fm-lock good
 exec 7>>"${CASE}/deploy.lock"
 flock -n 7
 run_from_main
