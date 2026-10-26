@@ -2,6 +2,7 @@
 // `test` from here, never from '@playwright/test' (docs/E2E.md "The console guard").
 import { expect, test as base } from '@playwright/test'
 import { readFileSync } from 'node:fs'
+import process from 'node:process'
 import { screenPath } from './paths.js'
 
 // Read out of the env scripts/e2e.sh mounts at ORBIT_E2E_ENV rather than written
