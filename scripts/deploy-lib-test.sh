@@ -45,7 +45,7 @@ equals() {
     if [ "$2" = "$3" ]; then pass "$1 is [$3]"; else fail "$1 is [$2], expected [$3]"; fi
 }
 
-as_nobody() { runuser -u nobody -- env HOME="${WORK}" "$@"; }
+as_nobody() { runuser -u nobody -- "$@"; }
 
 # <user> [VAR=value...] -> stderr, then "<rc> <DEPLOY_LIB>"
 ready() {
@@ -62,24 +62,40 @@ ready() {
 
 rc_of() { printf '%s\n' "$1" | tail -1 | cut -d' ' -f1; }
 
-# <dir>: a clone the seam can name, origin/main on HEAD; moved puts origin/main one commit past it
-fake_clone() {
-    local dir=$1 tree one two
+# Every fixture commit runs the fleet pre-commit hook: no commit-tree, no hook-off flag (S1, ES backlog 265).
+fixture_commit() { git -C "$1" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m "$2"; }
+
+# <kind> same|moved, built once as root and copied per case; moved puts origin/main one commit past HEAD.
+fixture_template() {
+    local dir="${WORK}/.template-$1"
+    [ -d "${dir}" ] && return 0
     mkdir -p "${dir}/scripts/lib/deploy"
     cp "${DEPLOY_LIB}"/*.sh "${dir}/scripts/lib/deploy/"
-    chown -R nobody "${dir}"
-    as_nobody git init -q -b main "${dir}"
-    as_nobody git -C "${dir}" add scripts/lib/deploy
-    tree="$(as_nobody git -C "${dir}" write-tree)"
-    one="$(as_nobody git -C "${dir}" -c user.name=t -c user.email=t@example.invalid commit-tree "${tree}" -m one)"
-    as_nobody git -C "${dir}" update-ref refs/heads/main "${one}"
-    if [ "${2:-same}" = moved ]; then
-        two="$(as_nobody git -C "${dir}" -c user.name=t -c user.email=t@example.invalid commit-tree "${tree}" -p "${one}" -m two)"
-        as_nobody git -C "${dir}" update-ref refs/remotes/origin/main "${two}"
+    git init -q -b main "${dir}" && git -C "${dir}" add scripts/lib/deploy && fixture_commit "${dir}" one || return 1
+    if [ "$1" = moved ]; then
+        fixture_commit "${dir}" two && git -C "${dir}" update-ref refs/remotes/origin/main HEAD \
+            && git -C "${dir}" update-ref refs/heads/main HEAD~1
     else
-        as_nobody git -C "${dir}" update-ref refs/remotes/origin/main "${one}"
+        git -C "${dir}" update-ref refs/remotes/origin/main HEAD
     fi
 }
+
+# <dir> [kind]: a nobody-owned clone the seam can name
+fake_clone() {
+    fixture_template "${2:-same}" || { fail "the ${2:-same} fixture did not commit"; return 1; }
+    cp -a "${WORK}/.template-${2:-same}" "$1" && chown -R nobody "$1"
+}
+
+# The route fake_clone commits by is the hook's: a planted token is refused there, unprinted.
+PROBE="${WORK}/.hook-probe"
+PROBE_TOKEN="ghp_$(tr -dc A-Za-z0-9 </dev/urandom | head -c36)"
+git init -q -b main "${PROBE}" && printf 'token=%s\n' "${PROBE_TOKEN}" >"${PROBE}/probe.txt" && git -C "${PROBE}" add probe.txt
+PROBE_OUT="$(fixture_commit "${PROBE}" probe 2>&1)"; PROBE_RC=$?
+[ "${PROBE_RC}" -ne 0 ] && ! git -C "${PROBE}" rev-parse -q --verify HEAD >/dev/null \
+    && pass 'fixture_commit runs the fleet hook: a planted token is refused and nothing is committed' \
+    || fail "fixture_commit committed a planted token (rc ${PROBE_RC}), so the fixtures skip the hook"
+contains 'and the hook said so' "${PROBE_OUT//${PROBE_TOKEN}/<token>}" 'BLOCKED'
+case "${PROBE_OUT}" in *"${PROBE_TOKEN}"*) fail 'the hook printed the token it caught' ;; *) pass 'the hook did not print the token' ;; esac
 
 STANDIN="${WORK}/standin"
 mkdir -p "${STANDIN}"
