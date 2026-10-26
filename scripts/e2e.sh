@@ -62,6 +62,8 @@ deploy_lib_ready || exit 1
 . "${DEPLOY_LIB}/ledger.sh"
 # shellcheck source=scripts/lib/e2e-env.sh
 . "${ROOT}/scripts/lib/e2e-env.sh"
+# Root's git refuses this uid-115 tree, so the ledger names HEAD as its owner; no caller's git is read.
+GATE_LEDGER_GIT="git-as orbit -C ${ROOT}"
 # The commit this run judges, pinned before any step; the ledger records no other.
 gate_ledger_arm
 
