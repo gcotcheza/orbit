@@ -19,6 +19,9 @@ fleet-deploy orbit <PR#>
 
 **`scripts/deploy.sh` run any other way refuses**; never work around it. Orbit does not use `--gated-by-hand`. A docs-only merge is the same command.
 
+`scripts/deploy.sh --from-main [--decide-only]` is deploy-on-merge's judge, run by
+`fleet-deploy-on-merge` as root once card 614 makes Orbit live there; a person never types it.
+
 ## If it says NOT GATED
 
 It prints this recipe, shas filled in. **Gate in a worktree of the root-owned clone, never in `/var/www/orbit`.**
@@ -39,6 +42,7 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 
 | line | means |
 |---|---|
+| `LOCK … held` | one deploy at a time, by hand or from main; `another deploy holds …` refuses |
 | `RESOLVED #N head … merge … trees identical` | the head is gated |
 | `RESOLVED #N merge … is origin/main and its tree is not head …'s` | the merge commit is gated |
 | `CLASSIFIED code` / `LANDED docs-only …` | a landing ends the run |

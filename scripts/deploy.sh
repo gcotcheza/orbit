@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Orbit deploy — this script IS the runbook (.claude/commands/deploy.md).
 #
-#   fleet-deploy orbit <PR#> [--gated-by-hand]
+#   fleet-deploy orbit <PR#> [--gated-by-hand]                     by a person
+#   scripts/deploy.sh --from-main [--decide-only]                   as deploy-on-merge's judge
 #
 # Root runs it only from fleet-deploy's export of scripts/ at the merge commit;
 # the lib's summary.sh refuses any other copy. Every git goes through git-as, the moving
@@ -30,9 +31,140 @@ deploy_lib_ready || { printf 'REFUSED: run this only as fleet-deploy orbit <PR#>
 # shellcheck source=/srv/engineering-standards/scripts/lib/deploy/compose.sh
 . "$DEPLOY_LIB/compose.sh"
 
+WEBFLOW_FPR=968479A1AFF927E37D1A566BB5690EEEBB952194
+
 usage() {
-    printf 'usage: fleet-deploy orbit <PR#> [--gated-by-hand]\n' >&2
+    printf 'usage: fleet-deploy orbit <PR#> [--gated-by-hand] | scripts/deploy.sh --from-main [--decide-only]\n' >&2
     exit 64
+}
+
+# From main: 0 live, 2 refused with nothing moved, 3 live with RED, 4 failed after STEP 1;
+# 5 lock busy either way. The codes fleet-deploy-on-merge reads.
+on_exit() {
+    local rc=$1
+    if [ "$LOCK_BUSY" -eq 1 ]; then
+        rc=5
+    elif [ "$FROM_MAIN" -eq 0 ]; then
+        :
+    elif [ "$rc" -eq 0 ]; then
+        case "$EXTRA_DONE" in *RED*) rc=3 ;; esac
+    elif [ "$PHASE" = moving ]; then
+        rc=4
+    else
+        rc=2
+    fi
+    exit "$rc"
+}
+
+take_lock() {
+    exec 8>>"$LOCK" || refuse "cannot open the deploy lock $LOCK."
+    flock -n 8 || { LOCK_BUSY=1; refuse "another deploy holds $LOCK: one deploy at a time, by hand or from main."; }
+    say "LOCK $LOCK held"
+}
+
+# Root's live record, a file only this uid can write and no job's output reaches.
+read_record() {
+    RECORD=''
+    deploy_record_safe "$RECORD_FILE" || refuse "root's record $RECORD_FILE is not a 600 file in a 700 directory, both owned by uid $(id -u): nothing is judged from a record someone else could write."
+    [ ! -f "$RECORD_FILE" ] \
+        || RECORD=$(awk '$1 == "DONE" || $1 == "ROLLBACK" || $1 == "SEED" { s = $2 } END { printf "%s", s }' "$RECORD_FILE")
+}
+
+ssh_key_safe() {
+    [ -f "$SSH_KEY" ] && [ ! -L "$SSH_KEY" ] && [ "$(stat -c %u "$SSH_KEY")" = "$(id -u)" ]
+}
+
+# Every mirror git is bounded: one that never answers is refused, not waited on.
+mirror_run() {
+    local rc=0
+    /usr/bin/timeout -k 5 "${DEPLOY_GIT_TIMEOUT:-300}" env -i PATH=/usr/bin:/bin HOME="$MIRROR_HOME" GNUPGHOME="$GNUPG" GIT_NO_REPLACE_OBJECTS=1 \
+        GIT_SSH_COMMAND="ssh -i $SSH_KEY -o IdentitiesOnly=yes -o BatchMode=yes" \
+        "$MIRROR_GIT" -C "$MIRROR" -c gpg.program="$GPG" "$@" || rc=$?
+    case "$rc" in 124|137) refuse "git did not answer in ${DEPLOY_GIT_TIMEOUT:-300}s in the mirror $MIRROR: git $1" ;; esac
+    return "$rc"
+}
+
+# The deployable rule, judged in root's mirror from verified shas only, as Moneywise's and GhieCode's.
+judge_main() {
+    local raw parents nparents committer ts sig gf gk subject mtree htree now live
+    read_record
+    [ -n "$RECORD" ] || refuse "no DONE, ROLLBACK or SEED row in $RECORD_FILE, so root has no live record: fleet-deploy-on-merge --seed orbit writes the first one."
+    [[ $RECORD =~ ^[0-9a-f]{40}$ ]] \
+        || refuse "root's newest live record ($RECORD in $RECORD_FILE) is not a full sha, and a short one is never expanded: deploy by hand once, or seed."
+    [ -d "$MIRROR" ] || refuse "no mirror at $MIRROR; fleet-deploy-on-merge's INSTALL.md creates it, and nothing is judged from the live checkout's own objects."
+    ssh_key_safe || refuse "the deploy key $SSH_KEY is not a regular file owned by uid $(id -u): INSTALL.md makes root's copy."
+    mirror_run fetch --quiet --no-tags "$MIRROR_URL" '+refs/heads/main:refs/heads/main' \
+        || refuse "fetching main from $MIRROR_URL into $MIRROR failed; nothing is judged on a stale mirror."
+    MERGE_SHA=$(mirror_run rev-parse --verify --quiet 'refs/heads/main^{commit}') \
+        || refuse "the mirror $MIRROR names no main after its fetch."
+    say "JUDGING main $MERGE_SHA from $MIRROR"
+    if [ "$MERGE_SHA" = "$RECORD" ]; then
+        say "ALREADY LIVE main $MERGE_SHA is root's record ($RECORD_FILE); nothing to deploy."
+        exit 0
+    fi
+
+    raw=$(mirror_run cat-file commit "$MERGE_SHA") || refuse "the mirror cannot read main $MERGE_SHA."
+    parents=$(printf '%s\n' "$raw" | awk '/^$/ { exit } $1 == "parent" { print $2 }')
+    nparents=$(printf '%s\n' "$parents" | awk 'NF { n++ } END { print n + 0 }')
+    [ "$nparents" -eq 2 ] \
+        || refuse "main $MERGE_SHA has $nparents parent(s): only a two-parent merge from GitHub's merge button deploys from main; a squash or rebase merge goes by fleet-deploy."
+    committer=$(printf '%s\n' "$raw" | awk '/^$/ { exit } $1 == "committer"')
+    [[ $committer =~ ^committer\ GitHub\ \<noreply@github\.com\>\ ([0-9]+)\ [-+][0-9]{4}$ ]] \
+        || refuse "main $MERGE_SHA was not committed by GitHub <noreply@github.com>: a merge made anywhere but GitHub does not deploy itself."
+    ts=${BASH_REMATCH[1]}
+    IFS='|' read -r sig gf gk <<<"$(mirror_run log -1 --format='%G?|%GF|%GK' "$MERGE_SHA")"
+    case "$sig" in
+        G|U) [ "$gf" = "$WEBFLOW_FPR" ] \
+                 || refuse "main $MERGE_SHA is signed by ${gf:-an unnamed key}, not GitHub's web-flow key $WEBFLOW_FPR." ;;
+        E)   refuse "main $MERGE_SHA carries a signature by key ${gk:-unknown} that $GNUPG cannot check: GitHub may have rotated its web-flow key. Import it as step 2 of fleet-deploy-on-merge's INSTALL.md says, comparing the fingerprint, and deploy this one with fleet-deploy." ;;
+        *)   refuse "main $MERGE_SHA carries no good GitHub signature (%G? ${sig:-empty}): a merge made anywhere but GitHub's merge button does not deploy itself." ;;
+    esac
+    subject=$(printf '%s\n' "$raw" | awk 'body { print; exit } /^$/ { body = 1 }')
+    PR=$(printf '%s\n' "$subject" | sed -n 's/^Merge pull request #\([1-9][0-9]*\) from .*/\1/p')
+    PR=${PR:-unnamed}
+
+    HEAD_SHA=$(printf '%s\n' "$parents" | sed -n 2p)
+    mtree=$(printf '%s\n' "$raw" | awk 'NR == 1 && $1 == "tree" { print $2 }')
+    htree=$(mirror_run cat-file commit "$HEAD_SHA" | awk 'NR == 1 && $1 == "tree" { print $2 }') \
+        || refuse "the mirror cannot read head $HEAD_SHA, main's second parent."
+    [ -n "$mtree" ] && [ "$mtree" = "$htree" ] \
+        || refuse "the tree of main $MERGE_SHA is not the tree of its head $HEAD_SHA, so what would deploy is not what was gated: merge main into the branch, gate that head, merge again."
+
+    now=$($CLOCK)
+    DEADLINE=$(( ts + FRESH_S ))
+    [ "$now" -le "$DEADLINE" ] \
+        || refuse "main $MERGE_SHA was merged $(( (now - ts) / 60 )) min ago, past the $(( FRESH_S / 60 ))-min window an unattended deploy has: a person deploys it with fleet-deploy."
+
+    live=$(deploy_head_file) || refuse "$ROOT/.git/HEAD does not read as main at a full sha, so the live commit is unknown."
+    [ "$live" = "$RECORD" ] \
+        || refuse "LIVE TREE MOVED: $ROOT/.git/HEAD is $live but root's record is $RECORD ($RECORD_FILE). Main moved in the live tree without a deploy; find out why before anything deploys."
+    mirror_run merge-base --is-ancestor "$RECORD" "$MERGE_SHA" \
+        || refuse "root's record $RECORD is not an ancestor of main $MERGE_SHA in the mirror, so this is not a fast-forward."
+    BEFORE=$RECORD
+    owed_rows_green
+    GATED="$GATED; deployed by deploy-on-merge"
+    say "JUDGED #$PR main $MERGE_SHA: GitHub's signed merge of head $HEAD_SHA, same tree, every gate row its test scope owes green, merged $(( (now - ts) / 60 )) min ago, a fast-forward from root's record $RECORD"
+}
+
+# The library's gated, read in root's mirror against root's live record: the rows the test
+# scope owes, as a hand deploy reads them (card 684).
+owed_rows_green() {
+    local GIT="env -i PATH=/usr/bin:/bin HOME=$MIRROR_HOME GIT_NO_REPLACE_OBJECTS=1 $MIRROR_GIT -C $MIRROR"
+    local GATE_SHA=$HEAD_SHA GATE_WHAT=head GATE_BASE=$RECORD
+    local GATE_ROUTE="deploy-on-merge deploys a head only when every gate row its test scope owes is green (scripts/check.sh writes ci, scripts/e2e.sh writes e2e, both run on the head before the merge): gate the head that way, or a person deploys this one with fleet-deploy."
+    gated
+}
+
+# The job's TOO LATE, or heavy-work's own give-up line, written after byte $1 of the log.
+too_late() {
+    tail -c +"$(( $1 + 1 ))" "$LOG" | grep -qE "giving up on 'orbit-deploy'|^TOO LATE: "
+}
+
+# A fast-forward killed mid-checkout has written files but not moved HEAD: HEAD alone is no
+# unmoved tree, so the status must match the one read before the job.
+live_tree_clean() {
+    # shellcheck disable=SC2086
+    deploy_git_bounded $GIT --no-optional-locks status --porcelain --untracked-files=normal && [ "$DEPLOY_GIT_OUT" = "$STATUS_BEFORE" ]
 }
 
 # The sidecar answers 400 without the Host header: the allowlist working.
@@ -45,9 +177,10 @@ rooted_count() { find "$ROOT" -user root -not -path "$ROOT/.claude/*" | wc -l; }
 
 land() {
     local head rooted code edge
+    PHASE=moving
     # shellcheck disable=SC2086
     if ! deploy_git_bounded $GIT merge --ff-only "$MERGE_SHA"; then
-        [ -n "$DEPLOY_GIT_ERR" ] || { say 'NOT LANDED: fast-forward refused, checkout unchanged'; exit 1; }
+        [ -n "$DEPLOY_GIT_ERR" ] || { PHASE=decide; say 'NOT LANDED: fast-forward refused, checkout unchanged'; exit 1; }
         say "NOT LANDED: $DEPLOY_GIT_ERR merging $MERGE_SHA. A fast-forward cut off mid-checkout writes files before it moves HEAD: read git status, and roll back to $BEFORE by the runbook."
         exit 4
     fi
@@ -182,6 +315,9 @@ set -e
 cd "$ROOT"
 rooted_count() { find "$ROOT" -user root -not -path "$ROOT/.claude/*" | wc -l; }
 EOF
+    [ -z "$DEADLINE" ] || cat <<EOF
+[ "\$($CLOCK)" -le $DEADLINE ] || { echo "TOO LATE: the slot came after main's freshness window closed, and nothing moved"; exit 1; }
+EOF
     # The job is its own bash, so it carries the library's bounded git verbatim. docs/DECISIONS.md
     declare -f deploy_git_bounded
     cat <<EOF
@@ -240,14 +376,30 @@ EOF
 }
 
 deploy_steps() {
-    local job rc=0
+    local job rc=0 mark max_wait
     say "STEP 1 rollback target $BEFORE"
     say "STEPS 1-10 are one heavy-work job and can queue behind another; nothing prints here until it returns. Watch it with: tail -f $LOG"
     job=$(deploy_job)
     detail "$job"
-    $HEAVY orbit-deploy -- bash -c "$job" || rc=$?
+    mark=$(stat -c %s "$LOG")
+    PHASE=moving
+    if [ -n "$DEADLINE" ]; then
+        max_wait=$(( DEADLINE - $($CLOCK) ))
+        [ "$max_wait" -ge 1 ] || max_wait=1
+        env HEAVY_WORK_MAX_WAIT="$max_wait" $HEAVY orbit-deploy -- bash -c "$job" || rc=$?
+    else
+        $HEAVY orbit-deploy -- bash -c "$job" || rc=$?
+    fi
     if [ "$rc" -ne 0 ]; then
         fail_tail 'STEPS 1-10' "$rc"
+        if [ "$FROM_MAIN" -eq 1 ] && [ "$(deploy_head_file)" = "$BEFORE" ] && live_tree_clean; then
+            PHASE=decide
+            if too_late "$mark"; then
+                refuse "TOO LATE: main $MERGE_SHA did not get the heavy-work slot inside its freshness window, and the live tree did not move; a person deploys it with fleet-deploy."
+            fi
+            refuse "the job failed before the live tree moved: $ROOT/.git/HEAD is still $BEFORE and the tree is clean, so there is nothing to roll back; a person deploys main $MERGE_SHA with fleet-deploy."
+        fi
+        say "ROLLBACK TARGET $BEFORE — the rollback block is in .claude/commands/deploy.md"
         exit "$rc"
     fi
     ROOTED=$(sed -n 's/^@@ROOT-OWNED //p' "$LOG" | tail -1)
@@ -373,16 +525,24 @@ verify() {
 main() {
     PR=''
     BY_HAND=0
+    FROM_MAIN=0
+    DECIDE_ONLY=0
     while [ $# -gt 0 ]; do
         case "$1" in
             --gated-by-hand) BY_HAND=1 ;;
+            --from-main) FROM_MAIN=1 ;;
+            --decide-only) DECIDE_ONLY=1 ;;
             -h|--help) usage ;;
             '' | *[!0-9]*) usage ;;
             *) [ -z "$PR" ] || usage; PR=$1 ;;
         esac
         shift
     done
-    [ -n "$PR" ] || usage
+    if [ "$FROM_MAIN" -eq 1 ]; then
+        [ -z "$PR" ] && [ "$BY_HAND" -eq 0 ] || usage
+    else
+        [ -n "$PR" ] && [ "$DECIDE_ONLY" -eq 0 ] || usage
+    fi
 
     ROOT=${DEPLOY_ROOT:-/var/www/orbit}
     # GIT and COMPOSE are COMMANDS WITH ARGUMENTS, so they are
@@ -397,6 +557,24 @@ main() {
     HOST=${ORBIT_HOST:-flights.ghiecode.io}
     BASE=${ORBIT_BASE:-http://127.0.0.1:3085}
     PUBLIC=${ORBIT_PUBLIC:-https://$HOST}
+    LOCK=${DEPLOY_LOCK:-/root/personal-vps-deploys/orbit.lock}
+    MIRROR=${DEPLOY_MIRROR:-/var/lib/fleet/deploy-on-merge/orbit.git}
+    MIRROR_URL=${DEPLOY_MIRROR_URL:-ssh://git@github.com/gcotcheza/orbit.git}
+    MIRROR_GIT=${DEPLOY_MIRROR_GIT:-/usr/bin/git}
+    MIRROR_HOME=${DEPLOY_MIRROR_HOME:-/root}
+    GNUPG=${DEPLOY_GNUPGHOME:-/etc/fleet/deploy-on-merge/gnupg}
+    GPG=${DEPLOY_GPG:-/usr/bin/gpg}
+    SSH_KEY=${DEPLOY_SSH_KEY:-/etc/fleet/deploy-on-merge/keys/orbit}
+    RECORD_FILE="${DEPLOY_RECORD_ROOT:-/var/lib/fleet/deploy-on-merge}/$(basename "$ROOT").record"
+    # CLOCK is a COMMAND WITH ARGUMENTS, unquoted at its call sites like GIT.
+    CLOCK=${DEPLOY_CLOCK:-date +%s}
+    FRESH_S=1800
+    LOCK_BUSY=0
+    PHASE=decide
+    DEADLINE=''
+    STATUS_BEFORE=unread
+    EXTRA_DONE=''
+    BEFORE=''
     GATED=''
     HEAD_SHA=''
     MERGE_SHA=''
@@ -408,8 +586,14 @@ main() {
     VHOST_EXTRA=''
 
     cd "$ROOT" || { printf 'deploy.sh: no checkout at %s\n' "$ROOT" >&2; exit 64; }
-    deploy_log_open "$PR"
+    deploy_log_open "${PR:-main}"
+    trap 'on_exit $?' EXIT
+    take_lock
+    under_lock 8>&-
+}
 
+# Bash keeps the lock on its own close-on-exec copy of fd 8 here, so no child inherits it.
+under_lock() {
     local branch_rc=0
     # shellcheck disable=SC2086
     deploy_git_or_refuse $GIT rev-parse --abbrev-ref HEAD || branch_rc=$?
@@ -420,18 +604,39 @@ main() {
     deploy_git_or_refuse $GIT log --oneline -3 || :
     printf '%s\n' "$DEPLOY_GIT_OUT"
 
-    head_is_present
-    resolve
+    if [ "$FROM_MAIN" -eq 1 ]; then
+        judge_main
+        # shellcheck disable=SC2086
+        deploy_git_or_refuse $GIT fetch origin || refuse "fetching origin into $ROOT failed, so the classifier could not read main $MERGE_SHA."
+    else
+        head_is_present
+        resolve
+    fi
+    # COMPOSE is a COMMAND WITH ARGUMENTS and has no seam: only deploy_compose_init sets it.
     deploy_compose_init "$MERGE_SHA"
     COMPOSE=$DEPLOY_COMPOSE
-    BEFORE=''
-    # shellcheck disable=SC2086
-    if deploy_git_or_refuse $GIT rev-parse --short HEAD; then BEFORE=$DEPLOY_GIT_OUT; fi
-    [ -n "$BEFORE" ] || refuse "cannot read the current head of $ROOT, and that short sha is the rollback target STEP 1 prints."
+    if [ "$FROM_MAIN" -eq 0 ]; then
+        # shellcheck disable=SC2086
+        if deploy_git_or_refuse $GIT rev-parse --short HEAD; then BEFORE=$DEPLOY_GIT_OUT; fi
+        [ -n "$BEFORE" ] || refuse "cannot read the current head of $ROOT, and that short sha is the rollback target STEP 1 prints."
+    fi
     refuse_if_dirty
-    classify
-    gate_or_recipe
-    preflight
+    if [ "$FROM_MAIN" -eq 1 ]; then
+        preflight
+        if [ "$DECIDE_ONLY" -eq 1 ]; then
+            say "WOULD DEPLOY #$PR $MERGE_SHA head $HEAD_SHA was $BEFORE — --decide-only stops before STEP 1"
+            exit 0
+        fi
+        # shellcheck disable=SC2086
+        deploy_git_or_refuse $GIT --no-optional-locks status --porcelain --untracked-files=normal \
+            || refuse "reading the status of $ROOT failed, so a failed job could not be told from a moved tree."
+        STATUS_BEFORE=$DEPLOY_GIT_OUT
+        classify
+    else
+        classify
+        gate_or_recipe
+        preflight
+    fi
     baseline
     deploy_steps
     await_health

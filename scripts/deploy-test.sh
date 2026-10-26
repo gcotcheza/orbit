@@ -102,7 +102,15 @@ SH
 #!/bin/sh
 [ "$1" = '--status' ] && { echo 'free'; exit 0; }
 printf '%s\n' "$*" >> "${FAKE_LOG_DIR}/heavy.argv"
+printf '%s\n' "${HEAVY_WORK_MAX_WAIT:-unset}" >> "${FAKE_LOG_DIR}/heavy.maxwait"
 [ -n "${FAKE_HEAVY_PREJOB:-}" ] && "${FAKE_HEAVY_PREJOB}"
+[ ! -e "${FAKE_LOG_DIR}/heavy-dirties" ] || : >"${DEPLOY_ROOT}/half-written.txt"
+if [ -e "${FAKE_LOG_DIR}/heavy-giveup" ]; then
+    echo "heavy-work: waited ${HEAVY_WORK_MAX_WAIT}s for the lock, giving up on '$1'" >&2
+    exit 75
+fi
+[ ! -e "${FAKE_LOG_DIR}/slot-at" ] || cp -- "${FAKE_LOG_DIR}/slot-at" "${FAKE_LOG_DIR}/now"
+[ ! -e /proc/self/fd/8 ] || echo 'fd 8 open' >> "${FAKE_LOG_DIR}/lock-fd"
 shift
 [ "$1" = '--' ] && shift
 exec "$@"
@@ -189,6 +197,41 @@ while [ "$i" -le "${FAKE_ROOT_OWNED:-0}" ]; do
     i=$((i + 1))
 done
 exit 0
+SH
+    # The mirror's git runs under env -i, so it stalls on its fetch by name, not by variable.
+    cat >"${BIN}/git-mirror-stalls" <<'SH'
+#!/bin/sh
+case " $* " in *' fetch '*) exec sleep 600 >/dev/null 2>&1 ;; esac
+exec git "$@"
+SH
+    # Signs for the fixture, and verifies by the mode file in the pinned GNUPGHOME.
+    cat >"${BIN}/gpg" <<'SH'
+#!/bin/sh
+case " $* " in
+    *' --verify '*)
+        cat >/dev/null
+        printf '%s\n' "${GNUPGHOME:-unset}" >>"${GNUPGHOME:-/nonexistent}/verify-calls"
+        fpr=968479A1AFF927E37D1A566BB5690EEEBB952194
+        case "$(cat "${GNUPGHOME:-/nonexistent}/fake-mode" 2>/dev/null)" in
+            good)
+                printf '[GNUPG:] NEWSIG\n[GNUPG:] GOODSIG B5690EEEBB952194 GitHub <noreply@github.com>\n'
+                printf '[GNUPG:] VALIDSIG %s 2026-10-02 1790000000 0 4 0 1 8 00 %s\n[GNUPG:] TRUST_UNDEFINED 0 pgp\n' "$fpr" "$fpr"
+                exit 0 ;;
+            wrong-key)
+                fpr=0123456789ABCDEF0123456789ABCDEF01234567
+                printf '[GNUPG:] NEWSIG\n[GNUPG:] GOODSIG 0123456789ABCDEF Someone <someone@example.invalid>\n'
+                printf '[GNUPG:] VALIDSIG %s 2026-10-02 1790000000 0 4 0 1 8 00 %s\n[GNUPG:] TRUST_UNDEFINED 0 pgp\n' "$fpr" "$fpr"
+                exit 0 ;;
+        esac
+        exit 2 ;;
+esac
+cat >/dev/null
+printf -- '-----BEGIN PGP SIGNATURE-----\n\nZml4dHVyZQ==\n-----END PGP SIGNATURE-----\n'
+printf '[GNUPG:] SIG_CREATED D 1 8 00 1790000000 968479A1AFF927E37D1A566BB5690EEEBB952194\n' >&2
+SH
+    cat >"${BIN}/clock" <<'SH'
+#!/bin/sh
+cat "${FAKE_LOG_DIR}/now"
 SH
     chmod 0755 "${BIN}"/*
 }
@@ -299,6 +342,7 @@ build_fixture() {
         "${CASE}/scripts" "${BIN}" "${LOGS}"
     : >"${LEDGER}"
     write_own_helpers
+    write_fakes
 
     git init -q -b main "${ROOT}"
     write_checkout
@@ -344,6 +388,7 @@ build_fixture() {
     fi
     MERGE_SHA="$(git_at rev-parse HEAD)"
     MERGE_SHORT="$(git_at rev-parse --short HEAD)"
+    [ "${1:-}" != frommain ] || from_main_merges
 
     git clone -q --bare "${ROOT}" "${CASE}/origin.git"
     git_at remote add origin "${CASE}/origin.git"
@@ -367,10 +412,34 @@ build_fixture() {
         "${HEAD_SHA}" "${MERGE_SHA}" >"${CASE}/gh.json"
     printf '%s ci 2026-09-19T06:00:00Z 0 -\n%s e2e 2026-09-19T06:30:00Z 0 -\n' \
         "${HEAD_SHA}" "${HEAD_SHA}" >"${LEDGER}"
-    write_fakes
 
-    printf 'LIVE_SHA=%s\nHEAD_SHA=%s\nMERGE_SHA=%s\nMERGE_SHORT=%s\n' \
-        "${LIVE_SHA}" "${HEAD_SHA}" "${MERGE_SHA}" "${MERGE_SHORT}" >"${template}/shas"
+    printf 'LIVE_SHA=%s\nHEAD_SHA=%s\nMERGE_SHA=%s\nMERGE_SHORT=%s\nFM_GOOD=%s\nFM_UNSIGNED=%s\nFM_MOVED=%s\nFM_LOCAL=%s\n' \
+        "${LIVE_SHA}" "${HEAD_SHA}" "${MERGE_SHA}" "${MERGE_SHORT}" "${FM_GOOD:-}" "${FM_UNSIGNED:-}" "${FM_MOVED:-}" "${MERGE_SHA}" >"${template}/shas"
+}
+
+# From-main shapes, as branches origin carries: GitHub's signed merge of pr, unsigned, moved tree.
+FM_TS=1790000000
+as_github() {
+    GIT_COMMITTER_NAME=GitHub GIT_COMMITTER_EMAIL=noreply@github.com GIT_COMMITTER_DATE="@${FM_TS} +0000" \
+        git_at -c gpg.program="${BIN}/gpg" -c user.signingkey=B5690EEEBB952194 "$@"
+}
+from_main_merges() {
+    local subject="Merge pull request #${PR_NUMBER} from gcotcheza/pr"
+    git_at checkout -q -b fm-good "${LIVE_SHA}"
+    as_github merge -q --no-ff -S -m "${subject}" pr
+    FM_GOOD="$(git_at rev-parse HEAD)"
+    git_at checkout -q -b fm-unsigned "${LIVE_SHA}"
+    as_github merge -q --no-ff -m "${subject}" pr
+    FM_UNSIGNED="$(git_at rev-parse HEAD)"
+    git_at checkout -q -b fm-moved "${LIVE_SHA}"
+    as_github merge -q --no-ff --no-commit pr
+    printf 'never gated\n' >"${ROOT}/app/extra.txt"
+    git_at add app/extra.txt
+    as_github commit -q -S -m "${subject}"
+    FM_MOVED="$(git_at rev-parse HEAD)"
+    git_at checkout -q main
+    [[ "${FM_GOOD} ${FM_UNSIGNED} ${FM_MOVED}" =~ ^[0-9a-f]{40}\ [0-9a-f]{40}\ [0-9a-f]{40}$ ]] \
+        || { fail 'the from-main fixture could not be committed; git said why above'; exit 1; }
 }
 
 run_deploy() {
@@ -411,6 +480,15 @@ run_deploy() {
         DEPLOY_LOG_DIR="${LOGS}" \
         ORBIT_PUBLIC='https://orbit.test' \
         ORBIT_BASE='http://127.0.0.1:3085' \
+        DEPLOY_LOCK="${CASE}/deploy.lock" \
+        DEPLOY_MIRROR="${CASE}/mirror.git" \
+        DEPLOY_MIRROR_URL="${CASE}/origin.git" \
+        DEPLOY_MIRROR_HOME="${CASE}/root-home" \
+        DEPLOY_GNUPGHOME="${CASE}/gnupg" \
+        DEPLOY_GPG="${BIN}/gpg" \
+        DEPLOY_SSH_KEY="${CASE}/deploy-key" \
+        DEPLOY_CLOCK="${BIN}/clock" \
+        "${FM_ENV[@]}" \
         bash "${DEPLOY_COPY:-${CASE}/scripts/deploy.sh}" "$@" 2>&1)"
     RUN_RC=$?
     unset FLEET_REPO DEPLOY_COPY
@@ -452,6 +530,7 @@ HEALTHY_AFTER=''
 UNHEALTHY=''
 HEALTH_TIMEOUT=''
 HEALTH_INTERVAL=''
+FM_ENV=()
 
 # --- 0. only root runs it, and only from a copy root alone can write ----------
 OUT="$(runuser -u nobody -- bash -s <"${BASH_SOURCE[0]}" 2>&1)"
@@ -1156,6 +1235,231 @@ equals 'a classifier whose git never answers exits' "${RUN_RC}" 1
 contains 'and is stopped as a timeout' "${OUT}" "STOP: git did not answer in 1s while the classifier read ${ROOT}"
 absent 'and it is not read as git failing' "${OUT}" 'STOP: git itself failed'
 untouched 'a classifier whose git never answers'
+
+# --- 16. from main: deploy-on-merge's judge (card 614) ------------------------
+fixture fm-usage frommain
+for bad in '--from-main 90' '--decide-only' '90 --decide-only' '--from-main --gated-by-hand'; do
+    # shellcheck disable=SC2086
+    run_deploy ${bad}
+    equals "the words [${bad}] exit" "${RUN_RC}" 64
+done
+contains 'they print the usage, naming --from-main' "${OUT}" \
+    'usage: fleet-deploy orbit <PR#> [--gated-by-hand] | scripts/deploy.sh --from-main [--decide-only]'
+
+record_row() {
+    install -d -m 700 "${CASE}/records"
+    ( umask 077; printf '%s\n' "$1" >>"${CASE}/records/orbit.record" )
+}
+fm_case() { # name, the commit origin's main names
+    fixture "$1" frommain
+    MERGE_SHA=$2
+    printf '%s\n' "${MERGE_SHA}" >"${CASE}/export-sha"
+    git -C "${CASE}/origin.git" update-ref refs/heads/main "${MERGE_SHA}"
+    git init -q --bare "${CASE}/mirror.git"
+    mkdir -m 700 "${CASE}/gnupg"
+    printf 'good\n' >"${CASE}/gnupg/fake-mode"
+    : >"${CASE}/deploy-key"
+    record_row "DONE ${LIVE_SHA} 2026-10-01T00:00:00Z fixture"
+    printf '%s\n' "$(( FM_TS + 60 ))" >"${CASE}/now"
+}
+run_from_main() { MERGE_SHA='' run_deploy --from-main "$@"; FM_ENV=(); }
+live_is() { # name, sha
+    if [ "$(git_at rev-parse HEAD)" = "$2" ]; then pass "$1"; else fail "$1 — the checkout is at $(git_at rev-parse --short HEAD)"; fi
+}
+refused_untouched() { # name
+    equals "$1 exits" "${RUN_RC}" 2
+    absent "$1: nothing reaches STEP 1" "${OUT}" 'STEP 1 rollback target'
+    absent "$1: no heavy-work job" "$(logged heavy.argv)" 'orbit-deploy'
+    absent "$1: no DONE line" "${OUT}" 'DONE #'
+    live_is "$1: the live tree did not move" "${LIVE_SHA}"
+}
+
+fm_case fm-good "${FM_GOOD}"
+run_from_main
+equals 'from main, a signed, gated, fresh merge deploys and exits' "${RUN_RC}" 0
+contains 'it names the main it judges first' "${OUT}" "JUDGING main ${FM_GOOD} from ${CASE}/mirror.git"
+contains 'it judges main from the mirror' "${OUT}" "JUDGED #${PR_NUMBER} main ${FM_GOOD}: GitHub's signed merge of head ${HEAD_SHA}"
+contains 'the lock is held' "${OUT}" "LOCK ${CASE}/deploy.lock held"
+equals 'and the job does not inherit the lock' "$(logged lock-fd)" ''
+contains 'the DONE line carries the merge' "${OUT}" "DONE #${PR_NUMBER} live ${FM_GOOD}"
+contains 'and says deploy-on-merge deployed it' "${OUT}" '; deployed by deploy-on-merge'
+live_is 'and the checkout is on the merge' "${FM_GOOD}"
+contains "root's record ends on the merge" "$(recorded | tail -n 1)" "DONE ${FM_GOOD} "
+contains 'the signature is checked against the pinned keyring' "$(cat "${CASE}/gnupg/verify-calls" 2>/dev/null)" "${CASE}/gnupg"
+contains 'heavy-work waits no longer than the freshness window left' "$(logged heavy.maxwait)" "$(( 1800 - 60 ))"
+contains 'the job re-judges freshness once it has the slot' "$(cat "${LOGS}"/*.log 2>/dev/null)" "-le $(( FM_TS + 1800 )) ] || { echo \"TOO LATE:"
+
+fm_case fm-docs "${FM_GOOD}"
+CLASSIFY_RC=0
+run_from_main
+equals 'from main, a docs-only merge lands and exits' "${RUN_RC}" 0
+contains 'it lands without the job' "${OUT}" "LANDED docs-only ${FM_GOOD:0:7}"
+contains "and root's record ends on it" "$(recorded | tail -n 1)" "DONE ${FM_GOOD} "
+
+fm_case fm-docs-down "${FM_GOOD}"
+CLASSIFY_RC=0
+CURL_CODE=500
+run_from_main
+equals 'from main, a docs-only landing onto a site that stopped answering exits' "${RUN_RC}" 4
+
+fm_case fm-docs-noff "${FM_GOOD}"
+CLASSIFY_RC=0
+CASE_GIT="git-stalls -C ${ROOT}" FAIL_ON='merge --ff-only' run_from_main
+equals 'from main, a refused fast-forward, which moves nothing, exits' "${RUN_RC}" 2
+live_is 'and the live tree did not move' "${LIVE_SHA}"
+
+fm_case fm-no-fetch "${FM_GOOD}"
+CASE_GIT="git-stalls -C ${ROOT}" FAIL_ON='fetch origin' run_from_main
+contains 'a live checkout that cannot fetch main is refused before the classifier' "${OUT}" \
+    "REFUSED: fetching origin into ${ROOT} failed, so the classifier could not read main ${FM_GOOD}"
+refused_untouched 'a live checkout that cannot fetch'
+
+fm_case fm-late "${FM_GOOD}"
+printf '%s\n' "$(( FM_TS + 1801 ))" >"${CASE}/slot-at"
+run_from_main
+equals 'a slot won after the window closed is refused and exits' "${RUN_RC}" 2
+contains 'it says TOO LATE' "${OUT}" "TOO LATE: main ${FM_GOOD} did not get the heavy-work slot"
+absent 'and names no rollback target' "${OUT}" 'ROLLBACK TARGET'
+live_is 'and the live tree did not move' "${LIVE_SHA}"
+
+fm_case fm-giveup "${FM_GOOD}"
+: >"${CASE}/heavy-giveup"
+run_from_main
+equals 'a heavy-work give-up is refused and exits' "${RUN_RC}" 2
+contains 'as too late' "${OUT}" 'did not get the heavy-work slot inside its freshness window'
+
+fm_case fm-dirtied "${FM_GOOD}"
+: >"${CASE}/heavy-giveup"
+: >"${CASE}/heavy-dirties"
+run_from_main
+equals 'a failed job that left a file in the live tree is a failure after STEP 1 and exits' "${RUN_RC}" 4
+contains 'and names the rollback target' "${OUT}" "ROLLBACK TARGET ${LIVE_SHA}"
+
+fm_case fm-migrate "${FM_GOOD}"
+COMPOSE_FAIL=migrate
+run_from_main
+equals 'from main, a step that fails after the fast-forward exits' "${RUN_RC}" 4
+contains 'and names the rollback target' "${OUT}" "ROLLBACK TARGET ${LIVE_SHA}"
+
+fm_case fm-decide "${FM_GOOD}"
+run_from_main --decide-only
+equals '--decide-only on a deployable merge exits' "${RUN_RC}" 0
+contains 'it says what it would deploy' "${OUT}" "WOULD DEPLOY #${PR_NUMBER} ${FM_GOOD} head ${HEAD_SHA} was ${LIVE_SHA}"
+absent 'and stops before STEP 1' "${OUT}" 'STEP 1 rollback target'
+live_is '--decide-only: the live tree did not move' "${LIVE_SHA}"
+
+fm_case fm-live "${FM_GOOD}"
+record_row "DONE ${FM_GOOD} 2026-10-02T00:00:00Z fixture"
+run_from_main
+equals 'main that is already root record exits' "${RUN_RC}" 0
+contains 'is already live' "${OUT}" "ALREADY LIVE main ${FM_GOOD}"
+absent 'and nothing runs' "$(logged heavy.argv)" 'orbit-deploy'
+
+fm_case fm-red-e2e "${FM_GOOD}"
+printf '%s ci 2026-10-15T20:00:00Z 0 -\n%s e2e 2026-10-15T20:30:00Z 1 -\n' "${HEAD_SHA}" "${HEAD_SHA}" >"${LEDGER}"
+run_from_main
+contains 'from main, a red e2e row is refused' "${OUT}" "REFUSED: the ledger holds no green e2e for ${HEAD_SHA:0:7}"
+refused_untouched 'from main, red e2e'
+
+fm_case fm-unsigned "${FM_UNSIGNED}"
+run_from_main
+contains 'an unsigned merge is refused' "${OUT}" 'carries no good GitHub signature (%G? N)'
+refused_untouched 'an unsigned merge'
+
+fm_case fm-wrong-key "${FM_GOOD}"
+printf 'wrong-key\n' >"${CASE}/gnupg/fake-mode"
+run_from_main
+contains 'a merge signed by another key is refused' "${OUT}" "not GitHub's web-flow key 968479A1AFF927E37D1A566BB5690EEEBB952194"
+refused_untouched 'another key'
+
+fm_case fm-moved "${FM_MOVED}"
+run_from_main
+contains 'a merge whose tree is not its head is refused' "${OUT}" "is not the tree of its head ${HEAD_SHA}"
+refused_untouched 'a moved tree'
+
+fm_case fm-one-parent "${HEAD_SHA}"
+run_from_main
+contains 'a one-parent main is refused' "${OUT}" "main ${HEAD_SHA} has 1 parent(s)"
+refused_untouched 'a one-parent main'
+
+fm_case fm-local "${FM_LOCAL}"
+run_from_main
+contains 'a merge someone else committed is refused' "${OUT}" 'was not committed by GitHub <noreply@github.com>'
+refused_untouched 'a local merge'
+
+fm_case fm-stale "${FM_GOOD}"
+printf '%s\n' "$(( FM_TS + 1801 ))" >"${CASE}/now"
+run_from_main
+contains 'a merge older than 30 minutes is refused' "${OUT}" 'past the 30-min window an unattended deploy has'
+refused_untouched 'a stale merge'
+
+fm_case fm-no-record "${FM_GOOD}"
+rm -f "${CASE}/records/orbit.record"
+run_from_main
+contains 'no live record is refused' "${OUT}" 'so root has no live record: fleet-deploy-on-merge --seed orbit writes the first one.'
+refused_untouched 'no record'
+
+fm_case fm-tree-moved "${FM_GOOD}"
+record_row "DONE ${FM_UNSIGNED} 2026-10-02T00:00:00Z fixture"
+run_from_main
+contains "a live tree that is not root's record is refused loudly" "${OUT}" "LIVE TREE MOVED: ${ROOT}/.git/HEAD is ${LIVE_SHA}"
+refused_untouched 'a moved live tree'
+
+fm_case fm-open-record "${FM_GOOD}"
+chmod 644 "${CASE}/records/orbit.record"
+run_from_main
+contains 'a record others can read is refused' "${OUT}" "root's record ${CASE}/records/orbit.record is not a 600 file in a 700 directory, both owned by uid $(id -u): nothing is judged"
+refused_untouched 'an unsafe record'
+
+fm_case fm-short-record "${FM_GOOD}"
+record_row "DONE ${LIVE_SHA:0:12} 2026-10-02T00:00:00Z fixture"
+run_from_main
+contains 'a short-sha record is refused, never expanded' "${OUT}" "(${LIVE_SHA:0:12} in ${CASE}/records/orbit.record) is not a full sha"
+refused_untouched 'a short-sha record'
+
+fm_case fm-not-ancestor "${FM_GOOD}"
+git_at reset -q --hard "${FM_UNSIGNED}"
+record_row "DONE ${FM_UNSIGNED} 2026-10-02T00:00:00Z fixture"
+run_from_main
+contains 'a record main does not descend from is refused' "${OUT}" "root's record ${FM_UNSIGNED} is not an ancestor of main ${FM_GOOD}"
+equals 'a record main does not descend from exits' "${RUN_RC}" 2
+absent 'a record main does not descend from: nothing reaches STEP 1' "${OUT}" 'STEP 1 rollback target'
+live_is 'a record main does not descend from: the live tree did not move' "${FM_UNSIGNED}"
+
+fm_case fm-no-key "${FM_GOOD}"
+rm -f "${CASE}/deploy-key"
+run_from_main
+contains 'a missing deploy key is refused' "${OUT}" "the deploy key ${CASE}/deploy-key is not a regular file"
+refused_untouched 'no deploy key'
+
+fm_case fm-mirror-stalls "${FM_GOOD}"
+FM_ENV=(DEPLOY_MIRROR_GIT="${BIN}/git-mirror-stalls")
+GIT_TIMEOUT=1 RUN_CAP='timeout 60' run_from_main
+contains 'a mirror fetch that never answers is refused as a timeout' "${OUT}" "REFUSED: git did not answer in 1s in the mirror ${CASE}/mirror.git: git fetch"
+refused_untouched 'a stalled mirror'
+
+fm_case fm-red "${FM_GOOD}"
+CLASSIFY_RC=0
+CASE_GIT="git-stalls -C ${ROOT}" STALL_ON='rev-parse --short HEAD' GIT_TIMEOUT=1 RUN_CAP='timeout 60' run_from_main
+equals 'from main, live with a RED, exits' "${RUN_RC}" 3
+contains 'and the DONE line carries it' "$(printf '%s\n' "${OUT}" | grep '^DONE #')" 'RED head unknown'
+
+fm_case fm-lock "${FM_GOOD}"
+exec 7>>"${CASE}/deploy.lock"
+flock -n 7
+run_from_main
+exec 7>&-
+contains 'a held deploy lock is refused' "${OUT}" "REFUSED: another deploy holds ${CASE}/deploy.lock"
+equals 'lock busy, a code of its own, exits' "${RUN_RC}" 5
+live_is 'lock busy: the live tree did not move' "${LIVE_SHA}"
+
+fixture hand-lock
+exec 7>>"${CASE}/deploy.lock"
+flock -n 7
+run_deploy "${PR_NUMBER}"
+exec 7>&-
+contains 'a hand deploy takes the same lock' "${OUT}" "REFUSED: another deploy holds ${CASE}/deploy.lock"
+equals 'and a busy lock exits' "${RUN_RC}" 5
 
 if [ "${fails}" -eq 0 ]; then
     printf '\ndeploy-test: all checks passed\n'

@@ -161,7 +161,7 @@ mutant 'gated reads the branch head, not the commit that was gated' lib/deploy/l
     'a gated merge commit deploys' \
     'and the ledger read is the merge commit, not the branch head'
 mutant 'the summary never says which commit was gated' lib/deploy/ledger.sh \
-    's/GATED="ledger \$what \${sha:0:7}\${bytree:+, by identical tree: \$bytree}"/GATED=ledger/' \
+    's/GATED="\${ci_by:+\$ci_by + e2e }ledger \$what \${sha:0:7}\${bytree:+, by identical tree: \$bytree}"/GATED=ledger/' \
     'and DONE says the merge was the commit that was gated' \
     'and DONE says the head was the commit that was gated'
 mutant 'the recipe sends the operator to the branch head' deploy.sh \
@@ -209,7 +209,7 @@ mutant 'a dirty checkout is allowed' lib/deploy/preflight.sh \
     's/^refuse_if_dirty() {/refuse_if_dirty() { return 0;/' \
     'a dirty checkout is refused'
 mutant 'deploy.sh runs on with no lib beside it' deploy.sh \
-    '/^for deploy_lib_file in /d' \
+    '/^deploy_lib_ready || /d' \
     'a deploy.sh with no lib beside it refuses and names fleet-deploy'
 mutant 'the gate takes the caller'"'"'s DEPLOY_LIB again' lib/gate/deploy-lib.sh \
     's#^DEPLOY_LIB=/srv/engineering-standards/scripts/lib/deploy$#DEPLOY_LIB=${DEPLOY_LIB:-/srv/engineering-standards/scripts/lib/deploy}#' \
@@ -419,6 +419,107 @@ mutant "the landing's fast-forward is unbounded" deploy.sh \
 mutant 'the classifier is unbounded' deploy.sh \
     's|/usr/bin/timeout -k 5 "\$n" "\$SCRIPT_DIR/docs-only.sh"|"$SCRIPT_DIR/docs-only.sh"|' \
     'a classifier whose git never answers exits'
+
+# --- from main: deploy-on-merge's judge (card 614) ------------------------------
+mutant 'the deploy lock is never taken' deploy.sh \
+    '/flock -n 8 ||/d' \
+    'a held deploy lock is refused' 'a hand deploy takes the same lock'
+mutant 'the job inherits the deploy lock' deploy.sh \
+    's/^    under_lock 8>&-$/    under_lock/' \
+    'and the job does not inherit the lock'
+mutant '--from-main takes a PR number or --gated-by-hand' deploy.sh \
+    's/\[ -z "\$PR" \] && \[ "\$BY_HAND" -eq 0 \] || usage/true/' \
+    'the words [--from-main 90] exit' 'the words [--from-main --gated-by-hand] exit'
+mutant '--decide-only is taken by hand' deploy.sh \
+    's/\[ -n "\$PR" \] && \[ "\$DECIDE_ONLY" -eq 0 \] || usage/[ -n "$PR" ] || usage/' \
+    'the words [90 --decide-only] exit'
+mutant 'no live record is judged' deploy.sh \
+    '/\[ -n "\$RECORD" \] || refuse/d' \
+    'no live record is refused'
+mutant 'a short-sha record is judged' deploy.sh \
+    's/\[\[ \$RECORD =~ ^\[0-9a-f\]{40}\$ \]\]/true/' \
+    'a short-sha record is refused, never expanded'
+mutant 'a record others can write is judged' deploy.sh \
+    's/deploy_record_safe "\$RECORD_FILE" || refuse/true || refuse/' \
+    'a record others can read is refused'
+mutant 'the deploy key is not checked' deploy.sh \
+    's/^    ssh_key_safe || refuse/    true || refuse/' \
+    'a missing deploy key is refused'
+mutant 'a mirror git that never answers is waited on' deploy.sh \
+    '/case "\$rc" in 124|137) refuse "git did not answer in/d' \
+    'a mirror fetch that never answers is refused as a timeout'
+mutant 'a main that is already live deploys again' deploy.sh \
+    's/if \[ "\$MERGE_SHA" = "\$RECORD" \]; then/if false; then/' \
+    'is already live'
+mutant 'a one-parent main deploys' deploy.sh \
+    's/\[ "\$nparents" -eq 2 \]/true/' \
+    'a one-parent main is refused'
+mutant 'a merge made off GitHub deploys' deploy.sh \
+    's/\(\[\[ \$committer =~ \)/[[ x =~ x ]] || \1/' \
+    'a merge someone else committed is refused'
+mutant 'an unsigned merge deploys' deploy.sh \
+    '/carries no good GitHub signature/d' \
+    'an unsigned merge is refused'
+mutant 'any key signs for GitHub' deploy.sh \
+    's/\[ "\$gf" = "\$WEBFLOW_FPR" \]/true/' \
+    'a merge signed by another key is refused'
+mutant 'a merge whose tree is not its head deploys' deploy.sh \
+    's/\[ -n "\$mtree" \] && \[ "\$mtree" = "\$htree" \]/true/' \
+    'a merge whose tree is not its head is refused'
+mutant 'a stale merge deploys' deploy.sh \
+    's/\[ "\$now" -le "\$DEADLINE" \]/true/' \
+    'a merge older than 30 minutes is refused'
+mutant 'a live tree off the record deploys' deploy.sh \
+    's/\[ "\$live" = "\$RECORD" \]/true/' \
+    "a live tree that is not root's record is refused loudly"
+mutant 'a main that does not descend from the record deploys' deploy.sh \
+    's/mirror_run merge-base --is-ancestor "\$RECORD" "\$MERGE_SHA"/true/' \
+    'a record main does not descend from is refused'
+mutant 'from main, the gate rows are not read' deploy.sh \
+    's/^    owed_rows_green$/    GATED=skipped/' \
+    'from main, a red e2e row is refused'
+mutant 'the DONE line hides who deployed it' deploy.sh \
+    's/^    GATED="\$GATED; deployed by deploy-on-merge"$/    :/' \
+    'and says deploy-on-merge deployed it'
+mutant 'the live checkout never fetches main' deploy.sh \
+    's/^        deploy_git_or_refuse \$GIT fetch origin || refuse "fetching origin into/        true || refuse "fetching origin into/' \
+    'a live checkout that cannot fetch main is refused before the classifier'
+mutant '--decide-only deploys' deploy.sh \
+    's/^        if \[ "\$DECIDE_ONLY" -eq 1 \]; then$/        if false; then/' \
+    'and stops before STEP 1' '--decide-only: the live tree did not move'
+mutant 'the job never re-judges the window' deploy.sh \
+    '/TOO LATE: the slot came after/d' \
+    'a slot won after the window closed is refused and exits'
+mutant 'heavy-work waits past the window' deploy.sh \
+    's/env HEAVY_WORK_MAX_WAIT="\$max_wait" //' \
+    'heavy-work waits no longer than the freshness window left'
+mutant 'a give-up is not called too late' deploy.sh \
+    's/^            if too_late "\$mark"; then$/            if false; then/' \
+    'it says TOO LATE' 'as too late'
+mutant 'an unmoved tree after a failed job is a rollback' deploy.sh \
+    's/\[ "\$FROM_MAIN" -eq 1 \] && \[ "\$(deploy_head_file)" = "\$BEFORE" \] && live_tree_clean/false/' \
+    'a slot won after the window closed is refused and exits'
+mutant 'a half-written tree reads as unmoved' deploy.sh \
+    's/^live_tree_clean() {/live_tree_clean() { return 0;/' \
+    'a failed job that left a file in the live tree is a failure after STEP 1 and exits'
+mutant 'a failure after STEP 1 is not code 4' deploy.sh \
+    '/^on_exit() {/,/^}/s/^        rc=4$/        rc=1/' \
+    'from main, a step that fails after the fast-forward exits'
+mutant 'a docs-only landing never says it moved' deploy.sh \
+    '/^land() {/,/^}/s/^    PHASE=moving$/    :/' \
+    'from main, a docs-only landing onto a site that stopped answering exits'
+mutant 'a refused fast-forward says it moved' deploy.sh \
+    "s/{ PHASE=decide; say 'NOT LANDED/{ say 'NOT LANDED/" \
+    'from main, a refused fast-forward, which moves nothing, exits'
+mutant 'a refusal from main is not code 2' deploy.sh \
+    '/^on_exit() {/,/^}/s/^        rc=2$/        rc=1/' \
+    'an unsigned merge exits'
+mutant 'a RED from main is not code 3' deploy.sh \
+    's/\*RED\*) rc=3 ;;/*RED*) rc=0 ;;/' \
+    'from main, live with a RED, exits'
+mutant 'a busy lock is not code 5' deploy.sh \
+    '/^on_exit() {/,/^}/s/^        rc=5$/        rc=1/' \
+    'lock busy, a code of its own, exits'
 
 mutant 'the battery asks a healthchecked service for bare Up' verify.sh \
     "s/for s in horizon postgres redis; do ps_says \"\\\$s\" '(healthy)'; done/for s in horizon postgres redis; do ps_says \"\\\$s\" 'Up'; done/" \
