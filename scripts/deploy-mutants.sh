@@ -197,7 +197,7 @@ mutant 'the landing finishes on the short head again' deploy.sh \
     '/^land() {/,/^}/s/finish "\$MERGE_SHA"/finish "$head"/' \
     'the landing stops with DONE'
 mutant 'the deploy finishes on the short head again' deploy.sh \
-    '/^main() {/,/^}/s/finish "\$MERGE_SHA"/finish "$($GIT rev-parse --short HEAD)"/' \
+    '/^under_lock() {/,/^}/s/finish "\$MERGE_SHA"/finish "$($GIT rev-parse --short HEAD)"/' \
     'the deploy finishes'
 mutant 'the check gate never arms the ledger' check.sh \
     '/^gate_ledger_arm$/d' \
