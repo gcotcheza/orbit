@@ -93,6 +93,27 @@ equals '2 the copy is 0640 root:119 in a 0750 root:119 folder' "$(tr '\n' ' ' <"
 equals '2 the sentinel survives' "$(cat "${SENTINEL}")" 'SENTINEL-716'
 equals '2 teardown removes the copy and its folder' "$(ls -A "${ENV_ROOT}")" ''
 
+# --- 3. the gate refuses to run as anyone but root ------------------------------------------
+new_case not-root
+setpriv --reuid=115 --regid=119 --clear-groups env PATH="${BIN}:${PATH}" GATE_LEDGER="${FAKE_DIR}/ledger" \
+    GATE_LEDGER_GIT="${BIN}/fake-git" ORBIT_GATE_LOG=/dev/null bash "${FAKE_TREE}/scripts/e2e.sh" >"${FAKE_DIR}/out" 2>&1
+rc=$?
+equals '3 run as uid 115 the gate exits' "${rc}" '1'
+equals '3 and says it needs root' "$(grep -c "run this as root: the env is root's own copy in ${ENV_ROOT}" "${FAKE_DIR}/out")" '1'
+equals '3 before docker is asked anything' "$(cat "${FAKE_DIR}/docker.argv" 2>/dev/null | wc -l)" '0'
+equals '3 and before the env folder is made' "$([ -e "${ENV_ROOT}" ] && echo made || echo absent)" 'absent'
+
+# --- 4. --down tears the stack down and removes the env copy --------------------------------
+new_case down
+install -d -o 0 -g 0 -m 0755 "${ENV_ROOT}" && install -d -o 0 -g 119 -m 0750 "${ENV_ROOT}/orbit-e2e" \
+    && printf 'ORBIT_E2E=1\n' >"${ENV_ROOT}/orbit-e2e/e2e.env"
+env PATH="${BIN}:${PATH}" GATE_LEDGER="${FAKE_DIR}/ledger" GATE_LEDGER_GIT="${BIN}/fake-git" \
+    ORBIT_GATE_LOG=/dev/null bash "${FAKE_TREE}/scripts/e2e.sh" --down >"${FAKE_DIR}/out" 2>&1
+rc=$?
+equals '4 --down exits 0' "${rc}" '0'
+equals '4 and ran compose down' "$(grep -c ' down -v --remove-orphans' "${FAKE_DIR}/docker.argv")" '1'
+equals '4 and removed the copy and its folder' "$(ls -A "${ENV_ROOT}")" ''
+
 if [ "${fails}" -gt 0 ]; then
     printf '\ne2e-gate-test: %d check(s) failed\n' "${fails}" >&2
     exit 1

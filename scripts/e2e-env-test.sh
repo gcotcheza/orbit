@@ -21,15 +21,12 @@ for file in "${E2E_ENV_LIB}" "${E2E_SH}"; do
     [ -f "${file}" ] || { printf 'FAIL %s is not a file\n' "${file}" >&2; exit 1; }
 done
 
+[ "$(id -u)" -eq 0 ] || { echo 'e2e-env-test: run as root, as e2e.sh must; nobody plays the owner' >&2; exit 1; }
+OWNER_UID=65534 OWNER_GID=65534
+
 WORK="$(mktemp -d -p /tmp)" || exit 1
 trap 'rm -rf -- "${WORK:?}"' EXIT
 chmod 755 "${WORK}"
-
-if [ "$(id -u)" -eq 0 ]; then
-    OWNER_UID=65534 OWNER_GID=65534
-else
-    OWNER_UID="$(id -u)" OWNER_GID="$(id -g)"
-fi
 
 # shellcheck source=scripts/lib/e2e-env.sh
 . "${E2E_ENV_LIB}"
@@ -38,11 +35,9 @@ SHIMS="${WORK}/shims" UIDS="${WORK}/uids.log"
 mkdir "${SHIMS}"
 : >"${UIDS}"
 chmod 666 "${UIDS}"
-for tool in install tee mkdir; do
-    real="$(command -v "${tool}")" || exit 1
-    printf '#!/bin/sh\nprintf "%%s %%s\\n" %s "$(id -u)" >>%s\nexec %s "$@"\n' "${tool}" "${UIDS}" "${real}" >"${SHIMS}/${tool}"
-    chmod 755 "${SHIMS}/${tool}"
-done
+real_mkdir="$(command -v mkdir)" || exit 1
+printf '#!/bin/sh\nprintf "mkdir %%s\\n" "$(id -u)" >>%s\nexec %s "$@"\n' "${UIDS}" "${real_mkdir}" >"${SHIMS}/mkdir"
+chmod 755 "${SHIMS}/mkdir"
 
 ran_as_owner() { # TOOL... — each ran at least once, and every logged run had the owner's uid
     local tool

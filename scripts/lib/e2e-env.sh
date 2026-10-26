@@ -22,14 +22,10 @@ e2e_refuse_foreign_owner() { # DIR UID — every file here is made as UID, so th
     fi
 }
 
-e2e_as_owner() { # UID GID COMMAND... — as that uid when root, as the caller otherwise
+e2e_as_owner() { # UID GID COMMAND... — root drops to that uid; e2e.sh runs only as root
     local uid=$1 gid=$2
     shift 2
-    if [ "$(id -u)" -eq 0 ]; then
-        setpriv --reuid="$uid" --regid="$gid" --clear-groups -- "$@"
-    else
-        "$@"
-    fi
+    setpriv --reuid="$uid" --regid="$gid" --clear-groups -- "$@"
 }
 
 e2e_env_copy_dir() { # PARENT DIR GID — DIR made 0750 root:GID under a root-only PARENT, and checked after

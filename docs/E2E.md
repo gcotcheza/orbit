@@ -4,9 +4,9 @@
 scripts/e2e.sh            # the whole thing: build, seed, drive, destroy
 ```
 
-Run it **as root**, not as `sudo -u orbit`. It needs `/var/run/docker.sock`,
-which is a group membership `orbit` does not have; nothing it does writes to the
-checkout as root, because every container it starts runs as `115:119`.
+Run it **as root**, not as `sudo -u orbit`; it refuses any other user. It needs `/var/run/docker.sock`,
+which is a group membership `orbit` does not have, and its env is root's own copy in `/run/orbit-e2e`;
+nothing it does writes to the checkout as root, because every container it starts runs as `115:119`.
 
 First run pulls a ~2 GB image. Every run after that is about **90 seconds**.
 
@@ -756,6 +756,7 @@ one in what a wait actually proves:
 | --- | --- |
 | `port 3185 is taken by something that is not the orbit-e2e stack` | a previous `--keep` run, or something else. `scripts/e2e.sh --down`. |
 | `cannot talk to docker` | run it as root, not `sudo -u orbit`. |
+| `run this as root: the env is root's own copy in /run/orbit-e2e` | run by another user; run it as root. |
 | `… is a symbolic link; refusing to write through it` | `e2e/`, `e2e/artifacts`, `e2e/baselines` or the env folder in `/run/orbit-e2e` is a link; the script refuses to follow one. Find out who planted it before removing it. |
 | `… is owned by uid N; the browser gate makes its files as uid 115, so it needs a tree uid 115 owns` | the worktree or lane clone you ran it in is not the `orbit` user's, so 115:119 could not write there. Run the gate from a lane clone made by `gh repo clone` and handed to orbit when it was made; never point a repair at `/var/www/orbit`. |
 | `… is not a folder only root writes; refusing to keep the e2e env there` | the env folder in `/run/orbit-e2e` was swapped or re-owned during the run. Find out what did it before removing it. |
