@@ -17,12 +17,11 @@ copy. They apply here in full; anything below overrides them and says why.
   `/var/www/orbit-worktrees/` is retired.
 - **Merging to `main` does not deploy.** Nothing ships until
   `.claude/commands/deploy.md` is run, literally: the long-lived containers
-  boot the code once, so an unrestarted deploy looks entirely successful and
-  serves the old app.
+  boot the code once, so an unrestarted deploy looks fine but serves the old app.
 - **The gate.** From a worktree, `scripts/check.sh overlay` under its own
   `COMPOSE_PROJECT_NAME`, then `scripts/e2e.sh`; `dev` execs into a stack already up there.
   The deploy, `fleet-deploy orbit <PR#>` as root, runs no gate: it refuses a head that lacks green ci and e2e
-  rows, its own or an identical tree's, in the gate ledger. `scripts/deploy.sh` run any other way refuses; never work around it.
+  rows, its own or an identical tree's, in the ledger. `scripts/deploy.sh` runs only so or as deploy-on-merge's judge, `--from-main [--decide-only]`; never work around it.
 - **The gate isolates its writes; it does not refuse the live checkout (S6).**
   In either runner it refuses a compose stack started from any other
   directory, which keeps a worktree off production's containers. Overlay mode
@@ -43,8 +42,7 @@ copy. They apply here in full; anything below overrides them and says why.
   and those screens: a screen that needs a field it does not list needs that
   file changed first.
 - **No PHPStan baseline, ever.** A wrong finding is ignored in `phpstan.neon`
-  with the reason beside it; a right one is fixed. There is nowhere for new
-  debt to hide.
+  with the reason beside it; a right one is fixed.
 - **Never a bare `docker compose` from a worktree.** `docker-compose.yml` pins
   `name: orbit`, so a bare command resolves to production's containers,
   network *and volumes*, and its three PHP services name `orbit/app:latest` —
