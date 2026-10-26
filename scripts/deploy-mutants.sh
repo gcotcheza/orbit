@@ -521,8 +521,8 @@ mutant 'a busy lock is not code 5' deploy.sh \
     '/^on_exit() {/,/^}/s/^        rc=5$/        rc=1/' \
     'lock busy, a code of its own, exits'
 mutant '--decide-only answers before the classifier' deploy.sh \
-    '/^        if \[ "\$DECIDE_ONLY" -eq 1 \]; then$/,/^        fi$/{/^            classifier_rc$/d}' \
-    '--decide-only on a merge the classifier refuses exits' 'and never says it would deploy'
+    '/^        if \[ "\$DECIDE_ONLY" -eq 1 \]; then$/,/^        fi$/s/^            classifier_rc$/            CLASS_RC=0/' \
+    '--decide-only on a merge the classifier refuses exits' 'it is the classifier STOP' 'and never says it would deploy'
 mutant 'a moved vhost deploys from main' deploy.sh \
     's/^        vhost_refuse$/        :/' \
     'from main, a moved deploy/nginx is a RED line naming the sha'
