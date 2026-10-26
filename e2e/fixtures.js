@@ -2,25 +2,24 @@
 // `test` from here, never from '@playwright/test' (docs/E2E.md "The console guard").
 import { expect, test as base } from '@playwright/test'
 import { readFileSync } from 'node:fs'
+import process from 'node:process'
 import { screenPath } from './paths.js'
 
-// Read out of .env.e2e rather than written here, so no credential lives in
-// this repository (docs/E2E.md "What it does, in order").
-const ENV_FILE = new URL('../.env.e2e', import.meta.url)
-
+// Read out of the env scripts/e2e.sh mounts at ORBIT_E2E_ENV rather than written
+// here, so no credential lives in this repository (docs/E2E.md "What it does, in order").
 function envValue(name) {
     let contents
 
     try {
-        contents = readFileSync(ENV_FILE, 'utf8')
+        contents = readFileSync(process.env.ORBIT_E2E_ENV ?? '', 'utf8')
     } catch {
-        throw new Error('.env.e2e is missing — run scripts/e2e.sh, which generates it')
+        throw new Error('the e2e env is not mounted at ORBIT_E2E_ENV — run scripts/e2e.sh, which generates it')
     }
 
     const line = contents.split('\n').find((row) => row.startsWith(`${name}=`))
 
     if (line === undefined) {
-        throw new Error(`.env.e2e has no ${name} — regenerate it with scripts/e2e.sh --fresh-env`)
+        throw new Error(`the e2e env has no ${name} — regenerate it with scripts/e2e.sh --fresh-env`)
     }
 
     return line.slice(name.length + 1).trim()

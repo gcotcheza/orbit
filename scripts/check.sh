@@ -2,6 +2,8 @@
 # usage: scripts/check.sh dev|overlay
 # Why two runners, and what each may not lose: docs/DECISIONS.md, the-gate-is-one-script-two-runners
 set -Eeuo pipefail
+# No caller's environment says a gate was recorded, here or in any child (card 702).
+unset GATE_RECORDED
 
 cd "$(dirname "$0")/.."
 here=$(pwd -P)
@@ -10,10 +12,11 @@ here=$(pwd -P)
 # docker-compose.yml alone names production's tag. docs/DECISIONS.md
 export COMPOSE_FILE="$here/docker-compose.yml:$here/docker-compose.ci.yml"
 
-# Vendored from gcotcheza/engineering-standards and not edited here:
-# tests/Unit/Standards/DeployLibDriftTest.php recomputes each file's own hash.
-# shellcheck source=scripts/lib/deploy/ledger.sh
-. "$here/scripts/lib/deploy/ledger.sh"
+# shellcheck source=scripts/lib/gate/deploy-lib.sh
+. "$here/scripts/lib/gate/deploy-lib.sh"
+deploy_lib_ready || exit 1
+# shellcheck source=/srv/engineering-standards/scripts/lib/deploy/ledger.sh
+. "$DEPLOY_LIB/ledger.sh"
 
 # Filtered until the arguments and the stack have been vetted, so a run that
 # dies in its own usage or refuses the box it found records nothing at all.
@@ -23,6 +26,8 @@ GATE_FILTERED=1
 # its own -C, so no call site below adds one. docs/DECISIONS.md, the-gate-scans-for-secrets-over-gits-view-of-the-tree
 GIT=${CI_GIT:-git}
 GATE_LEDGER_GIT="${GIT}"
+# The commit this run judges, pinned before any step (card 717); the ledger records no other.
+gate_ledger_arm
 
 mode=${1-}
 if [ $# -ne 1 ] || { [ "$mode" != dev ] && [ "$mode" != overlay ]; }; then
@@ -52,9 +57,6 @@ if [ -n "$seam_dir" ] && [ "$(realpath -- "$seam_dir" 2>/dev/null)" != "$here" ]
     printf '  the copy would disagree.\n' >&2
     exit 2
 fi
-
-# The commit this run judges, pinned before any step; the ledger records no other.
-gate_ledger_arm
 
 # 124 is GNU timeout on the host, 143 is BusyBox timeout in the test container.
 docker_answer() {
@@ -184,8 +186,9 @@ if [ ${#shell_files[@]} -eq 0 ]; then
     exit 1
 fi
 
-docker run --rm --network none -v "$here:/mnt:ro" -w /mnt koalaman/shellcheck:v0.11.0 \
-    -S warning "${shell_files[@]}"
+# The shared lib is mounted at its box path so -x reads what the gate sources from it.
+docker run --rm --network none -v "$here:/mnt:ro" -v "$DEPLOY_LIB:$DEPLOY_LIB:ro" -w /mnt koalaman/shellcheck:v0.11.0 \
+    -x -S warning "${shell_files[@]}"
 
 if [ "$mode" = overlay ]; then
     step 'Overlay (dev dependencies, outside the live vendor/)'
@@ -202,7 +205,7 @@ if [ "$mode" = overlay ]; then
     chown -R 115:119 "$gate"
     # storage/ is the app's own writable directory, not a build product, so it is
     # handed over rather than overlaid. docs/DECISIONS.md, worktrees-live-outside-the-served-tree
-    chown -R 115:119 "$here/storage"
+    chown -R -P 115:119 "$here/storage"
     # Unconditionally: compose builds a MISSING image and never a stale one, so
     # without this every step below runs whatever the box holds. docs/DECISIONS.md
     docker compose build app
@@ -247,9 +250,13 @@ step 'Guard diff reads (scripts/guard-lint.sh)'
 # and in no image. docs/DECISIONS.md, the-gate-lints-every-guards-diff-reads
 "$here/scripts/guard-lint.sh"
 
+step 'The deploy lib and this gate (scripts/deploy-lib-test.sh, scripts/check-test.sh)'
+# Host steps as root, each handed the tree it judges: they read the deploy lib from root's
+# clone and run this script against fakes. docs/DECISIONS.md, deploy-lib-is-not-vendored
+bash "$here/scripts/deploy-lib-test.sh" "$here"
+bash "$here/scripts/check-test.sh" "$here"
+
 step 'The deploy script (scripts/deploy-test.sh)'
-# On the host, not in a container, and below the first containerised step:
-# CheckGitSeamTest stubs docker and must stop before this one runs under its PATH.
 "$here/scripts/deploy-test.sh"
 "$here/scripts/verify-test.sh"
 
@@ -261,6 +268,9 @@ step 'The worktree script (scripts/worktree-test.sh)'
 step 'The browser gate makes its files as the app user (scripts/e2e-env-test.sh)'
 # A host step for the same reason: shell testing shell, in temp directories only.
 bash "$here/scripts/e2e-env-test.sh"
+
+step 'The browser gate end to end against a fake docker (scripts/e2e-gate-test.sh)'
+bash "$here/scripts/e2e-gate-test.sh" "$here"
 
 step 'Image tags (T9)'
 # A host step: the canonical clone is on this box and inside no container.

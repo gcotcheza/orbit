@@ -19,9 +19,11 @@ final class GateRunnersTest extends TestCase
         'gitleaks',
         'pint',
         'guard diff reads',
+        'the deploy lib and this gate',
         'the deploy script',
         'the worktree script',
         'the browser gate makes its files as the app user',
+        'the browser gate end to end against a fake docker',
         'image tags',
         'deploy mutants',
         'composer advisories',
@@ -134,7 +136,7 @@ final class GateRunnersTest extends TestCase
             .'is the refusal being fixed.'
         );
         $this->assertMatchesRegularExpression(
-            '/^\s*chown -R 115:119 "\$here\/storage"/m',
+            '/^\s*chown -R -P 115:119 "\$here\/storage"/m',
             $branch[1],
             'The overlay block must hand storage/ to the containers as well as its own overlay. '
             .'storage/ is the application\'s writable directory rather than a build product, so it '

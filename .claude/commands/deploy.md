@@ -19,6 +19,9 @@ fleet-deploy orbit <PR#>
 
 **`scripts/deploy.sh` run any other way refuses**; never work around it. Orbit does not use `--gated-by-hand`. A docs-only merge is the same command.
 
+`scripts/deploy.sh --from-main [--decide-only]` is deploy-on-merge's judge, run by
+`fleet-deploy-on-merge` as root once card 614 makes Orbit live there; a person never types it.
+
 ## If it says NOT GATED
 
 It prints this recipe, shas filled in. **Gate in a worktree of the root-owned clone, never in `/var/www/orbit`.**
@@ -39,6 +42,7 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 
 | line | means |
 |---|---|
+| `LOCK … held` | one deploy at a time, by hand or from main; `another deploy holds …` refuses |
 | `RESOLVED #N head … merge … trees identical` | the head is gated |
 | `RESOLVED #N merge … is origin/main and its tree is not head …'s` | the merge commit is gated |
 | `CLASSIFIED code` / `LANDED docs-only …` | a landing ends the run |
@@ -49,7 +53,7 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 | `STEPS 1-10 ok in one heavy-work job` | steps that ran |
 | `HEALTH … healthy …` | `HEALTH TIMEOUT`: landed, battery **not** run, not a rollback |
 | `VERIFY --backend-only` / `VERIFY full` | bundle not rebuilt / rebuilt and served |
-| `HOST VHOST NEEDED, NOT RUN …` | by hand: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`, in this order; reload only when both say `syntax is ok` |
+| `HOST VHOST NEEDED, NOT RUN …` | by hand: `nginx -t` · copy the file · `nginx -t` · `systemctl reload nginx`, in this order; reload only when both say `syntax is ok`. From main: `RED: HOST VHOST NEEDED <sha>`, nothing moved; deploy that PR by hand |
 | `DONE #N live <full merge sha> was … gated … root-owned 0 verify …` | finished; `root-owned` must read `0` |
 | `PAPERWORK PR #N deployed …` | backlog, handoff, fleet-docs page |
 | `REFUSED: git did not answer in Ns: <git command>` / `STOP: git did not answer in Ns while the classifier read …` | nothing moved; find why git hangs first |
@@ -173,14 +177,14 @@ git-as orbit -C /var/www/orbit reset --hard "${WAS:?set WAS to the sha DONE prin
   && find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
 ```
 
-The count must print `0`. Then write the rollback into root's record:
+The count must print `0`. Then write the rollback into root's record (`summary.sh` comes from root's engineering-standards clone at `origin/main`, the lib fleet-deploy lays beside `deploy.sh`):
 
 ```bash
 (
   set -u
   LIBDIR=$(mktemp -d /var/lib/fleet/deploy-src/rollback.XXXXXXXX) || exit
   trap 'rm -rf "${LIBDIR:?}"' EXIT
-  git --git-dir=/var/lib/fleet/deploy-src/orbit.git show main:scripts/lib/deploy/summary.sh >"${LIBDIR:?}/summary.sh" || exit
+  git -C / --git-dir=/srv/engineering-standards/.git show refs/remotes/origin/main:scripts/lib/deploy/summary.sh >"${LIBDIR:?}/summary.sh" || exit
   SHA=$(git-as orbit -C /var/www/orbit rev-parse --verify HEAD) || exit
   ROOT=/var/www/orbit bash -c '. "$1/summary.sh" && deploy_record_rollback "$2" runbook' _ "${LIBDIR:?}" "${SHA:?}"
 )

@@ -4,9 +4,9 @@
 scripts/e2e.sh            # the whole thing: build, seed, drive, destroy
 ```
 
-Run it **as root**, not as `sudo -u orbit`. It needs `/var/run/docker.sock`,
-which is a group membership `orbit` does not have; nothing it does writes to the
-checkout as root, because every container it starts runs as `115:119`.
+Run it **as root**, not as `sudo -u orbit`; it refuses any other user. It needs `/var/run/docker.sock`,
+which is a group membership `orbit` does not have, and its env is root's own copy in `/run/orbit-e2e`;
+nothing it does writes to the checkout as root, because every container it starts runs as `115:119`.
 
 First run pulls a ~2 GB image. Every run after that is about **90 seconds**.
 
@@ -46,9 +46,9 @@ browser.** Not "assert the component mounted". Look at it.
 
 `scripts/e2e.sh`:
 
-1. **Generates `.env.e2e`** if there is not one — a fresh `APP_KEY`, a throwaway
+1. **Generates its env** in `/run/orbit-e2e/<project>/e2e.env` (0640 root:119, never a checkout file — card 716) — a fresh `APP_KEY`, a throwaway
    database password, and a seeded login (`e2e@orbit.test`) that exists on no
-   other box. Gitignored. `--fresh-env` regenerates it.
+   other box. Teardown removes it; `--fresh-env` regenerates one a `--keep` run left.
 2. **Builds the sandbox image** `orbit/app:e2e` — never the `orbit/app:latest`
    production boots — and **checks the prerequisites** it cannot make:
    `vendor/`, `node_modules/`, `public/build/`. The last two are installed only
@@ -89,7 +89,7 @@ scripts/e2e.sh --keep -- --grep "heat map"     # one test, stack left up
 | queue | redis + Horizon | `sync` — jobs run inside the request |
 | postgres | named volume | **tmpfs**, capped at 256 MB |
 | redis | appendonly, named volume | `--save ''`, no volume |
-| env file | `.env` | `.env.e2e` (generated, gitignored) |
+| env file | `.env` | `/run/orbit-e2e/<project>/e2e.env` (generated, root's, outside the checkout) |
 | session cookie | `Secure` | **not** `Secure` — see below |
 | uid, `no-new-privileges`, `cap_drop`, read-only web | | **identical** |
 
@@ -103,7 +103,7 @@ matters when somebody is tired:
 3. Its own **env file**, with credentials that are generated rather than
    borrowed.
 4. **`ORBIT_E2E` is a required compose variable.** `docker compose -f
-   docker-compose.e2e.yml up` without `--env-file .env.e2e` fails at
+   docker-compose.e2e.yml up` without `scripts/e2e.sh`'s `--env-file` fails at
    interpolation instead of quietly starting the sandbox against production's
    `.env`.
 
@@ -387,11 +387,11 @@ month boundary. Every one of those is a red gate on a Tuesday for no reason.
 
 | side | how |
 | --- | --- |
-| app | `E2E_FIXED_NOW` in `.env.e2e` → `config('orbit.e2e.fixed_now')` → `Date::setTestNow()` in `SandboxClockServiceProvider::boot()` |
+| app | `E2E_FIXED_NOW` in the generated env → `config('orbit.e2e.fixed_now')` → `Date::setTestNow()` in `SandboxClockServiceProvider::boot()` |
 | browser | the shared `page` fixture in `e2e/fixtures.js` runs `clock.install({ time })` + `clock.resume()` for **every** spec; `phone-baselines.spec.js` adds `timezoneId: 'Europe/Amsterdam'` on top |
 
 `scripts/e2e.sh` owns the value (`E2E_FIXED_NOW` near the top of the script) and
-writes it into the generated `.env.e2e`; `e2e/fixtures.js` reads it back out, so
+writes it into the generated env, which Playwright gets at `ORBIT_E2E_ENV`; `e2e/fixtures.js` reads it back out, so
 the two sides cannot drift apart.
 
 **The browser's clock starts at the instant and then ticks; it is not pinned.**
@@ -756,12 +756,12 @@ one in what a wait actually proves:
 | --- | --- |
 | `port 3185 is taken by something that is not the orbit-e2e stack` | a previous `--keep` run, or something else. `scripts/e2e.sh --down`. |
 | `cannot talk to docker` | run it as root, not `sudo -u orbit`. |
-| `… is a symbolic link; refusing to write through it` | `.env.e2e`, `e2e/`, `e2e/artifacts` or `e2e/baselines` is a link; the script writes those paths as 115:119 and refuses to follow one. Find out who planted it before removing it. |
+| `run this as root: the env is root's own copy in /run/orbit-e2e` | run by another user; run it as root. |
+| `… is a symbolic link; refusing to write through it` | `e2e/`, `e2e/artifacts`, `e2e/baselines` or the env folder in `/run/orbit-e2e` is a link; the script refuses to follow one. Find out who planted it before removing it. |
 | `… is owned by uid N; the browser gate makes its files as uid 115, so it needs a tree uid 115 owns` | the worktree or lane clone you ran it in is not the `orbit` user's, so 115:119 could not write there. Run the gate from a lane clone made by `gh repo clone` and handed to orbit when it was made; never point a repair at `/var/www/orbit`. |
-| `.env.e2e is not a regular file; refusing to write into it` | something else, a directory say, sits at `.env.e2e`. Find out what made it before removing it. |
+| `… is not a folder only root writes; refusing to keep the e2e env there` | the env folder in `/run/orbit-e2e` was swapped or re-owned during the run. Find out what did it before removing it. |
 | `EACCES … mkdir '/work/e2e/baselines'` | a root-owned file in the checkout. Repair it narrowly, the way the deploy runbook does: `find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' -exec chown orbit:orbit {} +`, then read the count back. |
-| `.env.e2e is missing` | run `scripts/e2e.sh`, which generates it. |
-| `.env.e2e has no E2E_FIXED_NOW` | a file written before the frozen clock; `scripts/e2e.sh` regenerates it by itself. |
+| `the e2e env is not mounted at ORBIT_E2E_ENV` | Playwright was run by hand; run `scripts/e2e.sh`, which generates and mounts it. |
 | the globe times out in `waitForGlobe` | the earth texture 404'd, or `--enable-unsafe-swiftshader` stopped being accepted by a newer Chromium. Check `e2e/artifacts/report/index.html`. |
 | a baseline fails after a legitimate change | `scripts/e2e.sh -- --update-snapshots=changed`, then read `git diff --stat e2e/baselines` before committing. The `=changed` is not optional — see "Re-baseline deliberately". |
 | `429` on login | the 5/min throttle. Wait a minute; a full run only spends three attempts. |

@@ -499,7 +499,7 @@ return [
     | The browser sandbox's frozen clock
     |--------------------------------------------------------------------------
     |
-    | Both keys are .env.e2e's and nothing else's. docs/E2E.md "A frozen clock".
+    | Both keys are the generated e2e env's and nothing else's. docs/E2E.md "A frozen clock".
     |
     */
 
