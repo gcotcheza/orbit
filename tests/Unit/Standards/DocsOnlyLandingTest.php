@@ -88,11 +88,11 @@ final class DocsOnlyLandingTest extends TestCase
         $at = [];
 
         foreach (['classify', 'gate_or_recipe', 'baseline', 'deploy_steps'] as $call) {
-            $found = strpos($script, "\n    {$call}\n");
+            $called = preg_match("/^[ \\t]+{$call}\$/m", $script, $match, PREG_OFFSET_CAPTURE);
 
-            $this->assertIsInt($found, "main() no longer calls {$call}, so its order cannot be read.");
+            $this->assertSame(1, $called, "main() no longer calls {$call}, so its order cannot be read.");
 
-            $at[$call] = $found;
+            $at[$call] = $match[0][1];
         }
 
         $ordered = $at;
