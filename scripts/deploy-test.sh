@@ -1354,6 +1354,12 @@ contains 'it says what it would deploy' "${OUT}" "WOULD DEPLOY #${PR_NUMBER} ${F
 absent 'and stops before STEP 1' "${OUT}" 'STEP 1 rollback target'
 live_is '--decide-only: the live tree did not move' "${LIVE_SHA}"
 
+fm_case fm-decide-classifier-stops "${FM_GOOD}"
+CLASSIFY_RC=3 run_from_main --decide-only
+equals '--decide-only on a merge the classifier refuses exits' "${RUN_RC}" 2
+contains 'it is the classifier STOP' "${OUT}" 'STOP: the classifier refused.'
+absent 'and never says it would deploy' "${OUT}" 'WOULD DEPLOY'
+
 fm_case fm-live "${FM_GOOD}"
 record_row "DONE ${FM_GOOD} 2026-10-02T00:00:00Z fixture"
 run_from_main

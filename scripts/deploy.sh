@@ -223,17 +223,25 @@ land() {
 }
 
 # The classifier's own git is unbounded, so the classifier runs under the deploy's git timeout.
-classify() {
+classifier_rc() {
     local rc=0 n=${DEPLOY_GIT_TIMEOUT:-300}
     DOCS_ONLY_GIT="$GIT" /usr/bin/timeout -k 5 "$n" "$SCRIPT_DIR/docs-only.sh" "$MERGE_SHA" </dev/null || rc=$?
+    CLASS_RC=$rc
     case "$rc" in
-        0) land ;;
+        0|1|2) ;;
         124|137) say "STOP: git did not answer in ${n}s while the classifier read $ROOT, so nothing was classified and nothing moved. Find out why git is stuck (a lock, a FIFO, a full disk) before running it again."; exit 1 ;;
-        1) say 'CLASSIFIED code: the full deploy path' ;;
-        2) nothing_to_land ;;
         3) say 'STOP: the classifier refused. A landing is a fast-forward or it is not a landing, and nothing was classified.'; exit 1 ;;
         64) say 'STOP: the classifier was called wrong; nothing was classified.'; exit 1 ;;
         *) say "STOP: git itself failed (rc=$rc). A failed command must never be read as 'nothing to land'."; exit 1 ;;
+    esac
+}
+
+classify() {
+    classifier_rc
+    case "$CLASS_RC" in
+        0) land ;;
+        1) say 'CLASSIFIED code: the full deploy path' ;;
+        2) nothing_to_land ;;
     esac
 }
 
@@ -644,7 +652,8 @@ under_lock() {
     if [ "$FROM_MAIN" -eq 1 ]; then
         preflight
         if [ "$DECIDE_ONLY" -eq 1 ]; then
-            say "WOULD DEPLOY #$PR $MERGE_SHA head $HEAD_SHA was $BEFORE — --decide-only stops before STEP 1"
+            classifier_rc
+            say "WOULD DEPLOY #$PR $MERGE_SHA head $HEAD_SHA was $BEFORE — --decide-only stops before STEP 1 (classifier rc $CLASS_RC)"
             exit 0
         fi
         # shellcheck disable=SC2086
