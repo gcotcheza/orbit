@@ -28,7 +28,8 @@
 # ⚠ RUN IT AS ROOT, NOT as `sudo -u orbit`. Talking to /var/run/docker.sock is
 #   a group membership `orbit` does not have, and the env is root's own copy.
 #   This script writes, chowns and chmods nothing in the checkout as root:
-#   e2e/'s directories are made as 115:119 (= the host `orbit` user), so the
+#   e2e/'s directories and, if missing, the empty `.env` the env copy is
+#   mounted over are made as 115:119 (= the host `orbit` user), so the
 #   checkout must be 115's; the app, web and browser containers run as
 #   115:119, postgres and redis as their own users. The env lives outside the
 #   checkout, in /run/orbit-e2e/<project>/e2e.env (0640 root:119), because
@@ -146,7 +147,9 @@ fi
 
 e2e_refuse_foreign_owner "$ROOT" "$APP_UID" || fail "this tree must be owned by uid ${APP_UID} (orbit)"
 [ "$(id -u)" -eq 0 ] || fail "run this as root: the env is root's own copy in ${E2E_ENV_ROOT}"
-e2e_refuse_links e2e e2e/artifacts e2e/baselines || fail 'a path this script writes is a link'
+e2e_refuse_links e2e e2e/artifacts e2e/baselines .env || fail 'a path this script writes is a link'
+# The env copy is mounted over .env; a mount point the daemon makes for it is root's.
+[ -e .env ] || e2e_as_owner "$APP_UID" "$APP_GID" install -m 600 /dev/null .env || fail 'could not make .env as the tree owner'
 e2e_env_copy_dir "$E2E_ENV_ROOT" "$E2E_ENV_DIR" "$APP_GID" || fail "could not make ${E2E_ENV_DIR} root's alone"
 
 # -----------------------------------------------------------------------------

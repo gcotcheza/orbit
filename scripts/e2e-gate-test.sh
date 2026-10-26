@@ -114,6 +114,22 @@ equals '4 --down exits 0' "${rc}" '0'
 equals '4 and ran compose down' "$(grep -c ' down -v --remove-orphans' "${FAKE_DIR}/docker.argv")" '1'
 equals '4 and removed the copy and its folder' "$(ls -A "${ENV_ROOT}")" ''
 
+# --- 5. a fresh tree gets its .env mount point from the tree's owner, never the daemon ------
+new_case fresh-env
+rm -f -- "${FAKE_TREE}/.env"
+run_gate
+equals '5 the fake reached compose up' "$(grep -c ' up -d --wait' "${FAKE_DIR}/docker.argv")" '1'
+equals '5 .env exists, empty, 0600 and owned by 115:119' \
+    "$(stat -c '%u:%g %a %s' -- "${FAKE_TREE}/.env" 2>&1)" '115:119 600 0'
+
+# --- 6. a .env that is a link is refused before docker is asked anything --------------------
+new_case env-link
+rm -f -- "${FAKE_TREE}/.env" && ln -s "${WORK}/nowhere" "${FAKE_TREE}/.env"
+run_gate
+equals '6 the gate says a path it writes is a link' "$(grep -c 'a path this script writes is a link' "${FAKE_DIR}/out")" '1'
+equals '6 before docker is asked anything' "$(cat "${FAKE_DIR}/docker.argv" 2>/dev/null | wc -l)" '0'
+equals '6 and the link still points nowhere' "$(readlink "${FAKE_TREE}/.env")" "${WORK}/nowhere"
+
 if [ "${fails}" -gt 0 ]; then
     printf '\ne2e-gate-test: %d check(s) failed\n' "${fails}" >&2
     exit 1
