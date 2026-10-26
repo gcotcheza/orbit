@@ -535,6 +535,9 @@ mutant 'a vhost red carries on to STEP 1' deploy.sh \
 mutant 'a vhost alarms every tick' deploy.sh \
     '/! grep -qxF "\$MERGE_SHA" "\$VHOST_SEEN"/,/alarmed once already/d' \
     'the same moved vhost again exits' 'refuses without a second alarm'
+mutant 'any sha alarmed silences every later one' deploy.sh \
+    's/! grep -qxF "\$MERGE_SHA" "\$VHOST_SEEN"/! grep -q . "$VHOST_SEEN"/' \
+    'a moved vhost on a sha not yet alarmed, the alarm code, exits' 'an earlier sha alarmed still leaves a RED line naming the new one'
 mutant 'the alarmed sha is never kept' deploy.sh \
     '/>>"\$VHOST_SEEN"/d' \
     'and the alarmed sha is kept beside the lock' 'the same moved vhost again exits'

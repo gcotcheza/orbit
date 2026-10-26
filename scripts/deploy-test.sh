@@ -1469,6 +1469,13 @@ equals 'the same moved vhost again exits' "${RUN_RC}" 2
 contains 'refuses without a second alarm' "${OUT}" "REFUSED: HOST VHOST NEEDED ${FM_GOOD}, alarmed once already"
 absent 'and prints no second RED line' "${OUT}" 'RED: HOST VHOST'
 
+fm_case fm-vhost-new-sha good nginx
+printf '%s\n' "${LIVE_SHA}" >"${CASE}/deploy.vhost-red"
+run_from_main
+equals 'a moved vhost on a sha not yet alarmed, the alarm code, exits' "${RUN_RC}" 6
+contains 'an earlier sha alarmed still leaves a RED line naming the new one' "${OUT}" "RED: HOST VHOST NEEDED ${FM_GOOD}: deploy by the runbook"
+equals 'and the new sha is kept after the earlier one' "$(cat "${CASE}/deploy.vhost-red" 2>/dev/null)" "$(printf '%s\n%s' "${LIVE_SHA}" "${FM_GOOD}")"
+
 fm_case fm-vhost-shadow good nginx
 run_from_main --decide-only
 equals '--decide-only on a moved vhost, the alarm code, exits' "${RUN_RC}" 6
