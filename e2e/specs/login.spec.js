@@ -77,7 +77,7 @@ test('the empty login screen renders for a guest', async ({ page }) => {
 })
 
 test('the seeded account is the sandbox one, never production', async () => {
-    // A guard on the harness itself: if `.env.e2e` ever carried a real
+    // A guard on the harness itself: if the e2e env ever carried a real
     // address, every trace would have its password typed into a form.
     expect(account.email).toMatch(/\.test$/)
     expect(account.email, 'the sandbox must never sign in as the real owner').toMatch(/@orbit\.test$/)

@@ -28,7 +28,8 @@ docker() {
     case " $* " in
         *' composer install '*)
             if [ -n "${FAKE_PLANT:-}" ]; then
-                rm -f -- "${FAKE_TREE}/.env.e2e" && ln -s "${FAKE_PLANT}" "${FAKE_TREE}/.env.e2e"
+                rm -f -- "${FAKE_TREE}/.env.e2e" "${FAKE_TREE}/.env" \
+                    && ln -s "${FAKE_PLANT}" "${FAKE_TREE}/.env.e2e" && ln -s "${FAKE_PLANT}" "${FAKE_TREE}/.env"
             fi ;;
         *' up -d --wait '*)
             local prev='' a
@@ -36,7 +37,13 @@ docker() {
                 [ "${prev}" = '--env-file' ] && cat -- "$a" >"${FAKE_DIR}/up-env-file" 2>&1
                 prev=$a
             done
-            printf '%s' "${E2E_ENV_MOUNT:-}" >"${FAKE_DIR}/up-mount"
+            # Through a child, as compose sees it: this fake is a function, which sees unexported names too.
+            local mount
+            mount="$(printenv E2E_ENV_MOUNT || true)"
+            printf '%s' "${mount}" >"${FAKE_DIR}/up-mount"
+            cat -- "${mount:-/nonexistent}" >"${FAKE_DIR}/up-mount-content" 2>&1
+            stat -c '%u:%g %a' -- "${mount:-/nonexistent}" "$(dirname -- "${mount:-/nonexistent}")" \
+                >"${FAKE_DIR}/up-perm" 2>&1
             return 1 ;;
     esac
     return 0
@@ -51,6 +58,11 @@ new_case() { # NAME — a fresh uid-115 copy of the tree and a fresh fake log
         --exclude=./public/build --exclude=./.env.e2e -cf - . | tar -xf - -C "${FAKE_TREE}"
     chown -R 115:119 "${FAKE_TREE}"
     : >"${FAKE_DIR}/ledger"
+    # e2e.sh reads no env-root seam: the copy under test has its pinned folder moved into WORK.
+    ENV_ROOT="${FAKE_DIR}/env-root"
+    sed -i "s|^E2E_ENV_ROOT=/run/orbit-e2e\$|E2E_ENV_ROOT=${ENV_ROOT}|" "${FAKE_TREE}/scripts/e2e.sh"
+    grep -qx "E2E_ENV_ROOT=${ENV_ROOT}" "${FAKE_TREE}/scripts/e2e.sh" \
+        || { echo "e2e-gate-test: REFUSED: could not move E2E_ENV_ROOT into ${FAKE_DIR}" >&2; exit 1; }
     export FAKE_DIR FAKE_TREE
 }
 
@@ -65,6 +77,21 @@ run_gate GATE_RECORDED=1
 equals '1 the fake reached compose up' "$(grep -c ' up -d --wait' "${FAKE_DIR}/docker.argv")" '1'
 equals "1 and a caller's GATE_RECORDED=1 still leaves the red row" \
     "$(awk '{ print $1, $2, $4 }' "${FAKE_DIR}/ledger")" "${FAKE_SHA} e2e 1"
+
+# --- 2. compose and the mount read root's copy, never a link planted in the tree (card 716) --
+new_case planted
+SENTINEL="${WORK}/root-only/secret"
+mkdir -m 700 "${WORK}/root-only" && printf 'SENTINEL-716\n' >"${SENTINEL}"
+run_gate FAKE_PLANT="${SENTINEL}"
+equals '2 the fake reached compose up' "$(grep -c ' up -d --wait' "${FAKE_DIR}/docker.argv")" '1'
+equals '2 and the links were planted during the composer step' "$(readlink "${FAKE_TREE}/.env.e2e")" "${SENTINEL}"
+equals '2 compose read the generated env as --env-file' "$(grep -c '^ORBIT_E2E=1$' "${FAKE_DIR}/up-env-file")" '1'
+equals '2 the mount is the copy in the pinned folder' "$(cat "${FAKE_DIR}/up-mount")" "${ENV_ROOT}/orbit-e2e/e2e.env"
+equals '2 and holds the generated env' "$(grep -c '^ORBIT_E2E=1$' "${FAKE_DIR}/up-mount-content")" '1'
+equals '2 neither read the planted sentinel' "$(cat "${FAKE_DIR}/up-env-file" "${FAKE_DIR}/up-mount-content" | grep -c SENTINEL-716)" '0'
+equals '2 the copy is 0640 root:119 in a 0750 root:119 folder' "$(tr '\n' ' ' <"${FAKE_DIR}/up-perm")" '0:119 640 0:119 750 '
+equals '2 the sentinel survives' "$(cat "${SENTINEL}")" 'SENTINEL-716'
+equals '2 teardown removes the copy and its folder' "$(ls -A "${ENV_ROOT}")" ''
 
 if [ "${fails}" -gt 0 ]; then
     printf '\ne2e-gate-test: %d check(s) failed\n' "${fails}" >&2

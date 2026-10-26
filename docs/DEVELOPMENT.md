@@ -150,9 +150,9 @@ no argument prints what the variable is for and what its `-C` has to name.
 
 **The compose-project trap.** `docker-compose.yml` pins `name: orbit` and
 publishes `127.0.0.1:3085`; the browser sandbox pins `orbit-e2e` on
-`127.0.0.1:3185` with its own generated `.env.e2e`. A compose command is
+`127.0.0.1:3185` with its own generated env, root's copy in `/run/orbit-e2e`. A compose command is
 resolved through the project name — containers, networks *and volumes* — so
-running `-f docker-compose.e2e.yml` without `--env-file .env.e2e` would point
+running `-f docker-compose.e2e.yml` without `scripts/e2e.sh`'s `--env-file` would point
 the sandbox at production's `.env`. It does not: `ORBIT_E2E` is a required
 interpolation variable, and the command fails instead.
 
@@ -191,7 +191,7 @@ chmod -R go-w vendor node_modules
 
 The `chmod` is last on purpose: until the script has run there is nothing in
 those two directories to tighten. No `.env` is needed for any of it — the
-script writes its own `.env.e2e`. The gate reruns `vite build` whenever
+script writes its own env in `/run/orbit-e2e`. The gate reruns `vite build` whenever
 `public/build/manifest.json` is missing or older than `resources/`,
 `package-lock.json` or `vite.config.js` (`scripts/e2e.sh:403-414`), so emptying
 `public/build/` by hand after a front-end edit is no longer needed — in a

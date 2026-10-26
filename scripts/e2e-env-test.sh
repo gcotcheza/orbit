@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Guards the paths scripts/e2e.sh makes in an app-owned tree: links and directories are refused,
-# and as root the writes run as the owner (nobody stands in), proved by uid through PATH shims.
+# Guards the paths scripts/e2e.sh makes: in the app-owned tree links are refused and root's writes run
+# as the owner (nobody stands in, proved by uid); the env is root's copy in a folder only root writes.
 # E2E_ENV_LIB/E2E_SH test a copy.
 set -uo pipefail
 
@@ -66,58 +66,62 @@ sentinel_untouched() {
 
 root_made_nothing() { test -z "$(find "${CASE}/tree" -mindepth 1 -user 0 -not -path '*/e2e/specs')"; }
 
-place() { # CONTENT — e2e_env_place from inside the case's tree
-    : >"${UIDS}"
-    (cd "${CASE}/tree" && PATH="${SHIMS}:${PATH}" \
-        && printf '%s\n' "$1" | e2e_env_place .env.e2e "${OWNER_UID}" "${OWNER_GID}") 2>"${CASE}/stderr"
-}
-
 hand_over() {
     : >"${UIDS}"
     (cd "${CASE}/tree" && PATH="${SHIMS}:${PATH}" && e2e_hand_over_dirs "${OWNER_UID}" "${OWNER_GID}") 2>"${CASE}/stderr"
 }
 
-# --- 1. a link or a directory at .env.e2e is refused, and what it points at survives --
-fresh_case env-link
-ln -s "${CASE}/outside/sentinel" "${CASE}/tree/.env.e2e"
-place 'APP_KEY=planted'
-check 'a link at .env.e2e is refused' test $? -ne 0
-check 'and is still the same link' test "$(readlink "${CASE}/tree/.env.e2e")" = "${CASE}/outside/sentinel"
+# --- 1. the env is root's copy, outside the tree, in a folder only root writes (card 716) --
+REAL_INSTALL="$(command -v install)" || exit 1
+ENV_ROOT="${WORK}/env-root"
+ENV_DIR="${ENV_ROOT}/orbit-e2e"
+copy_env() { # CONTENT [PATH-DIR] — e2e_env_copy_dir, then e2e_env_copy_write, as e2e.sh calls them
+    (PATH="${2:+$2:}${PATH}" && e2e_env_copy_dir "${ENV_ROOT}" "${ENV_DIR}" "${OWNER_GID}" \
+        && printf '%s\n' "$1" | e2e_env_copy_write "${ENV_DIR}/e2e.env" "${OWNER_GID}") 2>"${WORK}/env-stderr"
+}
+
+copy_env 'APP_KEY=fresh'
+check 'the env copy is written' test $? -eq 0
+check 'with the content given' test "$(cat "${ENV_DIR}/e2e.env")" = 'APP_KEY=fresh'
+check 'the copy is 0640 root:<app group>' test "$(stat -c '%u:%g %a' "${ENV_DIR}/e2e.env")" = "0:${OWNER_GID} 640"
+check 'its folder is 0750 root:<app group>' test "$(stat -c '%u:%g %a' "${ENV_DIR}")" = "0:${OWNER_GID} 750"
+copy_env 'APP_KEY=new'
+check 'a second write replaces it' test "$(cat "${ENV_DIR}/e2e.env")" = 'APP_KEY=new'
+
+fresh_case env-dir-link
+OUTSIDE_STAT="$(stat -c '%u:%g %a' "${CASE}/outside")"
+rm -rf -- "${ENV_ROOT:?}" && mkdir -m 755 "${ENV_ROOT}" && ln -s "${CASE}/outside" "${ENV_DIR}"
+copy_env 'APP_KEY=planted'
+check 'a link planted at the env folder is refused' test $? -ne 0
+check 'and the refusal names it' grep -q "^${ENV_DIR} is a symbolic link" "${WORK}/env-stderr"
+check 'and nothing is written behind it' test "$(ls -A "${CASE}/outside")" = sentinel
+check "and the folder behind it keeps its owner and mode" test "$(stat -c '%u:%g %a' "${CASE}/outside")" = "${OUTSIDE_STAT}"
 check "and the sentinel's content, owner and mode are unchanged" sentinel_untouched
-check 'and the refusal names the path' grep -q '^.env.e2e is a symbolic link' "${CASE}/stderr"
 
-fresh_case env-dangling
-ln -s "${CASE}/outside/nowhere" "${CASE}/tree/.env.e2e"
-place 'APP_KEY=planted'
-check 'a dangling link at .env.e2e is refused' test $? -ne 0
-check 'and is still the same link' test "$(readlink "${CASE}/tree/.env.e2e")" = "${CASE}/outside/nowhere"
-check 'and its target is never created' test ! -e "${CASE}/outside/nowhere"
-
-fresh_case env-directory
-mkdir "${CASE}/tree/.env.e2e"
-printf 'kept\n' >"${CASE}/tree/.env.e2e/kept"
-place 'APP_KEY=planted'
-check 'a directory at .env.e2e is refused' test $? -ne 0
-check 'and nothing is written into it' test "$(ls -A "${CASE}/tree/.env.e2e")" = 'kept'
-check 'and the refusal names the path' grep -q '^.env.e2e is not a regular file' "${CASE}/stderr"
-
-# --- 2. the normal path, written by the owner and never by root ------------------------
-fresh_case env-new
-place 'APP_KEY=fresh'
-check 'a missing .env.e2e is written' test $? -eq 0
-check 'as a regular file with the content given' test "$(cat "${CASE}/tree/.env.e2e")" = 'APP_KEY=fresh'
-check 'mode 600, created by the owner rather than by root' test "$(stat -c '%u:%g %a' "${CASE}/tree/.env.e2e")" = "${OWNER_UID}:${OWNER_GID} 600"
-check 'and root made nothing in the tree' root_made_nothing
-check 'and install and tee each ran with the owner uid' ran_as_owner install tee
-
-fresh_case env-replace
-printf 'APP_KEY=old\n' >"${CASE}/tree/.env.e2e"
-chown "${OWNER_UID}:${OWNER_GID}" "${CASE}/tree/.env.e2e"
-chmod 644 "${CASE}/tree/.env.e2e"
-place 'APP_KEY=new'
-check 'an existing .env.e2e is replaced' test "$(cat "${CASE}/tree/.env.e2e")" = 'APP_KEY=new'
-check 'and is mode 600 again, still the owner' test "$(stat -c '%u:%g %a' "${CASE}/tree/.env.e2e")" = "${OWNER_UID}:${OWNER_GID} 600"
-check 'and install and tee each ran with the owner uid' ran_as_owner install tee
+# install -d re-owns a folder already there, so only a swap straight after it reaches the check.
+RACE="${WORK}/race"
+mkdir -m 755 "${RACE}"
+cat >"${RACE}/install" <<RACE_SHIM
+#!/bin/sh
+for last; do :; done
+${REAL_INSTALL} "\$@" || exit
+[ "\$1" = -d ] && [ "\$last" = "${ENV_DIR}" ] || exit 0
+case "\$RACE_MODE" in
+    link) rm -rf -- "\$last" && ln -s "\$RACE_TARGET" "\$last" ;;
+    nobody-owned) chown 65534 -- "\$last" ;;
+esac
+RACE_SHIM
+chmod 755 "${RACE}/install"
+for mode in nobody-owned link; do
+    fresh_case "env-race-${mode}"
+    rm -rf -- "${ENV_ROOT:?}"
+    export RACE_MODE="${mode}" RACE_TARGET="${CASE}/outside"
+    copy_env 'APP_KEY=raced' "${RACE}"
+    check "an env folder made ${mode} right after install is refused" test $? -ne 0
+    check 'and the refusal says why' grep -q 'is not a folder only root writes' "${WORK}/env-stderr"
+    check 'and no copy is written' test ! -e "${ENV_DIR}/e2e.env" -a "$(ls -A "${CASE}/outside")" = sentinel
+done
+unset RACE_MODE RACE_TARGET
 
 # --- 3. e2e/'s directories ---------------------------------------------------------------
 for planted in e2e e2e/artifacts e2e/baselines; do
@@ -154,18 +158,26 @@ check 'and the refusal names the owner it needs' grep -qF "so it needs a tree ui
 
 # --- 5. scripts/e2e.sh goes through the library, and refuses before any write -------------
 check 'e2e.sh sources the library' grep -qF '. "${ROOT}/scripts/lib/e2e-env.sh"' "${E2E_SH}"
-check 'e2e.sh writes .env.e2e only through e2e_env_place' grep -qE '^ +e2e_env_place \.env\.e2e ' "${E2E_SH}"
+check 'e2e.sh writes the env only through e2e_env_copy_write' grep -qE '^ +e2e_env_copy_write "\$E2E_ENV_MOUNT" ' "${E2E_SH}"
 check 'e2e.sh makes e2e/ only through e2e_hand_over_dirs' grep -qE '^e2e_hand_over_dirs ' "${E2E_SH}"
 writes_there="$(grep -vE '^ *#' "${E2E_SH}" \
     | grep -nE '(>|\b(tee|cp|install|mv|chown|chmod|mkdir|touch|ln)\b)[^#]*(\.env\.e2e|(^|[ "'\''=])e2e(/|[ "'\'']|$))')"
 check 'and nothing else writes, moves or chowns those paths' test -z "${writes_there}"
-refusal_line="$(grep -nE '^e2e_refuse_links \.env\.e2e e2e e2e/artifacts e2e/baselines ' "${E2E_SH}" | cut -d: -f1)"
+refusal_line="$(grep -nE '^e2e_refuse_links e2e e2e/artifacts e2e/baselines ' "${E2E_SH}" | cut -d: -f1)"
 first_write="$(grep -nE '^    write_env_file$' "${E2E_SH}" | head -1 | cut -d: -f1)"
 check 'e2e.sh refuses links up front, before the first write' \
     test -n "${refusal_line}" -a -n "${first_write}" -a "${refusal_line:-0}" -lt "${first_write:-0}"
 owner_line="$(grep -nE '^e2e_refuse_foreign_owner "\$ROOT" "\$APP_UID" \|\| fail ' "${E2E_SH}" | cut -d: -f1)"
 check 'e2e.sh refuses a tree uid 115 does not hold, before the first write' \
     test -n "${owner_line}" -a -n "${first_write}" -a "${owner_line:-0}" -lt "${first_write:-0}"
+dir_line="$(grep -nE '^e2e_env_copy_dir "\$E2E_ENV_ROOT" "\$E2E_ENV_DIR" "\$APP_GID" \|\| fail ' "${E2E_SH}" | cut -d: -f1)"
+check "e2e.sh checks the env folder is root's alone, before the first write" \
+    test -n "${dir_line}" -a -n "${first_write}" -a "${dir_line:-0}" -lt "${first_write:-0}"
+check 'e2e.sh keeps the env under a pinned folder, read from no caller' grep -qx 'E2E_ENV_ROOT=/run/orbit-e2e' "${E2E_SH}"
+check 'the browser reads the copy, mounted read-only outside the tree' \
+    grep -qF -- '-v "${E2E_ENV_MOUNT}":/run/orbit-e2e.env:ro' "${E2E_SH}"
+check 'and nothing in e2e.sh reads or writes .env.e2e' \
+    test -z "$(grep -vE '^ *#' "${E2E_SH}" | grep -F '.env.e2e')"
 
 if [ "$fails" -gt 0 ]; then
     printf '\n%d check(s) failed\n' "$fails" >&2
