@@ -22,9 +22,10 @@ final class BrowserGateLedgerGitTest extends TestCase
     #[Test]
     public function the_browser_gate_names_its_head_as_the_trees_owner_before_arming_the_ledger(): void
     {
+        $raw = explode("\n", $this->read(self::GATE));
         $lines = [];
 
-        foreach (explode("\n", $this->read(self::GATE)) as $index => $line) {
+        foreach ($raw as $index => $line) {
             $lines[$index] = trim((string) preg_replace('/(^|\s)#.*$/', '', $line));
         }
 
@@ -38,5 +39,14 @@ final class BrowserGateLedgerGitTest extends TestCase
         $this->assertIsInt($arm, self::GATE.' no longer calls gate_ledger_arm.');
         $this->assertGreaterThan($root, $assignments[0], 'GATE_LEDGER_GIT is set before ROOT exists.');
         $this->assertLessThan($arm, $assignments[0], 'gate_ledger_arm runs before GATE_LEDGER_GIT is set, so it arms with root\'s git.');
+        $this->assertSame(self::SEAM, $raw[$assignments[0]], 'GATE_LEDGER_GIT is set inside a block, so some runs arm with root\'s git.');
+
+        $between = array_filter(
+            array_slice($lines, $root + 1, $arm - $root - 1, true),
+            static fn (string $code, int $index): bool => $index !== $assignments[0] && str_contains($code, 'GATE_LEDGER_GIT'),
+            ARRAY_FILTER_USE_BOTH,
+        );
+
+        $this->assertSame([], $between, 'Another line touches GATE_LEDGER_GIT between ROOT and gate_ledger_arm, so the arm may not read the owner\'s git.');
     }
 }

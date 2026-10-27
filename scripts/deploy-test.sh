@@ -1036,8 +1036,15 @@ mkdir -p "${E2E_TREE}/scripts/lib/gate"
 cp "${E2E_SH}" "${E2E_TREE}/scripts/e2e.sh"
 cp "$(dirname "${E2E_SH}")/lib/e2e-env.sh" "${E2E_TREE}/scripts/lib/"
 cp "$(dirname "${E2E_SH}")/lib/gate/deploy-lib.sh" "${E2E_TREE}/scripts/lib/gate/"
+# e2e.sh reads no ledger-git or env-root seam: the copy names HEAD in this case's repo and pins its env here.
+sed -i -e "s|^GATE_LEDGER_GIT=\"git-as orbit -C \${ROOT}\"\$|GATE_LEDGER_GIT=\"git -C ${ROOT}\"|" \
+    -e "s|^E2E_ENV_ROOT=/run/orbit-e2e\$|E2E_ENV_ROOT=${CASE}/env-root|" "${E2E_TREE}/scripts/e2e.sh"
+grep -qxF "GATE_LEDGER_GIT=\"git -C ${ROOT}\"" "${E2E_TREE}/scripts/e2e.sh" \
+    || { echo "deploy-test: REFUSED: could not point the e2e copy's GATE_LEDGER_GIT at ${ROOT}" >&2; exit 1; }
+grep -qxF "E2E_ENV_ROOT=${CASE}/env-root" "${E2E_TREE}/scripts/e2e.sh" \
+    || { echo "deploy-test: REFUSED: could not move the e2e copy's E2E_ENV_ROOT into ${CASE}" >&2; exit 1; }
 : >"${E2E_LEDGER}"
-E2E_OUT="$(env PATH="${BIN}:${PATH}" GATE_LEDGER="${E2E_LEDGER}" GATE_LEDGER_GIT="git -C ${ROOT}" \
+E2E_OUT="$(env PATH="${BIN}:${PATH}" GATE_LEDGER="${E2E_LEDGER}" \
     ORBIT_GATE_LOG=/dev/null bash "${E2E_TREE}/scripts/e2e.sh" 2>&1)" || true
 contains 'a root-owned tree is refused for its owner before docker is asked anything' "${E2E_OUT}" \
     'this tree must be owned by uid 115'
@@ -1045,7 +1052,7 @@ absent 'and the owner refusal comes before the docker pre-flight' "${E2E_OUT}" '
 
 chown 115 "${E2E_TREE}"
 : >"${E2E_LEDGER}"
-E2E_OUT="$(env PATH="${BIN}:${PATH}" GATE_LEDGER="${E2E_LEDGER}" GATE_LEDGER_GIT="git -C ${ROOT}" \
+E2E_OUT="$(env PATH="${BIN}:${PATH}" GATE_LEDGER="${E2E_LEDGER}" \
     ORBIT_GATE_LOG=/dev/null bash "${E2E_TREE}/scripts/e2e.sh" 2>&1)" || true
 contains 'a browser gate that cannot reach docker stops in its pre-flight' "${E2E_OUT}" \
     'cannot talk to docker'
