@@ -63,11 +63,15 @@ new_case() { # NAME — a fresh uid-115 copy of the tree and a fresh fake log
     sed -i "s|^E2E_ENV_ROOT=/run/orbit-e2e\$|E2E_ENV_ROOT=${ENV_ROOT}|" "${FAKE_TREE}/scripts/e2e.sh"
     grep -qx "E2E_ENV_ROOT=${ENV_ROOT}" "${FAKE_TREE}/scripts/e2e.sh" \
         || { echo "e2e-gate-test: REFUSED: could not move E2E_ENV_ROOT into ${FAKE_DIR}" >&2; exit 1; }
+    # Nor a ledger-git seam: the copy names HEAD with the fake, since the copy has no .git.
+    sed -i "s|^GATE_LEDGER_GIT=\"git-as orbit -C \${ROOT}\"\$|GATE_LEDGER_GIT=${BIN}/fake-git|" "${FAKE_TREE}/scripts/e2e.sh"
+    grep -qx "GATE_LEDGER_GIT=${BIN}/fake-git" "${FAKE_TREE}/scripts/e2e.sh" \
+        || { echo "e2e-gate-test: REFUSED: could not point the copy's GATE_LEDGER_GIT at the fake git" >&2; exit 1; }
     export FAKE_DIR FAKE_TREE
 }
 
 run_gate() { # ENV... — the copy's e2e.sh, with the fakes first on PATH
-    env PATH="${BIN}:${PATH}" GATE_LEDGER="${FAKE_DIR}/ledger" GATE_LEDGER_GIT="${BIN}/fake-git" \
+    env PATH="${BIN}:${PATH}" GATE_LEDGER="${FAKE_DIR}/ledger" \
         ORBIT_GATE_LOG=/dev/null "$@" bash "${FAKE_TREE}/scripts/e2e.sh" >"${FAKE_DIR}/out" 2>&1
 }
 
@@ -96,7 +100,7 @@ equals '2 teardown removes the copy and its folder' "$(ls -A "${ENV_ROOT}")" ''
 # --- 3. the gate refuses to run as anyone but root ------------------------------------------
 new_case not-root
 setpriv --reuid=115 --regid=119 --clear-groups env PATH="${BIN}:${PATH}" GATE_LEDGER="${FAKE_DIR}/ledger" \
-    GATE_LEDGER_GIT="${BIN}/fake-git" ORBIT_GATE_LOG=/dev/null bash "${FAKE_TREE}/scripts/e2e.sh" >"${FAKE_DIR}/out" 2>&1
+    ORBIT_GATE_LOG=/dev/null bash "${FAKE_TREE}/scripts/e2e.sh" >"${FAKE_DIR}/out" 2>&1
 rc=$?
 equals '3 run as uid 115 the gate exits' "${rc}" '1'
 equals '3 and says it needs root' "$(grep -c "run this as root: the env is root's own copy in ${ENV_ROOT}" "${FAKE_DIR}/out")" '1'
@@ -107,7 +111,7 @@ equals '3 and before the env folder is made' "$([ -e "${ENV_ROOT}" ] && echo mad
 new_case down
 install -d -o 0 -g 0 -m 0755 "${ENV_ROOT}" && install -d -o 0 -g 119 -m 0750 "${ENV_ROOT}/orbit-e2e" \
     && printf 'ORBIT_E2E=1\n' >"${ENV_ROOT}/orbit-e2e/e2e.env"
-env PATH="${BIN}:${PATH}" GATE_LEDGER="${FAKE_DIR}/ledger" GATE_LEDGER_GIT="${BIN}/fake-git" \
+env PATH="${BIN}:${PATH}" GATE_LEDGER="${FAKE_DIR}/ledger" \
     ORBIT_GATE_LOG=/dev/null bash "${FAKE_TREE}/scripts/e2e.sh" --down >"${FAKE_DIR}/out" 2>&1
 rc=$?
 equals '4 --down exits 0' "${rc}" '0'
