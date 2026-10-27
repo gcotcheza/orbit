@@ -420,7 +420,7 @@ fi
 if [ ! -f node_modules/.package-lock.json ]; then
     step 'npm ci'
     docker run --rm -u "${APP_UID}:${APP_GID}" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
-        -v "$ROOT":/var/www/html -w /var/www/html node:24.21.0-alpine \
+        -v "$ROOT":/var/www/html -w /var/www/html node:24.22.1-alpine \
         npm ci --no-audit --fund=false
 fi
 
@@ -447,7 +447,7 @@ if [ -n "$vite_build_reason" ]; then
     fi
     step "vite build (${vite_build_reason})"
     docker run --rm -u "${APP_UID}:${APP_GID}" -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
-        -v "$ROOT":/var/www/html -w /var/www/html node:24.21.0-alpine \
+        -v "$ROOT":/var/www/html -w /var/www/html node:24.22.1-alpine \
         npm run build
 fi
 

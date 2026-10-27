@@ -95,7 +95,7 @@ services:
 
   # --- nginx sidecar: FastCGI -> HTTP on the loopback port ------------------
   web:
-    image: nginx:alpine
+    image: nginx:1.31.7-alpine
     user: '115:119'
     security_opt: ['no-new-privileges:true']
     cap_drop: ['ALL']

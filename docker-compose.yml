@@ -169,7 +169,7 @@ services:
   # php-fpm speaks FastCGI, not HTTP, and the house pattern is `proxy_pass` from
   # host nginx to a loopback HTTP port. This thin sidecar bridges the two.
   web:
-    image: nginx:alpine
+    image: nginx:1.31.7-alpine
     restart: unless-stopped
     user: '115:119'
     security_opt: ['no-new-privileges:true']
@@ -219,7 +219,7 @@ services:
   # owned by the host `orbit` user. HOME and the npm cache are pointed at /tmp
   # because uid 115 has no home directory inside a stock node image.
   assets:
-    image: node:24.21.0-alpine
+    image: node:24.22.1-alpine
     profiles: ['build']
     user: '115:119'
     security_opt: ['no-new-privileges:true']
