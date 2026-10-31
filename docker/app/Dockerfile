@@ -26,26 +26,31 @@ ARG APP_USER=app
 #             percentile over them; neither wants float rounding.
 # intl      : dates and money formatted for Europe/Amsterdam, and IATA/city
 #             names that are not ASCII.
+# zip       : so composer extracts with ZipArchive, which applies the umask
+#             (see the unzip removal below). Nothing in the app reads a zip.
 #
 # DELIBERATELY ABSENT, unlike the health-tracker image this is modelled on:
 #   gd  — Orbit uploads no images. Flags are CSS gradients (see design/README)
 #         and the globe textures are static files.
-#   zip — nothing here parses an .xlsx.
-# Both cost a build-dep and a runtime library each; an extension that is not
+# It costs a build-dep and a runtime library; an extension that is not
 # installed is attack surface that does not need patching.
 #
 # NB: opcache is compiled into the official php:8.5 images already — running
 #     `docker-php-ext-install opcache` against them FAILS, so it is not listed.
 RUN set -eux; \
-    apk add --no-cache --virtual .build-deps $PHPIZE_DEPS linux-headers postgresql-dev icu-dev; \
-    apk add --no-cache postgresql-client icu-libs libpq bash; \
-    docker-php-ext-install pdo_pgsql bcmath intl pcntl posix; \
+    apk add --no-cache --virtual .build-deps $PHPIZE_DEPS linux-headers postgresql-dev icu-dev libzip-dev; \
+    apk add --no-cache postgresql-client icu-libs libpq bash libzip; \
+    docker-php-ext-install pdo_pgsql bcmath intl pcntl posix zip; \
     pecl install redis; \
     docker-php-ext-enable redis; \
     apk del .build-deps; \
     rm -rf /tmp/pear
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# BusyBox unzip restores a zip's stored 0777 whatever the umask; ZipArchive does not.
+# docs/DECISIONS.md, composer-extracts-with-ziparchive-not-unzip
+RUN rm -f /usr/bin/unzip && ! command -v unzip
 
 # ---- Non-root app user -----------------------------------------------------
 RUN set -eux; \

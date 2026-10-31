@@ -220,6 +220,25 @@ final class DeploymentInvariantsTest extends TestCase
         $this->assertFalse($ini['session.upload_progress.enabled']);
     }
 
+    /** docs/DECISIONS.md, composer-extracts-with-ziparchive-not-unzip */
+    #[Test]
+    public function composer_extracts_with_ziparchive_not_busybox_unzip(): void
+    {
+        $dockerfile = file_get_contents(dirname(__DIR__, 2).'/docker/app/Dockerfile');
+        $this->assertIsString($dockerfile);
+
+        $this->assertMatchesRegularExpression(
+            '/^\s*docker-php-ext-install\b[^\n]*\bzip\b/m',
+            $dockerfile,
+            'The image lacks the zip extension, so composer would extract with unzip.'
+        );
+        $this->assertMatchesRegularExpression(
+            '/^RUN rm -f \/usr\/bin\/unzip && ! command -v unzip$/m',
+            $dockerfile,
+            'The image keeps BusyBox unzip, which restores 0777 on vendor directories.'
+        );
+    }
+
     /**
      * @return array<string, array<string, mixed>>
      */
