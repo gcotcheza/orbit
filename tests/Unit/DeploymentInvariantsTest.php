@@ -239,6 +239,16 @@ final class DeploymentInvariantsTest extends TestCase
         );
     }
 
+    /** Runs inside the image the gate builds; docs/DECISIONS.md, composer-extracts-with-ziparchive-not-unzip */
+    #[Test]
+    public function the_image_loads_the_zip_extension(): void
+    {
+        $this->assertTrue(
+            extension_loaded('zip'),
+            'The Dockerfile names zip but this PHP has not loaded it, so composer would extract with unzip.'
+        );
+    }
+
     /**
      * @return array<string, array<string, mixed>>
      */
