@@ -36,5 +36,8 @@
     },
     "optionalDependencies": {
         "@laravel/multiplex": "^0.4.5"
+    },
+    "overrides": {
+        "minimatch": "^11.0.1"
     }
 }
