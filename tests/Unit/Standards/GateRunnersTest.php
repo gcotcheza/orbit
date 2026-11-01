@@ -14,6 +14,7 @@ use PHPUnit\Framework\Attributes\Test;
 final class GateRunnersTest extends TestCase
 {
     private const ORDER = [
+        'decisions',
         'shellcheck',
         'overlay',
         'gitleaks',

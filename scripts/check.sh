@@ -172,6 +172,10 @@ node_step() {
     fi
 }
 
+step 'Decisions (W7, decisions-check.sh)'
+# First because cheapest: a host read of the canonical clone, like the T9 step, and not vendored.
+DECISIONS_GIT="$GIT" bash /srv/engineering-standards/scripts/decisions-check.sh "$here"
+
 step 'ShellCheck (shell scripts)'
 # Listed the way the secrets step lists, and for the same reason: an untracked
 # editor backup is not the branch. docs/DECISIONS.md, the-gate-lints-shell-at-warning

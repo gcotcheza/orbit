@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs scripts/check.sh from a copy of <tree>'s scripts/ in a throwaway root, git and docker faked:
-# the CI_GIT seam, the stack guard, the lint list, the T9 step and the overlay's mount points.
+# the CI_GIT seam, the stack guard, the lint list, the W7 and T9 steps and the overlay's mount points.
 # On the host as root, as the gate's other host suites. docs/DECISIONS.md, deploy-lib-is-not-vendored
 #
 #   bash scripts/check-test.sh <tree>
@@ -79,6 +79,9 @@ new_root() {
     ln -s "${FAKE_DOCKER}" "${B}/docker"
     ln -s "${FAKE_GIT}" "${B}/git"
     (cd "${R}" && find scripts -type f -print0 | sort -z) >"${C}/scripts.list"
+    printf '#!/bin/sh\nprintf "%%s|%%s\\n" "$DECISIONS_GIT" "$*" >>%s\nexit "${FAKE_DECISIONS_RC:-0}"\n' "${C}/decisions.log" >"${B}/decisions-check"
+    swap /srv/engineering-standards/scripts/decisions-check.sh "${B}/decisions-check" 1 \
+        'the canonical decisions-check path is not in check.sh exactly once, so a real one would run'
 }
 
 # run_check <mode|-> [VAR=value...]: OUT, RC and SECONDS_TAKEN; - runs check.sh with no argument.
@@ -138,7 +141,7 @@ contains '1 and the usage names the seam' "${OUT}" 'CI_GIT'
 
 # --- 2. the stack guard ------------------------------------------------------------------------
 REFUSAL='Refusing to run the gate against it.'
-FIRST_STEP='ShellCheck (shell scripts)'
+FIRST_STEP='Decisions (W7, decisions-check.sh)'
 RECIPE='COMPOSE_PROJECT_NAME=orbit-<name> docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build postgres redis app'
 refused() { # <label> <reason>
     equals "$1 is refused" "${RC}" 2
@@ -307,6 +310,18 @@ run_check overlay FAKE_MOUNTS=1
 equals '6 the overlay run fails at the fake install, after the storage chown' "${RC}" 1
 equals '6 storage/ itself went to the app user' "$(stat -c %u "${R}/storage")" 115
 equals '6 a file a link in storage/ points at keeps its owner' "$(stat -c %u "${C}/sentinel")" 0
+
+# --- 7. the W7 step runs the central checker first, through CI_GIT, and its finding stops the gate --
+new_root decisions-seam
+ln -s "${FAKE_GIT}" "${B}/fake-git"
+run_check dev CI_GIT="${B}/fake-git --as=orbit" FAKE_GIT_FIRST=--as=orbit FAKE_GIT_HEAD= FAKE_GIT_LOG="${C}/seam.log" FAKE_FAIL_ON='*shellcheck*'
+equals "7 the checker is handed the gate's git and this root" "$(cat "${C}/decisions.log" 2>/dev/null)" "${B}/fake-git --as=orbit|${R}"
+
+new_root decisions-red
+run_check dev FAKE_DECISIONS_RC=1
+equals '7 a checker finding fails the gate' "${RC}" 1
+contains '7 after reaching the step' "${OUT}" "${FIRST_STEP}"
+absent '7 and stops it before ShellCheck' "${OUT}" 'ShellCheck (shell scripts)'
 
 if [ "${fails}" -ne 0 ]; then
     printf '\ncheck-test: %s check(s) failed\n' "${fails}" >&2
