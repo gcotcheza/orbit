@@ -17,7 +17,7 @@ fails=0
 pass() { printf 'ok   %s\n' "$*"; }
 fail() { printf 'FAIL %s\n' "$*" >&2; fails=$((fails + 1)); }
 
-printf '%s\n' 'printf "%s\n" "$$" >"$1"' "trap '' TERM" 'while :; do sleep 0.1; done' >"${W}/stubborn.sh"
+printf '%s\n' "trap '' TERM" 'printf "%s\n" "$$" >"$1"' 'while :; do sleep 0.1; done' >"${W}/stubborn.sh"
 
 # <pid> <case>: waits at most WATCHDOG seconds, then kills the group itself and fails the case.
 bounded_wait() {
@@ -55,7 +55,7 @@ child_gone "${W}/1.pid" 1
 
 run_capped 60 bash "${W}/stubborn.sh" "${W}/2.pid" &
 pid=$!
-sleep 0.5
+for ((i = 0; i < 50; i++)); do [ -s "${W}/2.pid" ] && break; sleep 0.1; done
 kill -- -"${pid}" 2>/dev/null
 bounded_wait "${pid}" '2 the caller stopping the group ends a child that ignores TERM' \
     && pass '2 the caller stopping the group ends a child that ignores TERM'
