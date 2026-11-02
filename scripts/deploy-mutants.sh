@@ -20,6 +20,8 @@ SELF="${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}"
 # shellcheck source=scripts/lib/gate/deploy-lib.sh
 . "${SCRIPT_DIR}/lib/gate/deploy-lib.sh"
 deploy_lib_ready || exit 1
+# shellcheck source=scripts/lib/gate/run-capped.sh
+. "${SCRIPT_DIR}/lib/gate/run-capped.sh"
 WORK="$(mktemp -d /srv/worker-scratch/orbit-deploy-mutants.XXXXXXXX)" || exit 1
 trap 'rm -rf "${WORK:?}"' EXIT
 HARNESS_TIMEOUT=180
@@ -108,7 +110,7 @@ run_mutant() {
     # or an orphan writes into a directory this script is already removing.
     TMPDIR="${dir}/tmp" DEPLOY_TEST_ROOT="${dir}" DEPLOY_SH="${dir}/scripts/deploy.sh" VERIFY_SH="${dir}/scripts/verify.sh" \
         GATE_LEDGER_LIB="${dir}/scripts/lib/deploy/ledger.sh" \
-        setsid timeout "${HARNESS_TIMEOUT}" bash "${harness}" "${harness_args[@]}" >"${log}" 2>&1 &
+        run_capped "${HARNESS_TIMEOUT}" bash "${harness}" "${harness_args[@]}" >"${log}" 2>&1 &
     pid=$!
     (
         while kill -0 "${pid}" 2>/dev/null; do
@@ -121,7 +123,7 @@ run_mutant() {
     rc=$?
     kill "${watcher}" 2>/dev/null
     wait "${watcher}" 2>/dev/null
-    if [ "${rc}" -eq 124 ]; then
+    if run_capped_timed_out "${rc}" && ! all_red "${log}" "$@"; then
         printf 'BROKEN %s: timed out after %ss\n' "${name}" "${HARNESS_TIMEOUT}"
         missed=$((missed + 1))
         return
