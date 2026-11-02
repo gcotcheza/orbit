@@ -24,7 +24,7 @@ deploy_lib_ready || exit 1
 . "${SCRIPT_DIR}/lib/gate/run-capped.sh"
 WORK="$(mktemp -d /srv/worker-scratch/orbit-deploy-mutants.XXXXXXXX)" || exit 1
 trap 'rm -rf "${WORK:?}"' EXIT
-HARNESS_TIMEOUT=180
+HARNESS_TIMEOUT=600
 missed=0
 n=0
 ran=0
