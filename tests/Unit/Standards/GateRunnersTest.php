@@ -25,6 +25,7 @@ final class GateRunnersTest extends TestCase
         'the worktree script',
         'the browser gate makes its files as the app user',
         'the browser gate end to end against a fake docker',
+        'the mutant harness cap ends what ignores term',
         'image tags',
         'deploy mutants',
         'composer advisories',
