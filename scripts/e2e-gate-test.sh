@@ -44,6 +44,7 @@ docker() {
             cat -- "${mount:-/nonexistent}" >"${FAKE_DIR}/up-mount-content" 2>&1
             stat -c '%u:%g %a' -- "${mount:-/nonexistent}" "$(dirname -- "${mount:-/nonexistent}")" \
                 >"${FAKE_DIR}/up-perm" 2>&1
+            { pwd; stat -c %u .; } >"${FAKE_DIR}/up-where"
             return 1 ;;
     esac
     return 0
@@ -133,6 +134,37 @@ run_gate
 equals '6 the gate says a path it writes is a link' "$(grep -c 'a path this script writes is a link' "${FAKE_DIR}/out")" '1'
 equals '6 before docker is asked anything' "$(cat "${FAKE_DIR}/docker.argv" 2>/dev/null | wc -l)" '0'
 equals '6 and the link still points nowhere' "$(readlink "${FAKE_TREE}/.env")" "${WORK}/nowhere"
+
+# --- 7. a root-owned clean tree runs from a uid-115 clone that is removed after (880) -------
+new_root_case() { # NAME — a committed, root-owned git tree; its e2e.sh pointed at the test's folders
+    new_case "$1"
+    local repo="${FAKE_DIR}/root-tree"
+    LANES="${FAKE_DIR}/lanes"
+    mkdir -m 0755 "${LANES}" "${repo}"
+    cp -a "${FAKE_TREE}/." "${repo}/"
+    sed -i "s|^E2E_LANE_ROOT=/srv/worker-scratch\$|E2E_LANE_ROOT=${LANES}|" "${repo}/scripts/e2e.sh"
+    grep -qx "E2E_LANE_ROOT=${LANES}" "${repo}/scripts/e2e.sh" \
+        || { echo "e2e-gate-test: REFUSED: could not move E2E_LANE_ROOT into ${FAKE_DIR}" >&2; exit 1; }
+    chown -R 0:0 "${repo}"
+    git -C "${repo}" init -q -b main && git -C "${repo}" add -- . \
+        && git -C "${repo}" commit -q -m fixture || { echo 'e2e-gate-test: REFUSED: fixture commit failed' >&2; exit 1; }
+    FAKE_TREE="${repo}"
+    export FAKE_TREE
+}
+
+new_root_case lane
+run_gate
+equals '7 compose up ran once' "$(grep -c ' up -d --wait' "${FAKE_DIR}/docker.argv")" '1'
+equals '7 inside a lane clone owned by 115' "$(tr '\n' ' ' <"${FAKE_DIR}/up-where")" \
+    "${LANES}/root-tree-e2e-$(git -C "${FAKE_TREE}" rev-parse --short=8 HEAD)/repo 115 "
+equals '7 and the lane is removed after' "$(ls -A "${LANES}")" ''
+
+new_root_case lane-dirty
+printf 'x\n' >"${FAKE_TREE}/uncommitted"
+run_gate
+equals '7 a dirty root-owned tree is refused' "$(grep -c 'has uncommitted changes' "${FAKE_DIR}/out")" '1'
+equals '7 before docker is asked anything' "$(cat "${FAKE_DIR}/docker.argv" 2>/dev/null | wc -l)" '0'
+equals '7 and no lane is left' "$(ls -A "${LANES}")" ''
 
 if [ "${fails}" -gt 0 ]; then
     printf '\ne2e-gate-test: %d check(s) failed\n' "${fails}" >&2

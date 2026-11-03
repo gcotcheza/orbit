@@ -22,6 +22,24 @@ e2e_refuse_foreign_owner() { # DIR UID — every file here is made as UID, so th
     fi
 }
 
+e2e_lane_rerun() { # ROOT LANE_ROOT UID GID ARGS... — e2e.sh again, from a UID-owned clone of ROOT's HEAD, removed after
+    local root=$1 base=$2 uid=$3 gid=$4 sha lane rc=0
+    shift 4
+    if [ -n "$(git -C "$root" status --porcelain)" ]; then
+        printf '%s has uncommitted changes; the uid %s clone would not carry them, so commit first\n' "$root" "$uid" >&2
+        return 1
+    fi
+    sha="$(git -C "$root" rev-parse HEAD)" || return 1
+    lane="${base}/$(basename -- "$root")-e2e-${sha:0:8}"
+    mkdir -m 0755 -- "$lane" || return 1
+    git clone -q --no-hardlinks -- "$root" "${lane}/repo" && git -C "${lane}/repo" checkout -q "$sha" \
+        && [ "$(git -C "${lane}/repo" rev-parse 'HEAD^{tree}')" = "$(git -C "$root" rev-parse 'HEAD^{tree}')" ] \
+        && chown -R "${uid}:${gid}" -- "${lane}/repo" \
+        && E2E_LANE_CHILD=1 bash "${lane}/repo/scripts/e2e.sh" "$@" || rc=$?
+    rm -rf -- "${lane:?}"
+    return "$rc"
+}
+
 e2e_as_owner() { # UID GID COMMAND... — root drops to that uid; e2e.sh runs only as root
     local uid=$1 gid=$2
     shift 2

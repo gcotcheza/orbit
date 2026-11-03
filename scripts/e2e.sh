@@ -30,7 +30,8 @@
 #   This script writes, chowns and chmods nothing in the checkout as root:
 #   e2e/'s directories and, if missing, the empty `.env` the env copy is
 #   mounted over are made as 115:119 (= the host `orbit` user), so the
-#   checkout must be 115's; the app, web and browser containers run as
+#   checkout must be 115's (run from a root-owned worktree, it clones HEAD into a
+#   115-owned lane and runs there); the app, web and browser containers run as
 #   115:119, postgres and redis as their own users. The env lives outside the
 #   checkout, in /run/orbit-e2e/<project>/e2e.env (0640 root:119), because
 #   compose and the docker daemon follow a link planted in the checkout.
@@ -62,6 +63,15 @@ deploy_lib_ready || exit 1
 . "${DEPLOY_LIB}/ledger.sh"
 # shellcheck source=scripts/lib/e2e-env.sh
 . "${ROOT}/scripts/lib/e2e-env.sh"
+APP_UID='115'
+APP_GID='119'
+E2E_LANE_ROOT=/srv/worker-scratch
+# A root-owned tree (a worktree) runs from its own uid-115 clone. decision: e2e-runs-a-root-worktree-from-a-uid-115-clone
+if [ -z "${E2E_LANE_CHILD:-}" ] && [ "$(id -u)" -eq 0 ] && [ "$(stat -c %u -- "$ROOT")" = 0 ]; then
+    lane_rc=0
+    e2e_lane_rerun "$ROOT" "$E2E_LANE_ROOT" "$APP_UID" "$APP_GID" "$@" || lane_rc=$?
+    exit "$lane_rc"
+fi
 # Root's git refuses this uid-115 tree, so the ledger names HEAD as its owner; no caller's git is read.
 GATE_LEDGER_GIT="git-as orbit -C ${ROOT}"
 # The commit this run judges, pinned before any step; the ledger records no other.
@@ -103,9 +113,6 @@ E2E_PROJECT='orbit-e2e'
 # THE INSTANT THE WHOLE SANDBOX RUNS AT, app and browser alike. Changing it invalidates
 # every committed baseline — see docs/E2E.md "A frozen clock".
 E2E_FIXED_NOW='2026-08-23T09:00:00+02:00'
-
-APP_UID='115'
-APP_GID='119'
 
 # NOT `orbit/app:latest`: that tag is what docker-compose.yml's three PHP services
 # boot, and this stack rebuilds its own image (docker-compose.e2e.yml).
