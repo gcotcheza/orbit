@@ -171,7 +171,7 @@ equals '7 inside a lane clone owned by 115' "$(tr '\n' ' ' <"${FAKE_DIR}/up-wher
 equals '7 a failed run keeps the lane' "$(ls -A "${LANES}")" "$(lane_name)"
 equals '7 and prints the removal line' "$(grep -c "remove it with: rm -rf -- ${LANES}/$(lane_name)\$" "${FAKE_DIR}/out")" '1'
 run_args
-equals '7 a leftover lane is refused' "$(grep -c 'is left over from an earlier run; remove it with: rm -rf --' "${FAKE_DIR}/out")" '1'
+equals '7 a leftover lane is refused' "$(grep -c 'is left over from an earlier run or in use by a running gate; once no gate uses it, remove it with: rm -rf --' "${FAKE_DIR}/out")" '1'
 equals '7 with compose up not run again' "$(grep -c ' up -d --wait' "${FAKE_DIR}/docker.argv")" '1'
 
 new_root_case lane-pass

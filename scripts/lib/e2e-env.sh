@@ -40,12 +40,12 @@ e2e_lane_rerun() { # ROOT LANE_ROOT UID GID ARGS... — e2e.sh again, from a UID
     sha="$(git -C "$root" rev-parse HEAD)" || return 1
     lane="${base}/$(basename -- "$root")-e2e-${sha:0:8}"
     if [ -e "$lane" ]; then
-        printf 'the lane %s is left over from an earlier run; remove it with: rm -rf -- %s\n' "$lane" "$lane" >&2
+        printf 'the lane %s is left over from an earlier run or in use by a running gate; once no gate uses it, remove it with: rm -rf -- %s\n' "$lane" "$lane" >&2
         return 1
     fi
     mkdir -m 0755 -- "$lane" || return 1
-    trap 'rm -rf -- "${lane:?}"; exit 143' TERM
-    trap 'rm -rf -- "${lane:?}"; exit 130' INT
+    trap '[ "$keep" -eq 1 ] || rm -rf -- "${lane:?}"; exit 143' TERM
+    trap '[ "$keep" -eq 1 ] || rm -rf -- "${lane:?}"; exit 130' INT
     git clone -q --no-hardlinks -- "$root" "${lane}/repo" && git -C "${lane}/repo" checkout -q "$sha" \
         && [ "$(git -C "${lane}/repo" rev-parse 'HEAD^{tree}')" = "$(git -C "$root" rev-parse 'HEAD^{tree}')" ] \
         && chown -R "${uid}:${gid}" -- "${lane}/repo" \
