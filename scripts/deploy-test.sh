@@ -1043,10 +1043,11 @@ grep -qxF "GATE_LEDGER_GIT=\"git -C ${ROOT}\"" "${E2E_TREE}/scripts/e2e.sh" \
     || { echo "deploy-test: REFUSED: could not point the e2e copy's GATE_LEDGER_GIT at ${ROOT}" >&2; exit 1; }
 grep -qxF "E2E_ENV_ROOT=${CASE}/env-root" "${E2E_TREE}/scripts/e2e.sh" \
     || { echo "deploy-test: REFUSED: could not move the e2e copy's E2E_ENV_ROOT into ${CASE}" >&2; exit 1; }
+chown 65534 "${E2E_TREE}"
 : >"${E2E_LEDGER}"
 E2E_OUT="$(env PATH="${BIN}:${PATH}" GATE_LEDGER="${E2E_LEDGER}" \
     ORBIT_GATE_LOG=/dev/null bash "${E2E_TREE}/scripts/e2e.sh" 2>&1)" || true
-contains 'a root-owned tree is refused for its owner before docker is asked anything' "${E2E_OUT}" \
+contains 'a tree owned by neither root nor 115 is refused for its owner before docker is asked anything' "${E2E_OUT}" \
     'this tree must be owned by uid 115'
 absent 'and the owner refusal comes before the docker pre-flight' "${E2E_OUT}" 'cannot talk to docker'
 
