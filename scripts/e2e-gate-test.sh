@@ -45,6 +45,9 @@ docker() {
             stat -c '%u:%g %a' -- "${mount:-/nonexistent}" "$(dirname -- "${mount:-/nonexistent}")" \
                 >"${FAKE_DIR}/up-perm" 2>&1
             { pwd; stat -c %u .; } >"${FAKE_DIR}/up-where"
+            tr '\0' '|' <"/proc/$$/cmdline" >"${FAKE_DIR}/up-cmdline"
+            [ -z "${FAKE_UP_TERM:-}" ] || kill -TERM "${PPID}"
+            [ -z "${FAKE_UP_EXIT:-}" ] || exit "${FAKE_UP_EXIT}"
             return 1 ;;
     esac
     return 0
@@ -152,12 +155,45 @@ new_root_case() { # NAME — a committed, root-owned git tree; its e2e.sh pointe
     export FAKE_TREE
 }
 
+run_args() { # ARGS... — the root tree's e2e.sh with those arguments; rc kept in $rc
+    env PATH="${BIN}:${PATH}" GATE_LEDGER="${FAKE_DIR}/ledger" ORBIT_GATE_LOG=/dev/null \
+        bash "${FAKE_TREE}/scripts/e2e.sh" "$@" >"${FAKE_DIR}/out" 2>&1
+    rc=$?
+}
+lane_name() { printf 'root-tree-e2e-%s' "$(git -C "${FAKE_TREE}" rev-parse --short=8 HEAD)"; }
+
 new_root_case lane
-run_gate
+run_args
+equals '7 a failed run returns the child rc' "${rc}" '1'
 equals '7 compose up ran once' "$(grep -c ' up -d --wait' "${FAKE_DIR}/docker.argv")" '1'
 equals '7 inside a lane clone owned by 115' "$(tr '\n' ' ' <"${FAKE_DIR}/up-where")" \
-    "${LANES}/root-tree-e2e-$(git -C "${FAKE_TREE}" rev-parse --short=8 HEAD)/repo 115 "
-equals '7 and the lane is removed after' "$(ls -A "${LANES}")" ''
+    "${LANES}/$(lane_name)/repo 115 "
+equals '7 a failed run keeps the lane' "$(ls -A "${LANES}")" "$(lane_name)"
+equals '7 and prints the removal line' "$(grep -c "remove it with: rm -rf -- ${LANES}/$(lane_name)\$" "${FAKE_DIR}/out")" '1'
+run_args
+equals '7 a leftover lane is refused' "$(grep -c 'is left over from an earlier run; remove it with: rm -rf --' "${FAKE_DIR}/out")" '1'
+equals '7 with compose up not run again' "$(grep -c ' up -d --wait' "${FAKE_DIR}/docker.argv")" '1'
+
+new_root_case lane-pass
+FAKE_UP_EXIT=0 run_args -- 'a b' --c
+equals '7 a clean pass returns 0' "${rc}" '0'
+equals '7 with the arguments passed through unchanged' "$(grep -c "^bash|${LANES}/$(lane_name)/repo/scripts/e2e.sh|--|a b|--c|\$" "${FAKE_DIR}/up-cmdline")" '1'
+equals '7 and removes the lane' "$(ls -A "${LANES}")" ''
+
+new_root_case lane-keep
+FAKE_UP_EXIT=0 run_args --keep
+equals '7 --keep passes and returns 0' "${rc}" '0'
+equals '7 and keeps the lane' "$(ls -A "${LANES}")" "$(lane_name)"
+
+new_root_case lane-update
+run_args -- --update-snapshots
+equals '7 --update-snapshots is refused' "$(grep -c 'run --update-snapshots from a uid 115 clone instead' "${FAKE_DIR}/out")" '1'
+equals '7 before docker or a lane' "$(cat "${FAKE_DIR}/docker.argv" 2>/dev/null | wc -l):$(ls -A "${LANES}")" '0:'
+
+new_root_case lane-term
+FAKE_UP_TERM=1 run_args
+equals '7 a SIGTERM exits 143' "${rc}" '143'
+equals '7 and removes the lane' "$(ls -A "${LANES}")" ''
 
 new_root_case lane-dirty
 printf 'x\n' >"${FAKE_TREE}/uncommitted"

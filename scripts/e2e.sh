@@ -67,7 +67,7 @@ APP_UID='115'
 APP_GID='119'
 E2E_LANE_ROOT=/srv/worker-scratch
 # A root-owned tree (a worktree) runs from its own uid-115 clone. decision: e2e-runs-a-root-worktree-from-a-uid-115-clone
-if [ -z "${E2E_LANE_CHILD:-}" ] && [ "$(id -u)" -eq 0 ] && [ "$(stat -c %u -- "$ROOT")" = 0 ]; then
+if [ -z "${E2E_LANE_CHILD:-}" ] && [ "$(id -u)" -eq 0 ] && [ "$(stat -L -c %u -- "$ROOT")" = 0 ]; then
     lane_rc=0
     e2e_lane_rerun "$ROOT" "$E2E_LANE_ROOT" "$APP_UID" "$APP_GID" "$@" || lane_rc=$?
     exit "$lane_rc"
