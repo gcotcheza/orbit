@@ -276,6 +276,9 @@ bash "$here/scripts/e2e-env-test.sh"
 step 'The browser gate end to end against a fake docker (scripts/e2e-gate-test.sh)'
 bash "$here/scripts/e2e-gate-test.sh" "$here"
 
+step 'The mutant harness cap ends what ignores TERM (scripts/run-capped-test.sh)'
+bash "$here/scripts/run-capped-test.sh"
+
 step 'Image tags (T9)'
 # A host step: the canonical clone is on this box and inside no container.
 # docs/DECISIONS.md, the-gate-is-one-script-two-runners
