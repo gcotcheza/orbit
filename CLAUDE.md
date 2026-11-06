@@ -21,6 +21,8 @@ copy. They apply here in full; anything below overrides them and says why.
   serves the old app.
 - **The gate.** From a worktree, `scripts/check.sh overlay` under its own
   `COMPOSE_PROJECT_NAME`, then `scripts/e2e.sh`; `dev` execs into a stack already up there.
+  The browser gate needs a uid-115 tree, so from a root-owned worktree it clones the
+  committed HEAD into a lane under `/srv/worker-scratch` and runs there: commit first.
   The deploy, `fleet-deploy orbit <PR#>` as root, runs no gate: it refuses a head that lacks green ci and e2e
   rows, its own or an identical tree's, in the gate ledger. `scripts/deploy.sh` runs only so or as deploy-on-merge's judge, `--from-main [--decide-only]`; never work around it.
 - **The gate isolates its writes; it does not refuse the live checkout (S6).**
