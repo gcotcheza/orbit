@@ -44,6 +44,7 @@ final class ToolchainPinsTest extends TestCase
             'node'     => $this->read('scripts/e2e.sh'),
             'postgres' => $this->read('docker-compose.e2e.yml'),
             'redis'    => $this->read('docker-compose.e2e.yml'),
+            'nginx'    => $this->read('docker-compose.e2e.yml'),
         ];
 
         foreach ($copies as $image => $copy) {
