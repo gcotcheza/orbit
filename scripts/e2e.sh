@@ -303,8 +303,15 @@ teardown() {
     fi
 
     step 'Tearing the sandbox down'
-    "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
-    rm -rf -- "${E2E_ENV_DIR:?}"
+    local down_rc=0
+    "${COMPOSE[@]}" down -v --remove-orphans >/dev/null || down_rc=$?
+    if [ "$down_rc" -ne 0 ]; then
+        # The env copy stays: `--down` needs it to retry.
+        printf '\n\033[1;31m==> compose down of %s failed (exit %s): its containers, network or volumes may be left; scripts/e2e.sh --down\033[0m\n' "$E2E_PROJECT" "$down_rc" >&2
+        [ "$status" -ne 0 ] || status=$down_rc
+    else
+        rm -rf -- "${E2E_ENV_DIR:?}"
+    fi
 
     return $status
 }

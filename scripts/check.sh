@@ -69,17 +69,17 @@ docker_answer() {
 # Refuses a stack brought up from another directory, because a bare `docker compose`
 # here resolves to production; not the browser gate's guard: docs/DECISIONS.md.
 stack_is_foreign() {
-    local ids id from project rc
+    local id from project rc
     foreign_reason=''
 
     rc=0
-    ids=$(timeout 10 docker compose ps -aq 2>/dev/null) || rc=$?
+    stack_ids=$(timeout 10 docker compose ps -aq 2>/dev/null) || rc=$?
     if [ "$rc" -ne 0 ]; then
         foreign_reason="docker did not list this project's containers ($(docker_answer "$rc"))"
         return 0
     fi
 
-    for id in $ids; do
+    for id in $stack_ids; do
         rc=0
         from=$(timeout 10 docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$id" 2>/dev/null) || rc=$?
         if [ "$rc" -ne 0 ]; then
@@ -127,8 +127,26 @@ cleanup() {
         [ -d "$here/$dir" ] || continue
         rmdir -- "$here/$dir" 2>/dev/null || printf 'check.sh: left %s in place: absent when the gate started, and it could not rmdir it\n' "$here/$dir" >&2
     done
+    if [ -n "$own_project" ] && ! remove_own_networks; then
+        printf 'check.sh: left network(s) of compose project %s behind; list them: docker network ls --filter label=com.docker.compose.project=%s\n' "$own_project" "$own_project" >&2
+        return 1
+    fi
 }
-trap cleanup EXIT
+# `compose run --rm` leaves the networks it made; only a project this run found empty, never production's.
+# decision: the-overlay-gate-removes-its-projects-networks
+own_project=''
+if [ "$mode" = overlay ] && [ -z "$stack_ids" ] && [ "${COMPOSE_PROJECT_NAME:-orbit}" != orbit ]; then
+    own_project=$COMPOSE_PROJECT_NAME
+fi
+remove_own_networks() {
+    local nets net rc=0
+    nets=$(timeout 10 docker network ls -q --filter "label=com.docker.compose.project=$own_project") || return 1
+    for net in $nets; do
+        timeout 10 docker network rm "$net" >/dev/null || rc=1
+    done
+    return "$rc"
+}
+trap 'gate_rc=$?; cleanup || exit $((gate_rc ? gate_rc : 1))' EXIT
 
 # The ledger is written from this shell. An EXIT trap reads teardown's $?, which
 # is how a half-run gate once recorded itself green. docs/DECISIONS.md

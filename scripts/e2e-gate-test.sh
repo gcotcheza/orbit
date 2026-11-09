@@ -49,6 +49,7 @@ docker() {
             [ -z "${FAKE_UP_TERM:-}" ] || kill -TERM "${PPID}"
             [ -z "${FAKE_UP_EXIT:-}" ] || exit "${FAKE_UP_EXIT}"
             return 1 ;;
+        *' down -v --remove-orphans '*) return "${FAKE_DOWN_EXIT:-0}" ;;
     esac
     return 0
 }
@@ -121,6 +122,13 @@ rc=$?
 equals '4 --down exits 0' "${rc}" '0'
 equals '4 and ran compose down' "$(grep -c ' down -v --remove-orphans' "${FAKE_DIR}/docker.argv")" '1'
 equals '4 and removed the copy and its folder' "$(ls -A "${ENV_ROOT}")" ''
+
+new_case down-fails
+run_gate FAKE_DOWN_EXIT=3
+rc=$?
+equals '4 a failed run whose compose down fails keeps its own exit' "${rc}" '1'
+equals '4 and says the teardown failed (card 1005)' "$(grep -c 'compose down of orbit-e2e failed (exit 3)' "${FAKE_DIR}/out")" '1'
+equals '4 and keeps the env copy --down needs' "$(ls -A "${ENV_ROOT}")" 'orbit-e2e'
 
 # --- 5. a fresh tree gets its .env mount point from the tree's owner, never the daemon ------
 new_case fresh-env
