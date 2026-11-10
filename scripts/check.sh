@@ -173,7 +173,7 @@ php_step() {
     if [ "$mode" = dev ]; then
         docker compose exec -T app "$@"
     else
-        docker compose run --rm --no-deps \
+        docker compose run --rm --no-deps -T \
             -v "$gate/vendor:/var/www/html/vendor" \
             -v "$gate/bootstrap-cache:/var/www/html/bootstrap/cache" \
             app "$@"

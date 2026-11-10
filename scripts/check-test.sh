@@ -410,6 +410,7 @@ VENDOR_AT="$(grep -nF 'sh -s vendor' "${C}/docker.log" | cut -d: -f1)"
 [ -n "${INSTALL_AT}" ] && [ -n "${VENDOR_AT}" ] && [ "${INSTALL_AT}" -lt "${VENDOR_AT}" ] \
     && pass '9 overlay runs it after composer install' || fail "9 overlay ran composer install at [${INSTALL_AT}] and the vendor check at [${VENDOR_AT}]"
 contains '9 over the overlay vendor/' "$(grep -F 'sh -s vendor' "${C}/docker.log")" ':/var/www/html/vendor '
+contains '9 with no TTY, so a terminal run still reads the script from stdin' "$(grep -F 'sh -s vendor' "${C}/docker.log")" 'compose run --rm --no-deps -T '
 
 t9_root vendor-red 0 stdout "${OK_REPORT}"
 run_check dev FAKE_FAIL_ON='* sh -s vendor'
