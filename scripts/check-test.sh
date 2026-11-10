@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs scripts/check.sh from a copy of <tree>'s scripts/ in a throwaway root, git and docker faked:
-# the CI_GIT seam, the stack guard, the lint list, the W7 and T9 steps and the overlay's mount points.
+# the CI_GIT seam, the stack guard, the lint list, the W7 and T9 steps and the overlay's mount points and networks.
 # On the host as root, as the gate's other host suites. docs/DECISIONS.md, deploy-lib-is-not-vendored
 #
 #   bash scripts/check-test.sh <tree>
@@ -35,6 +35,8 @@ case "$*" in
     'compose ps -aq') eval "${FAKE_PS:-:}"; exit $? ;;
     *project.working_dir*) eval "${FAKE_INSPECT:-:}"; exit $? ;;
     *'com.docker.compose.project"'*) printf 'orbit-elsewhere\n'; exit 0 ;;
+    'network ls'*) eval "${FAKE_NETWORKS:-:}"; exit $? ;;
+    "network rm ${FAKE_NET_STUCK:-@@}") exit 1 ;;
 esac
 if [ -n "${FAKE_MOUNTS:-}" ] && [ "$1 $2" = 'compose run' ]; then
     for arg in "$@"; do
@@ -44,7 +46,7 @@ if [ -n "${FAKE_MOUNTS:-}" ] && [ "$1 $2" = 'compose run' ]; then
     exit 1
 fi
 # shellcheck disable=SC2254
-case "$*" in ${FAKE_FAIL_ON:-@@}) exit 1 ;; esac
+case "$*" in ${FAKE_FAIL_ON:-@@}) exit "${FAKE_FAIL_RC:-1}" ;; esac
 exit 0
 SH
 
@@ -322,6 +324,54 @@ run_check dev FAKE_DECISIONS_RC=1
 equals '7 a checker finding fails the gate' "${RC}" 1
 contains '7 after reaching the step' "${OUT}" "${FIRST_STEP}"
 absent '7 and stops it before ShellCheck' "${OUT}" 'ShellCheck (shell scripts)'
+
+# --- 8. the overlay runner removes its own project's networks, and no one else's (card 1005) --
+NETS="printf '%s\n' net1 net2"
+NET_LS='network ls -q --filter label=com.docker.compose.project=orbit-t1005'
+net_calls() { grep '^network ' "${C}/docker.log" 2>/dev/null; }
+t9_root net-pass 0 stdout "${OK_REPORT}"
+run_check overlay COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS="${NETS}"
+equals '8 a passing overlay run exits 0' "${RC}" 0
+equals "8 and removes exactly its own project's networks" "$(net_calls)" "${NET_LS}"$'\n'"network rm net1"$'\n'"network rm net2"
+
+mount_root net-failed
+run_check overlay COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS="${NETS}" FAKE_MOUNTS=1
+equals '8 an overlay run failing mid-way keeps its exit code' "${RC}" 1
+equals '8 and still removes its networks' "$(net_calls)" "${NET_LS}"$'\n'"network rm net1"$'\n'"network rm net2"
+
+t9_root net-stuck 0 stdout "${OK_REPORT}"
+run_check overlay COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS="${NETS}" FAKE_NET_STUCK=net1
+equals '8 a network that will not go fails the passing run' "${RC}" 1
+contains '8 and says so, naming the project' "${OUT}" 'check.sh: left network(s) of compose project orbit-t1005 behind'
+equals '8 after trying the other one' "$(net_calls | tail -1)" 'network rm net2'
+equals '8 and the ledger still records the suite' "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 0"
+
+t9_root net-stuck-red 0 stdout "${OK_REPORT}"
+run_check overlay COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS="${NETS}" FAKE_NET_STUCK=net1 FAKE_FAIL_ON='*pint*' FAKE_FAIL_RC=3
+equals '8 a run failing with 3 beside a stuck network keeps its 3' "${RC}" 3
+contains '8 and still names the leftover' "${OUT}" 'check.sh: left network(s) of compose project orbit-t1005 behind'
+
+t9_root net-unlisted 0 stdout "${OK_REPORT}"
+run_check overlay COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS='exit 1'
+equals '8 networks docker will not list fail the passing run' "${RC}" 1
+contains '8 and the gate says it may have left them' "${OUT}" 'check.sh: left network(s) of compose project orbit-t1005 behind'
+
+t9_root net-dev 0 stdout "${OK_REPORT}"
+run_check dev COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS="${NETS}"
+equals '8 the dev runner passes, even with nothing listed' "${RC}" 0
+equals '8 and leaves the stack it execs into alone' "$(net_calls)" ''
+
+t9_root net-sandbox 0 stdout "${OK_REPORT}"
+run_check overlay COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS="${NETS}" FAKE_PS="printf '%s\n' c0ffee1234" FAKE_INSPECT="printf '%s\n' '${R}'"
+equals '8 an overlay run beside a sandbox someone brought up passes' "${RC}" 0
+equals "8 and leaves that sandbox's networks alone" "$(net_calls)" ''
+
+for name in unset orbit; do
+    t9_root "net-${name}" 0 stdout "${OK_REPORT}"
+    if [ "${name}" = orbit ]; then run_check overlay COMPOSE_PROJECT_NAME=orbit FAKE_NETWORKS="${NETS}"; else run_check overlay FAKE_NETWORKS="${NETS}"; fi
+    equals "8 an overlay run whose project is production's (${name}) passes" "${RC}" 0
+    equals '8 and touches no network' "$(net_calls)" ''
+done
 
 if [ "${fails}" -ne 0 ]; then
     printf '\ncheck-test: %s check(s) failed\n' "${fails}" >&2

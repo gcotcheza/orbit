@@ -303,8 +303,16 @@ teardown() {
     fi
 
     step 'Tearing the sandbox down'
-    "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
-    rm -rf -- "${E2E_ENV_DIR:?}"
+    local down_rc=0 down_err
+    down_err=$("${COMPOSE[@]}" down -v --remove-orphans 2>&1 >/dev/null) || down_rc=$?
+    if [ "$down_rc" -ne 0 ]; then
+        # The env copy stays: `--down` needs it to retry.
+        printf '%s\n' "$down_err" >&2
+        printf '\n\033[1;31m==> compose down of %s failed (exit %s): its containers, network or volumes may be left; scripts/e2e.sh --down\033[0m\n' "$E2E_PROJECT" "$down_rc" >&2
+        [ "$status" -ne 0 ] || status=$down_rc
+    else
+        rm -rf -- "${E2E_ENV_DIR:?}"
+    fi
 
     return $status
 }
@@ -341,7 +349,7 @@ else
     note "port ${E2E_PORT} is free"
 fi
 
-# Only a run left up with --keep leaves a copy behind; teardown removes it.
+# Only a run left up with --keep, or one whose compose down failed, leaves a copy behind.
 if [ ! -f "$E2E_ENV_MOUNT" ] || [ "$FRESH_ENV" -eq 1 ]; then
     write_env_file
     note "${E2E_ENV_MOUNT} generated (fresh key, fresh database password, fresh seeded login)"
