@@ -114,9 +114,10 @@ exists 'add created the worktree under ORBIT_WORKTREES_ROOT' "${WT}/feat-my-thin
 equals 'the worktree sits on origin/main' \
     "$("${REAL_GIT}" -C "${CLONE}" rev-parse feat/My-Thing 2>/dev/null)" "${ORIGIN_MAIN}"
 contains 'add fetched origin first' "$(cat "${GIT_ARGV_LOG}")" 'fetch origin'
-contains 'add prints the sandbox line' "${OUT}" \
-    'COMPOSE_PROJECT_NAME=orbit-feat-my-thing docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build postgres redis app'
-contains 'add prints the overlay gate' "${OUT}" 'bash scripts/check.sh overlay'
+contains 'add prints the overlay gate under its own project' "${OUT}" \
+    'COMPOSE_PROJECT_NAME=orbit-feat-my-thing bash scripts/check.sh overlay   (nothing up)'
+contains 'add prints the sandbox line as dev only' "${OUT}" \
+    'dev only: COMPOSE_PROJECT_NAME=orbit-feat-my-thing docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build postgres redis app'
 
 run add feat/My-Thing
 nonzero 'add over an existing directory' "${RC}"

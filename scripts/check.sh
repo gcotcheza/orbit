@@ -103,9 +103,14 @@ stack_is_foreign() {
 if stack_is_foreign; then
     {
         printf 'check.sh: %s.\n' "$foreign_reason"
-        printf 'Refusing to run the gate against it. Bring a sandbox stack up from THIS directory\n'
-        printf 'and name it on the same command line (web is left out: it publishes 127.0.0.1:3085):\n'
-        printf '  COMPOSE_PROJECT_NAME=orbit-<name> docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build postgres redis app\n'
+        if [ "$mode" = overlay ]; then
+            printf 'Refusing to run the gate against it. Overlay needs no stack up: name a project of\n'
+            printf 'its own on the same command line, with nothing started under that name:\n'
+        else
+            printf 'Refusing to run the gate against it. Bring a sandbox stack up from THIS directory\n'
+            printf 'and name it on the same command line (web is left out: it publishes 127.0.0.1:3085):\n'
+            printf '  COMPOSE_PROJECT_NAME=orbit-<name> docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build postgres redis app\n'
+        fi
         printf '  COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh %s\n' "$mode"
     } >&2
     exit 2
