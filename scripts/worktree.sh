@@ -87,8 +87,8 @@ case "${CMD}" in
         echo
         say 'next:'
         note "cd ${DIR}"
-        note "COMPOSE_PROJECT_NAME=orbit-${NAME} docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build postgres redis app"
-        note 'bash scripts/check.sh overlay'
+        note "COMPOSE_PROJECT_NAME=orbit-${NAME} bash scripts/check.sh overlay   (nothing up)"
+        note "dev only: COMPOSE_PROJECT_NAME=orbit-${NAME} docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build postgres redis app"
         ;;
 
     remove | rm)

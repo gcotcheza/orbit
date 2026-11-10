@@ -188,6 +188,7 @@ refused '2 a stack started from another directory' 'has a container started from
 new_root elsewhere-overlay
 run_check overlay FAKE_PS="printf '%s\n' c0ffee1234" FAKE_INSPECT="printf '%s\n' /var/www/orbit"
 equals '2 overlay against a stack from another directory is refused' "${RC}" 2
+contains '2 and says overlay needs no stack up' "${OUT}" 'Overlay needs no stack up'
 contains '2 and names its own project for overlay' "${OUT}" 'COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh overlay'
 absent '2 and never asks for a stack overlay does not use' "${OUT}" 'up -d --build'
 absent '2 and gates nothing' "${OUT}" "${FIRST_STEP}"
