@@ -185,6 +185,13 @@ new_root elsewhere-stack
 run_check dev FAKE_PS="printf '%s\n' c0ffee1234" FAKE_INSPECT="printf '%s\n' /var/www/orbit"
 refused '2 a stack started from another directory' 'has a container started from /var/www/orbit'
 
+new_root elsewhere-overlay
+run_check overlay FAKE_PS="printf '%s\n' c0ffee1234" FAKE_INSPECT="printf '%s\n' /var/www/orbit"
+equals '2 overlay against a stack from another directory is refused' "${RC}" 2
+contains '2 and names its own project for overlay' "${OUT}" 'COMPOSE_PROJECT_NAME=orbit-<name> bash scripts/check.sh overlay'
+absent '2 and never asks for a stack overlay does not use' "${OUT}" 'up -d --build'
+absent '2 and gates nothing' "${OUT}" "${FIRST_STEP}"
+
 new_root no-list
 run_check dev FAKE_PS='exit 1'
 refused '2 a container list docker will not give' "docker did not list this project's containers (exited 1)"
