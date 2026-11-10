@@ -36,6 +36,7 @@ case "$*" in
     *project.working_dir*) eval "${FAKE_INSPECT:-:}"; exit $? ;;
     *'com.docker.compose.project"'*) printf 'orbit-elsewhere\n'; exit 0 ;;
     'network ls'*) eval "${FAKE_NETWORKS:-:}"; exit $? ;;
+    "network rm ${FAKE_NET_STUCK:-@@}") exit 1 ;;
 esac
 if [ -n "${FAKE_MOUNTS:-}" ] && [ "$1 $2" = 'compose run' ]; then
     for arg in "$@"; do
@@ -45,7 +46,7 @@ if [ -n "${FAKE_MOUNTS:-}" ] && [ "$1 $2" = 'compose run' ]; then
     exit 1
 fi
 # shellcheck disable=SC2254
-case "$*" in ${FAKE_FAIL_ON:-@@}) exit 1 ;; esac
+case "$*" in ${FAKE_FAIL_ON:-@@}) exit "${FAKE_FAIL_RC:-1}" ;; esac
 exit 0
 SH
 
@@ -339,11 +340,21 @@ equals '8 an overlay run failing mid-way keeps its exit code' "${RC}" 1
 equals '8 and still removes its networks' "$(net_calls)" "${NET_LS}"$'\n'"network rm net1"$'\n'"network rm net2"
 
 t9_root net-stuck 0 stdout "${OK_REPORT}"
-run_check overlay COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS="${NETS}" FAKE_FAIL_ON='network rm net1'
+run_check overlay COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS="${NETS}" FAKE_NET_STUCK=net1
 equals '8 a network that will not go fails the passing run' "${RC}" 1
 contains '8 and says so, naming the project' "${OUT}" 'check.sh: left network(s) of compose project orbit-t1005 behind'
 equals '8 after trying the other one' "$(net_calls | tail -1)" 'network rm net2'
 equals '8 and the ledger still records the suite' "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 0"
+
+t9_root net-stuck-red 0 stdout "${OK_REPORT}"
+run_check overlay COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS="${NETS}" FAKE_NET_STUCK=net1 FAKE_FAIL_ON='*pint*' FAKE_FAIL_RC=3
+equals '8 a run failing with 3 beside a stuck network keeps its 3' "${RC}" 3
+contains '8 and still names the leftover' "${OUT}" 'check.sh: left network(s) of compose project orbit-t1005 behind'
+
+t9_root net-unlisted 0 stdout "${OK_REPORT}"
+run_check overlay COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS='exit 1'
+equals '8 networks docker will not list fail the passing run' "${RC}" 1
+contains '8 and the gate says it may have left them' "${OUT}" 'check.sh: left network(s) of compose project orbit-t1005 behind'
 
 t9_root net-dev 0 stdout "${OK_REPORT}"
 run_check dev COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS="${NETS}"

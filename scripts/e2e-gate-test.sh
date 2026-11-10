@@ -48,8 +48,13 @@ docker() {
             tr '\0' '|' <"/proc/$$/cmdline" >"${FAKE_DIR}/up-cmdline"
             [ -z "${FAKE_UP_TERM:-}" ] || kill -TERM "${PPID}"
             [ -z "${FAKE_UP_EXIT:-}" ] || exit "${FAKE_UP_EXIT}"
+            [ -z "${FAKE_PASS:-}" ] || return 0
             return 1 ;;
-        *' down -v --remove-orphans '*) return "${FAKE_DOWN_EXIT:-0}" ;;
+        *' down -v --remove-orphans '*) echo FAKE-DOWN-ERROR >&2; return "${FAKE_DOWN_EXIT:-0}" ;;
+        # FAKE_PASS: one network, and the web container's address is what the app resolves.
+        *' network ls '*) [ -z "${FAKE_PASS:-}" ] || echo orbit-e2e_default ;;
+        *' inspect '*) [ -z "${FAKE_PASS:-}" ] || echo 10.9.9.9 ;;
+        *' getent hosts '*) [ -z "${FAKE_PASS:-}" ] || echo '10.9.9.9 orbit.test' ;;
     esac
     return 0
 }
@@ -101,6 +106,7 @@ equals '2 neither read the planted sentinel' "$(cat "${FAKE_DIR}/up-env-file" "$
 equals '2 the copy is 0640 root:119 in a 0750 root:119 folder' "$(tr '\n' ' ' <"${FAKE_DIR}/up-perm")" '0:119 640 0:119 750 '
 equals '2 the sentinel survives' "$(cat "${SENTINEL}")" 'SENTINEL-716'
 equals '2 teardown removes the copy and its folder' "$(ls -A "${ENV_ROOT}")" ''
+equals "2 and keeps a compose down that worked quiet" "$(grep -c FAKE-DOWN-ERROR "${FAKE_DIR}/out")" '0'
 
 # --- 3. the gate refuses to run as anyone but root ------------------------------------------
 new_case not-root
@@ -129,6 +135,15 @@ rc=$?
 equals '4 a failed run whose compose down fails keeps its own exit' "${rc}" '1'
 equals '4 and says the teardown failed (card 1005)' "$(grep -c 'compose down of orbit-e2e failed (exit 3)' "${FAKE_DIR}/out")" '1'
 equals '4 and keeps the env copy --down needs' "$(ls -A "${ENV_ROOT}")" 'orbit-e2e'
+
+new_case down-fails-after-pass
+run_gate FAKE_PASS=1 FAKE_DOWN_EXIT=3
+rc=$?
+equals '4 a passing suite reached Playwright' "$(grep -c 'browser gate passed' "${FAKE_DIR}/out")" '1'
+equals '4 and fails with the exit of its failed compose down' "${rc}" '3'
+equals '4 and says the suite passed but teardown failed' "$(grep -c 'the suite passed but teardown failed (exit 3)' "${FAKE_DIR}/out")" '1'
+equals "4 and shows compose down's own error" "$(grep -c '^FAKE-DOWN-ERROR$' "${FAKE_DIR}/out")" '1'
+equals '4 while the ledger keeps the suite green' "$(awk '{ print $1, $2, $4 }' "${FAKE_DIR}/ledger")" "${FAKE_SHA} e2e 0"
 
 # --- 5. a fresh tree gets its .env mount point from the tree's owner, never the daemon ------
 new_case fresh-env

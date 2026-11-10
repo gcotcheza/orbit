@@ -66,8 +66,8 @@ docker_answer() {
     esac
 }
 
-# Refuses a stack brought up from another directory, because a bare `docker compose`
-# here resolves to production; not the browser gate's guard: docs/DECISIONS.md.
+# Refuses a stack brought up from another directory (a bare `docker compose` here is production's), and
+# leaves this project's container ids in stack_ids; not the browser gate's guard: docs/DECISIONS.md.
 stack_is_foreign() {
     local id from project rc
     foreign_reason=''
