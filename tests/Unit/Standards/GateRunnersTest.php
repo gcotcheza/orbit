@@ -15,8 +15,10 @@ final class GateRunnersTest extends TestCase
 {
     private const ORDER = [
         'decisions',
+        'unzip deleted after every apk change',
         'shellcheck',
         'overlay',
+        'no world-writable path under vendor/',
         'gitleaks',
         'pint',
         'guard diff reads',

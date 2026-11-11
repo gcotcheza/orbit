@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs scripts/check.sh from a copy of <tree>'s scripts/ in a throwaway root, git and docker faked:
-# the CI_GIT seam, the stack guard, the lint list, the W7 and T9 steps and the overlay's mount points and networks.
+# the CI_GIT seam, the stack guard, the lint list, the W7, unzip, vendor and T9 steps and the overlay's mounts and networks.
 # On the host as root, as the gate's other host suites. docs/DECISIONS.md, deploy-lib-is-not-vendored
 #
 #   bash scripts/check-test.sh <tree>
@@ -45,6 +45,7 @@ if [ -n "${FAKE_MOUNTS:-}" ] && [ "$1 $2" = 'compose run' ]; then
     [ "${FAKE_MOUNTS}" != fill ] || touch vendor/autoload.php
     exit 1
 fi
+case "$*" in *' sh -s vendor') cat >>"${FAKE_STDIN}" ;; esac
 # shellcheck disable=SC2254
 case "$*" in ${FAKE_FAIL_ON:-@@}) exit "${FAKE_FAIL_RC:-1}" ;; esac
 exit 0
@@ -84,6 +85,9 @@ new_root() {
     printf '#!/bin/sh\nprintf "%%s|%%s\\n" "$DECISIONS_GIT" "$*" >>%s\nexit "${FAKE_DECISIONS_RC:-0}"\n' "${C}/decisions.log" >"${B}/decisions-check"
     swap /srv/engineering-standards/scripts/decisions-check.sh "${B}/decisions-check" 1 \
         'the canonical decisions-check path is not in check.sh exactly once, so a real one would run'
+    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>%s\nexit "${FAKE_UNZIP_RC:-0}"\n' "${C}/unzip.log" >"${B}/dockerfile-unzip-check"
+    swap /srv/engineering-standards/scripts/dockerfile-unzip-check.sh "${B}/dockerfile-unzip-check" 1 \
+        'the canonical dockerfile-unzip-check path is not in check.sh exactly once, so a real one would run'
 }
 
 # run_check <mode|-> [VAR=value...]: OUT, RC and SECONDS_TAKEN; - runs check.sh with no argument.
@@ -94,7 +98,7 @@ run_check() {
     OUT="$(cd "${R}" && env -u CI_GIT -u GATE_RECORDED -u GATE_SUITE_PASSED -u COMPOSE_PROJECT_NAME \
         PATH="${B}:${HOST_PATH}" GATE_LEDGER="${C}/ledger" ORBIT_GATE_LOG=- \
         FAKE_LOG="${C}/docker.log" FAKE_GIT_LOG="${C}/git.log" FAKE_SCRIPTS_LIST="${C}/scripts.list" \
-        FAKE_MADE="${C}/made.log" FAKE_GIT_HEAD="${ZEROS}" "$@" \
+        FAKE_MADE="${C}/made.log" FAKE_STDIN="${C}/stdin.log" FAKE_GIT_HEAD="${ZEROS}" "$@" \
         timeout 120 bash "${R}/scripts/check.sh" ${mode/#-/} 2>&1)"
     RC=$?
     SECONDS_TAKEN=$(($(date +%s) - started))
@@ -380,6 +384,39 @@ for name in unset orbit; do
     equals "8 an overlay run whose project is production's (${name}) passes" "${RC}" 0
     equals '8 and touches no network' "$(net_calls)" ''
 done
+
+# --- 9. the shared unzip and vendor checks run by their canonical paths, and a finding stops the gate --
+new_root unzip-args
+run_check dev FAKE_FAIL_ON='*shellcheck*'
+equals "9 the unzip check is handed the app stage count and this root's Dockerfile" "$(cat "${C}/unzip.log" 2>/dev/null)" "--stages 1 ${R}/docker/app/Dockerfile"
+
+new_root unzip-red
+run_check dev FAKE_UNZIP_RC=1
+equals '9 an unzip finding fails the gate' "${RC}" 1
+contains '9 after reaching the step' "${OUT}" 'Unzip deleted after every apk change (dockerfile-unzip-check.sh)'
+absent '9 and stops it before ShellCheck' "${OUT}" 'ShellCheck (shell scripts)'
+
+VENDOR_STEP='No world-writable path under vendor/ (vendor-perms-check.sh)'
+VENDOR_SCRIPT="$(cksum </srv/engineering-standards/scripts/vendor-perms-check.sh)"
+for mode in dev overlay; do
+    t9_root "vendor-${mode}" 0 stdout "${OK_REPORT}"
+    run_check "${mode}"
+    equals "9 the ${mode} gate passes with the vendor step" "${RC}" 0
+    equals "9 and the ${mode} app container is fed the canonical vendor check on stdin" "$(cksum <"${C}/stdin.log" 2>/dev/null)" "${VENDOR_SCRIPT}"
+done
+equals '9 dev runs it in the stack it execs into' "$(grep -F 'sh -s vendor' "${C}/../vendor-dev/docker.log")" 'compose exec -T app sh -s vendor'
+INSTALL_AT="$(grep -nF 'composer install' "${C}/docker.log" | cut -d: -f1)"
+VENDOR_AT="$(grep -nF 'sh -s vendor' "${C}/docker.log" | cut -d: -f1)"
+[ -n "${INSTALL_AT}" ] && [ -n "${VENDOR_AT}" ] && [ "${INSTALL_AT}" -lt "${VENDOR_AT}" ] \
+    && pass '9 overlay runs it after composer install' || fail "9 overlay ran composer install at [${INSTALL_AT}] and the vendor check at [${VENDOR_AT}]"
+contains '9 over the overlay vendor/' "$(grep -F 'sh -s vendor' "${C}/docker.log")" ':/var/www/html/vendor '
+contains '9 with no TTY, so a terminal run still reads the script from stdin' "$(grep -F 'sh -s vendor' "${C}/docker.log")" 'compose run --rm --no-deps -T '
+
+t9_root vendor-red 0 stdout "${OK_REPORT}"
+run_check dev FAKE_FAIL_ON='* sh -s vendor'
+equals '9 a vendor finding fails the gate' "${RC}" 1
+contains '9 after reaching the step' "${OUT}" "${VENDOR_STEP}"
+absent '9 and stops it before the secrets step' "${OUT}" 'Gitleaks (secrets)'
 
 if [ "${fails}" -ne 0 ]; then
     printf '\ncheck-test: %s check(s) failed\n' "${fails}" >&2

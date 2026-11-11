@@ -81,10 +81,13 @@ run without it. There is no second one to weigh against it, because there is no
 override: S1 leaves the guard none, and a commit it refuses is reported with the
 key it named and then fixed, never stood up some other way.
 
-**The gate.** `scripts/check.sh` runs fifteen checks, five of them on the
-host, stopping at the first failure: ShellCheck (every shell script under
-`scripts/`, at `-S warning`), Gitleaks, Pint, the guard-diff lint (on the host,
-the fleet's `fleet-lint-guard-diff` over `scripts/`), the deploy script's own tests (on
+**The gate.** `scripts/check.sh` runs its checks in this order, stopping at the
+first failure (`grep "step '" scripts/check.sh` lists them all): the W7
+decisions check and the shared `dockerfile-unzip-check.sh` (both on the host,
+from `/srv/engineering-standards`), ShellCheck (every shell script under
+`scripts/`, at `-S warning`), the shared `vendor-perms-check.sh` (in the app
+container, after the overlay's composer install), Gitleaks, Pint, the guard-diff lint (on the host,
+the fleet's `fleet-lint-guard-diff` over `scripts/`), the host suites for the deploy lib, this gate and the browser gate, the deploy script's own tests (on
 the host), the worktree script's own tests (on the host), the image-tag check (on the host, over the compose files, from
 the canonical clone at `/srv/engineering-standards`, so this step runs on this
 box), the deploy mutants

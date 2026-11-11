@@ -173,7 +173,7 @@ php_step() {
     if [ "$mode" = dev ]; then
         docker compose exec -T app "$@"
     else
-        docker compose run --rm --no-deps \
+        docker compose run --rm --no-deps -T \
             -v "$gate/vendor:/var/www/html/vendor" \
             -v "$gate/bootstrap-cache:/var/www/html/bootstrap/cache" \
             app "$@"
@@ -198,6 +198,10 @@ node_step() {
 step 'Decisions (W7, decisions-check.sh)'
 # First because cheapest: a host read of the canonical clone, like the T9 step, and not vendored.
 DECISIONS_GIT="$GIT" bash /srv/engineering-standards/scripts/decisions-check.sh "$here"
+
+step 'Unzip deleted after every apk change (dockerfile-unzip-check.sh)'
+# A host read of the canonical clone, like the W7 step. docs/DECISIONS.md, composer-extracts-with-ziparchive-not-unzip
+sh /srv/engineering-standards/scripts/dockerfile-unzip-check.sh --stages 1 "$here/docker/app/Dockerfile"
 
 step 'ShellCheck (shell scripts)'
 # Listed the way the secrets step lists, and for the same reason: an untracked
@@ -238,6 +242,10 @@ if [ "$mode" = overlay ]; then
     docker compose build app
     php_step composer install --no-interaction --no-progress
 fi
+
+step 'No world-writable path under vendor/ (vendor-perms-check.sh)'
+# On stdin, because the app container does not mount the canonical clone.
+php_step sh -s vendor </srv/engineering-standards/scripts/vendor-perms-check.sh
 
 step 'Gitleaks (secrets)'
 # git's view of the tree, copied out: a gitignored .env is never in $work/scan.
