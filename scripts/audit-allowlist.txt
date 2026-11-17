@@ -1,0 +1,9 @@
+# npm advisories the gate's npm step accepts, one per line:
+#
+#   npm <advisory id> <YYYY-MM-DD> <reason>
+#
+# One advisory id per line: no severity, package name or pattern. Any other high,
+# critical or unrated advisory fails the gate; moderate and low are printed and pass.
+# The date is the day the entry was added. Every run reports an entry whose
+# advisory no longer appears in the audit.
+npm GHSA-fc5q-39xc-vjpf 2026-11-17 picomatch reaches the tree through vite, vitest, laravel-vite-plugin, @vitejs/plugin-vue and vue-router (via unplugin and tinyglobby; the lockfile marks it prod), and a vite build on 2026-11-18 carried no picomatch in any of its JS files; no fixed version exists, so it is allowlisted and watched per Ghie's 11-17 ruling; remove when picomatch > 4.0.7 ships

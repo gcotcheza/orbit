@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs scripts/check.sh from a copy of <tree>'s scripts/ in a throwaway root, git and docker faked:
-# the CI_GIT seam, the stack guard, the lint list, the W7, unzip, vendor and T9 steps and the overlay's mounts and networks.
+# the CI_GIT seam, the stack guard, the lint list, the W7, unzip, vendor, T9 and npm advisory steps and the overlay's mounts and networks.
 # On the host as root, as the gate's other host suites. docs/DECISIONS.md, deploy-lib-is-not-vendored
 #
 #   bash scripts/check-test.sh <tree>
@@ -417,6 +417,12 @@ run_check dev FAKE_FAIL_ON='* sh -s vendor'
 equals '9 a vendor finding fails the gate' "${RC}" 1
 contains '9 after reaching the step' "${OUT}" "${VENDOR_STEP}"
 absent '9 and stops it before the secrets step' "${OUT}" 'Gitleaks (secrets)'
+
+# --- 10. the npm step judges the audit through the allowlist --------------------------------
+NPM_STEP="$(grep -F 'npm audit' "${WORK}/vendor-overlay/docker.log")"
+contains '10 the npm step runs the allowlist suite first' "${NPM_STEP}" 'node --test scripts/lib/npm-audit-allowlist.test.mjs && npm audit'
+contains '10 and judges the audit at high through the allowlist, never a bare exit code' "${NPM_STEP}" \
+    'npm audit --audit-level=high --json | node scripts/lib/npm-audit-allowlist.mjs scripts/audit-allowlist.txt'
 
 if [ "${fails}" -ne 0 ]; then
     printf '\ncheck-test: %s check(s) failed\n' "${fails}" >&2
