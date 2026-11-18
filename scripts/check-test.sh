@@ -99,7 +99,7 @@ run_check() {
         PATH="${B}:${HOST_PATH}" GATE_LEDGER="${C}/ledger" ORBIT_GATE_LOG=- \
         FAKE_LOG="${C}/docker.log" FAKE_GIT_LOG="${C}/git.log" FAKE_SCRIPTS_LIST="${C}/scripts.list" \
         FAKE_MADE="${C}/made.log" FAKE_STDIN="${C}/stdin.log" FAKE_GIT_HEAD="${ZEROS}" "$@" \
-        timeout 120 bash "${R}/scripts/check.sh" ${mode/#-/} 2>&1)"
+        timeout 120 bash -- "${R}/scripts/check.sh" ${mode/#-/} 2>&1)"
     RC=$?
     SECONDS_TAKEN=$(($(date +%s) - started))
 }

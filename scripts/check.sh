@@ -288,8 +288,8 @@ step 'Guard diff reads (scripts/guard-lint.sh)'
 step 'The deploy lib and this gate (scripts/deploy-lib-test.sh, scripts/check-test.sh)'
 # Host steps as root, each handed the tree it judges: they read the deploy lib from root's
 # clone and run this script against fakes. docs/DECISIONS.md, deploy-lib-is-not-vendored
-bash "$here/scripts/deploy-lib-test.sh" "$here"
-bash "$here/scripts/check-test.sh" "$here"
+bash -- "$here/scripts/deploy-lib-test.sh" "$here"
+bash -- "$here/scripts/check-test.sh" "$here"
 
 step 'The deploy script (scripts/deploy-test.sh)'
 "$here/scripts/deploy-test.sh"
@@ -302,13 +302,13 @@ step 'The worktree script (scripts/worktree-test.sh)'
 
 step 'The browser gate makes its files as the app user (scripts/e2e-env-test.sh)'
 # A host step for the same reason: shell testing shell, in temp directories only.
-bash "$here/scripts/e2e-env-test.sh"
+bash -- "$here/scripts/e2e-env-test.sh"
 
 step 'The browser gate end to end against a fake docker (scripts/e2e-gate-test.sh)'
-bash "$here/scripts/e2e-gate-test.sh" "$here"
+bash -- "$here/scripts/e2e-gate-test.sh" "$here"
 
 step 'The mutant harness cap ends what ignores TERM (scripts/run-capped-test.sh)'
-bash "$here/scripts/run-capped-test.sh"
+bash -- "$here/scripts/run-capped-test.sh"
 
 step 'Image tags (T9)'
 # A host step: the canonical clone is on this box and inside no container.

@@ -44,14 +44,23 @@ final class DeployRunbookCallsTheScriptTest extends TestCase
     #[Test]
     public function the_runbook_runs_the_battery_only_out_of_roots_mirror(): void
     {
-        $fenced = implode("\n", $this->fences($this->read(self::RUNBOOK)));
+        $fences = $this->fences($this->read(self::RUNBOOK));
+        $fenced = implode("\n", $fences);
+        $copy = '/var/lib/fleet/deploy-src/orbit-verify.sh';
+        $writes = array_values(array_filter($fences, static fn (string $f): bool => str_contains($f, "show main:scripts/verify.sh >{$copy}")));
+        $runs = array_values(array_filter($fences, static fn (string $f): bool => str_contains($f, "bash -- {$copy}")));
 
-        $this->assertStringContainsString(
-            'git --git-dir=/var/lib/fleet/deploy-src/orbit.git show main:scripts/verify.sh >"${VDIR:?}/verify.sh" || exit',
-            $fenced,
-            "The runbook lost the block that copies verify.sh out of root's mirror before root runs it."
+        $this->assertCount(1, $writes, "The runbook lost the block that copies verify.sh out of root's mirror before root runs it.");
+        $this->assertStringContainsString('umask 077', $writes[0]);
+        $this->assertStringContainsString('set -C', $writes[0], 'The copy must refuse a file that is already there.');
+        $this->assertCount(1, $runs, 'The runbook lost the block that runs the copy by its literal path.');
+        $this->assertNotSame(
+            $writes[0],
+            $runs[0],
+            'One block writes the copy and runs it, which the root exec guard refuses: '
+            .'docs/DECISIONS.md, the-battery-copy-is-written-and-run-in-two-blocks.'
         );
-        $this->assertStringContainsString('bash "${VDIR:?}/verify.sh"', $fenced);
+        $this->assertStringContainsString("trap 'rm -f -- {$copy}' EXIT", $runs[0]);
         $this->assertDoesNotMatchRegularExpression(
             '#(^|[\s/])scripts/verify\.sh\b#m',
             $fenced,

@@ -46,14 +46,14 @@ child_gone() { # <pidfile> <case>
 }
 
 start=${SECONDS}
-run_capped 1 bash "${W}/stubborn.sh" "${W}/1.pid" &
+run_capped 1 bash -- "${W}/stubborn.sh" "${W}/1.pid" &
 if bounded_wait $! '1 a child that ignores TERM is ended at its own timeout'; then
     run_capped_timed_out "${RC}" && pass "1 a child that ignores TERM is ended at its own timeout (rc ${RC}, $((SECONDS - start))s)" \
         || fail "1 the rc ${RC} does not read as timed out"
 fi
 child_gone "${W}/1.pid" 1
 
-run_capped 60 bash "${W}/stubborn.sh" "${W}/2.pid" &
+run_capped 60 bash -- "${W}/stubborn.sh" "${W}/2.pid" &
 pid=$!
 for ((i = 0; i < 50; i++)); do [ -s "${W}/2.pid" ] && break; sleep 0.1; done
 kill -- -"${pid}" 2>/dev/null
