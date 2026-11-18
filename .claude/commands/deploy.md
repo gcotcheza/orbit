@@ -66,16 +66,26 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 
 1. The only `orbit` live-tripwire line is `HEAD is <sha>, and no deploy log … names it`. Any `changed outside a deploy`, `hooks … changed` or `HEAD moved from` line is something else: stop and investigate.
 2. `HEAD` = `origin/main` in `/var/www/orbit` (`git-as orbit -C /var/www/orbit rev-parse HEAD origin/main`).
-3. Re-run the read-only battery from a root 700 copy out of root's mirror, never from the tree `orbit` can write. Green → accept once with
+3. Re-run the read-only battery from a root-only copy out of root's mirror, never from the tree `orbit` can write: the first block writes the copy, the second runs and removes it. Green → accept once with
    `vps-health-check.sh --accept-tripwire orbit`. Red → roll back as the script prints.
 
 ```bash
 (
   set -u
-  VDIR=$(mktemp -d /var/lib/fleet/deploy-src/verify.XXXXXXXX) || exit
-  trap 'rm -rf "${VDIR:?}"' EXIT
-  git --git-dir=/var/lib/fleet/deploy-src/orbit.git show main:scripts/verify.sh >"${VDIR:?}/verify.sh" || exit
-  bash "${VDIR:?}/verify.sh"
+  umask 077
+  case $(stat -c '%u %A' /var/lib/fleet/deploy-src) in '0 d????-??-?') ;; *) echo 'REFUSED: /var/lib/fleet/deploy-src is not root-only'; exit 1 ;; esac
+  [ ! -e /var/lib/fleet/deploy-src/orbit-verify.sh ] && [ ! -L /var/lib/fleet/deploy-src/orbit-verify.sh ] || { echo 'REFUSED: orbit-verify.sh is already there; read it, remove it, start again'; exit 1; }
+  set -C
+  git --git-dir=/var/lib/fleet/deploy-src/orbit.git show main:scripts/verify.sh >/var/lib/fleet/deploy-src/orbit-verify.sh || { rm -f -- /var/lib/fleet/deploy-src/orbit-verify.sh; echo 'REFUSED: the mirror read failed'; exit 1; }
+)
+```
+
+```bash
+(
+  set -u
+  trap 'rm -f -- /var/lib/fleet/deploy-src/orbit-verify.sh' EXIT
+  [ "$(stat -c '%u %a' /var/lib/fleet/deploy-src/orbit-verify.sh)" = '0 600' ] || { echo 'REFUSED: orbit-verify.sh is not root 600'; exit 1; }
+  bash -- /var/lib/fleet/deploy-src/orbit-verify.sh
 )
 ```
 

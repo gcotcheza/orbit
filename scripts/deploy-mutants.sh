@@ -110,7 +110,7 @@ run_mutant() {
     # or an orphan writes into a directory this script is already removing.
     TMPDIR="${dir}/tmp" DEPLOY_TEST_ROOT="${dir}" DEPLOY_SH="${dir}/scripts/deploy.sh" VERIFY_SH="${dir}/scripts/verify.sh" \
         GATE_LEDGER_LIB="${dir}/scripts/lib/deploy/ledger.sh" \
-        run_capped "${HARNESS_TIMEOUT}" bash "${harness}" "${harness_args[@]}" >"${log}" 2>&1 &
+        run_capped "${HARNESS_TIMEOUT}" bash -- "${harness}" "${harness_args[@]}" >"${log}" 2>&1 &
     pid=$!
     (
         while kill -0 "${pid}" 2>/dev/null; do
@@ -624,12 +624,12 @@ fi
 export DEPLOY_TEST_TEMPLATES="${WORK}/templates"
 mkdir -p "${WORK}/unmutated/tmp"
 if ! TMPDIR="${WORK}/unmutated/tmp" DEPLOY_TEST_ROOT="${WORK}/unmutated" \
-    bash "${SCRIPT_DIR}/deploy-test.sh" >"${WORK}/unmutated.out" 2>&1; then
+    bash -- "${SCRIPT_DIR}/deploy-test.sh" >"${WORK}/unmutated.out" 2>&1; then
     tail -20 "${WORK}/unmutated.out" >&2
     printf 'deploy-mutants: the unmutated suite fails, so no mutant was run\n' >&2
     exit 1
 fi
-if ! bash "${SCRIPT_DIR}/deploy-lib-test.sh" "${SCRIPT_DIR}/.." >"${WORK}/unmutated-lib.out" 2>&1; then
+if ! bash -- "${SCRIPT_DIR}/deploy-lib-test.sh" "${SCRIPT_DIR}/.." >"${WORK}/unmutated-lib.out" 2>&1; then
     grep '^FAIL ' "${WORK}/unmutated-lib.out" | cut -c1-200 >&2
     printf 'deploy-mutants: the unmutated deploy-lib-test.sh fails, so no mutant was run\n' >&2
     exit 1
@@ -640,7 +640,7 @@ fi
 for ((i = 1; i <= n; i++)); do printf '%s\n' "${i}"; done \
     | xargs -P "${JOBS}" -I{} sh -c '
         [ -e "$3/$1.rc" ] && exit 1
-        bash "$2" --worker "$1" >"$3/$1.out" 2>&1
+        bash -- "$2" --worker "$1" >"$3/$1.out" 2>&1
         printf %s "$?" >"$3/$1.rc"
     ' _ {} "${SELF}" "${WORK}"
 xargs_rc=$?

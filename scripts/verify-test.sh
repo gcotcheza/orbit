@@ -243,7 +243,7 @@ run_verify() {
         ORBIT_BASE='http://127.0.0.1:3085' \
         ORBIT_PUBLIC='https://flights.test' \
         ORBIT_SNAPSHOT="${SNAP}" \
-        bash "${VERIFY_SH}" "$@" 2>&1)"
+        bash -- "${VERIFY_SH}" "$@" 2>&1)"
     STATUS_RC=$?
     STARTED=''; STATUS=''; WEB_PORTS=''; BUNDLE_LOOP=''; BUNDLE_EDGE=''; SW_BUNDLE=''; SW_BAD=''; SW_HOW=''; SW_STREAM=''; MAIL_FILE=''
     ASSET_CC=''; SHELL_HEADERS=''; CSRF_CODE=''; LOGIN_CODE=''; PROBE_CODE=''

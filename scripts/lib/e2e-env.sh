@@ -49,7 +49,7 @@ e2e_lane_rerun() { # ROOT LANE_ROOT UID GID ARGS... — e2e.sh again, from a UID
     git clone -q --no-hardlinks -- "$root" "${lane}/repo" && git -C "${lane}/repo" checkout -q "$sha" \
         && [ "$(git -C "${lane}/repo" rev-parse 'HEAD^{tree}')" = "$(git -C "$root" rev-parse 'HEAD^{tree}')" ] \
         && chown -R "${uid}:${gid}" -- "${lane}/repo" \
-        && E2E_LANE_CHILD=1 bash "${lane}/repo/scripts/e2e.sh" "$@" || rc=$?
+        && E2E_LANE_CHILD=1 bash -- "${lane}/repo/scripts/e2e.sh" "$@" || rc=$?
     trap - INT TERM
     if [ "$rc" -ne 0 ] || [ "$keep" -eq 1 ]; then
         printf 'the lane %s is kept (its stack, artifacts or baselines may be in use); remove it with: rm -rf -- %s\n' "$lane" "$lane" >&2

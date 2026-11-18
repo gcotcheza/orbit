@@ -82,7 +82,7 @@ new_case() { # NAME — a fresh uid-115 copy of the tree and a fresh fake log
 
 run_gate() { # ENV... — the copy's e2e.sh, with the fakes first on PATH
     env PATH="${BIN}:${PATH}" GATE_LEDGER="${FAKE_DIR}/ledger" \
-        ORBIT_GATE_LOG=/dev/null "$@" bash "${FAKE_TREE}/scripts/e2e.sh" >"${FAKE_DIR}/out" 2>&1
+        ORBIT_GATE_LOG=/dev/null "$@" bash -- "${FAKE_TREE}/scripts/e2e.sh" >"${FAKE_DIR}/out" 2>&1
 }
 
 # --- 1. a caller's GATE_RECORDED never stops the run's own row (card 702) -------------------
@@ -111,7 +111,7 @@ equals "2 and keeps a compose down that worked quiet" "$(grep -c FAKE-DOWN-ERROR
 # --- 3. the gate refuses to run as anyone but root ------------------------------------------
 new_case not-root
 setpriv --reuid=115 --regid=119 --clear-groups env PATH="${BIN}:${PATH}" GATE_LEDGER="${FAKE_DIR}/ledger" \
-    ORBIT_GATE_LOG=/dev/null bash "${FAKE_TREE}/scripts/e2e.sh" >"${FAKE_DIR}/out" 2>&1
+    ORBIT_GATE_LOG=/dev/null bash -- "${FAKE_TREE}/scripts/e2e.sh" >"${FAKE_DIR}/out" 2>&1
 rc=$?
 equals '3 run as uid 115 the gate exits' "${rc}" '1'
 equals '3 and says it needs root' "$(grep -c "run this as root: the env is root's own copy in ${ENV_ROOT}" "${FAKE_DIR}/out")" '1'
@@ -123,7 +123,7 @@ new_case down
 install -d -o 0 -g 0 -m 0755 "${ENV_ROOT}" && install -d -o 0 -g 119 -m 0750 "${ENV_ROOT}/orbit-e2e" \
     && printf 'ORBIT_E2E=1\n' >"${ENV_ROOT}/orbit-e2e/e2e.env"
 env PATH="${BIN}:${PATH}" GATE_LEDGER="${FAKE_DIR}/ledger" \
-    ORBIT_GATE_LOG=/dev/null bash "${FAKE_TREE}/scripts/e2e.sh" --down >"${FAKE_DIR}/out" 2>&1
+    ORBIT_GATE_LOG=/dev/null bash -- "${FAKE_TREE}/scripts/e2e.sh" --down >"${FAKE_DIR}/out" 2>&1
 rc=$?
 equals '4 --down exits 0' "${rc}" '0'
 equals '4 and ran compose down' "$(grep -c ' down -v --remove-orphans' "${FAKE_DIR}/docker.argv")" '1'
@@ -180,7 +180,7 @@ new_root_case() { # NAME — a committed, root-owned git tree; its e2e.sh pointe
 
 run_args() { # ARGS... — the root tree's e2e.sh with those arguments; rc kept in $rc
     env PATH="${BIN}:${PATH}" GATE_LEDGER="${FAKE_DIR}/ledger" ORBIT_GATE_LOG=/dev/null \
-        bash "${FAKE_TREE}/scripts/e2e.sh" "$@" >"${FAKE_DIR}/out" 2>&1
+        bash -- "${FAKE_TREE}/scripts/e2e.sh" "$@" >"${FAKE_DIR}/out" 2>&1
     rc=$?
 }
 lane_name() { printf 'root-tree-e2e-%s' "$(git -C "${FAKE_TREE}" rev-parse --short=8 HEAD)"; }
@@ -200,7 +200,7 @@ equals '7 with compose up not run again' "$(grep -c ' up -d --wait' "${FAKE_DIR}
 new_root_case lane-pass
 FAKE_UP_EXIT=0 run_args -- 'a b' --c
 equals '7 a clean pass returns 0' "${rc}" '0'
-equals '7 with the arguments passed through unchanged' "$(grep -c "^bash|${LANES}/$(lane_name)/repo/scripts/e2e.sh|--|a b|--c|\$" "${FAKE_DIR}/up-cmdline")" '1'
+equals '7 with the arguments passed through unchanged' "$(grep -c "^bash|--|${LANES}/$(lane_name)/repo/scripts/e2e.sh|--|a b|--c|\$" "${FAKE_DIR}/up-cmdline")" '1'
 equals '7 and removes the lane' "$(ls -A "${LANES}")" ''
 
 new_root_case lane-keep

@@ -103,7 +103,7 @@ run_script() {
     shift
     : >"${GIT_ARGV_LOG}"
     : >"${FAKE_DOCKER_LOG}"
-    OUT="$(bash "${script}" "$@" 2>&1)"
+    OUT="$(bash -- "${script}" "$@" 2>&1)"
     RC=$?
 }
 run() { run_script "${WORKTREE_SH}" "$@"; }
@@ -227,7 +227,7 @@ if [ -x /usr/bin/setpriv ]; then
     cp "${WORKTREE_SH}" "${WORK}/as-nobody.sh"
     chmod 755 "${WORK}/as-nobody.sh"
     OUT="$(/usr/bin/setpriv --reuid=65534 --regid=65534 --clear-groups \
-        bash "${WORK}/as-nobody.sh" list 2>&1)"
+        bash -- "${WORK}/as-nobody.sh" list 2>&1)"
     RC=$?
     nonzero 'a run by a non-root user' "${RC}"
     contains 'the refusal says root' "${OUT}" 'root'

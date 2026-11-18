@@ -494,7 +494,7 @@ run_deploy() {
         DEPLOY_SSH_KEY="${CASE}/deploy-key" \
         DEPLOY_CLOCK="${BIN}/clock" \
         "${FM_ENV[@]}" \
-        bash "${DEPLOY_COPY:-${CASE}/scripts/deploy.sh}" "$@" 2>&1)"
+        bash -- "${DEPLOY_COPY:-${CASE}/scripts/deploy.sh}" "$@" 2>&1)"
     RUN_RC=$?
     unset FLEET_REPO DEPLOY_COPY
     CLASSIFY_RC=''
@@ -1046,7 +1046,7 @@ grep -qxF "E2E_ENV_ROOT=${CASE}/env-root" "${E2E_TREE}/scripts/e2e.sh" \
 chown 65534 "${E2E_TREE}"
 : >"${E2E_LEDGER}"
 E2E_OUT="$(env PATH="${BIN}:${PATH}" GATE_LEDGER="${E2E_LEDGER}" \
-    ORBIT_GATE_LOG=/dev/null bash "${E2E_TREE}/scripts/e2e.sh" 2>&1)" || true
+    ORBIT_GATE_LOG=/dev/null bash -- "${E2E_TREE}/scripts/e2e.sh" 2>&1)" || true
 contains 'a tree owned by neither root nor 115 is refused for its owner before docker is asked anything' "${E2E_OUT}" \
     'this tree must be owned by uid 115'
 absent 'and the owner refusal comes before the docker pre-flight' "${E2E_OUT}" 'cannot talk to docker'
@@ -1054,7 +1054,7 @@ absent 'and the owner refusal comes before the docker pre-flight' "${E2E_OUT}" '
 chown 115 "${E2E_TREE}"
 : >"${E2E_LEDGER}"
 E2E_OUT="$(env PATH="${BIN}:${PATH}" GATE_LEDGER="${E2E_LEDGER}" \
-    ORBIT_GATE_LOG=/dev/null bash "${E2E_TREE}/scripts/e2e.sh" 2>&1)" || true
+    ORBIT_GATE_LOG=/dev/null bash -- "${E2E_TREE}/scripts/e2e.sh" 2>&1)" || true
 contains 'a browser gate that cannot reach docker stops in its pre-flight' "${E2E_OUT}" \
     'cannot talk to docker'
 absent 'and its ledger arm named HEAD' "${E2E_OUT}" 'arming could not name HEAD'
