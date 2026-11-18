@@ -1,0 +1,24 @@
+{
+    "auditReportVersion": 2,
+    "vulnerabilities": {
+        "invented-pkg": {
+            "name": "invented-pkg",
+            "severity": "critical",
+            "via": [
+                {
+                    "source": 1100003,
+                    "name": "invented-pkg",
+                    "url": "https://github.com/advisories/GHSA-dddd-eeee-ffff",
+                    "severity": "critical",
+                    "range": "<2.0.0"
+                }
+            ],
+            "nodes": ["node_modules/invented-pkg"],
+            "fixAvailable": true
+        }
+    },
+    "metadata": {
+        "vulnerabilities": { "info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 1, "total": 1 },
+        "dependencies": { "prod": 1, "dev": 399, "optional": 0, "peer": 0, "peerOptional": 0, "total": 400 }
+    }
+}
