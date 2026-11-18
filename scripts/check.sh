@@ -378,7 +378,7 @@ php_step vendor/bin/phpstan analyse --no-progress --memory-limit=512M
 step 'npm advisories'
 # The dev half is audited too: vite builds the shipped bundle out of node_modules,
 # so a dev dependency's advisory can be on the site. docs/DECISIONS.md, npm-audit-allowlist
-node_step 'sh scripts/tests/npm-audit-allowlist.sh; report=$(mktemp); trap "rm -f -- \"\$report\"" EXIT; rc=0; npm audit --audit-level=high --json >"$report" || rc=$?; node scripts/lib/npm-audit-allowlist.mjs scripts/audit-allowlist.txt "$rc" <"$report"'
+node_step 'sh scripts/tests/npm-audit-allowlist.sh || exit 1; report=$(mktemp); trap "rm -f -- \"\$report\"" EXIT; rc=0; npm audit --audit-level=high --json >"$report" || rc=$?; node scripts/lib/npm-audit-allowlist.mjs scripts/audit-allowlist.txt "$rc" <"$report"'
 
 step 'ESLint (front end)'
 node_step 'npm run lint'
