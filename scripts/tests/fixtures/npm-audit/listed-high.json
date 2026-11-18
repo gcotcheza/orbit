@@ -1,0 +1,39 @@
+{
+    "auditReportVersion": 2,
+    "vulnerabilities": {
+        "picomatch": {
+            "name": "picomatch",
+            "severity": "high",
+            "isDirect": false,
+            "via": [
+                {
+                    "source": 1100001,
+                    "name": "picomatch",
+                    "dependency": "picomatch",
+                    "title": "Invented title for a fixture",
+                    "url": "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
+                    "severity": "high",
+                    "range": "<=4.0.7"
+                }
+            ],
+            "effects": ["vite"],
+            "range": "<=4.0.7",
+            "nodes": ["node_modules/picomatch"],
+            "fixAvailable": false
+        },
+        "vite": {
+            "name": "vite",
+            "severity": "high",
+            "isDirect": true,
+            "via": ["picomatch"],
+            "effects": [],
+            "range": "*",
+            "nodes": ["node_modules/vite"],
+            "fixAvailable": false
+        }
+    },
+    "metadata": {
+        "vulnerabilities": { "info": 0, "low": 0, "moderate": 0, "high": 2, "critical": 0, "total": 2 },
+        "dependencies": { "prod": 1, "dev": 399, "optional": 0, "peer": 0, "peerOptional": 0, "total": 400 }
+    }
+}

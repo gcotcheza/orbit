@@ -1,0 +1,4 @@
+{
+    "message": "request to https://registry.npmjs.org/-/npm/v1/security/advisories/bulk failed, reason: getaddrinfo EAI_AGAIN registry.npmjs.org",
+    "error": { "code": "EAI_AGAIN", "summary": "invented network failure for a fixture" }
+}

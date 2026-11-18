@@ -1,0 +1,9 @@
+# npm advisories the gate's npm step accepts, one per line:
+#
+#   npm <advisory id> <YYYY-MM-DD> <reason>
+#
+# One advisory id per line: no severity, package name or pattern. Any other high,
+# critical or unrated advisory fails the gate; moderate and low are printed and pass.
+# The date is the day the entry was added. Every run reports an entry whose
+# advisory no longer appears in the audit.
+npm GHSA-fc5q-39xc-vjpf 2026-11-17 production dependency tree via vue-router (unplugin, tinyglobby; vite and its plugins bring it as dev), build-time only; bundle proven free of picomatch by source-map check 2026-11-18; no fixed version exists, allowlisted per Ghie's 11-17 ruling; remove when picomatch > 4.0.7 ships
