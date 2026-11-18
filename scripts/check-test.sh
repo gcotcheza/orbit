@@ -420,9 +420,10 @@ absent '9 and stops it before the secrets step' "${OUT}" 'Gitleaks (secrets)'
 
 # --- 10. the npm step judges the audit through the allowlist --------------------------------
 NPM_STEP="$(grep -F 'npm audit' "${WORK}/vendor-overlay/docker.log")"
-contains '10 the npm step runs the allowlist suite first' "${NPM_STEP}" 'node --test scripts/lib/npm-audit-allowlist.test.mjs && npm audit'
-contains '10 and judges the audit at high through the allowlist, never a bare exit code' "${NPM_STEP}" \
-    'npm audit --audit-level=high --json | node scripts/lib/npm-audit-allowlist.mjs scripts/audit-allowlist.txt'
+contains '10 the npm step runs the allowlist suite first, as its own command' "${NPM_STEP}" \
+    'sh scripts/tests/npm-audit-allowlist.sh; report=$(mktemp);'
+contains '10 and judges the audit at high through the allowlist with npm'"'"'s exit beside it' "${NPM_STEP}" \
+    'npm audit --audit-level=high --json >"$report" || rc=$?; node scripts/lib/npm-audit-allowlist.mjs scripts/audit-allowlist.txt "$rc" <"$report"'
 
 if [ "${fails}" -ne 0 ]; then
     printf '\ncheck-test: %s check(s) failed\n' "${fails}" >&2
