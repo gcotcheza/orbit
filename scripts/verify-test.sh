@@ -654,6 +654,96 @@ equals 'every curl the battery makes carries --max-time' "${untimed}" '0'
 untimed=$(grep -cv -- '--connect-timeout' "${CASE}/curl.argv")
 equals 'and --connect-timeout' "${untimed}" '0'
 
+# --- 12. the runbook's two verify blocks, run against a stand-in folder -------
+DEPLOY_MD="${DEPLOY_MD:-${SCRIPT_DIR}/../.claude/commands/deploy.md}"
+STAND_IN="${WORK}/deploy-src"
+RUN_UID=$(id -u)
+
+fence_with() {
+    awk -v want="$2" '
+        /^```bash$/ { inb = 1; buf = ""; next }
+        /^```$/ && inb { inb = 0; if (index(buf, want)) { n++; out = buf }; next }
+        inb { buf = buf $0 "\n" }
+        END { if (n != 1) exit 1; printf "%s", out }' "$1"
+}
+
+swap() {
+    local hits
+    hits=$(grep -cE -- "$3" "$2")
+    if [ "${hits}" -lt 1 ]; then
+        fail "substitution missed: $1 matched nothing in $(basename -- "$2")"
+        return 1
+    fi
+    sed -E -i "s#$3#$4#g" "$2"
+}
+
+stand_in_fences() {
+    local q="'"
+    fence_with "${DEPLOY_MD}" 'umask 077' > "${WORK}/fence-a.sh" \
+        || { fail 'fence A (umask 077) is not exactly one bash block in deploy.md'; return 1; }
+    fence_with "${DEPLOY_MD}" "orbit-verify.sh${q} EXIT" > "${WORK}/fence-b.sh" \
+        || { fail 'fence B (the trap on orbit-verify.sh) is not exactly one bash block in deploy.md'; return 1; }
+    swap 'the mirror read' "${WORK}/fence-a.sh" 'git --git-dir=[^ ]+ show main:scripts/verify\.sh' \
+        "printf ${q}echo VERIFY-RAN\\\\n${q}" || return 1
+    swap 'the root uid in the folder pattern' "${WORK}/fence-a.sh" '(\) in .?)0([\ ])' "\\1${RUN_UID}\\2" || return 1
+    swap 'the root uid in the file check' "${WORK}/fence-b.sh" "(= .)0( 600.)" "\\1${RUN_UID}\\2" || return 1
+    swap 'the folder in fence A' "${WORK}/fence-a.sh" '/var/lib/fleet/deploy-src' "${STAND_IN}" || return 1
+    swap 'the folder in fence B' "${WORK}/fence-b.sh" '/var/lib/fleet/deploy-src' "${STAND_IN}" || return 1
+    if grep -qE '/var/lib/fleet|git ' "${WORK}/fence-a.sh" "${WORK}/fence-b.sh"; then
+        fail 'a stand-in still names the real folder or git'
+        return 1
+    fi
+}
+
+run_fence() {
+    OUT=$(bash -- "${WORK}/fence-$1.sh" 2>&1)
+    STATUS_RC=$?
+}
+
+fresh_stand_in() {
+    rm -rf -- "${STAND_IN}"
+    mkdir -m 755 -- "${STAND_IN}"
+}
+
+if stand_in_fences; then
+    fresh_stand_in
+    run_fence a
+    equals 'fence A on a clean root-only folder' "${STATUS_RC}" '0'
+    equals 'and it writes the copy 600' "$(stat -c '%a' -- "${STAND_IN}/orbit-verify.sh" 2>&1)" '600'
+    run_fence b
+    equals 'fence B on that copy' "${STATUS_RC}" '0'
+    contains 'and it runs the copy' "${OUT}" 'VERIFY-RAN'
+    equals 'and removes it' "$(ls -A -- "${STAND_IN}")" ''
+
+    fresh_stand_in
+    : > "${STAND_IN}/orbit-verify.sh"
+    run_fence a
+    equals 'fence A with a copy already there refuses' "${STATUS_RC}" '1'
+    contains 'with its sentence' "${OUT}" 'REFUSED: orbit-verify.sh is already there'
+
+    fresh_stand_in
+    ln -s -- "${STAND_IN}/nowhere" "${STAND_IN}/orbit-verify.sh"
+    run_fence a
+    equals 'fence A with a dangling symlink there refuses' "${STATUS_RC}" '1'
+    contains 'with its sentence' "${OUT}" 'REFUSED: orbit-verify.sh is already there'
+    equals 'and writes nothing through it' "$(ls -A -- "${STAND_IN}")" 'orbit-verify.sh'
+
+    fresh_stand_in
+    chmod 775 -- "${STAND_IN}"
+    run_fence a
+    equals 'fence A on a group-writable folder refuses' "${STATUS_RC}" '1'
+    contains 'with its sentence' "${OUT}" 'is not root-only'
+    equals 'and writes nothing' "$(ls -A -- "${STAND_IN}")" ''
+
+    fresh_stand_in
+    run_fence a
+    chmod 644 -- "${STAND_IN}/orbit-verify.sh"
+    run_fence b
+    equals 'fence B on a 644 copy refuses' "${STATUS_RC}" '1'
+    contains 'with its sentence' "${OUT}" 'REFUSED: orbit-verify.sh is not root 600'
+    absent 'and runs nothing' "${OUT}" 'VERIFY-RAN'
+fi
+
 if [ "${fails}" -eq 0 ]; then
     printf '\nverify-test: all checks passed\n'
     exit 0
