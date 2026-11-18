@@ -215,6 +215,23 @@ for name, service in (yaml.safe_load(open(sys.argv[1])) or {}).get("services", {
 ' "${TREE}/docker-compose.yml" "${ALLOWED}" 2>&1)" || OFF_LIST="the compose file could not be read: ${OFF_LIST}"
 equals 'every service key in docker-compose.yml is on root'"'"'s compose allowlist' "${OFF_LIST}" ''
 
+# deploy-mutants.sh feeds xargs through its own --slot; the stand-in lib is a worker that exits 7.
+SLOT="${WORK}/slot"
+mkdir -p "${SLOT}/scripts/lib/gate" "${SLOT}/runs"
+cp "${SCRIPTS}/deploy-mutants.sh" "${SLOT}/scripts/"
+printf 'printf "fake worker %%s\\n" "$*"; exit 7\n' >"${SLOT}/scripts/lib/gate/deploy-lib.sh"
+bash -- "${SLOT}/scripts/deploy-mutants.sh" --slot 3 "${SLOT}/runs"
+equals 'deploy-mutants.sh --slot exits 0 once its worker has run' "$?" 0
+equals 'and leaves the worker'"'"'s exit status in <n>.rc' "$(cat "${SLOT}/runs/3.rc" 2>&1)" 7
+equals 'and its output in <n>.out' "$(cat "${SLOT}/runs/3.out" 2>&1)" 'fake worker --worker 3'
+printf 'earlier\n' >"${SLOT}/runs/3.out"
+bash -- "${SLOT}/scripts/deploy-mutants.sh" --slot 3 "${SLOT}/runs"
+equals 'a slot whose <n>.rc already exists is refused' "$?" 1
+equals 'and that refused slot runs no worker' "$(cat "${SLOT}/runs/3.out")" earlier
+equals 'deploy-mutants.sh runs each xargs slot through itself' \
+    "$(grep -cE '\| xargs -P "\$\{JOBS\}" -I\{\} bash -- "\$\{SELF\}" --slot \{\} "\$\{WORK\}"$' "${SCRIPTS}/deploy-mutants.sh")" 1
+equals 'and carries no inline sh program' "$(grep -cE '(^|[^[:alnum:]_])sh -c' "${SCRIPTS}/deploy-mutants.sh")" 0
+
 if [ "${fails}" -ne 0 ]; then
     printf '\ndeploy-lib-test: %s check(s) failed\n' "${fails}" >&2
     exit 1

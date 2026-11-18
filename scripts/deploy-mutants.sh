@@ -10,13 +10,25 @@
 # It never reads /var/www/orbit, never runs docker and never runs gh. It runs as
 # root, because scripts/deploy-test.sh does: every copy lives in a root 700 directory.
 #
-# `--worker <n>` runs mutation n alone and exits 0 only if it was caught; that
-# is how the parent feeds its workers. docs/DECISIONS.md, the-mutant-harness-is-a-gate-step
+# `--worker <n>` runs mutation n alone and exits 0 only if it was caught;
+# `--slot <n> <dir>` runs that worker into <dir>/<n>.out and leaves its exit
+# status in <dir>/<n>.rc, which is how the parent feeds its workers through xargs.
+# docs/DECISIONS.md, the-mutant-harness-is-a-gate-step
 # shellcheck disable=SC2016  # every mutation below is sed source, not shell
 set -uo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SELF="${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}"
+if [ "${1-}" = '--slot' ]; then
+    if [ $# -ne 3 ] || [ -z "$2" ] || [ -n "${2//[0-9]/}" ] || [ ! -d "$3" ]; then
+        printf 'usage: %s --slot <n> <work dir>\n' "${0##*/}" >&2
+        exit 2
+    fi
+    [ -e "$3/$2.rc" ] && exit 1
+    bash -- "${SELF}" --worker "$2" >"$3/$2.out" 2>&1
+    printf %s "$?" >"$3/$2.rc"
+    exit 0
+fi
 # shellcheck source=scripts/lib/gate/deploy-lib.sh
 . "${SCRIPT_DIR}/lib/gate/deploy-lib.sh"
 deploy_lib_ready || exit 1
@@ -638,11 +650,7 @@ fi
 # One worker per mutation, ${JOBS} at a time. The verdict is the worker's exit
 # status: a missing one is a worker that died, and counts as a miss.
 for ((i = 1; i <= n; i++)); do printf '%s\n' "${i}"; done \
-    | xargs -P "${JOBS}" -I{} sh -c '
-        [ -e "$3/$1.rc" ] && exit 1
-        bash -- "$2" --worker "$1" >"$3/$1.out" 2>&1
-        printf %s "$?" >"$3/$1.rc"
-    ' _ {} "${SELF}" "${WORK}"
+    | xargs -P "${JOBS}" -I{} bash -- "${SELF}" --slot {} "${WORK}"
 xargs_rc=$?
 if [ "${xargs_rc}" -ne 0 ]; then
     printf 'deploy-mutants: a worker could not be run (xargs exited %s)\n' "${xargs_rc}" >&2
