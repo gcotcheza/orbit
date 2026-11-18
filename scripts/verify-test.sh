@@ -693,6 +693,8 @@ stand_in_fences() {
         fail 'a stand-in still names the real folder or git'
         return 1
     fi
+    cp -- "${WORK}/fence-a.sh" "${WORK}/fence-a-fail.sh"
+    swap 'the mirror read in the failing stand-in' "${WORK}/fence-a-fail.sh" 'printf .echo VERIFY-RAN[^ ]*' 'false' || return 1
 }
 
 run_fence() {
@@ -732,8 +734,14 @@ if stand_in_fences; then
     chmod 775 -- "${STAND_IN}"
     run_fence a
     equals 'fence A on a group-writable folder refuses' "${STATUS_RC}" '1'
-    contains 'with its sentence' "${OUT}" 'is not root-only'
+    contains 'with its sentence' "${OUT}" 'is not writable by root alone'
     equals 'and writes nothing' "$(ls -A -- "${STAND_IN}")" ''
+
+    fresh_stand_in
+    run_fence a-fail
+    equals 'fence A whose mirror read fails refuses' "${STATUS_RC}" '1'
+    contains 'with its sentence' "${OUT}" 'REFUSED: the mirror read failed'
+    equals 'and leaves no copy' "$(ls -A -- "${STAND_IN}")" ''
 
     fresh_stand_in
     run_fence a
@@ -742,6 +750,7 @@ if stand_in_fences; then
     equals 'fence B on a 644 copy refuses' "${STATUS_RC}" '1'
     contains 'with its sentence' "${OUT}" 'REFUSED: orbit-verify.sh is not root 600'
     absent 'and runs nothing' "${OUT}" 'VERIFY-RAN'
+    equals 'and removes it' "$(ls -A -- "${STAND_IN}")" ''
 fi
 
 if [ "${fails}" -eq 0 ]; then

@@ -7,7 +7,7 @@
 ## Before you run it
 
 1. Ghie merged the pull request.
-2. The ledger holds a green `ci` and `e2e` for the commit `RESOLVED` names. They are **not** re-run here.
+2. The ledger holds a green `ci` and `e2e` for the commit `RESOLVED` names.
 3. Run as root, from any directory.
 4. One deploy a day, and this is that one.
 
@@ -19,8 +19,7 @@ fleet-deploy orbit <PR#>
 
 **`scripts/deploy.sh` run any other way refuses**; never work around it. Orbit does not use `--gated-by-hand`. A docs-only merge is the same command.
 
-`scripts/deploy.sh --from-main [--decide-only]` is deploy-on-merge's judge, run by
-`fleet-deploy-on-merge` as root once card 614 makes Orbit live there; a person never types it.
+`scripts/deploy.sh --from-main [--decide-only]` is deploy-on-merge's judge; a person never types it.
 
 ## If it says NOT GATED
 
@@ -66,14 +65,14 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 
 1. The only `orbit` live-tripwire line is `HEAD is <sha>, and no deploy log … names it`. Any `changed outside a deploy`, `hooks … changed` or `HEAD moved from` line is something else: stop and investigate.
 2. `HEAD` = `origin/main` in `/var/www/orbit` (`git-as orbit -C /var/www/orbit rev-parse HEAD origin/main`).
-3. Re-run the read-only battery from a root-only copy out of root's mirror, never from the tree `orbit` can write: the first block writes the copy; only if it printed nothing, the second runs and removes it. Green → accept once with
+3. Re-run the read-only battery from root's mirror: the first block, then, only if it printed nothing, the second. Green → accept once with
    `vps-health-check.sh --accept-tripwire orbit`. Red → roll back as the script prints.
 
 ```bash
 (
   set -u
   umask 077
-  case $(stat -c '%u %A' /var/lib/fleet/deploy-src) in 0\ d????-??-?) ;; *) echo 'REFUSED: /var/lib/fleet/deploy-src is not root-only'; exit 1 ;; esac
+  case $(stat -c '%u %A' /var/lib/fleet/deploy-src) in 0\ d????-??-?) ;; *) echo 'REFUSED: /var/lib/fleet/deploy-src is not writable by root alone'; exit 1 ;; esac
   [ ! -e /var/lib/fleet/deploy-src/orbit-verify.sh ] && [ ! -L /var/lib/fleet/deploy-src/orbit-verify.sh ] || { echo 'REFUSED: orbit-verify.sh is already there; read it, remove it, start again'; exit 1; }
   set -C
   git --git-dir=/var/lib/fleet/deploy-src/orbit.git show main:scripts/verify.sh >/var/lib/fleet/deploy-src/orbit-verify.sh || { rm -f -- /var/lib/fleet/deploy-src/orbit-verify.sh; echo 'REFUSED: the mirror read failed'; exit 1; }
@@ -89,11 +88,11 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 )
 ```
 
-**⚠ The containers boot the code once**: a deploy that stops before the restarts looks successful and serves the old app.
+**⚠ The containers boot the code once**: a deploy stopped before the restarts serves the old app.
 
 ## What stays human
 
-Which PR; a phone look when the release touches anything you tap; the vhost notice; the paperwork; a surprise in the log — an unexpected migration is a conversation, not a step.
+Which PR; a phone look when the release touches anything you tap; the vhost notice; the paperwork; a surprise in the log.
 
 ## Authenticated writes — not part of the battery
 
@@ -170,15 +169,14 @@ curl -s --connect-timeout 5 --max-time 15 -H "$H" -H "Cookie: $AUTHED" \
 )
 ```
 
-**Good:** `204`, `200`, `200` from each PATCH, `[True]` from the read. Anything but `[True]` means a production route is
-still paused — put it back. A `419` from a PATCH is the token, not the app.
-**⚠ A bare `PUT /api/profile/password` is 419, not 401.**
+**Good:** `204`, `200`, `200` from each PATCH, `[True]` from the read. Anything but `[True]`: a route is
+still paused — put it back.
 
 ## Rollback
 
 **⚠ NOTHING ON THIS BOX CAN PUSH**, so the rollback is two things: the checkout on disk, and a revert of the merge commit for `main`.
 
-**On disk — put the checkout back on the sha `DONE` printed as `was`:**
+**On disk:**
 
 ```bash
 WAS=   # the sha DONE printed as `was`; the reset below refuses while this is empty
@@ -187,7 +185,7 @@ git-as orbit -C /var/www/orbit reset --hard "${WAS:?set WAS to the sha DONE prin
   && find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
 ```
 
-The count must print `0`. Then write the rollback into root's record (`summary.sh` comes from root's engineering-standards clone at `origin/main`, the lib fleet-deploy lays beside `deploy.sh`):
+The count must print `0`. Then write the rollback into root's record:
 
 ```bash
 (
@@ -201,8 +199,7 @@ The count must print `0`. Then write the rollback into root's record (`summary.s
 ```
 
 It prints `ROLLBACK <sha> recorded` or a `REFUSED:` line naming why. Then **rebuild what the deploy built** — asset build,
-`build:retain`, `view:clear`, the drain, the four restarts, then the two `verify.sh` blocks above. Reverting the merge and deploying it is quicker given time.
-⚠ Root's compose here, in the lift blocks and `verify.sh` reads the checkout's compose and `.env` (card 536).
+`build:retain`, `view:clear`, the drain, the four restarts, then the two `verify.sh` blocks above.
 
 **For the record — the revert PR, from a root-owned private clone, never this tree nor a worktree of it:**
 

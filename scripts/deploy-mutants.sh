@@ -120,7 +120,7 @@ run_mutant() {
     # setsid: stopping the harness must take the deploy it is running with it,
     # or an orphan writes into a directory this script is already removing.
     TMPDIR="${dir}/tmp" DEPLOY_TEST_ROOT="${dir}" DEPLOY_SH="${dir}/scripts/deploy.sh" VERIFY_SH="${dir}/scripts/verify.sh" \
-        GATE_LEDGER_LIB="${dir}/scripts/lib/deploy/ledger.sh" \
+        GATE_LEDGER_LIB="${dir}/scripts/lib/deploy/ledger.sh" DEPLOY_MD="${SCRIPT_DIR%/*}/.claude/commands/deploy.md" \
         run_capped "${HARNESS_TIMEOUT}" bash -- "${harness}" "${harness_args[@]}" >"${log}" 2>&1 &
     pid=$!
     (
