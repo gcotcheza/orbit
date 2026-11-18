@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Guards scripts/lib/gate/deploy-lib.sh: the gate reads the deploy lib only from root's clone at
+# Guards scripts/lib/gate/deploy-lib.sh and deploy-mutants.sh's --slot mode. The gate reads the lib only from root's clone at
 # its origin/main, no caller's DEPLOY_LIB is read, the test seam is refused as root, and a missing,
 # emptied, dirty or unreadable lib is refused out loud. docs/DECISIONS.md, deploy-lib-is-not-vendored
 #

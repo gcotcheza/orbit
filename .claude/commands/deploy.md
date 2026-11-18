@@ -66,14 +66,14 @@ One line per phase; the whole run in `/root/personal-vps-deploys/orbit/<utc>-pr<
 
 1. The only `orbit` live-tripwire line is `HEAD is <sha>, and no deploy log … names it`. Any `changed outside a deploy`, `hooks … changed` or `HEAD moved from` line is something else: stop and investigate.
 2. `HEAD` = `origin/main` in `/var/www/orbit` (`git-as orbit -C /var/www/orbit rev-parse HEAD origin/main`).
-3. Re-run the read-only battery from a root-only copy out of root's mirror, never from the tree `orbit` can write: the first block writes the copy, the second runs and removes it. Green → accept once with
+3. Re-run the read-only battery from a root-only copy out of root's mirror, never from the tree `orbit` can write: the first block writes the copy; only if it printed nothing, the second runs and removes it. Green → accept once with
    `vps-health-check.sh --accept-tripwire orbit`. Red → roll back as the script prints.
 
 ```bash
 (
   set -u
   umask 077
-  case $(stat -c '%u %A' /var/lib/fleet/deploy-src) in '0 d????-??-?') ;; *) echo 'REFUSED: /var/lib/fleet/deploy-src is not root-only'; exit 1 ;; esac
+  case $(stat -c '%u %A' /var/lib/fleet/deploy-src) in 0\ d????-??-?) ;; *) echo 'REFUSED: /var/lib/fleet/deploy-src is not root-only'; exit 1 ;; esac
   [ ! -e /var/lib/fleet/deploy-src/orbit-verify.sh ] && [ ! -L /var/lib/fleet/deploy-src/orbit-verify.sh ] || { echo 'REFUSED: orbit-verify.sh is already there; read it, remove it, start again'; exit 1; }
   set -C
   git --git-dir=/var/lib/fleet/deploy-src/orbit.git show main:scripts/verify.sh >/var/lib/fleet/deploy-src/orbit-verify.sh || { rm -f -- /var/lib/fleet/deploy-src/orbit-verify.sh; echo 'REFUSED: the mirror read failed'; exit 1; }
@@ -201,7 +201,7 @@ The count must print `0`. Then write the rollback into root's record (`summary.s
 ```
 
 It prints `ROLLBACK <sha> recorded` or a `REFUSED:` line naming why. Then **rebuild what the deploy built** — asset build,
-`build:retain`, `view:clear`, the drain, the four restarts, then the `verify.sh` block above. Reverting the merge and deploying it is quicker given time.
+`build:retain`, `view:clear`, the drain, the four restarts, then the two `verify.sh` blocks above. Reverting the merge and deploying it is quicker given time.
 ⚠ Root's compose here, in the lift blocks and `verify.sh` reads the checkout's compose and `.env` (card 536).
 
 **For the record — the revert PR, from a root-owned private clone, never this tree nor a worktree of it:**

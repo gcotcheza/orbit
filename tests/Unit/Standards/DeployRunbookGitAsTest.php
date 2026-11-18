@@ -79,7 +79,7 @@ final class DeployRunbookGitAsTest extends TestCase
     #[Test]
     public function only_a_read_out_of_roots_mirror_is_spared_the_root_git_check(): void
     {
-        $this->assertTrue($this->readsRootsMirror('  git --git-dir='.self::MIRROR.' show main:scripts/verify.sh >"${VDIR:?}/verify.sh" || exit'));
+        $this->assertTrue($this->readsRootsMirror('  git --git-dir='.self::MIRROR.' show main:scripts/verify.sh >/var/lib/fleet/deploy-src/orbit-verify.sh || exit'));
         $this->assertTrue($this->readsRootsMirror('  git -C / --git-dir='.self::LIB_CLONE.' show refs/remotes/origin/main:scripts/lib/deploy/summary.sh >"${LIBDIR:?}/summary.sh" || exit'));
 
         foreach ([

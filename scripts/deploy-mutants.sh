@@ -10,9 +10,8 @@
 # It never reads /var/www/orbit, never runs docker and never runs gh. It runs as
 # root, because scripts/deploy-test.sh does: every copy lives in a root 700 directory.
 #
-# `--worker <n>` runs mutation n alone and exits 0 only if it was caught;
-# `--slot <n> <dir>` runs that worker into <dir>/<n>.out and leaves its exit
-# status in <dir>/<n>.rc, which is how the parent feeds its workers through xargs.
+# `--worker <n>` runs mutation n alone, exiting 0 only if it was caught; `--slot <n> <dir>` runs it
+# into <dir>/<n>.out and <dir>/<n>.rc, which is how xargs feeds the parent's workers.
 # docs/DECISIONS.md, the-mutant-harness-is-a-gate-step
 # shellcheck disable=SC2016  # every mutation below is sed source, not shell
 set -uo pipefail
