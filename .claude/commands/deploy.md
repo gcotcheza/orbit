@@ -9,7 +9,6 @@
 1. Ghie merged the pull request.
 2. The ledger holds a green `ci` and `e2e` for the commit `RESOLVED` names.
 3. Run as root, from any directory.
-4. One deploy a day, and this is that one.
 
 ## The one command
 
