@@ -105,7 +105,7 @@ final class FakeFareModelTest extends TestCase
      * alerting exists to exercise.
      */
     #[Test]
-    public function every_route_has_sale_windows_somewhere_in_the_year(): void
+    public function the_dealing_routes_have_sale_windows_somewhere_in_the_year(): void
     {
         foreach (['AMS-LIS', 'AMS-OPO', 'EIN-BCN'] as $route) {
             $day = new DateTimeImmutable('2026-01-01');

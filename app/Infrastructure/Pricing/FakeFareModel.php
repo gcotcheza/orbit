@@ -86,8 +86,8 @@ final readonly class FakeFareModel
     }
 
     /**
-     * Seasonal sine, ±14%, peaking late July — amplitude kept small on purpose: a bigger swing
-     * would make every route look 40% off and leave the score no room.
+     * Seasonal sine, ±14% (none on STEADY_ROUTE), peaking late July — kept small on purpose: a
+     * bigger swing would make every route look 40% off and leave the score no room.
      */
     private function season(string $routeCode, int $dayOfYear): float
     {
@@ -115,8 +115,8 @@ final readonly class FakeFareModel
     }
 
     /**
-     * Two 5-day sale windows a year at 38% off — puts an occasional route into the "insane"
-     * tier so the score is not tested only against a polite band.
+     * Two 5-day sale windows a year at 38% off, except on STEADY_ROUTE — puts an occasional route
+     * into the "insane" tier so the score is not tested only against a polite band.
      */
     private function sale(string $routeCode, int $dayOfYear): float
     {
