@@ -124,8 +124,8 @@ final class FakeProvidersTest extends TestCase
         /** @var PriceStatsProvider $stats */
         $stats = $this->app->make(PriceStatsProvider::class);
 
-        // Fixed in summer: on about one day in eight, mostly autumn into winter, every route's
-        // 90-day low clears 15% under its usual price, so a wall clock turns this red (card 1155).
+        // Fixed so a wall clock never decides the result; FakeFareModelTest holds this bar
+        // for every week of 2026-2030 (cards 1155, 1156).
         Date::setTestNow('2026-08-14 06:10:00');
         $from = Date::now()->toDateTimeImmutable();
         $to = $from->modify('+90 days');
