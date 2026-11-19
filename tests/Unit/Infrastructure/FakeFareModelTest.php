@@ -6,6 +6,7 @@ namespace Tests\Unit\Infrastructure;
 
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
+use App\Domain\Pricing\PriceStats;
 use PHPUnit\Framework\Attributes\Test;
 use App\Infrastructure\Pricing\FakeFareModel;
 
@@ -15,6 +16,8 @@ use App\Infrastructure\Pricing\FakeFareModel;
  */
 final class FakeFareModelTest extends TestCase
 {
+    private const ROUTES = ['AMS-LIS', 'AMS-OPO', 'AMS-NAP', 'EIN-BCN', 'AMS-FAO', 'DUS-AGP'];
+
     private FakeFareModel $model;
 
     private DateTimeImmutable $observedAt;
@@ -102,7 +105,7 @@ final class FakeFareModelTest extends TestCase
      * alerting exists to exercise.
      */
     #[Test]
-    public function every_route_has_sale_windows_somewhere_in_the_year(): void
+    public function the_dealing_routes_have_sale_windows_somewhere_in_the_year(): void
     {
         foreach (['AMS-LIS', 'AMS-OPO', 'EIN-BCN'] as $route) {
             $day = new DateTimeImmutable('2026-01-01');
@@ -138,6 +141,37 @@ final class FakeFareModelTest extends TestCase
         $this->assertNotSame($today, $lastMonth);
     }
 
+    /**
+     * AMS-NAP is the steady route because no other test leans on its sales or drift;
+     * gap = how far the cheapest fare in the next 90 days sits below the usual price.
+     */
+    #[Test]
+    public function one_route_always_stays_dear_while_another_always_has_a_deal(): void
+    {
+        $this->assertSame('AMS-NAP', FakeFareModel::STEADY_ROUTE);
+
+        $highestMinGap = -1.0;
+        $highestSteadyGap = -1.0;
+        $lowestMaxGap = 1.0;
+        $end = new DateTimeImmutable('2030-12-31 06:10:00');
+
+        for ($day = new DateTimeImmutable('2026-01-01 06:10:00'); $day <= $end; $day = $day->modify('+7 days')) {
+            $gaps = [];
+
+            foreach (self::ROUTES as $route) {
+                $gaps[$route] = $this->gap($route, $day);
+            }
+
+            $highestMinGap = max($highestMinGap, min($gaps));
+            $highestSteadyGap = max($highestSteadyGap, $gaps[FakeFareModel::STEADY_ROUTE]);
+            $lowestMaxGap = min($lowestMaxGap, max($gaps));
+        }
+
+        $this->assertLessThanOrEqual(0.14, $highestMinGap, 'Some week has no route that stays dear.');
+        $this->assertLessThanOrEqual(0.14, $highestSteadyGap, 'The steady route looked like a deal.');
+        $this->assertGreaterThanOrEqual(0.21, $lowestMaxGap, 'Some week has no route with a deal.');
+    }
+
     #[Test]
     public function a_year_of_prices_covers_a_year_from_several_booking_moments(): void
     {
@@ -145,6 +179,18 @@ final class FakeFareModelTest extends TestCase
 
         $this->assertCount(365 * 6, $samples);
         $this->assertGreaterThan(1, count(array_unique($samples)));
+    }
+
+    private function gap(string $route, DateTimeImmutable $day): float
+    {
+        $usual = PriceStats::fromSamples($this->model->yearOfPrices($route, $day))->usualCents();
+        $cheapest = PHP_INT_MAX;
+
+        for ($d = $day->setTime(0, 0), $to = $day->modify('+90 days'); $d <= $to; $d = $d->modify('+1 day')) {
+            $cheapest = min($cheapest, $this->model->priceCents($route, $d, $day));
+        }
+
+        return ($usual - $cheapest) / $usual;
     }
 
     /**

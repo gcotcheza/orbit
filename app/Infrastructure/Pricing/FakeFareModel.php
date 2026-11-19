@@ -24,6 +24,14 @@ final readonly class FakeFareModel
     private const OBSERVATION_SAMPLES = 6;
 
     /**
+     * No season swing, no sale, a fifth of the drift: one route that is never a deal.
+     * decision: one-steady-fake-route
+     */
+    public const STEADY_ROUTE = 'AMS-NAP';
+
+    private const STEADY_DRIFT_SHARE = 0.2;
+
+    /**
      * The price for one departure date, as this route's fares look to somebody
      * shopping at `$observedAt`.
      */
@@ -33,7 +41,7 @@ final readonly class FakeFareModel
 
         return $this->clamp(
             $this->base($routeCode)
-            * $this->season($dayOfYear)
+            * $this->season($routeCode, $dayOfYear)
             * $this->dayOfWeek((int) $departure->format('N'))
             * $this->sale($routeCode, $dayOfYear)
             * $this->jitter($routeCode, $departure)
@@ -78,12 +86,13 @@ final readonly class FakeFareModel
     }
 
     /**
-     * Seasonal sine, ±14%, peaking late July — amplitude kept small on purpose: a bigger swing
-     * would make every route look 40% off and leave the score no room.
+     * Seasonal sine, ±14% (none on STEADY_ROUTE), peaking late July — kept small on purpose: a
+     * bigger swing would make every route look 40% off and leave the score no room.
      */
-    private function season(int $dayOfYear): float
+    private function season(string $routeCode, int $dayOfYear): float
     {
-        $seasonal = 1.0 + 0.14 * sin(2 * M_PI * ($dayOfYear - 110) / 365);
+        $swing = $routeCode === self::STEADY_ROUTE ? 0.0 : 0.14;
+        $seasonal = 1.0 + $swing * sin(2 * M_PI * ($dayOfYear - 110) / 365);
 
         // The fortnight either side of New Year, when nobody has a choice.
         $christmas = ($dayOfYear >= 352 || $dayOfYear <= 4) ? 1.22 : 1.0;
@@ -106,11 +115,15 @@ final readonly class FakeFareModel
     }
 
     /**
-     * Two 5-day sale windows a year at 38% off — puts an occasional route into the "insane"
-     * tier so the score is not tested only against a polite band.
+     * Two 5-day sale windows a year at 38% off, except on STEADY_ROUTE — puts an occasional route
+     * into the "insane" tier so the score is not tested only against a polite band.
      */
     private function sale(string $routeCode, int $dayOfYear): float
     {
+        if ($routeCode === self::STEADY_ROUTE) {
+            return 1.0;
+        }
+
         foreach ([1, 2] as $window) {
             $start = (int) ($this->unit($routeCode.':sale'.$window) * 365);
 
@@ -137,7 +150,8 @@ final readonly class FakeFareModel
      */
     private function drift(string $routeCode, DateTimeImmutable $observedAt): float
     {
-        $amplitude = 0.10 + $this->unit($routeCode.':amp') * 0.20;
+        $amplitude = (0.10 + $this->unit($routeCode.':amp') * 0.20)
+            * ($routeCode === self::STEADY_ROUTE ? self::STEADY_DRIFT_SHARE : 1.0);
         $phase = $this->unit($routeCode.':phase') * 2 * M_PI;
 
         $day = floor($observedAt->getTimestamp() / 86400);
