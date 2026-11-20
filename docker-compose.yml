@@ -169,7 +169,7 @@ services:
   # php-fpm speaks FastCGI, not HTTP, and the house pattern is `proxy_pass` from
   # host nginx to a loopback HTTP port. This thin sidecar bridges the two.
   web:
-    image: nginx:1.31.7-alpine
+    image: nginx:1.31.9-alpine
     restart: unless-stopped
     user: '115:119'
     security_opt: ['no-new-privileges:true']
