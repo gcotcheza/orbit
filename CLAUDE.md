@@ -11,6 +11,10 @@ copy. They apply here in full; anything below overrides them and says why.
   Workers and reviewers use a lane clone from GitHub instead, never a
   worktree: `gh repo clone gcotcheza/orbit /srv/worker-scratch/<lane>/repo`
   (the session clone's local `main` can be behind GitHub's).
+  `scripts/worktree.sh` serves the dev box's root clone only: it refuses a
+  clone root does not own. On the production box there is no session clone
+  and no worktree; the gate runs straight in an orbit-owned lane clone:
+  `cd /srv/worker-scratch/<lane>/repo && COMPOSE_PROJECT_NAME=orbit-<lane> bash scripts/check.sh overlay && bash scripts/e2e.sh`.
   `/var/www/orbit` IS production and is bind-mounted into the running
   containers, so editing, branching or building there changes the live site
   immediately; root's git does not enter it at all, and
