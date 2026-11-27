@@ -25,8 +25,8 @@ contains() { case "$2" in *"$3"*) pass "$1" ;; *) fail "$1 — no [$3] in:"$'\n'
 absent() { case "$2" in *"$3"*) fail "$1 — [$3] is in:"$'\n'"$2" ;; *) pass "$1" ;; esac; }
 equals() { if [ "$2" = "$3" ]; then pass "$1 is [$3]"; else fail "$1 is [$2], expected [$3]"; fi; }
 
-# A docker that logs its argv; the FAKE_* variables answer the stack guard, fail one call, or
-# make each `-v <src>:/var/www/html/<dir>` target of the first `compose run` and fail it.
+# A docker that logs its argv; the FAKE_* variables answer the stack guard, fail one call, set the
+# vendor check's output, or make each `-v <src>:/var/www/html/<dir>` target of the first `compose run` and fail it.
 FAKE_DOCKER="${WORK}/docker"
 cat >"${FAKE_DOCKER}" <<'SH'
 #!/bin/bash
@@ -45,7 +45,7 @@ if [ -n "${FAKE_MOUNTS:-}" ] && [ "$1 $2" = 'compose run' ]; then
     [ "${FAKE_MOUNTS}" != fill ] || touch vendor/autoload.php
     exit 1
 fi
-case "$*" in *' sh -s vendor') cat >>"${FAKE_STDIN}" ;; esac
+case "$*" in *' sh -s vendor') cat >>"${FAKE_STDIN}"; printf '%s\n' "${FAKE_VENDOR_OUT-world-writable paths under vendor/: 0 of 2}" ;; esac
 # shellcheck disable=SC2254
 case "$*" in ${FAKE_FAIL_ON:-@@}) exit "${FAKE_FAIL_RC:-1}" ;; esac
 exit 0
@@ -385,7 +385,7 @@ for name in unset orbit; do
     equals '8 and touches no network' "$(net_calls)" ''
 done
 
-# --- 9. the shared unzip and vendor checks run by their canonical paths, and a finding stops the gate --
+# --- 9. the shared unzip and vendor checks run by their canonical paths; a finding, or a vendor check that judged nothing, stops the gate --
 new_root unzip-args
 run_check dev FAKE_FAIL_ON='*shellcheck*'
 equals "9 the unzip check is handed the app stage count and this root's Dockerfile" "$(cat "${C}/unzip.log" 2>/dev/null)" "--stages 1 ${R}/docker/app/Dockerfile"
@@ -402,6 +402,7 @@ for mode in dev overlay; do
     t9_root "vendor-${mode}" 0 stdout "${OK_REPORT}"
     run_check "${mode}"
     equals "9 the ${mode} gate passes with the vendor step" "${RC}" 0
+    contains "9 and the ${mode} check's count line reaches the operator" "${OUT}" 'world-writable paths under vendor/: 0 of 2'
     equals "9 and the ${mode} app container is fed the canonical vendor check on stdin" "$(cksum <"${C}/stdin.log" 2>/dev/null)" "${VENDOR_SCRIPT}"
 done
 equals '9 dev runs it in the stack it execs into' "$(grep -F 'sh -s vendor' "${C}/../vendor-dev/docker.log")" 'compose exec -T app sh -s vendor'
@@ -413,10 +414,45 @@ contains '9 over the overlay vendor/' "$(grep -F 'sh -s vendor' "${C}/docker.log
 contains '9 with no TTY, so a terminal run still reads the script from stdin' "$(grep -F 'sh -s vendor' "${C}/docker.log")" 'compose run --rm --no-deps -T '
 
 t9_root vendor-red 0 stdout "${OK_REPORT}"
-run_check dev FAKE_FAIL_ON='* sh -s vendor'
+run_check dev FAKE_FAIL_ON='* sh -s vendor' FAKE_VENDOR_OUT='world-writable paths under vendor/: 3 of 9'
 equals '9 a vendor finding fails the gate' "${RC}" 1
 contains '9 after reaching the step' "${OUT}" "${VENDOR_STEP}"
 absent '9 and stops it before the secrets step' "${OUT}" 'Gitleaks (secrets)'
+contains '9 and the finding reaches the operator' "${OUT}" 'world-writable paths under vendor/: 3 of 9'
+equals '9 and records one red row' "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 1"
+
+vendor_case() { # <label> <reason>
+    equals "$1 fails the gate" "${RC}" 1
+    contains "$1, after reaching the step" "${OUT}" "${VENDOR_STEP}"
+    absent "$1, and stops it before the secrets step" "${OUT}" 'Gitleaks (secrets)'
+    contains "$1, and says why" "${OUT}" "$2"
+    equals "$1, and records one red row" "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 1"
+}
+NO_COUNT='check.sh: the vendor check printed no "world-writable paths under vendor/: 0 of N"'
+t9_root vendor-silent 0 stdout "${OK_REPORT}"
+run_check dev FAKE_VENDOR_OUT=
+vendor_case '9 a vendor check that exits 0 and prints no count line' "${NO_COUNT}"
+t9_root vendor-nonzero-count 0 stdout "${OK_REPORT}"
+run_check overlay FAKE_VENDOR_OUT='world-writable paths under vendor/: 3 of 9'
+vendor_case '9 an overlay vendor check that exits 0 over a count that is not 0' "${NO_COUNT}"
+
+t9_root vendor-status 0 stdout "${OK_REPORT}"
+run_check dev FAKE_FAIL_ON='* sh -s vendor' FAKE_FAIL_RC=3
+equals '9 a vendor check that fails over a 0-of-N line fails the gate with its status' "${RC}" 3
+contains '9 after reaching the step' "${OUT}" "${VENDOR_STEP}"
+absent '9 and stops it before the secrets step' "${OUT}" 'Gitleaks (secrets)'
+equals '9 and records that status in one red row' "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 3"
+
+NO_SCRIPT='vendor-perms-check.sh is missing or empty, and "sh -s" over an'
+for script in empty missing; do
+    t9_root "vendor-${script}-script" 0 stdout "${OK_REPORT}"
+    [ "${script}" = missing ] || : >"${C}/vendor-perms-check.sh"
+    swap /srv/engineering-standards/scripts/vendor-perms-check.sh "${C}/vendor-perms-check.sh" 1 \
+        '9 the canonical vendor check path is not in check.sh exactly once, so a real one would run'
+    run_check dev
+    vendor_case "9 a vendor check that is ${script}" "${NO_SCRIPT}"
+    absent "9 and the ${script} script is never fed to the app container" "$(cat "${C}/docker.log" 2>/dev/null)" 'sh -s vendor'
+done
 
 # --- 10. the npm step judges the audit through the allowlist --------------------------------
 NPM_STEP="$(grep -F 'npm audit' "${WORK}/vendor-overlay/docker.log")"
