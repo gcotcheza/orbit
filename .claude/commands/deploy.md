@@ -105,19 +105,13 @@ B='http://127.0.0.1:3085'
 HDR=$(mktemp) || exit 1; OUT=$(mktemp) || { rm -f "${HDR:?}"; exit 1; }
 curl -s -D "$HDR" -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -H "$H" "$B/sanctum/csrf-cookie"
 COOKIE=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$HDR")
-XSRF=$(printf '%s' "$COOKIE" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
-       | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
+XSRF=$(printf '%s' "$COOKIE" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
 DC="docker compose -f /var/www/orbit/docker-compose.yml"   # production's own project, by name, from any cwd
 EMAIL=$($DC exec -T app sh -c 'sed -n "s/^SEED_USER_EMAIL=//p" .env | head -1' | tr -d '\r')
-LOGIN=$($DC exec -T app sh -c 'sed -n "s/^SEED_USER_PASSWORD=//p" .env | head -1' | tr -d '\r' \
-  | python3 -c 'import json,sys;print(json.dumps({"email":sys.argv[1],"password":sys.stdin.read().strip()}))' "$EMAIL" \
-  | curl -s -D "$OUT" -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 15 -H "$H" \
-         -H "Cookie: $COOKIE" -H "X-XSRF-TOKEN: $XSRF" \
-         -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary @- "$B/login")
+LOGIN=$($DC exec -T app sh -c 'sed -n "s/^SEED_USER_PASSWORD=//p" .env | head -1' | tr -d '\r' | python3 -c 'import json,sys;print(json.dumps({"email":sys.argv[1],"password":sys.stdin.read().strip()}))' "$EMAIL" | curl -s -D "$OUT" -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 15 -H "$H" -H "Cookie: $COOKIE" -H "X-XSRF-TOKEN: $XSRF" -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary @- "$B/login")
 printf '%s\n' "$LOGIN"
 AUTHED=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$OUT")
-AUTH_XSRF=$(printf '%s' "$AUTHED" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
-            | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
+AUTH_XSRF=$(printf '%s' "$AUTHED" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
 rm -f "${HDR:?}" "${OUT:?}"
 [ "$LOGIN" = 200 ] || { printf 'login answered %s, not 200: stopping\n' "$LOGIN"; exit 1; }
 )
@@ -134,37 +128,23 @@ B='http://127.0.0.1:3085'
 HDR=$(mktemp) || exit 1; OUT=$(mktemp) || { rm -f "${HDR:?}"; exit 1; }
 curl -s -D "$HDR" -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -H "$H" "$B/sanctum/csrf-cookie"
 COOKIE=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$HDR")
-XSRF=$(printf '%s' "$COOKIE" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
-       | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
+XSRF=$(printf '%s' "$COOKIE" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
 DC="docker compose -f /var/www/orbit/docker-compose.yml"   # production's own project, by name, from any cwd
 EMAIL=$($DC exec -T app sh -c 'sed -n "s/^SEED_USER_EMAIL=//p" .env | head -1' | tr -d '\r')
-LOGIN=$($DC exec -T app sh -c 'sed -n "s/^SEED_USER_PASSWORD=//p" .env | head -1' | tr -d '\r' \
-  | python3 -c 'import json,sys;print(json.dumps({"email":sys.argv[1],"password":sys.stdin.read().strip()}))' "$EMAIL" \
-  | curl -s -D "$OUT" -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 15 -H "$H" \
-         -H "Cookie: $COOKIE" -H "X-XSRF-TOKEN: $XSRF" \
-         -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary @- "$B/login")
+LOGIN=$($DC exec -T app sh -c 'sed -n "s/^SEED_USER_PASSWORD=//p" .env | head -1' | tr -d '\r' | python3 -c 'import json,sys;print(json.dumps({"email":sys.argv[1],"password":sys.stdin.read().strip()}))' "$EMAIL" | curl -s -D "$OUT" -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 15 -H "$H" -H "Cookie: $COOKIE" -H "X-XSRF-TOKEN: $XSRF" -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary @- "$B/login")
 printf '%s\n' "$LOGIN"
 AUTHED=$(awk 'tolower($1)=="set-cookie:"{split($2,a,";"); printf "%s%s", (n++?"; ":""), a[1]}' "$OUT")
-AUTH_XSRF=$(printf '%s' "$AUTHED" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' \
-            | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
+AUTH_XSRF=$(printf '%s' "$AUTHED" | sed -n 's/.*XSRF-TOKEN=\([^;]*\).*/\1/p' | python3 -c 'import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))')
 rm -f "${HDR:?}" "${OUT:?}"
 [ "$LOGIN" = 200 ] || { printf 'login answered %s, not 200: stopping\n' "$LOGIN"; exit 1; }
 
 # PAUSE — AMS-LIS stops being polled from this moment.
-curl -s -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -X PATCH -H "$H" \
-     -H "Cookie: $AUTHED" -H "X-XSRF-TOKEN: $AUTH_XSRF" \
-     -H 'Accept: application/json' -H 'Content-Type: application/json' \
-     -d '{"active":false}' "$B/api/watchlist/AMS-LIS"
+curl -s -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -X PATCH -H "$H" -H "Cookie: $AUTHED" -H "X-XSRF-TOKEN: $AUTH_XSRF" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"active":false}' "$B/api/watchlist/AMS-LIS"
 
 # RESTORE — and then prove it, rather than trusting the 200.
-curl -s -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -X PATCH -H "$H" \
-     -H "Cookie: $AUTHED" -H "X-XSRF-TOKEN: $AUTH_XSRF" \
-     -H 'Accept: application/json' -H 'Content-Type: application/json' \
-     -d '{"active":true}' "$B/api/watchlist/AMS-LIS"
+curl -s -o /dev/null -w '%{http_code}\n' --connect-timeout 5 --max-time 15 -X PATCH -H "$H" -H "Cookie: $AUTHED" -H "X-XSRF-TOKEN: $AUTH_XSRF" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"active":true}' "$B/api/watchlist/AMS-LIS"
 
-curl -s --connect-timeout 5 --max-time 15 -H "$H" -H "Cookie: $AUTHED" \
-     -H 'Accept: application/json' "$B/api/watchlist" \
-  | python3 -c 'import sys,json;print([r["active"] for r in json.load(sys.stdin)["data"] if r["code"]=="AMS-LIS"])'
+curl -s --connect-timeout 5 --max-time 15 -H "$H" -H "Cookie: $AUTHED" -H 'Accept: application/json' "$B/api/watchlist" | python3 -c 'import sys,json;print([r["active"] for r in json.load(sys.stdin)["data"] if r["code"]=="AMS-LIS"])'
 )
 ```
 
@@ -180,8 +160,7 @@ still paused — put it back.
 ```bash
 WAS=   # the sha DONE printed as `was`; the reset below refuses while this is empty
 git-as orbit -C /var/www/orbit --no-optional-locks log --oneline -5   # confirm what is live
-git-as orbit -C /var/www/orbit reset --hard "${WAS:?set WAS to the sha DONE printed as was}" \
-  && find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
+git-as orbit -C /var/www/orbit reset --hard "${WAS:?set WAS to the sha DONE printed as was}" && find /var/www/orbit -user root -not -path '/var/www/orbit/.claude/*' | wc -l
 ```
 
 The count must print `0`. Then write the rollback into root's record:
