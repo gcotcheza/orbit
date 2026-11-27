@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Guards scripts/lib/gate/deploy-lib.sh, lane-work-dir.sh and deploy-mutants.sh's --slot mode. The gate
-# reads the lib only from root's clone at its origin/main, no caller's DEPLOY_LIB is read, the test seam
-# is refused as root, and a missing, emptied, dirty or unreadable lib is refused out loud.
+# Guards scripts/lib/gate/deploy-lib.sh, lane-work-dir.sh and deploy-mutants.sh's --slot mode.
 # docs/DECISIONS.md, deploy-lib-is-not-vendored and gate-work-dir-in-the-lane
 #
 #   bash scripts/deploy-lib-test.sh <tree>    as root, over the tree whose scripts/ it judges
