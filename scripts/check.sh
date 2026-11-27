@@ -166,6 +166,8 @@ gate_record() {
 }
 
 trap 'gate_record "$?"' ERR
+# An explicit exit fires no ERR trap, so a refusal records its own red row.
+gate_fail() { gate_record "$1"; exit "$1"; }
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 
@@ -245,7 +247,22 @@ fi
 
 step 'No world-writable path under vendor/ (vendor-perms-check.sh)'
 # On stdin, because the app container does not mount the canonical clone.
-php_step sh -s vendor </srv/engineering-standards/scripts/vendor-perms-check.sh
+vendor_check=/srv/engineering-standards/scripts/vendor-perms-check.sh
+if [ ! -s "$vendor_check" ]; then
+    printf 'check.sh: %s is missing or empty, and "sh -s" over an\n' "$vendor_check" >&2
+    printf '  empty stdin exits 0 having judged nothing. A skipped check is a silent pass.\n' >&2
+    gate_fail 1
+fi
+vendor_rc=0
+vendor_report=$(php_step sh -s vendor <"$vendor_check" 2>&1) || vendor_rc=$?
+printf '%s\n' "$vendor_report"
+if [ "$vendor_rc" -ne 0 ]; then gate_fail "$vendor_rc"; fi
+# A script cut short exits 0 too, so its own count line is the evidence.
+if ! grep -qE '^world-writable paths under vendor/: 0 of [0-9]+$' <<<"$vendor_report"; then
+    printf 'check.sh: the vendor check printed no "world-writable paths under vendor/: 0 of N"\n' >&2
+    printf '  line, so it judged nothing. That is not a pass.\n' >&2
+    gate_fail 1
+fi
 
 step 'Gitleaks (secrets)'
 # git's view of the tree, copied out: a gitignored .env is never in $work/scan.
