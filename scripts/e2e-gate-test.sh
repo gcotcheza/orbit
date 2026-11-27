@@ -11,7 +11,10 @@ pass() { printf 'ok   %s\n' "$*"; }
 fail() { printf 'FAIL %s\n' "$*" >&2; fails=$((fails + 1)); }
 equals() { if [ "$2" = "$3" ]; then pass "$1 is [$3]"; else fail "$1 is [$2], expected [$3]"; fi; }
 
-WORK="$(mktemp -d /srv/worker-scratch/orbit-e2e-gate-test.XXXXXXXX)" || exit 1
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)" || exit 1
+# shellcheck source=scripts/lib/gate/lane-work-dir.sh
+. "${SCRIPT_DIR}/lib/gate/lane-work-dir.sh"
+WORK="$(gate_lane_work_dir "${SCRIPT_DIR}/.." orbit-e2e-gate-test)" || exit 1
 trap 'rm -rf "${WORK:?}"' EXIT
 chmod 0711 "${WORK}"
 BIN="${WORK}/bin"

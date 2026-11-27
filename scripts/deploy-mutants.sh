@@ -34,7 +34,9 @@ fi
 deploy_lib_ready || exit 1
 # shellcheck source=scripts/lib/gate/run-capped.sh
 . "${SCRIPT_DIR}/lib/gate/run-capped.sh"
-WORK="$(mktemp -d "$(dirname -- "$(dirname -- "${SCRIPT_DIR}")")/orbit-deploy-mutants.XXXXXXXX")" || exit 1
+# shellcheck source=scripts/lib/gate/lane-work-dir.sh
+. "${SCRIPT_DIR}/lib/gate/lane-work-dir.sh"
+WORK="$(gate_lane_work_dir "${SCRIPT_DIR}/.." orbit-deploy-mutants)" || exit 1
 trap 'rm -rf "${WORK:?}"' EXIT
 HARNESS_TIMEOUT=600
 missed=0

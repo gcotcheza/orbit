@@ -25,8 +25,8 @@ fleet-deploy orbit <PR#>
 It prints this recipe, shas filled in. **Gate in a worktree of the root-owned clone, never in `/var/www/orbit`.**
 
 ```bash
-git -C /srv/sessions/orbit/repo worktree add /srv/worker-scratch/orbit-gate-pr<N> <the sha NOT GATED printed>
-cd /srv/worker-scratch/orbit-gate-pr<N>
+git -C /srv/sessions/orbit/repo worktree add /srv/worker-scratch/orbit-gate-pr<N>/repo <the sha NOT GATED printed>
+cd /srv/worker-scratch/orbit-gate-pr<N>/repo
 export COMPOSE_PROJECT_NAME=orbit-gate-pr<N>
 heavy-work orbit-gate-pr<N> -- bash scripts/check.sh overlay
 heavy-work orbit-e2e-pr<N> -- bash scripts/e2e.sh

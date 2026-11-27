@@ -264,7 +264,7 @@ head_is_present() {
 # The library's gated() refuses and exits, so the recipe goes out ahead of it. The
 # probe is a subshell with the summary fd closed: only the real call may print.
 gate_or_recipe() {
-    local wt="/srv/worker-scratch/orbit-gate-pr$PR"
+    local wt="/srv/worker-scratch/orbit-gate-pr$PR/repo"
     if ! ( exec 3>/dev/null; gated ) >/dev/null 2>&1; then
         say "NOT GATED ${GATE_SHA:0:7}: gate that $GATE_WHAT in a worktree cut from the root-owned clone, never in this checkout — it is bind-mounted into the running containers."
         say "  git -C /srv/sessions/orbit/repo worktree add $wt $GATE_SHA"
