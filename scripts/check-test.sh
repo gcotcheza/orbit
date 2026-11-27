@@ -24,6 +24,12 @@ fail() { printf 'FAIL %s\n' "$*" >&2; fails=$((fails + 1)); }
 contains() { case "$2" in *"$3"*) pass "$1" ;; *) fail "$1 — no [$3] in:"$'\n'"$2" ;; esac; }
 absent() { case "$2" in *"$3"*) fail "$1 — [$3] is in:"$'\n'"$2" ;; *) pass "$1" ;; esac; }
 equals() { if [ "$2" = "$3" ]; then pass "$1 is [$3]"; else fail "$1 is [$2], expected [$3]"; fi; }
+ledger_rows() { awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null; }
+refused_red() { # <label> <reason>
+    equals "$1 fails the gate" "${RC}" 1
+    contains "$1, and says why" "${OUT}" "$2"
+    equals "$1, and records one red row" "$(ledger_rows)" "${ZEROS} ci 1"
+}
 
 # A docker that logs its argv; the FAKE_* variables answer the stack guard, fail one call, set the
 # vendor check's output, or make each `-v <src>:/var/www/html/<dir>` target of the first `compose run` and fail it.
@@ -63,7 +69,7 @@ case "$1" in -C) shift 2 ;; esac
 printf '%s\n' "$*" >>"${FAKE_GIT_LOG}"
 case "$*" in
     *'-- scripts') cat "${FAKE_SCRIPTS_LIST}" ;;
-    ls-files*) [ -z "${FAKE_GIT_FILES-x}" ] || printf '%s\0' ${FAKE_GIT_FILES-composer.json scripts/check.sh} ;;
+    ls-files*) [ -z "${FAKE_GIT_FILES-x}" ] || { read -ra files <<<"${FAKE_GIT_FILES-composer.json scripts/check.sh}"; printf '%s\0' "${files[@]}"; } ;;
     rev-parse*) [ -z "${FAKE_GIT_HEAD:-}" ] && exit 98; printf '%s\n' "${FAKE_GIT_HEAD}" ;;
     *status*) : ;;
     *) printf 'FAKE GIT: unexpected subcommand %s\n' "$*" >&2; exit 98 ;;
@@ -95,7 +101,7 @@ run_check() {
     local mode=$1 started
     shift
     started=$(date +%s)
-    OUT="$(cd "${R}" && env -u CI_GIT -u GATE_RECORDED -u GATE_SUITE_PASSED -u COMPOSE_PROJECT_NAME \
+    OUT="$(cd "${R}" && env -u CI_GIT -u FAKE_GIT_FILES -u GATE_RECORDED -u GATE_SUITE_PASSED -u COMPOSE_PROJECT_NAME \
         PATH="${B}:${HOST_PATH}" GATE_LEDGER="${C}/ledger" ORBIT_GATE_LOG=- \
         FAKE_LOG="${C}/docker.log" FAKE_GIT_LOG="${C}/git.log" FAKE_SCRIPTS_LIST="${C}/scripts.list" \
         FAKE_MADE="${C}/made.log" FAKE_STDIN="${C}/stdin.log" FAKE_GIT_HEAD="${ZEROS}" "$@" \
@@ -254,11 +260,9 @@ for mode in dev overlay; do
 done
 t9_case() { # <label> <reason>
     run_check dev
-    [ "${RC}" -ne 0 ] && pass "$1 fails the gate" || fail "$1 let the gate pass"
+    refused_red "$@"
     contains "$1, after reaching the step" "${OUT}" "${STEP}"
     absent "$1, and the gate stops there" "${OUT}" "${NEXT_STEP}"
-    contains "$1, and says why" "${OUT}" "$2"
-    equals "$1, and records one red row" "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 1"
 }
 t9_root t9-missing 0 stdout "${OK_REPORT}"
 rm -f -- "${B}/gate-image-tags"
@@ -317,7 +321,7 @@ rmdir -- "${FOREIGN}" 2>/dev/null
 new_root recorded
 run_check dev GATE_RECORDED=1 FAKE_FAIL_ON='*pint*'
 equals '5 the stubbed Pint step stops the run' "${RC}" 1
-equals '5 and a caller'"'"'s GATE_RECORDED=1 still leaves the red row' "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 1"
+equals '5 and a caller'"'"'s GATE_RECORDED=1 still leaves the red row' "$(ledger_rows)" "${ZEROS} ci 1"
 
 # --- 6. storage/ is handed over without following a link planted in it ------------------------
 new_root chown-link
@@ -362,7 +366,7 @@ run_check overlay COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS="${NETS}" FAKE_
 equals '8 a network that will not go fails the passing run' "${RC}" 1
 contains '8 and says so, naming the project' "${OUT}" 'check.sh: left network(s) of compose project orbit-t1005 behind'
 equals '8 after trying the other one' "$(net_calls | tail -1)" 'network rm net2'
-equals '8 and the ledger still records the suite' "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 0"
+equals '8 and the ledger still records the suite' "$(ledger_rows)" "${ZEROS} ci 0"
 
 t9_root net-stuck-red 0 stdout "${OK_REPORT}"
 run_check overlay COMPOSE_PROJECT_NAME=orbit-t1005 FAKE_NETWORKS="${NETS}" FAKE_NET_STUCK=net1 FAKE_FAIL_ON='*pint*' FAKE_FAIL_RC=3
@@ -425,14 +429,12 @@ equals '9 a vendor finding fails the gate' "${RC}" 1
 contains '9 after reaching the step' "${OUT}" "${VENDOR_STEP}"
 absent '9 and stops it before the secrets step' "${OUT}" 'Gitleaks (secrets)'
 contains '9 and the finding reaches the operator' "${OUT}" 'world-writable paths under vendor/: 3 of 9'
-equals '9 and records one red row' "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 1"
+equals '9 and records one red row' "$(ledger_rows)" "${ZEROS} ci 1"
 
 vendor_case() { # <label> <reason>
-    equals "$1 fails the gate" "${RC}" 1
+    refused_red "$@"
     contains "$1, after reaching the step" "${OUT}" "${VENDOR_STEP}"
     absent "$1, and stops it before the secrets step" "${OUT}" 'Gitleaks (secrets)'
-    contains "$1, and says why" "${OUT}" "$2"
-    equals "$1, and records one red row" "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 1"
 }
 NO_COUNT='check.sh: the vendor check printed no "world-writable paths under vendor/: 0 of N"'
 t9_root vendor-silent 0 stdout "${OK_REPORT}"
@@ -447,7 +449,7 @@ run_check dev FAKE_FAIL_ON='* sh -s vendor' FAKE_FAIL_RC=3
 equals '9 a vendor check that fails over a 0-of-N line fails the gate with its status' "${RC}" 3
 contains '9 after reaching the step' "${OUT}" "${VENDOR_STEP}"
 absent '9 and stops it before the secrets step' "${OUT}" 'Gitleaks (secrets)'
-equals '9 and records that status in one red row' "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 3"
+equals '9 and records that status in one red row' "$(ledger_rows)" "${ZEROS} ci 3"
 
 NO_SCRIPT='vendor-perms-check.sh is missing or empty, and "sh -s" over an'
 for script in empty missing; do
@@ -468,21 +470,21 @@ contains '10 and judges the audit at high through the allowlist with npm'"'"'s e
     'npm audit --audit-level=high --json >"$report" || rc=$?; node scripts/lib/npm-audit-allowlist.mjs scripts/audit-allowlist.txt "$rc" <"$report"'
 
 # --- 11. a refusal after the ERR trap records its own red row (card 1334) ----------------------
-refusal_row() { # <label> <reason>
-    equals "$1 fails the gate" "${RC}" 1
-    contains "$1, and says why" "${OUT}" "$2"
-    equals "$1, and records one red row" "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 1"
-}
 new_root refuse-no-shell
 : >"${C}/scripts.list"
 run_check dev
-refusal_row '11 a lint list with no shell script' 'git listed no shell script under scripts/'
+refused_red '11 a lint list with no shell script' 'git listed no shell script under scripts/'
 new_root refuse-no-files
 run_check dev FAKE_GIT_FILES=
-refusal_row '11 a tree git lists no file in' 'git listed no file to scan in'
+refused_red '11 a tree git lists no file in' 'git listed no file to scan in'
 new_root refuse-allowlist
 run_check dev FAKE_GIT_FILES='composer.json scripts/check.sh .gitleaks.toml'
-refusal_row '11 a tree carrying a gitleaks allowlist' 'the tree carries a gitleaks allowlist file'
+refused_red '11 a tree carrying a gitleaks allowlist' 'the tree carries a gitleaks allowlist file'
+new_root refuse-empty-scan
+printf '#!/bin/sh\nexit 0\n' >"${B}/tar"
+chmod 755 "${B}/tar"
+run_check dev
+refused_red '11 a copy that leaves the scan directory empty' 'the scan directory came out empty'
 
 if [ "${fails}" -ne 0 ]; then
     printf '\ncheck-test: %s check(s) failed\n' "${fails}" >&2
