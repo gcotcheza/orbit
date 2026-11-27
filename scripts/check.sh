@@ -216,7 +216,7 @@ done < <($GIT ls-files -z --cached -- scripts)
 
 if [ ${#shell_files[@]} -eq 0 ]; then
     printf 'check.sh: git listed no shell script under scripts/, so this step linted nothing.\n' >&2
-    exit 1
+    gate_fail 1
 fi
 
 # The shared lib is mounted at its box path so -x reads what the gate sources from it.
@@ -275,12 +275,12 @@ if [ ! -s "$work/list" ]; then
     printf 'check.sh: git listed no file to scan in %s. The secrets\n' "$here" >&2
     printf '  step would have scanned nothing and reported no leaks. That is\n' >&2
     printf '  a failure.\n' >&2
-    exit 1
+    gate_fail 1
 fi
 if grep -qzE '(^|/)\.gitleaks(\.toml|ignore)$' "$work/list"; then
     printf 'check.sh: the tree carries a gitleaks allowlist file, which would let\n' >&2
     printf '  the scanned code decide what the scanner may find. Delete it.\n' >&2
-    exit 1
+    gate_fail 1
 fi
 
 tar -C "$here" --null -T "$work/list" -cf - | tar -xf - -C "$work/scan"
@@ -288,7 +288,7 @@ tar -C "$here" --null -T "$work/list" -cf - | tar -xf - -C "$work/scan"
 if [ -z "$(ls -A "$work/scan")" ]; then
     printf 'check.sh: the scan directory came out empty. Refusing to call that\n' >&2
     printf '  clean.\n' >&2
-    exit 1
+    gate_fail 1
 fi
 
 docker run --rm --network none -v "$work/scan:/scan:ro" zricethezav/gitleaks:v8.30.1 \
@@ -334,12 +334,12 @@ tag_check=/srv/engineering-standards/scripts/gate-image-tags.sh
 if [ ! -x "$tag_check" ]; then
     printf 'check.sh: %s is missing or not executable, so nothing read which image\n' "$tag_check" >&2
     printf '  tags this gate builds. A skipped check is a silent pass.\n' >&2
-    exit 1
+    gate_fail 1
 fi
 
 if ! tag_report=$("$tag_check" "$here" 2>&1); then
     printf '%s\n' "$tag_report" >&2
-    exit 1
+    gate_fail 1
 fi
 printf '%s\n' "$tag_report"
 
@@ -349,7 +349,7 @@ case "$tag_report" in
     *)
         printf 'check.sh: the image-tag check counted no built tags in %s, so it\n' "$here" >&2
         printf '  examined nothing. That is not a pass.\n' >&2
-        exit 1
+        gate_fail 1
         ;;
 esac
 
@@ -361,7 +361,7 @@ if ! printf '%s' "$built" | grep -qE '^[0-9]+$' || [ "$built" -eq 0 ]; then
         "${built:-no}" "$here" >&2
     printf '  and this repository builds one on both sides. A zero or an unreadable count means\n' >&2
     printf '  it read something other than this tree, so its exit code says nothing about T9.\n' >&2
-    exit 1
+    gate_fail 1
 fi
 
 # The count line is read, not the "unresolved and not judged" phrase: that phrase
@@ -373,7 +373,7 @@ if [ "$unresolved" != 0 ]; then
         "${unresolved:-an unreadable number of}" "$here" >&2
     printf '  or stopped printing the count line this reads. An unjudged value is where a gate\n' >&2
     printf '  tag aimed at production sits unseen; the report above names its file and line.\n' >&2
-    exit 1
+    gate_fail 1
 fi
 
 step 'Deploy mutants (scripts/deploy-mutants.sh)'

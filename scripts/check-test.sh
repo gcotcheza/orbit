@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs scripts/check.sh from a copy of <tree>'s scripts/ in a throwaway root, git and docker faked:
-# the CI_GIT seam, the stack guard, the lint list, the W7, unzip, vendor, T9 and npm advisory steps and the overlay's mounts and networks.
+# the CI_GIT seam, the stack guard, the lint list, the W7, unzip, vendor, T9 and npm advisory steps and the overlay's mounts and networks, and each refusal's red row.
 # On the host as root, as the gate's other host suites. docs/DECISIONS.md, deploy-lib-is-not-vendored
 #
 #   bash scripts/check-test.sh <tree>
@@ -63,7 +63,7 @@ case "$1" in -C) shift 2 ;; esac
 printf '%s\n' "$*" >>"${FAKE_GIT_LOG}"
 case "$*" in
     *'-- scripts') cat "${FAKE_SCRIPTS_LIST}" ;;
-    ls-files*) printf 'composer.json\0scripts/check.sh\0' ;;
+    ls-files*) [ -z "${FAKE_GIT_FILES-x}" ] || printf '%s\0' ${FAKE_GIT_FILES-composer.json scripts/check.sh} ;;
     rev-parse*) [ -z "${FAKE_GIT_HEAD:-}" ] && exit 98; printf '%s\n' "${FAKE_GIT_HEAD}" ;;
     *status*) : ;;
     *) printf 'FAKE GIT: unexpected subcommand %s\n' "$*" >&2; exit 98 ;;
@@ -258,7 +258,13 @@ t9_case() { # <label> <reason>
     contains "$1, after reaching the step" "${OUT}" "${STEP}"
     absent "$1, and the gate stops there" "${OUT}" "${NEXT_STEP}"
     contains "$1, and says why" "${OUT}" "$2"
+    equals "$1, and records one red row" "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 1"
 }
+t9_root t9-missing 0 stdout "${OK_REPORT}"
+rm -f -- "${B}/gate-image-tags"
+t9_case '3 a checker that is missing' 'is missing or not executable, so nothing read which image'
+t9_root t9-no-summary 0 stdout 'gate-image-tags: %s\nok %s\n'
+t9_case '3 a checker that exits 0 and prints no summary' 'counted no built tags in'
 t9_root t9-refused 1 stdout 'gate-image-tags: %s\nrefused %s: orbit/app:latest is built by the gate and run in production\n'
 t9_case '3 a tag the gate builds and production runs' 'is built by the gate and run in production'
 t9_root t9-no-compose 2 stderr 'gate-image-tags: %s\ngate-image-tags: no compose file beside this root — nothing was examined, so %s is refused, not passed (T9)\n'
@@ -460,6 +466,23 @@ contains '10 the npm step runs the allowlist suite first, and a red suite stops 
     'sh scripts/tests/npm-audit-allowlist.sh || exit 1; report=$(mktemp);'
 contains '10 and judges the audit at high through the allowlist with npm'"'"'s exit beside it' "${NPM_STEP}" \
     'npm audit --audit-level=high --json >"$report" || rc=$?; node scripts/lib/npm-audit-allowlist.mjs scripts/audit-allowlist.txt "$rc" <"$report"'
+
+# --- 11. a refusal after the ERR trap records its own red row (card 1334) ----------------------
+refusal_row() { # <label> <reason>
+    equals "$1 fails the gate" "${RC}" 1
+    contains "$1, and says why" "${OUT}" "$2"
+    equals "$1, and records one red row" "$(awk '{ print $1, $2, $4 }' "${C}/ledger" 2>/dev/null)" "${ZEROS} ci 1"
+}
+new_root refuse-no-shell
+: >"${C}/scripts.list"
+run_check dev
+refusal_row '11 a lint list with no shell script' 'git listed no shell script under scripts/'
+new_root refuse-no-files
+run_check dev FAKE_GIT_FILES=
+refusal_row '11 a tree git lists no file in' 'git listed no file to scan in'
+new_root refuse-allowlist
+run_check dev FAKE_GIT_FILES='composer.json scripts/check.sh .gitleaks.toml'
+refusal_row '11 a tree carrying a gitleaks allowlist' 'the tree carries a gitleaks allowlist file'
 
 if [ "${fails}" -ne 0 ]; then
     printf '\ncheck-test: %s check(s) failed\n' "${fails}" >&2
