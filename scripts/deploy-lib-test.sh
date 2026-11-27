@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Guards scripts/lib/gate/deploy-lib.sh and deploy-mutants.sh's --slot mode. The gate reads the lib only from root's clone at
+# Guards scripts/lib/gate/deploy-lib.sh, deploy-mutants.sh's --slot mode and where both deploy harnesses make their work dir. The gate reads the lib only from root's clone at
 # its origin/main, no caller's DEPLOY_LIB is read, the test seam is refused as root, and a missing,
 # emptied, dirty or unreadable lib is refused out loud. docs/DECISIONS.md, deploy-lib-is-not-vendored
 #
@@ -231,6 +231,23 @@ equals 'and that refused slot runs no worker' "$(cat "${SLOT}/runs/3.out")" earl
 equals 'deploy-mutants.sh runs each xargs slot through itself' \
     "$(grep -cE '\| xargs -P "\$\{JOBS\}" -I\{\} bash -- "\$\{SELF\}" --slot \{\} "\$\{WORK\}"$' "${SCRIPTS}/deploy-mutants.sh")" 1
 equals 'and carries no inline sh program' "$(grep -cE '(^|[^[:alnum:]_])sh -c' "${SCRIPTS}/deploy-mutants.sh")" 0
+
+# Card 1320: each harness makes its work dir in the gate tree's lane, never loose in the scratch
+# root; a fake mktemp records where it was asked to make it and stops the script there.
+SCRATCH="${WORK}/scratch"
+LANE_TREE="${SCRATCH}/lane/repo"
+mkdir -p "${LANE_TREE}/scripts/lib/gate" "${WORK}/fake-bin"
+cp "${SCRIPTS}/deploy-mutants.sh" "${SCRIPTS}/deploy-test.sh" "${LANE_TREE}/scripts/"
+printf 'DEPLOY_LIB=%s/no-lib\ndeploy_lib_ready() { :; }\n' "${WORK}" >"${LANE_TREE}/scripts/lib/gate/deploy-lib.sh"
+: >"${LANE_TREE}/scripts/lib/gate/run-capped.sh"
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s"\nexit 1\n' "${WORK}/mktemp.argv" >"${WORK}/fake-bin/mktemp"
+chmod 755 "${WORK}/fake-bin/mktemp"
+for harness in deploy-mutants deploy-test; do
+    : >"${WORK}/mktemp.argv"
+    env -u DEPLOY_TEST_ROOT PATH="${WORK}/fake-bin:${PATH}" bash -- "${LANE_TREE}/scripts/${harness}.sh" >/dev/null 2>&1
+    equals "${harness}.sh makes its work dir in the tree's lane" \
+        "$(cat "${WORK}/mktemp.argv")" "-d ${SCRATCH}/lane/orbit-${harness}.XXXXXXXX"
+done
 
 if [ "${fails}" -ne 0 ]; then
     printf '\ndeploy-lib-test: %s check(s) failed\n' "${fails}" >&2

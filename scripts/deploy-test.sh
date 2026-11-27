@@ -11,8 +11,8 @@
 #                                   DEPLOY_TEST_TEMPLATES=<dir> keeps the fixture repos
 #                                   there, built once for every run that shares it
 #
-# Each case runs a root 700 copy of deploy.sh and lib/ under DEPLOY_TEST_ROOT
-# (default /srv/worker-scratch), because the library refuses any other copy.
+# Each case runs a root 700 copy of deploy.sh and lib/ under DEPLOY_TEST_ROOT (default: the
+# tree's lane, the directory holding it), because the library refuses a copy below any dir root does not own alone.
 # It never reads /var/www/orbit, never runs docker, never runs gh and never runs
 # git-as: every one of those is a fake whose argv is what the assertions read.
 set -uo pipefail
@@ -53,7 +53,7 @@ equals() {
     if [ "$2" = "$3" ]; then pass "$1 is [$3]"; else fail "$1 is [$2], expected [$3]"; fi
 }
 
-WORK="$(mktemp -d "${DEPLOY_TEST_ROOT:-/srv/worker-scratch}/orbit-deploy-test.XXXXXXXX")" || exit 1
+WORK="$(mktemp -d "${DEPLOY_TEST_ROOT:-$(dirname -- "$(dirname -- "${SCRIPT_DIR}")")}/orbit-deploy-test.XXXXXXXX")" || exit 1
 trap 'rm -rf "${WORK:?}"' EXIT
 BREACH_LOG="${WORK}/checkout-helpers.argv"
 : >"${BREACH_LOG}"
