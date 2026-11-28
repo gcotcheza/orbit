@@ -91,13 +91,14 @@ final class ToolchainPinsTest extends TestCase
     }
 
     #[Test]
-    public function the_app_image_pins_a_patched_libxml2(): void
+    public function the_app_image_pins_its_card_1263_package_floors(): void
     {
         $this->assertMatchesRegularExpression(
-            '/^\s*apk add --no-cache \'libxml2>=2\.13\.9-r5\'; \\\\$/m',
+            '/^\s*apk add --no-cache \'libxml2>=2\.13\.9-r5\' \'brotli-libs>=1\.2\.1-r0\' '
+            .'\'curl>=8\.23\.0-r0\' \'libcurl>=8\.23\.0-r0\'; \\\\$/m',
             $this->read('docker/app/Dockerfile'),
-            'docker/app/Dockerfile no longer holds libxml2 at 2.13.9-r5 or later, so the image ships '
-            .'the base image\'s 2.13.9-r2 and its 7 HIGH CVEs. The quotes keep `>` from being a redirect.'
+            'docker/app/Dockerfile no longer holds libxml2, brotli-libs, curl and libcurl at their card 1263 '
+            .'floors, so the image can ship the base image\'s vulnerable ones. The quotes keep `>` from being a redirect.'
         );
     }
 

@@ -6,25 +6,40 @@ namespace Tests\Unit\Standards;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /** Runs inside the image the gate builds, so it reads that image's own apk database. */
 final class AppImagePackagesAreCurrentTest extends TestCase
 {
     private const APK_DATABASE = '/lib/apk/db/installed';
 
-    /** CVE-2026-11979 and CVE-2026-86138..86144 are fixed from here (card 1263). */
-    private const LIBXML2_FLOOR = '2.13.9-r5';
+    /** Card 1263: CVE-2026-11979, 86138-86140, 86142-86144 (libxml2), 111497 (brotli), 92392 (curl). */
+    private const FLOORS = [
+        'libxml2'     => '2.13.9-r5',
+        'brotli-libs' => '1.2.1-r0',
+        'curl'        => '8.23.0-r0',
+        'libcurl'     => '8.23.0-r0',
+    ];
+
+    /** @return iterable<string, array{string, string}> */
+    public static function floors(): iterable
+    {
+        foreach (self::FLOORS as $package => $floor) {
+            yield $package => [$package, $floor];
+        }
+    }
 
     #[Test]
-    public function the_app_image_carries_a_libxml2_with_its_security_fixes(): void
+    #[DataProvider('floors')]
+    public function the_app_image_carries_each_package_at_or_above_its_security_floor(string $package, string $floor): void
     {
-        $installed = $this->installedVersion('libxml2');
+        $installed = $this->installedVersion($package);
 
         $this->assertContains(
-            $this->apkCompare($installed, self::LIBXML2_FLOOR),
+            $this->apkCompare($installed, $floor),
             ['=', '>'],
-            "The app image ships libxml2 {$installed}, below ".self::LIBXML2_FLOOR.', so the CVEs fixed there are '
-            .'live in PHP\'s dom and xml extensions. docker/app/Dockerfile holds it with `apk add \'libxml2>=…\'`.'
+            "The app image ships {$package} {$installed}, below its floor {$floor}, so the CVEs fixed there are "
+            ."live. docker/app/Dockerfile holds it with `apk add '{$package}>={$floor}'`."
         );
     }
 
