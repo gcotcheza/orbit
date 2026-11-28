@@ -121,7 +121,7 @@ final class GateImageTagsStepTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            'exit 1',
+            'gate_fail 1',
             $guard[1],
             'A report with no built-tag count means the check examined nothing, and that is a red.'
         );
@@ -149,7 +149,7 @@ final class GateImageTagsStepTest extends TestCase
         }
 
         $this->assertStringContainsString(
-            'exit 1',
+            'gate_fail 1',
             $guard[1],
             'A count of zero, or one this step cannot read, has to stop the gate.'
         );
@@ -184,7 +184,7 @@ final class GateImageTagsStepTest extends TestCase
         }
 
         $this->assertStringContainsString(
-            'exit 1',
+            'gate_fail 1',
             $guard[1],
             'A value the check could not judge has to stop the gate, not print itself into a log.'
         );
