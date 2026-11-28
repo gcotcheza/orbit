@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Guards scripts/lib/gate/deploy-lib.sh and deploy-mutants.sh's --slot mode. The gate reads the lib only from root's clone at
-# its origin/main, no caller's DEPLOY_LIB is read, the test seam is refused as root, and a missing,
-# emptied, dirty or unreadable lib is refused out loud. docs/DECISIONS.md, deploy-lib-is-not-vendored
+# Guards scripts/lib/gate/deploy-lib.sh, lane-work-dir.sh and deploy-mutants.sh's --slot mode.
+# docs/DECISIONS.md, deploy-lib-is-not-vendored and gate-work-dir-in-the-lane
 #
 #   bash scripts/deploy-lib-test.sh <tree>    as root, over the tree whose scripts/ it judges
 set -uo pipefail
@@ -231,6 +230,45 @@ equals 'and that refused slot runs no worker' "$(cat "${SLOT}/runs/3.out")" earl
 equals 'deploy-mutants.sh runs each xargs slot through itself' \
     "$(grep -cE '\| xargs -P "\$\{JOBS\}" -I\{\} bash -- "\$\{SELF\}" --slot \{\} "\$\{WORK\}"$' "${SCRIPTS}/deploy-mutants.sh")" 1
 equals 'and carries no inline sh program' "$(grep -cE '(^|[^[:alnum:]_])sh -c' "${SCRIPTS}/deploy-mutants.sh")" 0
+
+# Card 1320: gate_lane_work_dir puts a work dir beside its tree and refuses the scratch root itself.
+SCRATCH="$(cd -- "${WORK}" && pwd -P)/scratch"
+LANE_TREE="${SCRATCH}/lane/repo"
+mkdir -p "${LANE_TREE}/scripts/lib/gate" "${SCRATCH}/loose" "${WORK}/fake-bin"
+ln -s "${SCRATCH}/lane" "${WORK}/lane-link"
+ln -s "${SCRATCH}" "${WORK}/scratch-link"
+work_dir() { # <scratch root> <tree> -> stdout and stderr, then "rc=<rc>"
+    bash -c '. "$0"; GATE_SCRATCH_ROOT=$1; gate_lane_work_dir "$2" orbit-probe' \
+        "${SCRIPTS}/lib/gate/lane-work-dir.sh" "$1" "$2" 2>&1
+    printf 'rc=%s' "$?"
+}
+out="$(work_dir "${SCRATCH}" "${LANE_TREE}")"
+made="${out%%$'\n'*}"
+equals 'a tree in a lane gets its work dir in that lane' "$(dirname -- "${made}"):${out##*$'\n'}" "${SCRATCH}/lane:rc=0"
+equals 'and it is a root 700 orbit-probe dir' "$(stat -c '%U %a' -- "${made}" 2>&1) ${made##*/}" "root 700 orbit-probe.${made##*.}"
+out="$(work_dir "${SCRATCH}" "${SCRATCH}/loose")"
+contains 'a tree directly in the scratch root is refused' "${out}" "REFUSED: ${SCRATCH}/loose sits directly in the shared scratch root ${SCRATCH}"
+equals 'and that refusal exits 1 and makes nothing' "${out##*$'\n'}:$(find "${SCRATCH}" -maxdepth 1 -name 'orbit-probe.*' | wc -l)" 'rc=1:0'
+out="$(work_dir "${SCRATCH}" "${WORK}/lane-link/repo")"
+equals 'a symlinked tree resolves to its real lane' "$(dirname -- "${out%%$'\n'*}"):${out##*$'\n'}" "${SCRATCH}/lane:rc=0"
+contains 'a tree reached through a symlinked scratch root is refused' \
+    "$(work_dir "${SCRATCH}" "${WORK}/scratch-link/loose")" 'REFUSED:'
+contains 'and so is a scratch root named through a symlink' \
+    "$(work_dir "${WORK}/scratch-link" "${SCRATCH}/loose")" 'REFUSED:'
+
+# Each caller asks the helper; a fake mktemp records where it was asked and stops the script there.
+cp "${SCRIPTS}/deploy-mutants.sh" "${SCRIPTS}/deploy-test.sh" "${SCRIPTS}/e2e-gate-test.sh" "${LANE_TREE}/scripts/"
+cp "${SCRIPTS}/lib/gate/lane-work-dir.sh" "${LANE_TREE}/scripts/lib/gate/"
+printf 'DEPLOY_LIB=%s/no-lib\ndeploy_lib_ready() { :; }\n' "${WORK}" >"${LANE_TREE}/scripts/lib/gate/deploy-lib.sh"
+: >"${LANE_TREE}/scripts/lib/gate/run-capped.sh"
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s"\nexit 1\n' "${WORK}/mktemp.argv" >"${WORK}/fake-bin/mktemp"
+chmod 755 "${WORK}/fake-bin/mktemp"
+for harness in deploy-mutants deploy-test e2e-gate-test; do
+    : >"${WORK}/mktemp.argv"
+    env -u DEPLOY_TEST_ROOT PATH="${WORK}/fake-bin:${PATH}" bash -- "${LANE_TREE}/scripts/${harness}.sh" >/dev/null 2>&1
+    equals "${harness}.sh makes its work dir in the tree's lane" \
+        "$(cat "${WORK}/mktemp.argv")" "-d ${SCRATCH}/lane/orbit-${harness}.XXXXXXXX"
+done
 
 if [ "${fails}" -ne 0 ]; then
     printf '\ndeploy-lib-test: %s check(s) failed\n' "${fails}" >&2

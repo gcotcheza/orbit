@@ -8,7 +8,8 @@
 # against scripts/deploy-test.sh, which fakes verify.sh out entirely.
 #
 # It never reads /var/www/orbit, never runs docker and never runs gh. It runs as
-# root, because scripts/deploy-test.sh does: every copy lives in a root 700 directory.
+# root, because scripts/deploy-test.sh does: every copy lives in a root 700 directory
+# beside this tree, in its lane, never loose in the shared scratch root.
 #
 # `--worker <n>` runs mutation n alone, exiting 0 only if it was caught; `--slot <n> <dir>` runs it
 # into <dir>/<n>.out and <dir>/<n>.rc, which is how xargs feeds the parent's workers.
@@ -33,7 +34,9 @@ fi
 deploy_lib_ready || exit 1
 # shellcheck source=scripts/lib/gate/run-capped.sh
 . "${SCRIPT_DIR}/lib/gate/run-capped.sh"
-WORK="$(mktemp -d /srv/worker-scratch/orbit-deploy-mutants.XXXXXXXX)" || exit 1
+# shellcheck source=scripts/lib/gate/lane-work-dir.sh
+. "${SCRIPT_DIR}/lib/gate/lane-work-dir.sh"
+WORK="$(gate_lane_work_dir "${SCRIPT_DIR}/.." orbit-deploy-mutants)" || exit 1
 trap 'rm -rf "${WORK:?}"' EXIT
 HARNESS_TIMEOUT=600
 missed=0

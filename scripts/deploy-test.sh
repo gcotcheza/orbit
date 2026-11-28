@@ -11,8 +11,8 @@
 #                                   DEPLOY_TEST_TEMPLATES=<dir> keeps the fixture repos
 #                                   there, built once for every run that shares it
 #
-# Each case runs a root 700 copy of deploy.sh and lib/ under DEPLOY_TEST_ROOT
-# (default /srv/worker-scratch), because the library refuses any other copy.
+# Each case runs a root 700 copy of deploy.sh and lib/ under DEPLOY_TEST_ROOT (default: the
+# tree's lane), because the library refuses a copy below any dir root does not own alone.
 # It never reads /var/www/orbit, never runs docker, never runs gh and never runs
 # git-as: every one of those is a fake whose argv is what the assertions read.
 set -uo pipefail
@@ -53,7 +53,13 @@ equals() {
     if [ "$2" = "$3" ]; then pass "$1 is [$3]"; else fail "$1 is [$2], expected [$3]"; fi
 }
 
-WORK="$(mktemp -d "${DEPLOY_TEST_ROOT:-/srv/worker-scratch}/orbit-deploy-test.XXXXXXXX")" || exit 1
+# shellcheck source=scripts/lib/gate/lane-work-dir.sh
+. "${SCRIPT_DIR}/lib/gate/lane-work-dir.sh"
+if [ -n "${DEPLOY_TEST_ROOT:-}" ]; then
+    WORK="$(mktemp -d "${DEPLOY_TEST_ROOT}/orbit-deploy-test.XXXXXXXX")" || exit 1
+else
+    WORK="$(gate_lane_work_dir "${SCRIPT_DIR}/.." orbit-deploy-test)" || exit 1
+fi
 trap 'rm -rf "${WORK:?}"' EXIT
 BREACH_LOG="${WORK}/checkout-helpers.argv"
 : >"${BREACH_LOG}"
@@ -622,9 +628,9 @@ contains 'and a green head does not deploy a merge the ledger never saw' "${OUT}
 contains 'and the recipe says it is the merge that wants gating' "${OUT}" \
     "NOT GATED ${MERGE_SHA:0:7}: gate that merge in a worktree"
 contains 'and the recipe names the merge commit' "${OUT}" \
-    "worktree add /srv/worker-scratch/orbit-gate-pr90 ${MERGE_SHA}"
+    "worktree add /srv/worker-scratch/orbit-gate-pr90/repo ${MERGE_SHA}"
 absent 'never the branch head, gating which would change nothing' "${OUT}" \
-    "worktree add /srv/worker-scratch/orbit-gate-pr90 ${HEAD_SHA}"
+    "worktree add /srv/worker-scratch/orbit-gate-pr90/repo ${HEAD_SHA}"
 equals 'an ungated merge builds nothing' "$(logged heavy.argv)" ''
 absent 'and an ungated merge never says DONE' "${OUT}" 'DONE #90'
 
@@ -650,7 +656,7 @@ fixture head-absent
 run_deploy "${PR_NUMBER}"
 contains 'a head absent from the ledger is refused' "${OUT}" 'the ledger holds no green ci for'
 contains 'and the refusal is preceded by the worktree recipe' "${OUT}" \
-    'worktree add /srv/worker-scratch/orbit-gate-pr90'
+    'worktree add /srv/worker-scratch/orbit-gate-pr90/repo'
 contains 'which gates outside the served checkout, and says why' "${OUT}" \
     'never in this checkout — it is bind-mounted into the running containers'
 contains 'and names both gates' "${OUT}" 'bash scripts/check.sh overlay'
