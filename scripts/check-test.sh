@@ -241,7 +241,7 @@ t9_root() { # <name> <exit> <stderr|stdout> <report, %s = root>
         '3 the canonical checker path is not in check.sh exactly once, so this is not the step it says'
     swap 'chown -R ' ': ' 2 '3 the overlay hands two paths to the app user; a third would run for real'
     for step in $(cd "${R}/scripts" && grep -oE '"\$here/scripts/[a-z0-9-]+\.sh"' check.sh | sed 's#.*/##; s#"##' | sort -u); do
-        printf '#!/bin/sh\nexit 0\n' >"${R}/scripts/${step}"
+        printf '#!/bin/sh\necho "%s: all checks passed"\n' "${step%.sh}" >"${R}/scripts/${step}"
         chmod 700 "${R}/scripts/${step}"
     done
 }
@@ -485,6 +485,20 @@ printf '#!/bin/sh\nexit 0\n' >"${B}/tar"
 chmod 755 "${B}/tar"
 run_check dev
 refused_red '11 a copy that leaves the scan directory empty' 'the scan directory came out empty'
+
+# --- 12. the deploy suites pass on their banner, not on their rc alone (card 1411) ------------
+lines_in_check() { grep -cxF -- "$1" "${TREE}/scripts/check.sh"; }
+equals '12 banner_suite fails a suite that exits 0 without its banner' "$(lines_in_check \
+    '    [[ "${out}" == *"$2"* ]] || { printf '"'"'check.sh: %s exited 0 without its banner [%s], so it ran none of its checks\n'"'"' "$1" "$2" >&2; gate_fail 1; }')" 1
+for suite in deploy verify; do
+    equals "12 the ${suite} suite runs through banner_suite with its banner" "$(lines_in_check \
+        "banner_suite \"\$here/scripts/${suite}-test.sh\" '${suite}-test: all checks passed'")" 1
+    equals "12 and no bare ${suite} suite call is left" "$(lines_in_check "\"\$here/scripts/${suite}-test.sh\"")" 0
+    t9_root "silent-${suite}-test" 0 stdout "${OK_REPORT}"
+    printf '#!/bin/sh\nexit 0\n' >"${R}/scripts/${suite}-test.sh"
+    run_check dev
+    refused_red "12 a ${suite} suite that exits 0 without its banner" "${suite}-test.sh exited 0 without its banner"
+done
 
 if [ "${fails}" -ne 0 ]; then
     printf '\ncheck-test: %s check(s) failed\n' "${fails}" >&2
