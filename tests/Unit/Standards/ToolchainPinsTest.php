@@ -94,10 +94,10 @@ final class ToolchainPinsTest extends TestCase
     public function the_app_image_pins_a_patched_libxml2(): void
     {
         $this->assertMatchesRegularExpression(
-            '/^\s*apk add --no-cache libxml2=2\.13\.9-r5; \\\\$/m',
+            '/^\s*apk add --no-cache \'libxml2>=2\.13\.9-r5\'; \\\\$/m',
             $this->read('docker/app/Dockerfile'),
-            'docker/app/Dockerfile no longer pins libxml2=2.13.9-r5, so the image ships the base '
-            .'image\'s 2.13.9-r2 and its 7 HIGH CVEs.'
+            'docker/app/Dockerfile no longer holds libxml2 at 2.13.9-r5 or later, so the image ships '
+            .'the base image\'s 2.13.9-r2 and its 7 HIGH CVEs. The quotes keep `>` from being a redirect.'
         );
     }
 
