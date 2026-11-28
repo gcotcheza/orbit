@@ -37,7 +37,10 @@ ARG APP_USER=app
 #
 # NB: opcache is compiled into the official php:8.5 images already — running
 #     `docker-php-ext-install opcache` against them FAILS, so it is not listed.
+# Card 1263: fixed libxml2 (CVE-2026-11979, 86138-86140, 86142-86144), brotli-libs (CVE-2026-111497)
+# and curl/libcurl (CVE-2026-92392), held as floors so the image never ships an older one.
 RUN set -eux; \
+    apk add --no-cache 'libxml2>=2.13.9-r5' 'brotli-libs>=1.2.1-r0' 'curl>=8.23.0-r0' 'libcurl>=8.23.0-r0'; \
     apk add --no-cache --virtual .build-deps $PHPIZE_DEPS linux-headers postgresql-dev icu-dev libzip-dev; \
     apk add --no-cache postgresql-client icu-libs libpq bash libzip; \
     docker-php-ext-install pdo_pgsql bcmath intl pcntl posix zip; \
