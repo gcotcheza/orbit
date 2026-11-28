@@ -171,6 +171,15 @@ gate_fail() { gate_record "$1"; exit "$1"; }
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 
+# A suite that exits 0 having run nothing passes on its rc alone.
+banner_suite() { # <script> <banner>
+    local out rc=0
+    out="$("$1" 2>&1)" || rc=$?
+    printf '%s\n' "${out}"
+    [ "${rc}" -eq 0 ] || { printf 'check.sh: %s failed (rc %s); its report is above\n' "$1" "${rc}" >&2; gate_fail 1; }
+    [[ "${out}" == *"$2"* ]] || { printf 'check.sh: %s exited 0 without its banner [%s], so it ran none of its checks\n' "$1" "$2" >&2; gate_fail 1; }
+}
+
 php_step() {
     if [ "$mode" = dev ]; then
         docker compose exec -T app "$@"
@@ -309,8 +318,8 @@ bash -- "$here/scripts/deploy-lib-test.sh" "$here"
 bash -- "$here/scripts/check-test.sh" "$here"
 
 step 'The deploy script (scripts/deploy-test.sh)'
-"$here/scripts/deploy-test.sh"
-"$here/scripts/verify-test.sh"
+banner_suite "$here/scripts/deploy-test.sh" 'deploy-test: all checks passed'
+banner_suite "$here/scripts/verify-test.sh" 'verify-test: all checks passed'
 
 step 'The worktree script (scripts/worktree-test.sh)'
 # A host step for the reason the one above is: shell testing shell, against a
