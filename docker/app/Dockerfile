@@ -37,7 +37,9 @@ ARG APP_USER=app
 #
 # NB: opcache is compiled into the official php:8.5 images already — running
 #     `docker-php-ext-install opcache` against them FAILS, so it is not listed.
+# The base ships libxml2 2.13.9-r2 (7 HIGH CVEs); drop this pin once FROM carries r5 or later.
 RUN set -eux; \
+    apk add --no-cache libxml2=2.13.9-r5; \
     apk add --no-cache --virtual .build-deps $PHPIZE_DEPS linux-headers postgresql-dev icu-dev libzip-dev; \
     apk add --no-cache postgresql-client icu-libs libpq bash libzip; \
     docker-php-ext-install pdo_pgsql bcmath intl pcntl posix zip; \

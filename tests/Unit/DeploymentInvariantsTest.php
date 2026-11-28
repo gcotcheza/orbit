@@ -249,6 +249,23 @@ final class DeploymentInvariantsTest extends TestCase
         );
     }
 
+    /** Runs inside the image the gate builds: 2.13.9-r2, the base's, carries 7 HIGH CVEs. */
+    #[Test]
+    public function the_image_carries_a_patched_libxml2(): void
+    {
+        $installed = file_get_contents('/lib/apk/db/installed');
+        $this->assertIsString($installed, 'This is not an Alpine image: there is no apk database to read.');
+        if (preg_match('/^P:libxml2\nV:(\S+)-r(\d+)$/m', $installed, $found) !== 1) {
+            $this->fail('apk lists no libxml2.');
+        }
+
+        [, $upstream, $release] = $found;
+        $this->assertTrue(
+            version_compare($upstream, '2.13.9', '>') || ($upstream === '2.13.9' && (int) $release >= 5),
+            "The image carries libxml2 {$upstream}-r{$release}, older than 2.13.9-r5."
+        );
+    }
+
     /**
      * @return array<string, array<string, mixed>>
      */
