@@ -90,6 +90,18 @@ final class ToolchainPinsTest extends TestCase
         );
     }
 
+    #[Test]
+    public function the_app_image_pins_its_card_1263_package_floors(): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/^\s*apk add --no-cache \'libxml2>=2\.13\.9-r5\' \'brotli-libs>=1\.2\.1-r0\' '
+            .'\'curl>=8\.23\.0-r0\' \'libcurl>=8\.23\.0-r0\'; \\\\$/m',
+            $this->read('docker/app/Dockerfile'),
+            'docker/app/Dockerfile no longer holds libxml2, brotli-libs, curl and libcurl at their card 1263 '
+            .'floors, so the image can ship the base image\'s vulnerable ones. The quotes keep `>` from being a redirect.'
+        );
+    }
+
     private function matched(string $pattern, string $relative): string
     {
         if (preg_match($pattern, $this->read($relative), $found) !== 1) {
